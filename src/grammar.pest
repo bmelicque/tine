@@ -1,0 +1,34 @@
+// Whitespace and comments
+NEWLINE = _{ "\n" | "\r\n" }
+WHITESPACE = _{ " " | "\t" }
+COMMENT = _{ "//" ~ (!"\n" ~ ANY)* ~ "\n" | "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+
+// Identifiers and literals
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+number_literal = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+boolean_literal = @{ "true" | "false" }
+
+// Type annotations
+type_annotation = { ":" ~ type_name }
+type_name = { identifier }
+
+// Expressions
+expression = { binary_expression | primary }
+binary_expression = { primary ~ binary_operator ~ expression }
+binary_operator = { "+" | "-" | "*" | "/" | "==" | "!=" | "<" | ">" | "<=" | ">=" }
+primary = { string_literal | number_literal | boolean_literal | identifier | "(" ~ expression ~ ")" }
+
+// Statements
+statement = { variable_declaration | function_declaration | return_statement | expression_statement }
+variable_declaration = { identifier ~ ":=" ~ expression ~ NEWLINE }
+function_declaration = { "function" ~ identifier ~ parameter_list ~ type_annotation? ~ block }
+parameter_list = { "(" ~ (parameter ~ ("," ~ parameter)*)? ~ ")" }
+parameter = { identifier ~ type_annotation }
+return_statement = { "return" ~ expression? ~ NEWLINE }
+expression_statement = { expression ~ NEWLINE }
+block = { "{" ~ (statement | blank_line)* ~ "}" }
+
+// Program
+blank_line = _{ NEWLINE }
+program = { SOI ~ (statement | blank_line)* ~ EOI }

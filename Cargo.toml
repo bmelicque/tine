@@ -1,0 +1,16 @@
+[package]
+name = "mylang-transpiler"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+pest = "2.7"
+pest_derive = "2.7"
+swc_common = "0.33.0"
+swc_ecma_ast = "0.110.0"
+swc_ecma_codegen = "0.146.0"
+swc_ecma_parser = "0.141.0"
+
+[build-dependencies]
+pest_generator = "2.7"
