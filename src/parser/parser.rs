@@ -11,6 +11,14 @@ use super::statements::parse_statement;
 #[grammar = "parser/grammar.pest"]
 pub struct MyLanguageParser;
 
+#[derive(Debug)]
+pub struct ParseError<'i> {
+    pub message: String,
+    pub span: pest::Span<'i>,
+}
+
+pub type ParseResult<'i, T> = Result<T, Vec<ParseError<'i>>>;
+
 pub struct ParserEngine;
 
 impl ParserEngine {
@@ -24,6 +32,7 @@ impl ParserEngine {
     }
 
     fn build_ast(&self, pairs: Pairs<Rule>) -> Result<Node, Box<dyn Error>> {
+        let mut errors = Vec::new();
         let mut nodes = Vec::new();
 
         for pair in pairs {
@@ -32,14 +41,16 @@ impl ParserEngine {
             }
             pair.into_inner()
                 .map(|inner| self.parse_statement(inner))
-                .filter_map(|x| x)
-                .for_each(|node| nodes.push(node));
+                .for_each(|result| match result {
+                    Ok(node) => nodes.push(node),
+                    Err(mut e) => errors.append(&mut e),
+                });
         }
 
         Ok(Node::Program(nodes))
     }
 
-    fn parse_statement(&self, pair: Pair<Rule>) -> Option<Node> {
+    fn parse_statement<'i>(&self, pair: Pair<'i, Rule>) -> ParseResult<'i, Node> {
         parse_statement(pair)
     }
 }

@@ -2,105 +2,91 @@ use pest::iterators::Pair;
 
 use crate::ast::Node;
 
-use super::{expressions::parse_expression, parser::Rule};
+use super::{
+    expressions::parse_expression,
+    parser::{ParseError, ParseResult, Rule},
+};
 
-pub fn parse_statement(pair: Pair<Rule>) -> Option<Node> {
+pub fn parse_statement<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i, Node> {
     match pair.as_rule() {
         Rule::statement => {
             let inner_pair = pair.into_inner().next().unwrap();
             parse_statement(inner_pair)
         }
         Rule::variable_declaration => parse_variable_declaration(pair),
-        Rule::function_declaration => parse_function_declaration(pair),
         Rule::return_statement => parse_return_statement(pair),
         Rule::expression_statement => parse_expression_statement(pair),
-        _ => None,
+        // TODO:
+        _ => Err(vec![]),
     }
 }
 
-fn parse_variable_declaration(pair: Pair<Rule>) -> Option<Node> {
+fn parse_variable_declaration<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i, Node> {
+    let span = pair.clone().as_span();
     let mut inner = pair.into_inner();
-    let name = inner.next()?.as_str().to_string();
 
-    let mut type_annotation = None;
-    let mut initializer = None;
+    let Some(item) = inner.next() else {
+        return Err(vec![
+            ParseError {
+                message: "Value identifier expected".to_string(),
+                span,
+            },
+            ParseError {
+                message: "Initializer expected".to_string(),
+                span,
+            },
+        ]);
+    };
 
-    for item in inner {
-        match item.as_rule() {
-            Rule::type_annotation => {
-                if let Some(type_name_pair) = item.into_inner().next() {
-                    type_annotation = Some(type_name_pair.as_str().to_string());
-                }
-            }
-            Rule::expression => {
-                initializer = parse_expression(item).map(Box::new);
-            }
-            _ => {}
+    let name = match item.as_rule() {
+        Rule::identifier => item.as_str().to_string(),
+        Rule::expression => {
+            return Err(vec![ParseError {
+                message: "Value identifier expected".to_string(),
+                span,
+            }])
+        }
+        _ => panic!("Unexpected rule in variable delcaration!"),
+    };
+
+    let initializer = match item.as_rule() {
+        Rule::expression => match parse_expression(item) {
+            Ok(expr) => Some(expr),
+            Err(e) => return Err(e),
+        },
+        _ => {
+            return Err(vec![ParseError {
+                message: "Initializer expected".to_string(),
+                span,
+            }])
         }
     }
+    .map(Box::new);
 
-    Some(Node::VariableDeclaration {
+    Ok(Node::VariableDeclaration {
         name,
-        type_annotation,
+        type_annotation: None,
         initializer,
     })
 }
 
-fn parse_function_declaration(pair: Pair<Rule>) -> Option<Node> {
-    let mut inner = pair.into_inner();
-    let name = inner.next()?.as_str().to_string();
-
-    let mut params = Vec::new();
-    let mut return_type = None;
-    let mut body = Vec::new();
-
-    for item in inner {
-        match item.as_rule() {
-            Rule::parameter_list => {
-                for param in item.into_inner() {
-                    let mut param_inner = param.into_inner();
-                    let param_name = param_inner.next()?.as_str().to_string();
-                    let type_annotation = param_inner.next()?;
-                    let param_type = type_annotation.into_inner().next()?.as_str().to_string();
-                    params.push((param_name, param_type));
-                }
-            }
-            Rule::type_annotation => {
-                if let Some(type_name_pair) = item.into_inner().next() {
-                    return_type = Some(type_name_pair.as_str().to_string());
-                }
-            }
-            Rule::block => {
-                for stmt in item.into_inner() {
-                    if let Some(node) = parse_statement(stmt) {
-                        body.push(node);
-                    }
-                }
-            }
-            _ => {}
-        }
+fn parse_return_statement<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i, Node> {
+    match pair.clone().into_inner().next() {
+        Some(inner) => match parse_expression(inner) {
+            Ok(expr) => Ok(Node::ReturnStatement(Some(Box::new(expr)))),
+            Err(e) => Err(e),
+        },
+        None => Ok(Node::ReturnStatement(None)),
     }
-
-    Some(Node::FunctionDeclaration {
-        name,
-        params,
-        return_type,
-        body,
-    })
 }
 
-fn parse_return_statement(pair: Pair<Rule>) -> Option<Node> {
-    let inner = pair.into_inner().next();
-    let expr = inner.and_then(|p| parse_expression(p).map(Box::new));
-
-    Some(Node::ReturnStatement(expr))
-}
-
-fn parse_expression_statement(pair: Pair<Rule>) -> Option<Node> {
-    let inner = pair.into_inner().next()?;
-    Some(Node::ExpressionStatement(Box::new(parse_expression(
-        inner,
-    )?)))
+fn parse_expression_statement<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i, Node> {
+    match pair.into_inner().next() {
+        Some(inner) => Ok(Node::ExpressionStatement(Box::new(parse_expression(
+            inner,
+        )?))),
+        None => Err(vec![]),
+    }
 }
 
 #[cfg(test)]
@@ -114,7 +100,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        println!("PAIR = {:#?}", pair);
+        // println!("PAIR = {:#?}", pair);
         parse_statement(pair).expect("Failed to parse statement")
     }
 
@@ -158,29 +144,6 @@ mod tests {
                 assert!(matches!(*expr.unwrap(), Node::NumberLiteral(42.0)));
             }
             _ => panic!("Expected ReturnStatement"),
-        }
-    }
-
-    #[test]
-    fn test_function_declaration() {
-        // FIXME:
-        let node = parse("function add(a: number, b: number): number { return a + b }");
-        match node {
-            Node::FunctionDeclaration {
-                name,
-                params,
-                return_type,
-                body,
-            } => {
-                assert_eq!(name, "add");
-                assert_eq!(params.len(), 2);
-                assert_eq!(params[0], ("a".to_string(), "number".to_string()));
-                assert_eq!(params[1], ("b".to_string(), "number".to_string()));
-                assert_eq!(return_type.unwrap(), "number");
-                assert_eq!(body.len(), 1);
-                assert!(matches!(body[0], Node::ReturnStatement(_)));
-            }
-            _ => panic!("Expected FunctionDeclaration"),
         }
     }
 }

@@ -2,59 +2,86 @@ use pest::iterators::Pair;
 
 use crate::ast::Node;
 
-use super::parser::Rule;
+use super::parser::{ParseError, ParseResult, Rule};
 
-pub fn parse_expression(pair: Pair<Rule>) -> Option<Node> {
+pub fn parse_expression<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i, Node> {
     match pair.as_rule() {
-        Rule::expression => parse_expression(pair.into_inner().next()?),
-        Rule::primary => parse_expression(pair.into_inner().next()?),
+        Rule::expression | Rule::primary => match pair.into_inner().next() {
+            Some(inner) => parse_expression(inner),
+            // TODO:
+            None => Err(vec![]),
+        },
         Rule::equality
         | Rule::relation
         | Rule::addition
         | Rule::multiplication
         | Rule::exponentiation => parse_binary_expression(pair),
-        Rule::function_call => parse_function_call(pair),
-        Rule::identifier => Some(Node::Identifier(pair.as_str().to_string())),
+        Rule::identifier => Ok(Node::Identifier(pair.as_str().to_string())),
         Rule::string_literal => {
             let value = pair.as_str();
-            Some(Node::StringLiteral(value[1..value.len() - 1].to_string()))
+            Ok(Node::StringLiteral(value[1..value.len() - 1].to_string()))
         }
-        Rule::number_literal => Some(Node::NumberLiteral(pair.as_str().parse().unwrap_or(0.0))),
-        Rule::boolean_literal => Some(Node::BooleanLiteral(pair.as_str() == "true")),
-        _ => None,
+        Rule::number_literal => Ok(Node::NumberLiteral(pair.as_str().parse().unwrap_or(0.0))),
+        Rule::boolean_literal => Ok(Node::BooleanLiteral(pair.as_str() == "true")),
+        // TODO:
+        _ => Err(vec![]),
     }
 }
 
-fn parse_binary_expression(pair: Pair<Rule>) -> Option<Node> {
+fn parse_binary_expression<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i, Node> {
+    let mut errors = Vec::new();
+    let span = pair.clone().as_span();
+
     let mut inner = pair.into_inner();
-    let mut left = parse_expression(inner.next()?)?;
+    let Some(next) = inner.next() else {
+        // FIXME: does not handle "** expression"
+        return Err(vec![]);
+    };
+    let mut left = match parse_expression(next) {
+        Ok(expr) => Some(expr),
+        Err(mut err) => {
+            errors.append(&mut err);
+            None
+        }
+    };
 
     while let Some(op_pair) = inner.next() {
-        let right_pair = inner.next()?;
         let operator = op_pair.as_str().to_string();
-        let right = parse_expression(right_pair)?;
 
-        left = Node::BinaryExpression {
-            left: Box::new(left),
-            operator,
-            right: Box::new(right),
+        let Some(right_pair) = inner.next() else {
+            errors.push(ParseError {
+                message: "Expression expected".to_string(),
+                span: op_pair.as_span(),
+            });
+            continue;
+        };
+
+        let right = match parse_expression(right_pair) {
+            Ok(expr) => Some(expr),
+            Err(mut e) => {
+                errors.append(&mut e);
+                None
+            }
+        };
+
+        left = match (left, right) {
+            (Some(l), Some(r)) => Some(Node::BinaryExpression {
+                left: Box::new(l),
+                operator,
+                right: Box::new(r),
+            }),
+            _ => None,
         };
     }
 
-    Some(left)
-}
-
-fn parse_function_call(pair: Pair<Rule>) -> Option<Node> {
-    let mut inner = pair.into_inner();
-    let name = inner.next()?.as_str().to_string();
-    let mut args = Vec::new();
-
-    for arg in inner {
-        if let Some(expr) = parse_expression(arg) {
-            args.push(expr);
+    if errors.is_empty() {
+        match left {
+            Some(l) => Ok(l),
+            None => Err(vec![]),
         }
+    } else {
+        Err(errors)
     }
-    Some(Node::FunctionCall { name, args })
 }
 
 #[cfg(test)]
