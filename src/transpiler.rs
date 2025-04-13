@@ -157,6 +157,15 @@ fn node_to_swc_stmt(node: Node) -> Result<Option<ast::ModuleItem>, Box<dyn Error
                 },
             ))))
         }
+        Node::ExpressionStatement(expr) => {
+            let swc_expr = node_to_swc_expr(*expr)?;
+            Ok(Some(ast::ModuleItem::Stmt(ast::Stmt::Expr(
+                ast::ExprStmt {
+                    span: DUMMY_SP,
+                    expr: Box::new(swc_expr),
+                },
+            ))))
+        }
         _ => Ok(None),
     }
 }
@@ -194,6 +203,31 @@ fn node_to_swc_expr(node: Node) -> Result<ast::Expr, Box<dyn Error>> {
                 op,
                 left: Box::new(left_expr),
                 right: Box::new(right_expr),
+            }))
+        }
+        Node::FunctionCall { name, args } => {
+            let callee = ast::Expr::Ident(ast::Ident {
+                span: DUMMY_SP,
+                sym: name.into(),
+                optional: false,
+            });
+
+            let arguments = args
+                .into_iter()
+                .map(|arg| {
+                    let expr = node_to_swc_expr(arg)?;
+                    Ok::<_, Box<dyn Error>>(ast::ExprOrSpread {
+                        spread: None,
+                        expr: Box::new(expr),
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(ast::Expr::Call(ast::CallExpr {
+                span: DUMMY_SP,
+                callee: ast::Callee::Expr(Box::new(callee)),
+                args: arguments,
+                type_args: None,
             }))
         }
         Node::Identifier(name) => Ok(ast::Expr::Ident(ast::Ident {

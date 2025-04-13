@@ -25,16 +25,13 @@ impl ParserEngine {
         let mut nodes = Vec::new();
 
         for pair in pairs {
-            match pair.as_rule() {
-                Rule::program => {
-                    for inner_pair in pair.into_inner() {
-                        if let Some(node) = self.parse_statement(inner_pair) {
-                            nodes.push(node);
-                        }
-                    }
-                }
-                _ => {}
+            if pair.as_rule() != Rule::program {
+                continue;
             }
+            pair.into_inner()
+                .map(|inner| self.parse_statement(inner))
+                .filter_map(|x| x)
+                .for_each(|node| nodes.push(node));
         }
 
         Ok(Node::Program(nodes))
@@ -49,6 +46,7 @@ impl ParserEngine {
             Rule::variable_declaration => self.parse_variable_declaration(pair),
             Rule::function_declaration => self.parse_function_declaration(pair),
             Rule::return_statement => self.parse_return_statement(pair),
+            Rule::expression_statement => self.parse_expression_statement(pair),
             _ => None,
         }
     }
@@ -134,22 +132,50 @@ impl ParserEngine {
         Some(Node::ReturnStatement(expr))
     }
 
+    fn parse_expression_statement(&self, pair: Pair<Rule>) -> Option<Node> {
+        let inner = pair.into_inner().next()?;
+        Some(Node::ExpressionStatement(Box::new(
+            self.parse_expression(inner)?,
+        )))
+    }
+
     // Parse an expression
     fn parse_expression(&self, pair: Pair<Rule>) -> Option<Node> {
         match pair.as_rule() {
             Rule::expression => self.parse_expression(pair.into_inner().next()?),
             Rule::primary => self.parse_expression(pair.into_inner().next()?),
-            Rule::binary_expression => {
+            Rule::equality
+            | Rule::relation
+            | Rule::addition
+            | Rule::multiplication
+            | Rule::exponentiation => {
                 let mut inner = pair.into_inner();
-                let left = self.parse_expression(inner.next()?)?;
-                let operator = inner.next()?.as_str().to_string();
-                let right = self.parse_expression(inner.next()?)?;
+                let mut left = self.parse_expression(inner.next()?)?;
 
-                Some(Node::BinaryExpression {
-                    left: Box::new(left),
-                    operator,
-                    right: Box::new(right),
-                })
+                while let Some(op_pair) = inner.next() {
+                    let operator = op_pair.as_str().to_string();
+                    let right = self.parse_expression(inner.next()?)?;
+
+                    left = Node::BinaryExpression {
+                        left: Box::new(left),
+                        operator,
+                        right: Box::new(right),
+                    };
+                }
+
+                Some(left)
+            }
+            Rule::function_call => {
+                let mut inner = pair.into_inner();
+                let name = inner.next()?.as_str().to_string();
+                let mut args = Vec::new();
+
+                for arg in inner {
+                    if let Some(expr) = self.parse_expression(arg) {
+                        args.push(expr);
+                    }
+                }
+                Some(Node::FunctionCall { name, args })
             }
             Rule::identifier => Some(Node::Identifier(pair.as_str().to_string())),
             Rule::string_literal => {

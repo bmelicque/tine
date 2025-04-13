@@ -12,10 +12,15 @@ pub enum Node {
         return_type: Option<String>,
         body: Vec<Node>,
     },
+    ExpressionStatement(Box<Node>),
     BinaryExpression {
         left: Box<Node>,
         operator: String,
         right: Box<Node>,
+    },
+    FunctionCall {
+        name: String,
+        args: Vec<Node>,
     },
     Identifier(String),
     StringLiteral(String),

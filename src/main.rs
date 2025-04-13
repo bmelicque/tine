@@ -14,7 +14,8 @@ use transpiler::Transpiler;
 use type_checker::TypeChecker;
 
 fn main() {
-    // Read the input file
+    env::set_var("RUST_BACKTRACE", "1");
+
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
         eprintln!("Usage: {} <input_file> <output_file>", args[0]);

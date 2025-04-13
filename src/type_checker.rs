@@ -117,6 +117,7 @@ impl TypeChecker {
                     Type::Void
                 }
             }
+            Node::ExpressionStatement(expr) => self.visit(expr),
             Node::BinaryExpression {
                 left,
                 operator,
@@ -139,6 +140,51 @@ impl TypeChecker {
                 } else {
                     left_type
                 }
+            }
+            Node::FunctionCall { name, args } => {
+                let Some(func_type) = self.symbols.lookup(name).cloned() else {
+                    self.errors.push(TranspilerError {
+                        message: format!("Undefined function: {}", name),
+                    });
+                    return Type::Unknown;
+                };
+
+                let Type::Function {
+                    params,
+                    return_type,
+                } = &func_type
+                else {
+                    self.errors.push(TranspilerError {
+                        message: format!("'{}' is not a function", name),
+                    });
+                    return Type::Unknown;
+                };
+
+                if params.len() != args.len() {
+                    self.errors.push(TranspilerError {
+                        message: format!(
+                            "Function '{}' expects {} arguments, but {} were provided",
+                            name,
+                            params.len(),
+                            args.len()
+                        ),
+                    });
+                    return Type::Unknown;
+                }
+
+                for (arg, param_type) in args.iter().zip(params) {
+                    let arg_type = self.visit(arg);
+                    if &arg_type != param_type {
+                        self.errors.push(TranspilerError {
+                            message: format!(
+                                "Type mismatch in argument for '{}': expected {:?}, found {:?}",
+                                name, param_type, arg_type
+                            ),
+                        });
+                    }
+                }
+
+                *return_type.clone()
             }
             Node::Identifier(name) => match self.symbols.lookup(name) {
                 Some(t) => t.clone(),
