@@ -3,6 +3,7 @@ mod parser;
 mod transpiler;
 mod type_checker;
 mod types;
+mod utils;
 
 use std::env;
 use std::fs;
@@ -32,13 +33,13 @@ fn main() {
     };
 
     let parser = ParserEngine::new();
-    let ast = match parser.parse(&input) {
-        Ok(ok) => ok,
-        Err(err) => {
-            eprintln!("Error parsing file {}: {}", filename, err);
-            std::process::exit(1);
-        }
+    let result = parser.parse(&input);
+    let Some(ast) = result.node else {
+        panic!("parse should make sure that this is Some")
     };
+    for error in result.errors {
+        utils::pretty_print_error(&input, &error);
+    }
 
     let mut checker = TypeChecker::new();
     match checker.check(&ast) {

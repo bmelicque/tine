@@ -1,7 +1,6 @@
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
 use pest_derive::Parser;
-use std::error::Error;
 
 use crate::ast::Node;
 
@@ -45,12 +44,14 @@ impl ParserEngine {
         Self
     }
 
-    pub fn parse(&self, input: &str) -> Result<Node, Box<dyn Error>> {
-        let pairs = MyLanguageParser::parse(Rule::program, input)?;
-        self.build_ast(pairs)
+    pub fn parse<'i>(&self, input: &'i str) -> ParseResult<'i> {
+        match MyLanguageParser::parse(Rule::program, input) {
+            Ok(pairs) => self.build_ast(pairs),
+            Err(err) => panic!("{}", err),
+        }
     }
 
-    fn build_ast(&self, pairs: Pairs<Rule>) -> Result<Node, Box<dyn Error>> {
+    fn build_ast<'i>(&self, pairs: Pairs<'i, Rule>) -> ParseResult<'i> {
         let mut errors = Vec::new();
         let mut nodes = Vec::new();
 
@@ -68,7 +69,10 @@ impl ParserEngine {
             }
         }
 
-        Ok(Node::Program(nodes))
+        ParseResult {
+            node: Some(Node::Program(nodes)),
+            errors,
+        }
     }
 
     fn parse_statement<'i>(&self, pair: Pair<'i, Rule>) -> ParseResult<'i> {

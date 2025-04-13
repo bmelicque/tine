@@ -75,7 +75,16 @@ fn parse_return_statement<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i> {
 
 fn parse_expression_statement<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i> {
     match pair.into_inner().next() {
-        Some(inner) => parse_expression(inner),
+        Some(inner) => {
+            let result = parse_expression(inner);
+            ParseResult {
+                node: match result.node {
+                    Some(expr) => Some(Node::ExpressionStatement(Box::new(expr))),
+                    None => None,
+                },
+                errors: result.errors,
+            }
+        }
         None => ParseResult::empty(),
     }
 }
