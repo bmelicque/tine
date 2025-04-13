@@ -1,26 +1,15 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     Program(Vec<Node>),
     VariableDeclaration {
-        name: String,
-        type_annotation: Option<String>,
+        name: Option<String>,
         initializer: Option<Box<Node>>,
-    },
-    FunctionDeclaration {
-        name: String,
-        params: Vec<(String, String)>, // (name, type)
-        return_type: Option<String>,
-        body: Vec<Node>,
     },
     ExpressionStatement(Box<Node>),
     BinaryExpression {
-        left: Box<Node>,
+        left: Option<Box<Node>>,
         operator: String,
-        right: Box<Node>,
-    },
-    FunctionCall {
-        name: String,
-        args: Vec<Node>,
+        right: Option<Box<Node>>,
     },
     Identifier(String),
     StringLiteral(String),

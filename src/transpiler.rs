@@ -46,11 +46,7 @@ pub fn node_to_swc_module(
 
 fn node_to_swc_stmt(node: Node) -> Result<Option<ast::ModuleItem>, Box<dyn Error>> {
     match node {
-        Node::VariableDeclaration {
-            name,
-            type_annotation: _,
-            initializer,
-        } => {
+        Node::VariableDeclaration { name, initializer } => {
             let init = if let Some(expr) = initializer {
                 let swc_expr = node_to_swc_expr(*expr)?;
                 Some(Box::new(swc_expr))
@@ -63,7 +59,7 @@ fn node_to_swc_stmt(node: Node) -> Result<Option<ast::ModuleItem>, Box<dyn Error
                 name: ast::Pat::Ident(ast::BindingIdent {
                     id: ast::Ident {
                         span: DUMMY_SP,
-                        sym: name.into(),
+                        sym: name.unwrap().into(),
                         optional: false,
                     },
                     type_ann: None,
@@ -80,67 +76,6 @@ fn node_to_swc_stmt(node: Node) -> Result<Option<ast::ModuleItem>, Box<dyn Error
                     decls: vec![decl],
                 })),
             ))))
-        }
-        Node::FunctionDeclaration {
-            name,
-            params,
-            return_type: _,
-            body,
-        } => {
-            let mut swc_params = Vec::new();
-
-            for (param_name, _) in params {
-                swc_params.push(ast::Pat::Ident(ast::BindingIdent {
-                    id: ast::Ident {
-                        span: DUMMY_SP,
-                        sym: param_name.into(),
-                        optional: false,
-                    },
-                    type_ann: None,
-                }));
-            }
-
-            let mut swc_body_stmts = Vec::new();
-            for stmt in body {
-                if let Some(swc_stmt) = node_to_swc_stmt(stmt)? {
-                    if let ast::ModuleItem::Stmt(s) = swc_stmt {
-                        swc_body_stmts.push(s);
-                    }
-                }
-            }
-
-            let function = ast::Function {
-                params: swc_params
-                    .into_iter()
-                    .map(|p| ast::Param {
-                        span: DUMMY_SP,
-                        decorators: vec![],
-                        pat: p,
-                    })
-                    .collect(),
-                decorators: vec![],
-                span: DUMMY_SP,
-                body: Some(ast::BlockStmt {
-                    span: DUMMY_SP,
-                    stmts: swc_body_stmts,
-                }),
-                is_generator: false,
-                is_async: false,
-                type_params: None,
-                return_type: None,
-            };
-
-            Ok(Some(ast::ModuleItem::Stmt(ast::Stmt::Decl(ast::Decl::Fn(
-                ast::FnDecl {
-                    ident: ast::Ident {
-                        span: DUMMY_SP,
-                        sym: name.into(),
-                        optional: false,
-                    },
-                    declare: false,
-                    function: Box::new(function),
-                },
-            )))))
         }
         Node::ReturnStatement(expr) => {
             let arg = if let Some(e) = expr {
@@ -177,8 +112,8 @@ fn node_to_swc_expr(node: Node) -> Result<ast::Expr, Box<dyn Error>> {
             operator,
             right,
         } => {
-            let left_expr = node_to_swc_expr(*left)?;
-            let right_expr = node_to_swc_expr(*right)?;
+            let left_expr = node_to_swc_expr(*left.unwrap())?;
+            let right_expr = node_to_swc_expr(*right.unwrap())?;
 
             let op = match operator.as_str() {
                 "+" => ast::BinaryOp::Add,
@@ -203,31 +138,6 @@ fn node_to_swc_expr(node: Node) -> Result<ast::Expr, Box<dyn Error>> {
                 op,
                 left: Box::new(left_expr),
                 right: Box::new(right_expr),
-            }))
-        }
-        Node::FunctionCall { name, args } => {
-            let callee = ast::Expr::Ident(ast::Ident {
-                span: DUMMY_SP,
-                sym: name.into(),
-                optional: false,
-            });
-
-            let arguments = args
-                .into_iter()
-                .map(|arg| {
-                    let expr = node_to_swc_expr(arg)?;
-                    Ok::<_, Box<dyn Error>>(ast::ExprOrSpread {
-                        spread: None,
-                        expr: Box::new(expr),
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-
-            Ok(ast::Expr::Call(ast::CallExpr {
-                span: DUMMY_SP,
-                callee: ast::Callee::Expr(Box::new(callee)),
-                args: arguments,
-                type_args: None,
             }))
         }
         Node::Identifier(name) => Ok(ast::Expr::Ident(ast::Ident {

@@ -15,27 +15,27 @@ type_name = { identifier }
 
 // Expressions
 expression = { equality }
-equality = { relation ~ (("=="|"!=") ~ relation)* }
+equality = { relation? ~ (("=="|"!=") ~ relation?)* }
 eq_op = { "==" | "!=" }
-relation = { addition ~ (rel_op ~ addition)*}
+relation = { addition? ~ (rel_op ~ addition?)*}
 rel_op = { "<" | "<=" | ">=" | ">" }
-addition = { multiplication ~ (add_op ~ multiplication)* }
+addition = { multiplication? ~ (add_op ~ multiplication?)* }
 add_op = { "+" | "-" }
-multiplication = { exponentiation ~ (mul_op ~ exponentiation)* }
+multiplication = { exponentiation? ~ (mul_op ~ exponentiation?)* }
 mul_op = { "*" | "/" | "%" }
-exponentiation = { primary ~ ("**" ~ primary)* }
+exponentiation = { primary? ~ ("**" ~ primary?)* }
 primary = {  string_literal | number_literal | boolean_literal | identifier | "(" ~ expression ~ ")" }
 
 
 // Statements
 statement = { variable_declaration | return_statement | expression_statement }
-variable_declaration = { identifier ~ ":=" ~ expression }
+variable_declaration = { identifier? ~ ":=" ~ expression? }
 parameter_list = { "(" ~ (parameter ~ ("," ~ parameter)*)? ~ ")" }
 parameter = { identifier ~ type_annotation }
 return_statement = { "return" ~ expression? }
 expression_statement = { expression }
-block = { "{" ~ ((statement | blank_line) ~ (NEWLINE ~ (statement | blank_line))*)? ~ "}" }
+block = { "{" ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ "}" }
 
 // Program
 blank_line = _{ NEWLINE }
-program = { SOI ~ ((statement | blank_line) ~ (NEWLINE ~ (statement | blank_line))*)? ~ EOI }
+program = { SOI ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ EOI }

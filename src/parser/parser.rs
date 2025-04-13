@@ -17,7 +17,26 @@ pub struct ParseError<'i> {
     pub span: pest::Span<'i>,
 }
 
-pub type ParseResult<'i, T> = Result<T, Vec<ParseError<'i>>>;
+pub struct ParseResult<'i> {
+    pub node: Option<Node>,
+    pub errors: Vec<ParseError<'i>>,
+}
+
+impl ParseResult<'_> {
+    pub fn empty() -> Self {
+        ParseResult {
+            node: None,
+            errors: vec![],
+        }
+    }
+
+    pub fn ok(node: Option<Node>) -> Self {
+        ParseResult {
+            node,
+            errors: vec![],
+        }
+    }
+}
 
 pub struct ParserEngine;
 
@@ -39,18 +58,20 @@ impl ParserEngine {
             if pair.as_rule() != Rule::program {
                 continue;
             }
-            pair.into_inner()
-                .map(|inner| self.parse_statement(inner))
-                .for_each(|result| match result {
-                    Ok(node) => nodes.push(node),
-                    Err(mut e) => errors.append(&mut e),
-                });
+            for inner in pair.into_inner() {
+                let mut result = self.parse_statement(inner);
+                match result.node {
+                    Some(n) => nodes.push(n),
+                    None => {}
+                }
+                errors.append(&mut result.errors);
+            }
         }
 
         Ok(Node::Program(nodes))
     }
 
-    fn parse_statement<'i>(&self, pair: Pair<'i, Rule>) -> ParseResult<'i, Node> {
+    fn parse_statement<'i>(&self, pair: Pair<'i, Rule>) -> ParseResult<'i> {
         parse_statement(pair)
     }
 }
