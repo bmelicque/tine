@@ -1,1 +1,1 @@
-- [ ] `block` or `function declaration` can be a single statement with no EOL
+- [ ] allow multiple errors

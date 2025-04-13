@@ -114,12 +114,13 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
+        println!("PAIR = {:#?}", pair);
         parse_statement(pair).expect("Failed to parse statement")
     }
 
     #[test]
     fn test_variable_declaration() {
-        let node = parse("y := true\n");
+        let node = parse("y := true");
         match node {
             Node::VariableDeclaration {
                 name,
@@ -136,7 +137,7 @@ mod tests {
 
     #[test]
     fn test_expression_statement() {
-        let node = parse("foo(1, 2)\n");
+        let node = parse("foo(1, 2)");
         match node {
             Node::ExpressionStatement(expr) => match *expr {
                 Node::FunctionCall { name, args } => {
@@ -151,7 +152,7 @@ mod tests {
 
     #[test]
     fn test_return_statement() {
-        let node = parse("return 42\n");
+        let node = parse("return 42");
         match node {
             Node::ReturnStatement(expr) => {
                 assert!(matches!(*expr.unwrap(), Node::NumberLiteral(42.0)));
@@ -163,7 +164,7 @@ mod tests {
     #[test]
     fn test_function_declaration() {
         // FIXME:
-        let node = parse("fn add(a: number, b: number): number { return a + b; }");
+        let node = parse("function add(a: number, b: number): number { return a + b }");
         match node {
             Node::FunctionDeclaration {
                 name,

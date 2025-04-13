@@ -30,14 +30,14 @@ function_call = { identifier ~ "(" ~ (expression ~ ("," ~ expression)*)? ~ ")" }
 
 // Statements
 statement = { variable_declaration | function_declaration | return_statement | expression_statement }
-variable_declaration = { identifier ~ ":=" ~ expression ~ NEWLINE }
+variable_declaration = { identifier ~ ":=" ~ expression }
 function_declaration = { "function" ~ identifier ~ parameter_list ~ type_annotation? ~ block }
 parameter_list = { "(" ~ (parameter ~ ("," ~ parameter)*)? ~ ")" }
 parameter = { identifier ~ type_annotation }
-return_statement = { "return" ~ expression? ~ NEWLINE }
-expression_statement = { expression ~ NEWLINE }
-block = { "{" ~ (statement | blank_line)* ~ "}" }
+return_statement = { "return" ~ expression? }
+expression_statement = { expression }
+block = { "{" ~ ((statement | blank_line) ~ (NEWLINE ~ (statement | blank_line))*)? ~ "}" }
 
 // Program
 blank_line = _{ NEWLINE }
-program = { SOI ~ (statement | blank_line)* ~ EOI }
+program = { SOI ~ ((statement | blank_line) ~ (NEWLINE ~ (statement | blank_line))*)? ~ EOI }
