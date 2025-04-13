@@ -16,9 +16,13 @@ type_name = { identifier }
 // Expressions
 expression = { equality }
 equality = { relation ~ (("=="|"!=") ~ relation)* }
-relation = { addition ~ (("<"|"<="|">="|">") ~ addition)*}
-addition = { multiplication ~ (("+"|"-") ~ multiplication)* }
-multiplication = { exponentiation ~ (("*"|"/"|"%") ~ exponentiation)* }
+eq_op = { "==" | "!=" }
+relation = { addition ~ (rel_op ~ addition)*}
+rel_op = { "<" | "<=" | ">=" | ">" }
+addition = { multiplication ~ (add_op ~ multiplication)* }
+add_op = { "+" | "-" }
+multiplication = { exponentiation ~ (mul_op ~ exponentiation)* }
+mul_op = { "*" | "/" | "%" }
 exponentiation = { primary ~ ("**" ~ primary)* }
 primary = { function_call | string_literal | number_literal | boolean_literal | identifier | "(" ~ expression ~ ")" }
 function_call = { identifier ~ "(" ~ (expression ~ ("," ~ expression)*)? ~ ")" }
