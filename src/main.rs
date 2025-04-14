@@ -1,6 +1,6 @@
 mod ast;
+mod codegen;
 mod parser;
-mod transpiler;
 mod type_checker;
 mod types;
 mod utils;
@@ -10,8 +10,8 @@ use std::fs;
 use std::fs::File;
 use std::io::Write;
 
+use codegen::CodeGenerator;
 use parser::ParserEngine;
-use transpiler::Transpiler;
 use type_checker::TypeChecker;
 
 fn main() {
@@ -57,8 +57,8 @@ fn main() {
         std::process::exit(1);
     }
 
-    let transpiler = Transpiler::new();
-    match transpiler.generate_js(ast) {
+    let code_generator = CodeGenerator::new();
+    match code_generator.generate_js(ast) {
         Ok(js_code) => {
             write_output(&args[2], &js_code);
         }
