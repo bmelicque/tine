@@ -1,3 +1,3 @@
-- [ ] constant values `name :: init`
-- [ ] don't check type mismatch if unknown
+- [ ] function expression
+- [ ] function call
 - [ ] custom types `Type :: ...`

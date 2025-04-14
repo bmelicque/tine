@@ -148,7 +148,10 @@ impl TypeChecker {
                     None => Type::Unknown,
                 };
 
-                if left_type != right_type {
+                if left_type != right_type
+                    && left_type != Type::Unknown
+                    && right_type != Type::Unknown
+                {
                     self.errors.push(ParseError {
                         message: format!(
                             "Binary type mismatch: {:?} vs {:?}",
@@ -161,10 +164,10 @@ impl TypeChecker {
 
                 let valid = match operator.as_str() {
                     "+" | "-" | "*" | "**" | "/" | "%" | "<" | "<=" | ">" | ">=" => {
-                        matches!(left_type, Type::Number)
+                        matches!(left_type, Type::Unknown | Type::Number)
                     }
                     "==" | "!=" => true,
-                    "&&" | "||" => matches!(left_type, Type::Boolean),
+                    "&&" | "||" => matches!(left_type, Type::Unknown | Type::Boolean),
                     _ => false,
                 };
                 if !valid {
