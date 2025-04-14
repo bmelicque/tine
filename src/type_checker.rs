@@ -3,17 +3,23 @@ use crate::parser::parser::ParseError;
 use crate::types::Type;
 use std::collections::HashMap;
 
+pub struct VariableInfo {
+    pub ty: Type,
+    pub mutable: bool,
+}
+
 #[derive(Default)]
 pub struct SymbolTable {
-    symbols: HashMap<String, Type>,
+    symbols: HashMap<String, VariableInfo>,
 }
 
 impl SymbolTable {
-    pub fn define(&mut self, name: &str, type_: Type) {
-        self.symbols.insert(name.to_string(), type_);
+    pub fn define(&mut self, name: &str, type_: Type, mutable: bool) {
+        self.symbols
+            .insert(name.to_string(), VariableInfo { ty: type_, mutable });
     }
 
-    pub fn lookup(&self, name: &str) -> Option<&Type> {
+    pub fn lookup(&self, name: &str) -> Option<&VariableInfo> {
         self.symbols.get(name)
     }
 }
@@ -48,15 +54,25 @@ impl TypeChecker {
                 }
                 Type::Void
             }
-            Node::VariableDeclaration { name, initializer } => {
+            Node::VariableDeclaration {
+                name,
+                op,
+                initializer,
+            } => {
                 let inferred_type = if let Some(expr) = initializer {
                     self.visit(&expr)
                 } else {
                     Type::Unknown
                 };
 
+                let mutable = match op.as_str() {
+                    ":=" => true,
+                    "::" => false,
+                    _ => panic!("Unexpected declaration operator '{}'", op),
+                };
+
                 if let Some(n) = name {
-                    self.symbols.define(&n, inferred_type.clone());
+                    self.symbols.define(&n, inferred_type.clone(), mutable);
                 }
                 inferred_type
             }
@@ -81,12 +97,18 @@ impl TypeChecker {
                 };
 
                 match self.symbols.lookup(name) {
-                    Some(expected_type) => {
-                        if expected_type != &value_type {
+                    Some(&VariableInfo { ref ty, mutable }) => {
+                        if !mutable {
+                            self.errors.push(ParseError {
+                                message: "Cannot assign to immutable variable".to_string(),
+                                span: node.span,
+                            });
+                        }
+                        if ty != &value_type {
                             self.errors.push(ParseError {
                                 message: format!(
                                     "Type mismatch in assignment to '{}': expected {:?}, found {:?}",
-                                    name, expected_type, value_type
+                                    name, ty, value_type
                                 ),
                                 span: node.span,
                             });
@@ -162,7 +184,7 @@ impl TypeChecker {
                 }
             }
             Node::Identifier(name) => match self.symbols.lookup(&name) {
-                Some(t) => t.clone(),
+                Some(VariableInfo { ty, mutable: _ }) => ty.clone(),
                 None => {
                     self.errors.push(ParseError {
                         message: format!("Undefined variable: {}", name),
@@ -212,6 +234,7 @@ mod tests {
         let ast = spanned(Node::Program(vec![
             spanned(Node::VariableDeclaration {
                 name: Some("x".to_string()),
+                op: ":=".to_string(),
                 initializer: Some(Box::new(spanned(Node::NumberLiteral(1.0)))),
             }),
             spanned(Node::ExpressionStatement(Box::new(spanned(
@@ -227,7 +250,7 @@ mod tests {
     #[test]
     fn test_valid_assignment() {
         let mut checker = TypeChecker::new();
-        checker.symbols.define("x", Type::Number);
+        checker.symbols.define("x", Type::Number, true);
 
         let node = spanned(Node::Assignment {
             name: Some("x".to_string()),
@@ -239,9 +262,26 @@ mod tests {
     }
 
     #[test]
+    fn test_assignment_to_constant() {
+        let mut checker = TypeChecker::new();
+        checker.symbols.define("x", Type::Number, false);
+
+        let node = spanned(Node::Assignment {
+            name: Some("x".to_string()),
+            value: Some(Box::new(spanned(Node::NumberLiteral(42.0)))),
+        });
+
+        let result = checker.check(&node);
+        assert!(result.is_err());
+        assert!(checker.errors[0]
+            .message
+            .contains("Cannot assign to immutable variable"));
+    }
+
+    #[test]
     fn test_assignment_type_mismatch() {
         let mut checker = TypeChecker::new();
-        checker.symbols.define("x", Type::String);
+        checker.symbols.define("x", Type::String, true);
 
         let node = spanned(Node::Assignment {
             name: Some("x".to_string()),
@@ -288,7 +328,7 @@ mod tests {
     #[test]
     fn test_assignment_missing_value() {
         let mut checker = TypeChecker::new();
-        checker.symbols.define("z", Type::Boolean);
+        checker.symbols.define("z", Type::Boolean, true);
 
         let node = spanned(Node::Assignment {
             name: Some("z".to_string()),

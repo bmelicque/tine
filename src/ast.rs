@@ -9,6 +9,7 @@ pub enum Node {
     Program(Vec<AstNode>),
     VariableDeclaration {
         name: Option<String>,
+        op: String,
         initializer: Option<Box<AstNode>>,
     },
     Assignment {

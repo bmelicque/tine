@@ -1,2 +1,3 @@
-- [ ] constant values
+- [ ] constant values `name :: init`
 - [ ] don't check type mismatch if unknown
+- [ ] custom types `Type :: ...`

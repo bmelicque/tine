@@ -11,7 +11,11 @@ pub fn node_to_swc_stmt(
     node: Node,
 ) -> Result<Option<ast::ModuleItem>, Box<dyn Error>> {
     match node {
-        Node::VariableDeclaration { name, initializer } => {
+        Node::VariableDeclaration {
+            name,
+            op,
+            initializer,
+        } => {
             let init = if let Some(expr) = initializer {
                 let swc_expr = node_to_swc_expr(generator, expr.node)?;
                 Some(Box::new(swc_expr))
@@ -33,10 +37,16 @@ pub fn node_to_swc_stmt(
                 definite: false,
             };
 
+            let kind = match op.as_str() {
+                ":=" => ast::VarDeclKind::Let,
+                "::" => ast::VarDeclKind::Const,
+                _ => panic!("Unexpected declaration operator '{}'", op),
+            };
+
             Ok(Some(ast::ModuleItem::Stmt(ast::Stmt::Decl(
                 ast::Decl::Var(Box::new(ast::VarDecl {
                     span: DUMMY_SP,
-                    kind: ast::VarDeclKind::Let,
+                    kind,
                     declare: false,
                     decls: vec![decl],
                 })),

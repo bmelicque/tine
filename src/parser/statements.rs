@@ -22,12 +22,13 @@ pub fn parse_statement(pair: Pair<'static, Rule>) -> ParseResult {
 }
 
 fn parse_variable_declaration(pair: Pair<'static, Rule>) -> ParseResult {
-    let (name, value, errors) = parse_assignment_like(pair.clone());
+    let (name, value, op, errors) = parse_assignment_like(pair.clone());
 
     ParseResult {
         node: Some(Spanned {
             node: Node::VariableDeclaration {
                 name,
+                op,
                 initializer: value,
             },
             span: pair.as_span(),
@@ -36,7 +37,7 @@ fn parse_variable_declaration(pair: Pair<'static, Rule>) -> ParseResult {
     }
 }
 fn parse_assignment(pair: Pair<'static, Rule>) -> ParseResult {
-    let (name, value, errors) = parse_assignment_like(pair.clone());
+    let (name, value, _, errors) = parse_assignment_like(pair.clone());
 
     ParseResult {
         node: Some(Spanned {
@@ -50,24 +51,29 @@ fn parse_assignment(pair: Pair<'static, Rule>) -> ParseResult {
 // Parses variable declarations and assignments
 fn parse_assignment_like(
     pair: Pair<'static, Rule>,
-) -> (Option<String>, Option<Box<AstNode>>, Vec<ParseError>) {
+) -> (
+    Option<String>,
+    Option<Box<AstNode>>,
+    String,
+    Vec<ParseError>,
+) {
     let span = pair.as_span();
     let mut inner = pair.into_inner();
 
     let mut errors = Vec::new();
     let mut name: Option<String> = None;
     let mut value: Option<AstNode> = None;
+    let mut op: String = "=".to_string();
 
     while let Some(item) = inner.next() {
         match item.as_rule() {
-            Rule::identifier => {
-                name = Some(item.as_str().to_string());
-            }
+            Rule::identifier => name = Some(item.as_str().to_string()),
             Rule::expression => {
                 let mut result = parse_expression(item);
                 value = result.node;
                 errors.append(&mut result.errors);
             }
+            Rule::decl_op => op = item.as_str().to_string(),
             _ => panic!("Unexpected rule in assignment-like statement!"),
         }
     }
@@ -84,7 +90,7 @@ fn parse_assignment_like(
         });
     }
 
-    (name, value.map(Box::new), errors)
+    (name, value.map(Box::new), op, errors)
 }
 
 fn parse_return_statement(pair: Pair<'static, Rule>) -> ParseResult {
@@ -146,12 +152,17 @@ mod tests {
         assert!(result.errors.is_empty());
 
         match result.node.unwrap().node {
-            Node::VariableDeclaration { name, initializer } => {
+            Node::VariableDeclaration {
+                name,
+                op,
+                initializer,
+            } => {
                 assert_eq!(name.unwrap(), "x");
                 assert!(matches!(
                     initializer.unwrap().node,
                     Node::NumberLiteral(42.0)
                 ));
+                assert_eq!(op, ":=");
             }
             _ => panic!("Expected VariableDeclaration"),
         }
