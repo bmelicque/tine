@@ -3,7 +3,7 @@ use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as ast;
 use swc_ecma_codegen::{text_writer::JsWriter, Config, Emitter};
 
-use crate::ast::Node;
+use crate::ast::{AstNode, Node};
 
 #[derive(Debug, Clone)]
 pub struct TranspilerError {
@@ -27,7 +27,7 @@ pub fn node_to_swc_module(
             let mut swc_stmts = Vec::new();
 
             for stmt in statements {
-                if let Some(swc_stmt) = node_to_swc_stmt(stmt)? {
+                if let Some(swc_stmt) = node_to_swc_stmt(stmt.node)? {
                     swc_stmts.push(swc_stmt);
                 }
             }
@@ -48,7 +48,7 @@ fn node_to_swc_stmt(node: Node) -> Result<Option<ast::ModuleItem>, Box<dyn Error
     match node {
         Node::VariableDeclaration { name, initializer } => {
             let init = if let Some(expr) = initializer {
-                let swc_expr = node_to_swc_expr(*expr)?;
+                let swc_expr = node_to_swc_expr(expr.node)?;
                 Some(Box::new(swc_expr))
             } else {
                 None
@@ -79,7 +79,7 @@ fn node_to_swc_stmt(node: Node) -> Result<Option<ast::ModuleItem>, Box<dyn Error
         }
         Node::ReturnStatement(expr) => {
             let arg = if let Some(e) = expr {
-                let swc_expr = node_to_swc_expr(*e)?;
+                let swc_expr = node_to_swc_expr(e.node)?;
                 Some(Box::new(swc_expr))
             } else {
                 None
@@ -93,7 +93,7 @@ fn node_to_swc_stmt(node: Node) -> Result<Option<ast::ModuleItem>, Box<dyn Error
             ))))
         }
         Node::ExpressionStatement(expr) => {
-            let swc_expr = node_to_swc_expr(*expr)?;
+            let swc_expr = node_to_swc_expr(expr.node)?;
             Ok(Some(ast::ModuleItem::Stmt(ast::Stmt::Expr(
                 ast::ExprStmt {
                     span: DUMMY_SP,
@@ -112,8 +112,8 @@ fn node_to_swc_expr(node: Node) -> Result<ast::Expr, Box<dyn Error>> {
             operator,
             right,
         } => {
-            let left_expr = node_to_swc_expr(*left.unwrap())?;
-            let right_expr = node_to_swc_expr(*right.unwrap())?;
+            let left_expr = node_to_swc_expr(left.unwrap().node)?;
+            let right_expr = node_to_swc_expr(right.unwrap().node)?;
 
             let op = match operator.as_str() {
                 "+" => ast::BinaryOp::Add,
@@ -176,8 +176,8 @@ impl Transpiler {
         }
     }
 
-    pub fn generate_js(&self, node: Node) -> Result<String, Box<dyn Error>> {
-        let program = node_to_swc_module(&self.source_map, node)?;
+    pub fn generate_js(&self, node: AstNode) -> Result<String, Box<dyn Error>> {
+        let program = node_to_swc_module(&self.source_map, node.node)?;
 
         let mut buf = Vec::new();
         {

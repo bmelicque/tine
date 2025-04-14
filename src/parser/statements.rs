@@ -1,13 +1,13 @@
 use pest::iterators::Pair;
 
-use crate::ast::Node;
+use crate::ast::{AstNode, Node, Spanned};
 
 use super::{
     expressions::parse_expression,
     parser::{ParseError, ParseResult, Rule},
 };
 
-pub fn parse_statement<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i> {
+pub fn parse_statement(pair: Pair<'static, Rule>) -> ParseResult {
     match pair.as_rule() {
         Rule::statement => {
             let inner_pair = pair.into_inner().next().unwrap();
@@ -16,18 +16,17 @@ pub fn parse_statement<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i> {
         Rule::variable_declaration => parse_variable_declaration(pair),
         Rule::return_statement => parse_return_statement(pair),
         Rule::expression_statement => parse_expression_statement(pair),
-        // TODO:
         _ => ParseResult::empty(),
     }
 }
 
-fn parse_variable_declaration<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i> {
-    let span = pair.clone().as_span();
+fn parse_variable_declaration(pair: Pair<'static, Rule>) -> ParseResult {
+    let span = pair.as_span();
     let mut inner = pair.into_inner();
 
     let mut errors = Vec::new();
     let mut name: Option<String> = None;
-    let mut initializer: Option<Box<Node>> = None;
+    let mut initializer: Option<AstNode> = None;
 
     while let Some(item) = inner.next() {
         match item.as_rule() {
@@ -36,7 +35,7 @@ fn parse_variable_declaration<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i> {
             }
             Rule::expression => {
                 let mut result = parse_expression(item);
-                initializer = result.node.map(Box::new);
+                initializer = result.node;
                 errors.append(&mut result.errors);
             }
             _ => panic!("Unexpected rule in variable declaration!"),
@@ -45,7 +44,7 @@ fn parse_variable_declaration<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i> {
     if name.is_none() {
         errors.push(ParseError {
             message: "Value identifier expected".to_string(),
-            span,
+            span: span.clone(),
         });
     }
     if initializer.is_none() {
@@ -56,32 +55,49 @@ fn parse_variable_declaration<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i> {
     }
 
     ParseResult {
-        node: Some(Node::VariableDeclaration { name, initializer }),
+        node: Some(Spanned {
+            node: Node::VariableDeclaration {
+                name,
+                initializer: initializer.map(Box::new),
+            },
+            span,
+        }),
         errors,
     }
 }
 
-fn parse_return_statement<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i> {
+fn parse_return_statement(pair: Pair<'static, Rule>) -> ParseResult {
+    let span = pair.as_span();
     let Some(inner) = pair.clone().into_inner().next() else {
-        return ParseResult::ok(Some(Node::ReturnStatement(None)));
+        return ParseResult {
+            node: Some(Spanned {
+                node: Node::ReturnStatement(None),
+                span,
+            }),
+            errors: vec![],
+        };
     };
 
     let result = parse_expression(inner);
     ParseResult {
-        node: Some(Node::ReturnStatement(result.node.map(Box::new))),
+        node: Some(Spanned {
+            node: Node::ReturnStatement(result.node.map(Box::new)),
+            span,
+        }),
         errors: result.errors,
     }
 }
 
-fn parse_expression_statement<'i>(pair: Pair<'i, Rule>) -> ParseResult<'i> {
+fn parse_expression_statement(pair: Pair<'static, Rule>) -> ParseResult {
+    let span = pair.as_span();
     match pair.into_inner().next() {
         Some(inner) => {
             let result = parse_expression(inner);
             ParseResult {
-                node: match result.node {
-                    Some(expr) => Some(Node::ExpressionStatement(Box::new(expr))),
-                    None => None,
-                },
+                node: result.node.map(|expr| Spanned {
+                    node: Node::ExpressionStatement(Box::new(expr)),
+                    span,
+                }),
                 errors: result.errors,
             }
         }
@@ -95,7 +111,7 @@ mod tests {
     use crate::parser::parser::{MyLanguageParser, Rule};
     use pest::Parser;
 
-    fn parse(input: &str) -> ParseResult {
+    fn parse(input: &'static str) -> ParseResult {
         let pair = MyLanguageParser::parse(Rule::statement, input)
             .unwrap()
             .next()
@@ -106,16 +122,15 @@ mod tests {
     #[test]
     fn test_valid_variable_declaration() {
         let result = parse("x := 42");
-        assert!(
-            result.errors.is_empty(),
-            "Expected no errors, got {:?}",
-            result.errors
-        );
+        assert!(result.errors.is_empty());
 
-        match result.node {
-            Some(Node::VariableDeclaration { name, initializer }) => {
+        match result.node.unwrap().node {
+            Node::VariableDeclaration { name, initializer } => {
                 assert_eq!(name.unwrap(), "x");
-                assert!(matches!(*initializer.unwrap(), Node::NumberLiteral(42.0)));
+                assert!(matches!(
+                    initializer.unwrap().node,
+                    Node::NumberLiteral(42.0)
+                ));
             }
             _ => panic!("Expected VariableDeclaration"),
         }
@@ -149,9 +164,9 @@ mod tests {
         let result = parse("return true");
         assert!(result.errors.is_empty());
 
-        match result.node {
-            Some(Node::ReturnStatement(Some(expr))) => {
-                assert!(matches!(*expr, Node::BooleanLiteral(true)));
+        match result.node.unwrap().node {
+            Node::ReturnStatement(Some(expr)) => {
+                assert!(matches!(expr.node, Node::BooleanLiteral(true)));
             }
             _ => panic!("Expected ReturnStatement with value"),
         }
@@ -162,8 +177,8 @@ mod tests {
         let result = parse("return");
         assert!(result.errors.is_empty());
 
-        match result.node {
-            Some(Node::ReturnStatement(None)) => {}
+        match result.node.unwrap().node {
+            Node::ReturnStatement(None) => {}
             _ => panic!("Expected empty ReturnStatement"),
         }
     }

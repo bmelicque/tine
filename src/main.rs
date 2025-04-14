@@ -33,22 +33,29 @@ fn main() {
     };
 
     let parser = ParserEngine::new();
-    let result = parser.parse(&input);
+    let static_input: &'static str = Box::leak(input.to_string().into_boxed_str());
+    let result = parser.parse(&static_input);
     let Some(ast) = result.node else {
         panic!("parse should make sure that this is Some")
     };
+    let has_parse_errors = !result.errors.is_empty();
     for error in result.errors {
         utils::pretty_print_error(&input, &error);
     }
 
     let mut checker = TypeChecker::new();
     match checker.check(&ast) {
-        Err(err) => {
-            eprintln!("Error type checking file {}: {:?}", filename, err);
+        Err(errors) => {
+            for error in errors {
+                utils::pretty_print_error(&input, &error);
+            }
             std::process::exit(1);
         }
         _ => (),
     };
+    if has_parse_errors {
+        std::process::exit(1);
+    }
 
     let transpiler = Transpiler::new();
     match transpiler.generate_js(ast) {
