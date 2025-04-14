@@ -60,6 +60,50 @@ impl TypeChecker {
                 }
                 inferred_type
             }
+            Node::Assignment { name, value } => {
+                let value_type = match value {
+                    Some(v) => self.visit(v),
+                    None => {
+                        self.errors.push(ParseError {
+                            message: "Expression expected".to_string(),
+                            span: node.span,
+                        });
+                        Type::Unknown
+                    }
+                };
+
+                let Some(name) = name else {
+                    self.errors.push(ParseError {
+                        message: "Missing assignee".to_string(),
+                        span: node.span,
+                    });
+                    return Type::Unknown;
+                };
+
+                match self.symbols.lookup(name) {
+                    Some(expected_type) => {
+                        if expected_type != &value_type {
+                            self.errors.push(ParseError {
+                                message: format!(
+                                    "Type mismatch in assignment to '{}': expected {:?}, found {:?}",
+                                    name, expected_type, value_type
+                                ),
+                                span: node.span,
+                            });
+                            Type::Unknown
+                        } else {
+                            Type::Void
+                        }
+                    }
+                    None => {
+                        self.errors.push(ParseError {
+                            message: format!("Assignment to undeclared variable '{}'", name),
+                            span: node.span,
+                        });
+                        Type::Unknown
+                    }
+                }
+            }
             Node::ReturnStatement(expr_opt) => {
                 if let Some(expr) = expr_opt {
                     self.visit(&expr)
@@ -148,6 +192,7 @@ impl TypeChecker {
 mod tests {
     use crate::ast::{Node, Spanned};
     use crate::type_checker::TypeChecker;
+    use crate::types::Type;
     use pest::Span;
 
     fn dummy_span() -> Span<'static> {
@@ -177,6 +222,82 @@ mod tests {
         let mut checker = TypeChecker::new();
         let result = checker.check(&ast);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_valid_assignment() {
+        let mut checker = TypeChecker::new();
+        checker.symbols.define("x", Type::Number);
+
+        let node = spanned(Node::Assignment {
+            name: Some("x".to_string()),
+            value: Some(Box::new(spanned(Node::NumberLiteral(42.0)))),
+        });
+
+        let result = checker.check(&node);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_assignment_type_mismatch() {
+        let mut checker = TypeChecker::new();
+        checker.symbols.define("x", Type::String);
+
+        let node = spanned(Node::Assignment {
+            name: Some("x".to_string()),
+            value: Some(Box::new(spanned(Node::BooleanLiteral(true)))),
+        });
+
+        let result = checker.check(&node);
+        assert!(result.is_err());
+        assert!(checker.errors[0]
+            .message
+            .contains("Type mismatch in assignment"));
+    }
+
+    #[test]
+    fn test_assignment_to_undeclared_variable() {
+        let mut checker = TypeChecker::new();
+
+        let node = spanned(Node::Assignment {
+            name: Some("y".to_string()),
+            value: Some(Box::new(spanned(Node::NumberLiteral(99.0)))),
+        });
+
+        let result = checker.check(&node);
+        assert!(result.is_err());
+        assert!(checker.errors[0]
+            .message
+            .contains("Assignment to undeclared variable"));
+    }
+
+    #[test]
+    fn test_assignment_missing_name() {
+        let mut checker = TypeChecker::new();
+
+        let node = spanned(Node::Assignment {
+            name: None,
+            value: Some(Box::new(spanned(Node::StringLiteral("oops".into())))),
+        });
+
+        let result = checker.check(&node);
+        assert!(result.is_err());
+        assert!(checker.errors[0].message.contains("Missing assignee"));
+    }
+
+    #[test]
+    fn test_assignment_missing_value() {
+        let mut checker = TypeChecker::new();
+        checker.symbols.define("z", Type::Boolean);
+
+        let node = spanned(Node::Assignment {
+            name: Some("z".to_string()),
+            value: None,
+        });
+
+        let result = checker.check(&node);
+        assert!(result.is_err());
+        assert!(checker.errors[0].message.contains("Expression expected"));
     }
 
     #[test]

@@ -42,6 +42,37 @@ pub fn node_to_swc_stmt(
                 })),
             ))))
         }
+        Node::Assignment { name, value } => {
+            let value_expr = if let Some(v) = value {
+                node_to_swc_expr(generator, v.node)?
+            } else {
+                panic!("Missing expression in assignment!");
+            };
+
+            let Some(name) = name else {
+                panic!("Missing variable name in assignment.");
+            };
+
+            let swc_name = ast::Ident {
+                span: DUMMY_SP,
+                sym: name.into(),
+                optional: false,
+            };
+
+            let swc_assignee = ast::Expr::Ident(swc_name);
+
+            Ok(Some(ast::ModuleItem::Stmt(ast::Stmt::Expr(
+                ast::ExprStmt {
+                    span: DUMMY_SP,
+                    expr: Box::new(ast::Expr::Assign(ast::AssignExpr {
+                        span: DUMMY_SP,
+                        op: ast::AssignOp::Assign,
+                        left: ast::PatOrExpr::Expr(Box::new(swc_assignee)),
+                        right: Box::new(value_expr),
+                    })),
+                },
+            ))))
+        }
         Node::ReturnStatement(expr) => {
             let arg = if let Some(e) = expr {
                 let swc_expr = node_to_swc_expr(generator, e.node)?;

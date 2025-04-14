@@ -1,5 +1,2 @@
-- [ ] refactor transpiler
-- [ ] transpile
-
 - [ ] constant values
-- [ ] assignment
+- [ ] don't check type mismatch if unknown

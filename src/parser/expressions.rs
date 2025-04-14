@@ -69,7 +69,6 @@ fn parse_binary_ltr_expression(pair: Pair<'static, Rule>) -> ParseResult {
 
     let mut is_binary = false;
     while let Some(op_pair) = inner.next() {
-        println!("In loop");
         if !is_binary && left.is_none() && errors.is_empty() {
             errors.push(ParseError {
                 message: "Expression expected".to_string(),

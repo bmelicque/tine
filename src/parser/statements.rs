@@ -14,6 +14,7 @@ pub fn parse_statement(pair: Pair<'static, Rule>) -> ParseResult {
             parse_statement(inner_pair)
         }
         Rule::variable_declaration => parse_variable_declaration(pair),
+        Rule::assignment => parse_assignment(pair),
         Rule::return_statement => parse_return_statement(pair),
         Rule::expression_statement => parse_expression_statement(pair),
         _ => ParseResult::empty(),
@@ -21,12 +22,41 @@ pub fn parse_statement(pair: Pair<'static, Rule>) -> ParseResult {
 }
 
 fn parse_variable_declaration(pair: Pair<'static, Rule>) -> ParseResult {
+    let (name, value, errors) = parse_assignment_like(pair.clone());
+
+    ParseResult {
+        node: Some(Spanned {
+            node: Node::VariableDeclaration {
+                name,
+                initializer: value,
+            },
+            span: pair.as_span(),
+        }),
+        errors,
+    }
+}
+fn parse_assignment(pair: Pair<'static, Rule>) -> ParseResult {
+    let (name, value, errors) = parse_assignment_like(pair.clone());
+
+    ParseResult {
+        node: Some(Spanned {
+            node: Node::Assignment { name, value },
+            span: pair.as_span(),
+        }),
+        errors,
+    }
+}
+
+// Parses variable declarations and assignments
+fn parse_assignment_like(
+    pair: Pair<'static, Rule>,
+) -> (Option<String>, Option<Box<AstNode>>, Vec<ParseError>) {
     let span = pair.as_span();
     let mut inner = pair.into_inner();
 
     let mut errors = Vec::new();
     let mut name: Option<String> = None;
-    let mut initializer: Option<AstNode> = None;
+    let mut value: Option<AstNode> = None;
 
     while let Some(item) = inner.next() {
         match item.as_rule() {
@@ -35,35 +65,26 @@ fn parse_variable_declaration(pair: Pair<'static, Rule>) -> ParseResult {
             }
             Rule::expression => {
                 let mut result = parse_expression(item);
-                initializer = result.node;
+                value = result.node;
                 errors.append(&mut result.errors);
             }
-            _ => panic!("Unexpected rule in variable declaration!"),
+            _ => panic!("Unexpected rule in assignment-like statement!"),
         }
     }
     if name.is_none() {
         errors.push(ParseError {
-            message: "Value identifier expected".to_string(),
+            message: "Identifier expected in lhs".to_string(),
             span: span.clone(),
         });
     }
-    if initializer.is_none() {
+    if value.is_none() {
         errors.push(ParseError {
-            message: "Initializer expected".to_string(),
+            message: "Expression expected in rhs".to_string(),
             span,
         });
     }
 
-    ParseResult {
-        node: Some(Spanned {
-            node: Node::VariableDeclaration {
-                name,
-                initializer: initializer.map(Box::new),
-            },
-            span,
-        }),
-        errors,
-    }
+    (name, value.map(Box::new), errors)
 }
 
 fn parse_return_statement(pair: Pair<'static, Rule>) -> ParseResult {
@@ -141,7 +162,7 @@ mod tests {
         let result = parse(":= 42");
         assert!(result.node.is_some());
         assert_eq!(result.errors.len(), 1);
-        assert_eq!(result.errors[0].message, "Value identifier expected");
+        assert_eq!(result.errors[0].message, "Identifier expected in lhs");
     }
 
     #[test]
@@ -149,7 +170,7 @@ mod tests {
         let result = parse("x :=");
         assert!(result.node.is_some());
         assert_eq!(result.errors.len(), 1);
-        assert_eq!(result.errors[0].message, "Initializer expected");
+        assert_eq!(result.errors[0].message, "Expression expected in rhs");
     }
 
     #[test]
@@ -157,6 +178,36 @@ mod tests {
         let result = parse(":=");
         assert!(result.node.is_some());
         assert_eq!(result.errors.len(), 2);
+    }
+
+    #[test]
+    fn test_valid_assignment() {
+        let result = parse("x = 42");
+        assert!(result.errors.is_empty());
+
+        match result.node.unwrap().node {
+            Node::Assignment { name, value } => {
+                assert_eq!(name.unwrap(), "x");
+                assert!(matches!(value.unwrap().node, Node::NumberLiteral(42.0)));
+            }
+            _ => panic!("Expected VariableDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_assignment_missing_assignee() {
+        let result = parse("= 42");
+        assert!(result.node.is_some());
+        assert_eq!(result.errors.len(), 1);
+        assert_eq!(result.errors[0].message, "Identifier expected in lhs");
+    }
+
+    #[test]
+    fn test_assignment_missing_value() {
+        let result = parse("x =");
+        assert!(result.node.is_some());
+        assert_eq!(result.errors.len(), 1);
+        assert_eq!(result.errors[0].message, "Expression expected in rhs");
     }
 
     #[test]
