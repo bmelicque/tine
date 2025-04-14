@@ -73,9 +73,6 @@ impl TypeChecker {
                 operator,
                 right,
             } => {
-                // FIXME: make sure that types are compatible with operator
-                _ = operator;
-
                 let left_type = match left {
                     Some(expr) => self.visit(&expr),
                     None => Type::Unknown,
@@ -93,9 +90,31 @@ impl TypeChecker {
                         ),
                         span: node.span,
                     });
-                    Type::Unknown
-                } else {
-                    left_type
+                    return Type::Unknown;
+                }
+
+                let valid = match operator.as_str() {
+                    "+" | "-" | "*" | "**" | "/" | "%" | "<" | "<=" | ">" | ">=" => {
+                        matches!(left_type, Type::Number)
+                    }
+                    "==" | "!=" => true,
+                    "&&" | "||" => matches!(left_type, Type::Boolean),
+                    _ => false,
+                };
+                if !valid {
+                    self.errors.push(ParseError {
+                        message: format!(
+                            "Operator '{}' cannot be applied to type {:?}",
+                            operator, left_type
+                        ),
+                        span: node.span,
+                    });
+                }
+
+                match operator.as_str() {
+                    "==" | "!=" | "<" | "<=" | ">" | ">=" | "&&" | "||" => Type::Boolean,
+                    "+" | "-" | "*" | "**" | "/" | "%" => Type::Number,
+                    _ => left_type,
                 }
             }
             Node::Identifier(name) => match self.symbols.lookup(&name) {
@@ -161,26 +180,88 @@ mod tests {
     }
 
     #[test]
-    fn test_type_mismatch_error() {
-        let ast = spanned(Node::Program(vec![
-            spanned(Node::VariableDeclaration {
-                name: Some("a".to_string()),
-                initializer: Some(Box::new(spanned(Node::StringLiteral("hello".to_string())))),
-            }),
-            spanned(Node::BinaryExpression {
-                left: Some(Box::new(spanned(Node::Identifier("a".to_string())))),
-                operator: "+".to_string(),
-                right: Some(Box::new(spanned(Node::NumberLiteral(42.0)))),
-            }),
-        ]));
+    fn test_number_addition() {
+        let node = spanned(Node::BinaryExpression {
+            left: Some(Box::new(spanned(Node::NumberLiteral(1.0)))),
+            operator: "+".to_string(),
+            right: Some(Box::new(spanned(Node::NumberLiteral(2.0)))),
+        });
 
         let mut checker = TypeChecker::new();
-        let result = checker.check(&ast);
+        let result = checker.check(&node);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_boolean_addition_error() {
+        let node = spanned(Node::BinaryExpression {
+            left: Some(Box::new(spanned(Node::BooleanLiteral(true)))),
+            operator: "+".to_string(),
+            right: Some(Box::new(spanned(Node::BooleanLiteral(false)))),
+        });
+
+        let mut checker = TypeChecker::new();
+        let result = checker.check(&node);
         assert!(result.is_err());
-        let errors = result.unwrap_err();
-        assert!(errors
-            .iter()
-            .any(|e| e.message.contains("Binary type mismatch")));
+        assert!(checker.errors[0]
+            .message
+            .contains("Operator '+' cannot be applied"));
+    }
+
+    #[test]
+    fn test_equality_check_valid() {
+        let node = spanned(Node::BinaryExpression {
+            left: Some(Box::new(spanned(Node::StringLiteral("a".into())))),
+            operator: "==".to_string(),
+            right: Some(Box::new(spanned(Node::StringLiteral("b".into())))),
+        });
+
+        let mut checker = TypeChecker::new();
+        let result = checker.check(&node);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_logical_and_valid() {
+        let node = spanned(Node::BinaryExpression {
+            left: Some(Box::new(spanned(Node::BooleanLiteral(true)))),
+            operator: "&&".to_string(),
+            right: Some(Box::new(spanned(Node::BooleanLiteral(false)))),
+        });
+
+        let mut checker = TypeChecker::new();
+        let result = checker.check(&node);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_logical_and_invalid_type() {
+        let node = spanned(Node::BinaryExpression {
+            left: Some(Box::new(spanned(Node::NumberLiteral(1.0)))),
+            operator: "&&".to_string(),
+            right: Some(Box::new(spanned(Node::NumberLiteral(0.0)))),
+        });
+
+        let mut checker = TypeChecker::new();
+        let result = checker.check(&node);
+        assert!(result.is_err());
+        assert!(checker.errors[0]
+            .message
+            .contains("Operator '&&' cannot be applied"));
+    }
+
+    #[test]
+    fn test_type_mismatch_error() {
+        let node = spanned(Node::BinaryExpression {
+            left: Some(Box::new(spanned(Node::NumberLiteral(1.0)))),
+            operator: "+".to_string(),
+            right: Some(Box::new(spanned(Node::StringLiteral("oops".into())))),
+        });
+
+        let mut checker = TypeChecker::new();
+        let result = checker.check(&node);
+        assert!(result.is_err());
+        assert!(checker.errors[0].message.contains("Binary type mismatch"));
     }
 
     #[test]
