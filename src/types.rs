@@ -4,9 +4,9 @@ pub enum Type {
     Number,
     Boolean,
     Void,
-    // Function {
-    //     params: Vec<Type>,
-    //     return_type: Box<Type>,
-    // },
+    Function {
+        params: Vec<Type>,
+        return_type: Box<Type>,
+    },
     Unknown,
 }

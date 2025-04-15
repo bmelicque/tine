@@ -1,39 +1,21 @@
+use super::symbol_table::{SymbolTable, VariableInfo};
+
 use crate::ast::{AstNode, Node};
 use crate::parser::parser::ParseError;
 use crate::types::Type;
-use std::collections::HashMap;
-
-pub struct VariableInfo {
-    pub ty: Type,
-    pub mutable: bool,
-}
-
-#[derive(Default)]
-pub struct SymbolTable {
-    symbols: HashMap<String, VariableInfo>,
-}
-
-impl SymbolTable {
-    pub fn define(&mut self, name: &str, type_: Type, mutable: bool) {
-        self.symbols
-            .insert(name.to_string(), VariableInfo { ty: type_, mutable });
-    }
-
-    pub fn lookup(&self, name: &str) -> Option<&VariableInfo> {
-        self.symbols.get(name)
-    }
-}
 
 pub struct TypeChecker {
-    errors: Vec<ParseError>,
-    symbols: SymbolTable,
+    pub errors: Vec<ParseError>,
+    pub symbols: SymbolTable,
 }
 
 impl TypeChecker {
     pub fn new() -> Self {
+        let mut symbols = SymbolTable::default();
+        symbols.enter_scope();
         Self {
             errors: Vec::new(),
-            symbols: SymbolTable::default(),
+            symbols,
         }
     }
 
@@ -46,12 +28,19 @@ impl TypeChecker {
         }
     }
 
-    fn visit(&mut self, node: &AstNode) -> Type {
+    pub(super) fn visit(&mut self, node: &AstNode) -> Type {
         match &node.node {
             Node::Program(statements) => {
                 for stmt in statements {
                     self.visit(&stmt);
                 }
+                Type::Void
+            }
+            Node::Block(statements) => {
+                for stmt in statements {
+                    self.visit(&stmt);
+                }
+                // TODO: block expressions?
                 Type::Void
             }
             Node::VariableDeclaration {
@@ -133,21 +122,12 @@ impl TypeChecker {
                     Type::Void
                 }
             }
-            Node::Block(block) => {
-                // TODO:
-                _ = block;
-                Type::Unknown
-            }
             Node::ExpressionStatement(expr) => self.visit(&expr),
             Node::FunctionExpression {
-                parameters,
-                return_type,
-                body,
-            } => {
-                // TODO:
-                _ = (parameters, return_type, body);
-                Type::Unknown
-            }
+                parameters: _,
+                return_type: _,
+                body: _,
+            } => self.visit_function_expression(&node.node),
             Node::BinaryExpression {
                 left,
                 operator,
@@ -216,15 +196,15 @@ impl TypeChecker {
         }
     }
 
-    // fn resolve_type(&self, type_str: &str) -> Option<Type> {
-    //     match type_str {
-    //         "string" => Some(Type::String),
-    //         "number" => Some(Type::Number),
-    //         "boolean" => Some(Type::Boolean),
-    //         "void" => Some(Type::Void),
-    //         _ => Some(Type::Unknown),
-    //     }
-    // }
+    pub(super) fn resolve_type(&self, type_str: &str) -> Type {
+        match type_str {
+            "string" => Type::String,
+            "number" => Type::Number,
+            "boolean" => Type::Boolean,
+            "void" => Type::Void,
+            _ => Type::Unknown,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -290,6 +270,7 @@ mod tests {
 
         let result = checker.check(&node);
         assert!(result.is_err());
+        assert!(checker.errors.len() == 1);
         assert!(checker.errors[0]
             .message
             .contains("Cannot assign to immutable variable"));
