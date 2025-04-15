@@ -10,9 +10,22 @@ number_literal = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 boolean_literal = @{ "true" | "false" }
 
 // Type annotations
-// TODO: handle more complex types
 type_annotation = { type_name }
-type_name = { identifier }
+type_name = _{ tuple_type }
+tuple_type = { result_type ~ ("," ~ result_type)* } // e.g., number, string
+result_type = { map_type ~ ("!" ~ map_type)* }        // e.g., error!ok | !ok
+// TODO: inferred "#"
+map_type = { unary_type ~ ("#" ~ unary_type)* }      // e.g., string#number
+unary_type = { (unary_type_op)* ~ generic_type }
+unary_type_op = { "[]" | "?" }
+generic_type = { identifier ~ ("[" ~ type_name ~ ("," ~ type_name)* ~ "]")? } // e.g., List[number]
+
+// result_type = { type_name? ~ "!" ~ type_name }  // e.g., error!ok | !ok
+// option_type = { "?" ~ type_name }               // e.g., ?string
+// map_type = { type_name ~ "#" ~ type_name }      // e.g., string#number
+// generic_type = { identifier ~ "[" ~ type_name ~ ("," ~ type_name)* ~ "]" } // e.g., List[number]
+// array_type = { "[]" ~ type_name }               // e.g., []number
+// tuple_type = { type_name ~ ("," ~ type_name)+ } // e.g., number, string
 
 // Expressions
 expression = { equality }

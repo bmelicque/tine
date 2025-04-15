@@ -7,3 +7,5 @@
 - [ ] handle return in functions (check nested blocks)
 
 - [ ] function call
+- [ ] type instances `Type {}`
+- [ ] inferred type instances `#{ key: 42 }`
