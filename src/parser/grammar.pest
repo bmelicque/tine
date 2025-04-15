@@ -10,7 +10,8 @@ number_literal = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 boolean_literal = @{ "true" | "false" }
 
 // Type annotations
-type_annotation = { ":" ~ type_name }
+// TODO: handle more complex types
+type_annotation = { type_name }
 type_name = { identifier }
 
 // Expressions
@@ -24,11 +25,16 @@ add_op = { "+" | "-" }
 multiplication = { exponentiation? ~ (mul_op ~ exponentiation?)* }
 mul_op = { "*" | "/" | "%" }
 exponentiation = { primary? ~ ("**" ~ primary?)* }
-primary = {  string_literal | number_literal | boolean_literal | identifier | "(" ~ expression ~ ")" }
+primary = {  string_literal | number_literal | boolean_literal | identifier | function_expression | "(" ~ expression ~ ")" }
+
+function_expression = { parameter_list? ~ "=>" ~ (function_body | expression)? }
+function_body = { type_annotation? ~ block }
+parameter_list = { "(" ~ (parameter ~ ("," ~ parameter)*)? ~ ")" }
+parameter = { identifier ~ type_annotation? }
 
 
 // Statements
-statement = { variable_declaration | assignment | return_statement | expression_statement }
+statement = { block | variable_declaration | assignment | return_statement | expression_statement }
 variable_declaration = { identifier? ~ decl_op ~ expression? }
 decl_op = { ":=" | "::" }
 assignment = { identifier? ~ "=" ~ expression? }

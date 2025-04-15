@@ -133,7 +133,21 @@ impl TypeChecker {
                     Type::Void
                 }
             }
+            Node::Block(block) => {
+                // TODO:
+                _ = block;
+                Type::Unknown
+            }
             Node::ExpressionStatement(expr) => self.visit(&expr),
+            Node::FunctionExpression {
+                parameters,
+                return_type,
+                body,
+            } => {
+                // TODO:
+                _ = (parameters, return_type, body);
+                Type::Unknown
+            }
             Node::BinaryExpression {
                 left,
                 operator,

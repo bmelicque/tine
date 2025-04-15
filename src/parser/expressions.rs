@@ -1,8 +1,11 @@
 use pest::iterators::Pair;
 
-use crate::ast::{Node, Spanned};
+use crate::ast::{Node, Spanned, TypeNode};
 
-use super::parser::{ParseError, ParseResult, Rule};
+use super::{
+    function_expression::parse_function_expression,
+    parser::{ParseError, ParseResult, Rule},
+};
 
 pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
     let span = pair.as_span().clone();
@@ -15,6 +18,7 @@ pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
                 errors: vec![],
             },
         },
+        Rule::function_expression => parse_function_expression(pair),
         Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
             parse_binary_ltr_expression(pair)
         }
@@ -103,11 +107,16 @@ fn parse_binary_ltr_expression(pair: Pair<'static, Rule>) -> ParseResult {
                 right: right.map(Box::new),
             },
             // FIXME:
-            span: span,
+            span,
         });
     }
 
     ParseResult { node: left, errors }
+}
+
+pub fn parse_type_annotation(pair: Pair<'static, Rule>) -> TypeNode {
+    let mut inner = pair.into_inner();
+    inner.next().unwrap().as_str().to_string()
 }
 
 #[cfg(test)]
