@@ -115,6 +115,10 @@ impl TypeChecker {
                     }
                 }
             }
+            Node::TypeDeclaration { name, fields } => {
+                _ = (name, fields);
+                Type::Unknown
+            }
             Node::ReturnStatement(expr_opt) => {
                 if let Some(expr) = expr_opt {
                     self.visit(&expr)

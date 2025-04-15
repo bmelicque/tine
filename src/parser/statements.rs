@@ -5,6 +5,7 @@ use crate::ast::{AstNode, Node, Spanned};
 use super::{
     expressions::parse_expression,
     parser::{ParseError, ParseResult, Rule},
+    utils::{is_camel_case, is_pascal_case},
 };
 
 pub fn parse_statement(pair: Pair<'static, Rule>) -> ParseResult {
@@ -15,6 +16,7 @@ pub fn parse_statement(pair: Pair<'static, Rule>) -> ParseResult {
         }
         Rule::variable_declaration => parse_variable_declaration(pair),
         Rule::assignment => parse_assignment(pair),
+        Rule::type_declaration => parse_type_declaration(pair),
         Rule::return_statement => parse_return_statement(pair),
         Rule::block => parse_block(pair),
         Rule::expression_statement => parse_expression_statement(pair),
@@ -92,6 +94,54 @@ fn parse_assignment_like(
     }
 
     (name, value.map(Box::new), op, errors)
+}
+
+pub fn parse_type_declaration(pair: Pair<'static, Rule>) -> ParseResult {
+    let span = pair.as_span();
+    let mut inner = pair.into_inner();
+
+    let mut errors = Vec::new();
+
+    let name = inner.next().unwrap().as_str().to_string();
+    if !is_pascal_case(&name) {
+        errors.push(ParseError {
+            message: format!("Type name '{}' should be in PascalCase", name),
+            span,
+        });
+    }
+
+    let struct_body = inner.next().unwrap();
+    let mut fields = Vec::new();
+
+    for field_pair in struct_body.into_inner() {
+        let mut field_inner = field_pair.clone().into_inner();
+        let field_name = field_inner.next().unwrap().as_str().to_string();
+        let type_name = field_inner.next().unwrap().as_str().to_string();
+
+        if !is_camel_case(&field_name) {
+            errors.push(ParseError {
+                message: format!("Field name '{}' should be in camelCase", field_name),
+                span: field_pair.as_span(),
+            });
+        }
+
+        if !is_pascal_case(&type_name) {
+            errors.push(ParseError {
+                message: format!("Type name '{}' should be in PascalCase", type_name),
+                span: field_pair.as_span(),
+            });
+        }
+
+        fields.push((field_name, type_name));
+    }
+
+    ParseResult {
+        node: Some(Spanned {
+            node: Node::TypeDeclaration { name, fields },
+            span,
+        }),
+        errors,
+    }
 }
 
 fn parse_return_statement(pair: Pair<'static, Rule>) -> ParseResult {
@@ -241,6 +291,45 @@ mod tests {
         assert!(result.node.is_some());
         assert_eq!(result.errors.len(), 1);
         assert_eq!(result.errors[0].message, "Expression expected in rhs");
+    }
+
+    #[test]
+    fn test_valid_type_declaration() {
+        let src = r#"
+            Person :: {
+                firstName: String
+                age: Int
+            }
+        "#;
+
+        let result = parse(src);
+        assert!(result.errors.is_empty(), "Expected no errors");
+        let node = result.node.unwrap().node;
+
+        match node {
+            Node::Block(statements) => match &statements[0].node {
+                Node::TypeDeclaration { name, fields } => {
+                    assert_eq!(name, "Person");
+                    assert_eq!(fields.len(), 2);
+                    assert_eq!(fields[0], ("firstName".to_string(), "String".to_string()));
+                    assert_eq!(fields[1], ("age".to_string(), "Int".to_string()));
+                }
+                _ => panic!("Expected TypeDeclaration"),
+            },
+            _ => panic!("Expected Block"),
+        }
+    }
+
+    #[test]
+    fn test_invalid_type_name_snake_case() {
+        let src = r#"
+            my_type :: {
+                firstName: String
+            }
+        "#;
+
+        let result = parse(src);
+        assert!(!result.errors.is_empty(), "Expected errors");
     }
 
     #[test]

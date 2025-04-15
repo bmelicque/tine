@@ -24,6 +24,10 @@ pub enum Node {
         name: Option<String>,
         value: Option<Box<AstNode>>,
     },
+    TypeDeclaration {
+        name: String,
+        fields: Vec<(String, String)>,
+    },
     ExpressionStatement(Box<AstNode>),
     Block(Vec<AstNode>),
     BinaryExpression {
