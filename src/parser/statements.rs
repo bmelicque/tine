@@ -16,6 +16,7 @@ pub fn parse_statement(pair: Pair<'static, Rule>) -> ParseResult {
         Rule::variable_declaration => parse_variable_declaration(pair),
         Rule::assignment => parse_assignment(pair),
         Rule::return_statement => parse_return_statement(pair),
+        Rule::block => parse_block(pair),
         Rule::expression_statement => parse_expression_statement(pair),
         _ => ParseResult::empty(),
     }
@@ -112,6 +113,27 @@ fn parse_return_statement(pair: Pair<'static, Rule>) -> ParseResult {
             span,
         }),
         errors: result.errors,
+    }
+}
+
+pub fn parse_block(pair: Pair<'static, Rule>) -> ParseResult {
+    let mut errors = Vec::new();
+    let mut nodes = Vec::new();
+
+    for inner in pair.clone().into_inner() {
+        let mut result = parse_statement(inner);
+        if let Some(node) = result.node {
+            nodes.push(node);
+        }
+        errors.append(&mut result.errors);
+    }
+
+    ParseResult {
+        node: Some(Spanned {
+            node: Node::Block(nodes),
+            span: pair.as_span(),
+        }),
+        errors,
     }
 }
 
@@ -242,6 +264,66 @@ mod tests {
         match result.node.unwrap().node {
             Node::ReturnStatement(None) => {}
             _ => panic!("Expected empty ReturnStatement"),
+        }
+    }
+
+    #[test]
+    fn parses_empty_block() {
+        let result = parse("{}");
+        assert!(result.errors.is_empty());
+
+        if let Some(Spanned {
+            node: Node::Block(statements),
+            ..
+        }) = result.node
+        {
+            assert!(statements.is_empty());
+        } else {
+            panic!("Expected a Block node");
+        }
+    }
+
+    #[test]
+    fn parses_single_statement_block() {
+        let result = parse("{ x := 42 }");
+        assert!(result.errors.is_empty());
+
+        if let Some(Spanned {
+            node: Node::Block(statements),
+            ..
+        }) = result.node
+        {
+            assert_eq!(statements.len(), 1);
+            assert!(matches!(
+                statements[0].node,
+                Node::VariableDeclaration { .. }
+            ));
+        } else {
+            panic!("Expected a Block node");
+        }
+    }
+
+    #[test]
+    fn parses_multiple_statements_block() {
+        let result = parse("{ a := 1\n b := 2 }");
+        assert!(result.errors.is_empty());
+
+        if let Some(Spanned {
+            node: Node::Block(statements),
+            ..
+        }) = result.node
+        {
+            assert_eq!(statements.len(), 2);
+            assert!(matches!(
+                statements[0].node,
+                Node::VariableDeclaration { .. }
+            ));
+            assert!(matches!(
+                statements[1].node,
+                Node::VariableDeclaration { .. }
+            ));
+        } else {
+            panic!("Expected a Block node");
         }
     }
 }

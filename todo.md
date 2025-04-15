@@ -1,3 +1,3 @@
-- [ ] function expression
-- [ ] function call
 - [ ] custom types `Type :: ...`
+- [ ] function call
+- [ ] adjust reserved names (`function`, `let`, etc.) when transpiling
