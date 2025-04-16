@@ -2,7 +2,6 @@
 
 ### Parser
 
-- [ ] function types
 - [ ] parentheses in types
 - [ ] reference types
 - [ ] default values in structs

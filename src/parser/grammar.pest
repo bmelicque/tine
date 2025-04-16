@@ -11,13 +11,15 @@ boolean_literal = @{ "true" | "false" }
 
 // Type annotations
 type_annotation = { type_name }
-type_name = _{ tuple_type }
+type_name = _{ function_type | tuple_type }
+function_type = { "(" ~ tuple_type ~ ")" ~ "->" ~ type_name}
 tuple_type = { binary_type ~ ("," ~ binary_type)* } // e.g., number, string
 binary_type = { unary_type? ~ (binary_type_op ~ unary_type?)* }
 binary_type_op = { "!" | "#" }
 unary_type = { (unary_type_op)* ~ generic_type? }
 unary_type_op = { "[]" | "?" }
-generic_type = { identifier ~ ("[" ~ type_name ~ ("," ~ type_name)* ~ "]")? } // e.g., List[number]
+// uses binary_type in generic_type to avoid unwrapping tuples
+generic_type = { identifier ~ ("[" ~ binary_type ~ ("," ~ binary_type)* ~ "]")? } // e.g., List[number]
 
 // Expressions
 expression = { equality }

@@ -32,6 +32,10 @@ pub enum Node {
         name: String,
         args: Vec<Box<AstNode>>,
     },
+    FunctionType {
+        parameters: Box<AstNode>,
+        return_type: Box<AstNode>,
+    },
 
     // Statements
     VariableDeclaration {
