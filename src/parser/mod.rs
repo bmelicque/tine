@@ -3,6 +3,7 @@ pub mod function_expression;
 pub mod parser;
 pub mod statements;
 pub mod sum_types;
+pub mod type_declarations;
 pub mod types;
 pub mod utils;
 

@@ -1,11 +1,18 @@
-- [ ] custom types `Type :: ...` for structs (sum types later)
-- [ ] adjust reserved names (`function`, `let`, etc.) when transpiling
+## Types
+
+- [ ] declare traits
+- [ ] reference types
+- [ ] type instances `Type {}`
+- [ ] inferred type instances `#{ key: 42 }`
+
+## Flow
 
 - [ ] blocks as expressions
 - [ ] if - else
 - [ ] for loops
 - [ ] handle return in functions (check nested blocks)
-
 - [ ] function call
-- [ ] type instances `Type {}`
-- [ ] inferred type instances `#{ key: 42 }`
+
+## Other
+
+- [ ] adjust reserved names (`function`, `let`, etc.) when transpiling

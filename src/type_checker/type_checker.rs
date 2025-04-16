@@ -115,8 +115,8 @@ impl TypeChecker {
                     }
                 }
             }
-            Node::TypeDeclaration { name, fields } => {
-                _ = (name, fields);
+            Node::TypeDeclaration { name, def } => {
+                _ = (name, def);
                 Type::Unknown
             }
             Node::ReturnStatement(expr_opt) => {

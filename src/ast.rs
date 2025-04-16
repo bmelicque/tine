@@ -28,7 +28,6 @@ pub enum Node {
         operator: String,
         right: Option<Box<AstNode>>,
     },
-    // SumType(Vec<SumTypeConstructor>),
     GenericType {
         name: String,
         args: Vec<Box<AstNode>>,
@@ -46,18 +45,16 @@ pub enum Node {
     },
     TypeDeclaration {
         name: String,
-        fields: Vec<(String, String)>,
+        def: Option<Box<AstNode>>,
     },
+    Struct(Vec<Spanned<(String, Option<Box<AstNode>>)>>),
+    Sum(Vec<SumTypeConstructor>),
     ExpressionStatement(Box<AstNode>),
     Block(Vec<AstNode>),
     BinaryExpression {
         left: Option<Box<AstNode>>,
         operator: String,
         right: Option<Box<AstNode>>,
-    },
-    UnaryExpression {
-        operator: String,
-        operand: Option<Box<AstNode>>,
     },
     FunctionExpression {
         parameters: Option<Vec<Parameter>>,
