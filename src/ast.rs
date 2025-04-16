@@ -4,17 +4,37 @@ pub struct Spanned<T> {
     pub span: pest::Span<'static>,
 }
 
-pub type TypeNode = String;
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parameter {
     pub name: String,
-    pub type_annotation: Option<TypeNode>,
+    pub type_annotation: Option<Box<AstNode>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SumTypeConstructor {
+    pub name: String,
+    pub param: Option<AstNode>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     Program(Vec<AstNode>),
+
+    // Types
+    UnaryType(Option<Box<AstNode>>), // []Type | ?Type
+    Tuple(Vec<Option<AstNode>>),
+    BinaryType {
+        left: Option<Box<AstNode>>,
+        operator: String,
+        right: Option<Box<AstNode>>,
+    },
+    // SumType(Vec<SumTypeConstructor>),
+    GenericType {
+        name: String,
+        args: Vec<Box<AstNode>>,
+    },
+
+    // Statements
     VariableDeclaration {
         name: Option<String>,
         op: String,
@@ -35,9 +55,13 @@ pub enum Node {
         operator: String,
         right: Option<Box<AstNode>>,
     },
+    UnaryExpression {
+        operator: String,
+        operand: Option<Box<AstNode>>,
+    },
     FunctionExpression {
         parameters: Option<Vec<Parameter>>,
-        return_type: Option<TypeNode>,
+        return_type: Option<Box<AstNode>>,
         body: Option<Box<AstNode>>, // either a block or expression
     },
     Identifier(String),

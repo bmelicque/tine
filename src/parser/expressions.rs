@@ -1,23 +1,26 @@
 use pest::iterators::Pair;
 
-use crate::ast::{Node, Spanned, TypeNode};
+use crate::ast::{AstNode, Node, Spanned};
 
 use super::{
     function_expression::parse_function_expression,
     parser::{ParseError, ParseResult, Rule},
+    utils::merge_span,
 };
 
 pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
     let span = pair.as_span().clone();
 
     match pair.as_rule() {
-        Rule::expression | Rule::primary => match pair.into_inner().next() {
-            Some(inner) => parse_expression(inner),
-            None => ParseResult {
-                node: None,
-                errors: vec![],
-            },
-        },
+        Rule::expression | Rule::primary | Rule::type_annotation => {
+            match pair.into_inner().next() {
+                Some(inner) => parse_expression(inner),
+                None => ParseResult {
+                    node: None,
+                    errors: vec![],
+                },
+            }
+        }
         Rule::function_expression => parse_function_expression(pair),
         Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
             parse_binary_ltr_expression(pair)
@@ -73,6 +76,7 @@ fn parse_binary_ltr_expression(pair: Pair<'static, Rule>) -> ParseResult {
 
     let mut is_binary = false;
     while let Some(op_pair) = inner.next() {
+        // FIXME: messages should be Expression|Type depending on operator
         if !is_binary && left.is_none() && errors.is_empty() {
             errors.push(ParseError {
                 message: "Expression expected".to_string(),
@@ -114,9 +118,48 @@ fn parse_binary_ltr_expression(pair: Pair<'static, Rule>) -> ParseResult {
     ParseResult { node: left, errors }
 }
 
-pub fn parse_type_annotation(pair: Pair<'static, Rule>) -> TypeNode {
+fn parse_unary_expression(pair: Pair<'static, Rule>) -> ParseResult {
+    let mut errors = Vec::new();
+    let span = pair.as_span().to_owned();
     let mut inner = pair.into_inner();
-    inner.next().unwrap().as_str().to_string()
+
+    let mut operators = Vec::new();
+    let mut base_type = None;
+    while let Some(item) = inner.next() {
+        match item.as_rule() {
+            Rule::unary_type_op => operators.push(item),
+            Rule::generic_type => {
+                let mut result = parse_expression(item);
+                errors.append(&mut result.errors);
+                base_type = result.node;
+            }
+            _ => panic!("Unexpected rule for unary expressions"),
+        }
+    }
+
+    if operators.is_empty() {
+        return ParseResult {
+            node: base_type,
+            errors,
+        };
+    }
+
+    let mut expr: Option<AstNode> = None;
+    for op in operators.iter().rev() {
+        let span = match expr {
+            Some(ref spanned) => merge_span(op.as_span(), spanned.span),
+            None => op.as_span(),
+        };
+        expr = Some(Spanned {
+            node: Node::UnaryExpression {
+                operator: op.as_str().to_string(),
+                operand: expr.map(Box::new),
+            },
+            span,
+        })
+    }
+
+    ParseResult { node: expr, errors }
 }
 
 #[cfg(test)]

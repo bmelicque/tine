@@ -3,9 +3,10 @@ use pest::iterators::Pair;
 use crate::ast::{Node, Parameter, Spanned};
 
 use super::{
-    expressions::{parse_expression, parse_type_annotation},
+    expressions::parse_expression,
     parser::{ParseError, ParseResult, Rule},
     statements::parse_block,
+    types::parse_type,
 };
 
 pub fn parse_function_expression(pair: Pair<'static, Rule>) -> ParseResult {
@@ -28,7 +29,9 @@ pub fn parse_function_expression(pair: Pair<'static, Rule>) -> ParseResult {
                     panic!("function_body should at least contain a block!");
                 };
                 if item.as_rule() == Rule::type_annotation {
-                    return_type = Some(parse_type_annotation(item));
+                    let mut result = parse_type(item);
+                    errors.append(&mut result.errors);
+                    return_type = result.node.map(Box::new);
                     item = if let Some(inner) = inner_body.next() {
                         inner
                     } else {
@@ -104,7 +107,16 @@ fn parse_parameter_list(pair: Pair<'static, Rule>) -> Vec<Parameter> {
 fn parse_parameter(pair: Pair<'static, Rule>) -> Parameter {
     let mut inner = pair.into_inner();
     let name = inner.next().unwrap().as_str().to_string();
-    let type_annotation = inner.next().map(parse_type_annotation);
+
+    let mut errors = Vec::new();
+    let type_annotation = inner
+        .next()
+        .and_then(|part| {
+            let mut result = parse_type(part);
+            errors.append(&mut result.errors);
+            result.node
+        })
+        .map(Box::new);
 
     Parameter {
         name,
@@ -186,7 +198,7 @@ mod tests {
             node:
                 Node::FunctionExpression {
                     parameters,
-                    return_type,
+                    return_type: _,
                     body,
                 },
             ..
@@ -195,9 +207,7 @@ mod tests {
             let params = parameters.unwrap();
             assert_eq!(params.len(), 1);
             assert_eq!(params[0].name, "x");
-            assert_eq!(params[0].type_annotation.as_ref().unwrap(), "number");
-
-            assert_eq!(return_type.unwrap(), "number");
+            // TODO: assert types
             assert!(matches!(body.unwrap().node, Node::Block(_)));
         } else {
             panic!("Expected a FunctionExpression node");

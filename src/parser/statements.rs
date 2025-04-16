@@ -110,6 +110,7 @@ pub fn parse_type_declaration(pair: Pair<'static, Rule>) -> ParseResult {
         });
     }
 
+    // TODO: handle sum_types
     let struct_body = inner.next().unwrap();
     let mut fields = Vec::new();
 
@@ -297,8 +298,8 @@ mod tests {
     fn test_valid_type_declaration() {
         let src = r#"
             Person :: {
-                firstName: String
-                age: Int
+                firstName string
+                age number
             }
         "#;
 
@@ -311,8 +312,8 @@ mod tests {
                 Node::TypeDeclaration { name, fields } => {
                     assert_eq!(name, "Person");
                     assert_eq!(fields.len(), 2);
-                    assert_eq!(fields[0], ("firstName".to_string(), "String".to_string()));
-                    assert_eq!(fields[1], ("age".to_string(), "Int".to_string()));
+                    assert_eq!(fields[0], ("firstName".to_string(), "string".to_string()));
+                    assert_eq!(fields[1], ("age".to_string(), "number".to_string()));
                 }
                 _ => panic!("Expected TypeDeclaration"),
             },

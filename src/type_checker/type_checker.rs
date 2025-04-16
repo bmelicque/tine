@@ -197,16 +197,24 @@ impl TypeChecker {
             Node::StringLiteral(_) => Type::String,
             Node::NumberLiteral(_) => Type::Number,
             Node::BooleanLiteral(_) => Type::Boolean,
+            _ => {
+                // FIXME:
+                panic!("Not implemented yet!")
+            }
         }
     }
 
-    pub(super) fn resolve_type(&self, type_str: &str) -> Type {
-        match type_str {
-            "string" => Type::String,
-            "number" => Type::Number,
-            "boolean" => Type::Boolean,
-            "void" => Type::Void,
-            _ => Type::Unknown,
+    pub(super) fn resolve_type(&self, type_node: &Node) -> Type {
+        match type_node {
+            Node::Identifier(id) => match id.as_str() {
+                "string" => Type::String,
+                "number" => Type::Number,
+                "boolean" => Type::Boolean,
+                "void" => Type::Void,
+                _ => Type::Unknown,
+            },
+            // FIXME:
+            _ => panic!("Not implemented yet!"),
         }
     }
 }
