@@ -49,6 +49,10 @@ pub enum Node {
     },
     Struct(Vec<Spanned<(String, Option<Box<AstNode>>)>>),
     Sum(Vec<SumTypeConstructor>),
+    Trait {
+        name: String,
+        body: Box<AstNode>,
+    },
     ExpressionStatement(Box<AstNode>),
     Block(Vec<AstNode>),
     BinaryExpression {

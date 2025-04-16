@@ -43,16 +43,17 @@ statement = { block | type_declaration | variable_declaration | assignment | ret
 variable_declaration = { identifier? ~ decl_op ~ expression? }
 decl_op = { ":=" | "::" }
 assignment = { identifier? ~ "=" ~ expression? }
-field_declaration = { identifier ~ type_name }
 return_statement = { "return" ~ expression? }
 expression_statement = { expression }
 block = { "{" ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ "}" }
 
-type_declaration = { identifier ~ "::" ~ (struct_body|sum_type) }
-struct_body = { "{" ~ (field_declaration ~ (NEWLINE ~ field_declaration )*)? ~ "}" }
+type_declaration = { identifier ~ "::" ~ (struct_body|sum_type|trait_type) }
+struct_body = { "{" ~ NEWLINE? ~ (field_declaration ~ (NEWLINE ~ field_declaration )* ~ NEWLINE?)? ~ "}" }
+field_declaration = { identifier ~ type_name }
 sum_type = { "|"? ~ sum_constructor ~ ("|" ~ sum_constructor)+ }
 sum_constructor = { identifier ~ (sum_param | struct_body) }
 sum_param = { "{" ~ type_name ~ "}" }
+trait_type = { "(" ~ identifier ~ ")" ~ "." ~ struct_body }
 // TODO: traits `.{}`
 
 // Program

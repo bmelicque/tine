@@ -47,7 +47,11 @@ pub fn parse_type_declaration(pair: Pair<'static, Rule>) -> ParseResult {
             errors.append(&mut errs);
             Some(d)
         }
-        // TODO: traits
+        Rule::trait_type => {
+            let (d, mut errs) = parse_trait(def_pair);
+            errors.append(&mut errs);
+            Some(d)
+        }
         _ => unreachable!(),
     }
     .map(Box::new);
@@ -148,4 +152,204 @@ fn parse_sum_constructor(pair: Pair<'static, Rule>) -> (SumTypeConstructor, Vec<
         },
         errors,
     )
+}
+
+fn parse_trait(pair: Pair<'static, Rule>) -> (AstNode, Vec<ParseError>) {
+    let span = pair.as_span();
+    let mut inner = pair.into_inner();
+    let mut errors = Vec::new();
+
+    let name_pair = inner.next().unwrap(); // Should be the identifier inside `()`
+    let name = name_pair.as_str().to_string();
+
+    if !is_pascal_case(&name) {
+        errors.push(ParseError {
+            message: format!("Trait name '{}' should be in PascalCase", name),
+            span: name_pair.as_span(),
+        });
+    }
+
+    let body_pair = inner.next().unwrap(); // Should be the struct_body after the dot
+    let (body, mut body_errors) = parse_struct_body(body_pair);
+    errors.append(&mut body_errors);
+
+    (
+        Spanned {
+            node: Node::Trait {
+                name,
+                body: Box::new(body),
+            },
+            span,
+        },
+        errors,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::Node;
+    use crate::parser::parser::MyLanguageParser;
+    use crate::parser::statements::parse_statement;
+    use pest::Parser;
+
+    fn parse(input: &'static str) -> ParseResult {
+        let pair = MyLanguageParser::parse(Rule::statement, input)
+            .unwrap()
+            .next()
+            .unwrap();
+        parse_statement(pair)
+    }
+
+    #[test]
+    fn test_parse_struct_type_declaration() {
+        let input = r#"Person :: { 
+            name string
+            age  number
+        }"#;
+
+        let result = parse(input);
+        assert!(result.errors.is_empty());
+
+        match result.node.unwrap().node {
+            Node::TypeDeclaration {
+                name,
+                def: Some(def),
+            } => {
+                assert_eq!(name, "Person");
+                match def.node {
+                    Node::Struct(fields) => {
+                        assert_eq!(fields.len(), 2);
+                        assert_eq!(fields[0].node.0, "name");
+                        assert_eq!(fields[1].node.0, "age");
+                    }
+                    _ => panic!("Expected Struct node"),
+                }
+            }
+            _ => panic!("Expected TypeDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_sum_type_declaration() {
+        let input = "Shape :: | Circle{number} | Rectangle{number}";
+
+        let result = parse(input);
+
+        assert!(result.errors.is_empty());
+
+        match result.node.unwrap().node {
+            Node::TypeDeclaration {
+                name,
+                def: Some(def),
+            } => {
+                assert_eq!(name, "Shape");
+                match def.node {
+                    Node::Sum(constructors) => {
+                        assert_eq!(constructors.len(), 2);
+                        assert_eq!(constructors[0].name, "Circle");
+                        assert_eq!(constructors[1].name, "Rectangle");
+                    }
+                    _ => panic!("Expected Sum node"),
+                }
+            }
+            _ => panic!("Expected TypeDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_sum_constructor_with_struct_body() {
+        let input = "Result :: | Ok{value string} | Err{error string}";
+
+        let result = parse(input);
+
+        assert!(result.errors.is_empty());
+
+        match result.node.unwrap().node {
+            Node::TypeDeclaration {
+                name,
+                def: Some(def),
+            } => {
+                assert_eq!(name, "Result");
+                match def.node {
+                    Node::Sum(constructors) => {
+                        assert_eq!(constructors.len(), 2);
+                        assert_eq!(constructors[0].name, "Ok");
+                        assert_eq!(constructors[1].name, "Err");
+
+                        match &constructors[0].param {
+                            Some(p) => match &p.node {
+                                Node::Struct(fields) => {
+                                    assert_eq!(fields[0].node.0, "value");
+                                }
+                                _ => panic!("Expected Struct in Ok"),
+                            },
+                            None => panic!("Missing struct param in Ok"),
+                        }
+                    }
+                    _ => panic!("Expected Sum node"),
+                }
+            }
+            _ => panic!("Expected TypeDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_trait_declaration() {
+        // FIXME: test with function type
+        let input = r#"Drawable :: (Self).{
+                draw Self
+            }"#;
+
+        let result = parse(input);
+
+        assert!(result.errors.is_empty());
+
+        match result.node.unwrap().node {
+            Node::TypeDeclaration {
+                name,
+                def: Some(def),
+            } => {
+                assert_eq!(name, "Drawable");
+                match def.node {
+                    Node::Trait {
+                        name: trait_name,
+                        body,
+                    } => {
+                        assert_eq!(trait_name, "Self");
+
+                        match body.node {
+                            Node::Struct(fields) => {
+                                assert_eq!(fields.len(), 1);
+                                assert_eq!(fields[0].node.0, "draw");
+                            }
+                            _ => panic!("Expected Struct in trait body"),
+                        }
+                    }
+                    _ => panic!("Expected Trait node"),
+                }
+            }
+            _ => panic!("Expected TypeDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_field_name_case_check() {
+        let input = "BadStruct :: { NotCamel string }";
+
+        let result = parse(input);
+
+        assert_eq!(result.errors.len(), 1);
+        assert!(result.errors[0].message.contains("camelCase"));
+    }
+
+    #[test]
+    fn test_type_name_case_check() {
+        let input = "notPascal :: { goodField string }";
+
+        let result = parse(input);
+
+        assert_eq!(result.errors.len(), 1);
+        assert!(result.errors[0].message.contains("PascalCase"));
+    }
 }
