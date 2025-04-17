@@ -2,7 +2,7 @@
 
 ### Parser
 
-- default values in structs
+- prevent duplicated names in structs
 - type instances `Type {}`
 - adjust line break handling in type declaration
 

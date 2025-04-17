@@ -17,6 +17,13 @@ pub struct SumTypeConstructor {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct StructField {
+    pub name: String,
+    pub def: Option<Box<AstNode>>,
+    pub optional: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     Program(Vec<AstNode>),
 
@@ -51,7 +58,7 @@ pub enum Node {
         name: String,
         def: Option<Box<AstNode>>,
     },
-    Struct(Vec<Spanned<(String, Option<Box<AstNode>>)>>),
+    Struct(Vec<Spanned<StructField>>),
     Sum(Vec<SumTypeConstructor>),
     Trait {
         name: String,

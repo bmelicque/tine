@@ -1,8 +1,9 @@
 use pest::iterators::Pair;
 
-use crate::ast::{AstNode, Node, Spanned, SumTypeConstructor};
+use crate::ast::{AstNode, Node, Spanned, StructField, SumTypeConstructor};
 
 use super::{
+    expressions::parse_expression,
     parser::{ParseError, ParseResult, Rule},
     types::parse_type,
     utils::{is_camel_case, is_pascal_case},
@@ -71,22 +72,11 @@ fn parse_struct_body(pair: Pair<'static, Rule>) -> (AstNode, Vec<ParseError>) {
     let mut fields = Vec::new();
 
     for field_pair in pair.into_inner() {
-        let mut field_inner = field_pair.clone().into_inner();
-        let field_name = field_inner.next().unwrap().as_str().to_string();
-        let mut type_result = parse_type(field_inner.next().unwrap());
-        errors.append(&mut type_result.errors);
+        let span = field_pair.as_span();
+        let inner = field_pair.into_inner().next().unwrap();
+        let field = parse_struct_field(inner, &mut errors);
 
-        if !is_camel_case(&field_name) {
-            errors.push(ParseError {
-                message: format!("Field name '{}' should be in camelCase", field_name),
-                span: field_pair.as_span(),
-            });
-        }
-
-        fields.push(Spanned {
-            node: (field_name, type_result.node.map(Box::new)),
-            span: field_pair.as_span(),
-        });
+        fields.push(Spanned { node: field, span });
     }
 
     (
@@ -96,6 +86,46 @@ fn parse_struct_body(pair: Pair<'static, Rule>) -> (AstNode, Vec<ParseError>) {
         },
         errors,
     )
+}
+
+fn parse_struct_field(pair: Pair<'static, Rule>, errors: &mut Vec<ParseError>) -> StructField {
+    println!("rule: {:?}", pair.as_rule());
+    match pair.as_rule() {
+        Rule::embedded_field => {
+            let mut field_inner = pair.clone().into_inner();
+            let field_name = field_inner.next().unwrap().as_str().to_string();
+            StructField {
+                name: field_name,
+                def: None,
+                optional: false,
+            }
+        }
+        Rule::mandatory_field | Rule::optional_field => {
+            let mut field_inner = pair.clone().into_inner();
+            let field_name = field_inner.next().unwrap().as_str().to_string();
+            let next = field_inner.next().unwrap();
+            let mut def_result = match pair.as_rule() {
+                Rule::mandatory_field => parse_type(next),
+                Rule::optional_field => parse_expression(next),
+                _ => unreachable!(),
+            };
+            errors.append(&mut def_result.errors);
+
+            if !is_camel_case(&field_name) {
+                errors.push(ParseError {
+                    message: format!("Field name '{}' should be in camelCase", field_name),
+                    span: pair.as_span(),
+                });
+            }
+
+            StructField {
+                name: field_name,
+                def: def_result.node.map(Box::new),
+                optional: pair.as_rule() == Rule::optional_field,
+            }
+        }
+        _ => unreachable!(),
+    }
 }
 
 pub fn parse_sum_type(pair: Pair<'static, Rule>) -> (AstNode, Vec<ParseError>) {
@@ -220,8 +250,40 @@ mod tests {
                 match def.node {
                     Node::Struct(fields) => {
                         assert_eq!(fields.len(), 2);
-                        assert_eq!(fields[0].node.0, "name");
-                        assert_eq!(fields[1].node.0, "age");
+                        assert_eq!(fields[0].node.name, "name");
+                        assert_eq!(fields[1].node.name, "age");
+                    }
+                    _ => panic!("Expected Struct node"),
+                }
+            }
+            _ => panic!("Expected TypeDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_struct_with_embedded_field() {
+        let input = r#"Person :: { 
+            Address
+        }"#;
+
+        let result = parse(input);
+        assert!(
+            result.errors.is_empty(),
+            "expected no errors, got: {:?}",
+            result.errors
+        );
+
+        match result.node.unwrap().node {
+            Node::TypeDeclaration {
+                name,
+                def: Some(def),
+            } => {
+                assert_eq!(name, "Person");
+                match def.node {
+                    Node::Struct(fields) => {
+                        assert_eq!(fields.len(), 1);
+                        assert_eq!(fields[0].node.name, "Address");
+                        assert!(fields[0].node.def.is_none());
                     }
                     _ => panic!("Expected Struct node"),
                 }
@@ -280,7 +342,7 @@ mod tests {
                         match &constructors[0].param {
                             Some(p) => match &p.node {
                                 Node::Struct(fields) => {
-                                    assert_eq!(fields[0].node.0, "value");
+                                    assert_eq!(fields[0].node.name, "value");
                                 }
                                 _ => panic!("Expected Struct in Ok"),
                             },
@@ -296,7 +358,6 @@ mod tests {
 
     #[test]
     fn test_parse_trait_declaration() {
-        // FIXME: test with function type
         let input = r#"Drawable :: (Self).{
                 draw Self
             }"#;
@@ -321,7 +382,7 @@ mod tests {
                         match body.node {
                             Node::Struct(fields) => {
                                 assert_eq!(fields.len(), 1);
-                                assert_eq!(fields[0].node.0, "draw");
+                                assert_eq!(fields[0].node.name, "draw");
                             }
                             _ => panic!("Expected Struct in trait body"),
                         }
@@ -350,6 +411,10 @@ mod tests {
         let result = parse(input);
 
         assert_eq!(result.errors.len(), 1);
-        assert!(result.errors[0].message.contains("PascalCase"));
+        assert!(
+            result.errors[0].message.contains("PascalCase"),
+            "{}",
+            result.errors[0].message
+        );
     }
 }
