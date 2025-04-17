@@ -70,11 +70,20 @@ fn parse_struct_body(pair: Pair<'static, Rule>) -> (AstNode, Vec<ParseError>) {
     let span = pair.as_span();
     let mut errors = Vec::new();
     let mut fields = Vec::new();
+    let mut field_names = std::collections::HashSet::new();
 
     for field_pair in pair.into_inner() {
         let span = field_pair.as_span();
         let inner = field_pair.into_inner().next().unwrap();
         let field = parse_struct_field(inner, &mut errors);
+
+        // Check for duplicate field names
+        if !field_names.insert(field.name.clone()) {
+            errors.push(ParseError {
+                message: format!("Duplicate field name '{}'", field.name),
+                span,
+            });
+        }
 
         fields.push(Spanned { node: field, span });
     }
@@ -89,7 +98,6 @@ fn parse_struct_body(pair: Pair<'static, Rule>) -> (AstNode, Vec<ParseError>) {
 }
 
 fn parse_struct_field(pair: Pair<'static, Rule>, errors: &mut Vec<ParseError>) -> StructField {
-    println!("rule: {:?}", pair.as_rule());
     match pair.as_rule() {
         Rule::embedded_field => {
             let mut field_inner = pair.clone().into_inner();
@@ -105,7 +113,10 @@ fn parse_struct_field(pair: Pair<'static, Rule>, errors: &mut Vec<ParseError>) -
             let field_name = field_inner.next().unwrap().as_str().to_string();
             let next = field_inner.next().unwrap();
             let mut def_result = match pair.as_rule() {
-                Rule::mandatory_field => parse_type(next),
+                Rule::mandatory_field => {
+                    assert!(next.as_rule() == Rule::field_type);
+                    parse_type(next.into_inner().next().unwrap())
+                }
                 Rule::optional_field => parse_expression(next),
                 _ => unreachable!(),
             };
@@ -133,10 +144,22 @@ pub fn parse_sum_type(pair: Pair<'static, Rule>) -> (AstNode, Vec<ParseError>) {
     let mut inner = pair.into_inner();
 
     let mut constructors = Vec::new();
+    let mut constructor_names = std::collections::HashSet::new();
     let mut errors = Vec::new();
+
     while let Some(pair) = inner.next() {
         assert!(pair.as_rule() == Rule::sum_constructor);
+        let span = pair.as_span();
         let mut result = parse_sum_constructor(pair);
+
+        // Check for duplicate constructor names
+        if !constructor_names.insert(result.0.name.clone()) {
+            errors.push(ParseError {
+                message: format!("Duplicate constructor name '{}'", result.0.name),
+                span,
+            });
+        }
+
         errors.append(&mut result.1);
         constructors.push(result.0);
     }
@@ -293,6 +316,43 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_struct_with_duplicate_fields() {
+        let input = r#"Person :: { 
+            name string
+            age number
+            name string
+        }"#;
+
+        let result = parse(input);
+
+        // Ensure there is one error for the duplicate field
+        assert_eq!(result.errors.len(), 1);
+        assert!(result.errors[0]
+            .message
+            .contains("Duplicate field name 'name'"));
+
+        match result.node.unwrap().node {
+            Node::TypeDeclaration {
+                name,
+                def: Some(def),
+            } => {
+                assert_eq!(name, "Person");
+                match def.node {
+                    Node::Struct(fields) => {
+                        // Ensure all fields are parsed
+                        assert_eq!(fields.len(), 3);
+                        assert_eq!(fields[0].node.name, "name");
+                        assert_eq!(fields[1].node.name, "age");
+                        assert_eq!(fields[2].node.name, "name");
+                    }
+                    _ => panic!("Expected Struct node"),
+                }
+            }
+            _ => panic!("Expected TypeDeclaration"),
+        }
+    }
+
+    #[test]
     fn test_parse_sum_type_declaration() {
         let input = "Shape :: | Circle{number} | Rectangle{number}";
 
@@ -348,6 +408,43 @@ mod tests {
                             },
                             None => panic!("Missing struct param in Ok"),
                         }
+                    }
+                    _ => panic!("Expected Sum node"),
+                }
+            }
+            _ => panic!("Expected TypeDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_sum_type_with_duplicate_constructors() {
+        let input = "Shape :: | Circle{radius number} | Rectangle{width number, height number} | Circle{diameter number}";
+
+        let result = parse(input);
+
+        // Ensure there is one error for the duplicate constructor
+        assert_eq!(result.errors.len(), 1);
+        assert!(
+            result.errors[0]
+                .message
+                .contains("Duplicate constructor name 'Circle'"),
+            "got {:?}",
+            result.errors
+        );
+
+        match result.node.unwrap().node {
+            Node::TypeDeclaration {
+                name,
+                def: Some(def),
+            } => {
+                assert_eq!(name, "Shape");
+                match def.node {
+                    Node::Sum(constructors) => {
+                        // Ensure all constructors are parsed
+                        assert_eq!(constructors.len(), 3);
+                        assert_eq!(constructors[0].name, "Circle");
+                        assert_eq!(constructors[1].name, "Rectangle");
+                        assert_eq!(constructors[2].name, "Circle");
                     }
                     _ => panic!("Expected Sum node"),
                 }

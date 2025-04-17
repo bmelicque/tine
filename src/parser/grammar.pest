@@ -50,12 +50,14 @@ expression_statement = { expression }
 block = { "{" ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ "}" }
 
 type_declaration = { identifier ~ "::" ~ (struct_body|sum_type|trait_type) }
-struct_body = { "{" ~ NEWLINE? ~ (field_declaration ~ (NEWLINE ~ field_declaration)* ~ NEWLINE?)? ~ "}" }
+struct_body = { "{" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ "}" }
 field_declaration = { mandatory_field | optional_field | embedded_field }
 embedded_field = { identifier }
-mandatory_field = { identifier ~ type_name }
+mandatory_field = { identifier ~ field_type }
+// cannot use type_name because tuples types mess with the parser
+field_type = { function_type | binary_type }
 optional_field = { identifier ~ ":" ~ expression }
-sum_type = { "|"? ~ sum_constructor ~ ("|" ~ sum_constructor)+ }
+sum_type = { (NEWLINE? ~ "|")? ~ sum_constructor ~ (NEWLINE? ~ "|" ~ sum_constructor)+ }
 sum_constructor = { identifier ~ (sum_param | struct_body) }
 sum_param = { "{" ~ type_name ~ "}" }
 trait_type = { "(" ~ identifier ~ ")" ~ "." ~ struct_body }
