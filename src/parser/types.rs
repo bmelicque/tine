@@ -117,7 +117,7 @@ fn parse_unary_type(pair: Pair<'static, Rule>) -> ParseResult {
     for part in inner {
         match part.as_rule() {
             Rule::unary_type_op => ops.push(part),
-            Rule::generic_type => {
+            Rule::generic_type | Rule::type_name => {
                 let mut result = parse_type(part);
                 errors.append(&mut result.errors);
                 node = result.node;

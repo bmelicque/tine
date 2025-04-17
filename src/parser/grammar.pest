@@ -16,8 +16,8 @@ function_type = { "(" ~ tuple_type ~ ")" ~ "->" ~ type_name}
 tuple_type = { binary_type ~ ("," ~ binary_type)* } // e.g., number, string
 binary_type = { unary_type? ~ (binary_type_op ~ unary_type?)* }
 binary_type_op = { "!" | "#" }
-unary_type = { (unary_type_op)* ~ generic_type? }
-unary_type_op = { "[]" | "?" }
+unary_type = { (unary_type_op)* ~ (generic_type | ("(" ~ type_name ~ ")"))? }
+unary_type_op = { "[]" | "?" | "&" }
 // uses binary_type in generic_type to avoid unwrapping tuples
 generic_type = { identifier ~ ("[" ~ binary_type ~ ("," ~ binary_type)* ~ "]")? } // e.g., List[number]
 

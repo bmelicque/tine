@@ -21,7 +21,7 @@ pub enum Node {
     Program(Vec<AstNode>),
 
     // Types
-    UnaryType(Option<Box<AstNode>>), // []Type | ?Type
+    UnaryType(Option<Box<AstNode>>), // []Type | ?Type | &Type
     Tuple(Vec<Option<AstNode>>),
     BinaryType {
         left: Option<Box<AstNode>>,
