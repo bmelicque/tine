@@ -21,6 +21,18 @@ unary_type_op = { "[]" | "?" | "&" }
 // uses binary_type in generic_type to avoid unwrapping tuples
 generic_type = { identifier ~ ("[" ~ binary_type ~ ("," ~ binary_type)* ~ "]")? } // e.g., List[number]
 
+// Types instantiations
+type_instantiation = { struct_body | unary_instantiation | map_instantiation }
+map_instantiation = { binary_type ~ "{" ~ map_body ~ "}" }
+map_body = { (map_entry? ~ ("," ~ map_entry)*)? }
+map_entry = { map_key ~ ":" ~ expression }
+map_key = { string_literal | number_literal | "[" ~ expression ~ "]" }
+unary_instantiation = { unary_type ~ "{" ~ unary_body ~ "}" }
+unary_body = { (expression? ~ ("," ~ expression)*)? }
+struct_instantiation = { generic_type ~ "{" ~ struct_instance_body ~ "}" }
+struct_instance_body = { (field_assignment ~ ("," ~ field_assignment)*)? }
+field_assignment = { identifier ~ ":" ~ expression }
+
 // Expressions
 expression = { equality }
 equality = { relation? ~ (("=="|"!=") ~ relation?)* }

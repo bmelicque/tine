@@ -1,11 +1,8 @@
 ## Types
 
-### Parser
-
-- type instances `Type {}`
-
 ### Type checker
 
+- generic types
 - binary types
 - unary types
 - structs
@@ -23,6 +20,18 @@
 ### Other
 
 - handle all FIXMEs and TODOs
+
+## Expressions
+
+### To complete
+
+- type check instantiation
+- codegen instantiation
+
+### From zero
+
+- tuples: `a, b`
+- access: `object.key`, `tuple.0`
 
 ## Flow
 

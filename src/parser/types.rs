@@ -132,7 +132,10 @@ fn parse_unary_type(pair: Pair<'static, Rule>) -> ParseResult {
             None => op.as_span(),
         };
         node = Some(Spanned {
-            node: Node::UnaryType(node.map(Box::new)),
+            node: Node::UnaryType {
+                operator: op.as_str().to_string(),
+                inner: node.map(Box::new),
+            },
             span,
         })
     }
@@ -270,8 +273,8 @@ mod tests {
         assert!(result.errors.is_empty());
 
         match result.node.unwrap().node {
-            Node::UnaryType(inner1) => match inner1.unwrap().node {
-                Node::UnaryType(inner2) => match inner2.unwrap().node {
+            Node::UnaryType { operator: _, inner } => match inner.unwrap().node {
+                Node::UnaryType { operator: _, inner } => match inner.unwrap().node {
                     Node::Identifier(ref name) => assert_eq!(name, "Foo"),
                     _ => panic!("Expected inner identifier"),
                 },

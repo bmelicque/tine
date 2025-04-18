@@ -28,7 +28,10 @@ pub enum Node {
     Program(Vec<AstNode>),
 
     // Types
-    UnaryType(Option<Box<AstNode>>), // []Type | ?Type | &Type
+    UnaryType {
+        operator: String,
+        inner: Option<Box<AstNode>>,
+    }, // []Type | ?Type | &Type
     Tuple(Vec<Option<AstNode>>),
     BinaryType {
         left: Option<Box<AstNode>>,
@@ -66,6 +69,9 @@ pub enum Node {
     },
     ExpressionStatement(Box<AstNode>),
     Block(Vec<AstNode>),
+    ReturnStatement(Option<Box<AstNode>>),
+
+    // Expressions
     BinaryExpression {
         left: Option<Box<AstNode>>,
         operator: String,
@@ -80,7 +86,32 @@ pub enum Node {
     StringLiteral(String),
     NumberLiteral(f64),
     BooleanLiteral(bool),
-    ReturnStatement(Option<Box<AstNode>>),
+
+    // Instances
+    MapInstantiation {
+        ty: Option<Box<AstNode>>,
+        entries: Vec<Spanned<MapEntry>>,
+    },
+    UnaryInstantiation {
+        unary_type: Box<AstNode>,
+        body: Vec<AstNode>,
+    },
+    StructInstantiation {
+        struct_type: Box<AstNode>,
+        fields: Vec<Spanned<FieldAssignment>>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapEntry {
+    pub key: Box<AstNode>,
+    pub value: Box<AstNode>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldAssignment {
+    pub name: String,
+    pub value: Box<AstNode>,
 }
 
 pub type AstNode = Spanned<Node>;

@@ -3,8 +3,8 @@ use pest::iterators::Pair;
 use crate::ast::{Node, Spanned};
 
 use super::{
-    function_expression::parse_function_expression,
     parser::{ParseError, ParseResult, Rule},
+    type_instantiations::parse_type_instantiation,
 };
 
 pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
@@ -20,7 +20,7 @@ pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
                 },
             }
         }
-        Rule::function_expression => parse_function_expression(pair),
+        Rule::type_instantiation => parse_type_instantiation(pair),
         Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
             parse_binary_ltr_expression(pair)
         }
@@ -168,7 +168,6 @@ mod tests {
     fn test_simple_addition() {
         let result = parse("1 + 2");
         assert!(result.errors.is_empty());
-        println!("{:?}", result.node);
         match result.node.unwrap().node {
             Node::BinaryExpression {
                 left: Some(left),
