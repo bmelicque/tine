@@ -20,7 +20,7 @@ impl TypeChecker {
         if let Some(params) = parameters {
             for param in params {
                 let ty = if let Some(ann) = &param.type_annotation {
-                    self.resolve_type(&ann.node)
+                    self.resolve_type(&ann)
                 } else {
                     Type::Unknown // type inference could go here later
                 };
@@ -38,7 +38,7 @@ impl TypeChecker {
         self.symbols.exit_scope();
 
         let return_ty = if let Some(return_annotation) = return_type {
-            let expected = self.resolve_type(&return_annotation.node);
+            let expected = self.resolve_type(&return_annotation);
             if body_type != Type::Unknown && expected != body_type {
                 self.errors.push(ParseError {
                     message: format!(

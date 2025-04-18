@@ -153,7 +153,10 @@ fn parse_generic_type(pair: Pair<'static, Rule>) -> ParseResult {
     for part in pair.into_inner() {
         match part.as_rule() {
             Rule::identifier => {
-                name = Some(part.as_str().to_string());
+                name = Some(Box::new(Spanned {
+                    node: Node::NamedType(part.as_str().to_string()),
+                    span: part.as_span(),
+                }));
             }
             Rule::binary_type => {
                 let mut result = parse_type(part);
@@ -170,7 +173,7 @@ fn parse_generic_type(pair: Pair<'static, Rule>) -> ParseResult {
             args,
         }
     } else {
-        Node::Identifier(name.unwrap())
+        name.unwrap().node
     };
 
     ParseResult {
@@ -230,8 +233,8 @@ mod tests {
         assert!(result.errors.is_empty());
 
         match result.node.unwrap().node {
-            Node::Identifier(name) => assert_eq!(name, "number"),
-            _ => panic!("Expected Identifier"),
+            Node::NamedType(name) => assert_eq!(name, "number"),
+            _ => panic!("Expected NamedType"),
         }
     }
 
@@ -245,11 +248,11 @@ mod tests {
                 assert_eq!(items.len(), 2);
                 assert_eq!(
                     items[0].as_ref().unwrap().node,
-                    Node::Identifier("number".into())
+                    Node::NamedType("number".into())
                 );
                 assert_eq!(
                     items[1].as_ref().unwrap().node,
-                    Node::Identifier("string".into())
+                    Node::NamedType("string".into())
                 );
             }
             _ => panic!("Expected Tuple node"),
@@ -275,7 +278,7 @@ mod tests {
         match result.node.unwrap().node {
             Node::UnaryType { operator: _, inner } => match inner.unwrap().node {
                 Node::UnaryType { operator: _, inner } => match inner.unwrap().node {
-                    Node::Identifier(ref name) => assert_eq!(name, "Foo"),
+                    Node::NamedType(ref name) => assert_eq!(name, "Foo"),
                     _ => panic!("Expected inner identifier"),
                 },
                 _ => panic!("Expected nested unary"),
@@ -290,8 +293,8 @@ mod tests {
         assert!(result.errors.is_empty());
 
         match result.node.unwrap().node {
-            Node::Identifier(name) => assert_eq!(name, "Box"),
-            _ => panic!("Expected Identifier (generic type without args)"),
+            Node::NamedType(name) => assert_eq!(name, "Box"),
+            _ => panic!("Expected NamedType (generic type without args)"),
         }
     }
 
@@ -302,10 +305,10 @@ mod tests {
 
         match result.node.unwrap().node {
             Node::GenericType { name, args } => {
-                assert_eq!(name, "List");
+                assert_eq!(name.node, Node::NamedType("List".into()));
                 assert_eq!(args.len(), 2);
-                assert_eq!(args[0].node, Node::Identifier("number".into()));
-                assert_eq!(args[1].node, Node::Identifier("string".into()));
+                assert_eq!(args[0].node, Node::NamedType("number".into()));
+                assert_eq!(args[1].node, Node::NamedType("string".into()));
             }
             _ => panic!("Expected GenericType"),
         }
@@ -326,16 +329,16 @@ mod tests {
                         assert_eq!(params.len(), 2);
                         assert_eq!(
                             params[0].as_ref().unwrap().node,
-                            Node::Identifier("number".into())
+                            Node::NamedType("number".into())
                         );
                         assert_eq!(
                             params[1].as_ref().unwrap().node,
-                            Node::Identifier("string".into())
+                            Node::NamedType("string".into())
                         );
                     }
                     _ => panic!("Expected parameters as Tuple"),
                 }
-                assert_eq!(return_type.node, Node::Identifier("boolean".into()));
+                assert_eq!(return_type.node, Node::NamedType("boolean".into()));
             }
             _ => panic!("Expected FunctionType"),
         }

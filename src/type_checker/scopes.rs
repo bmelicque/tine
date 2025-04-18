@@ -36,3 +36,23 @@ impl SymbolTable {
         None
     }
 }
+
+pub struct TypeRegistry {
+    types: HashMap<String, Type>,
+}
+
+impl TypeRegistry {
+    pub fn new() -> Self {
+        Self {
+            types: HashMap::new(),
+        }
+    }
+
+    pub fn define(&mut self, name: &str, ty: Type) {
+        self.types.insert(name.to_string(), ty);
+    }
+
+    pub fn lookup(&self, name: &str) -> Option<&Type> {
+        self.types.get(name)
+    }
+}

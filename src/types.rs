@@ -16,17 +16,19 @@ pub enum Type {
     Tuple(Vec<Type>),
     Generic {
         name: String,
-        params: Vec<Type>,
+        args: Vec<Type>,
     },
     Map {
         key: Box<Type>,
         value: Box<Type>,
     },
     Option(Box<Type>),
+    Reference(Box<Type>),
     Result {
         error: Option<Box<Type>>,
         ok: Box<Type>,
     },
+    Dynamic, // Represents a type that will have to be inferred later
 
     Unknown,
 }

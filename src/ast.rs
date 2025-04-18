@@ -28,6 +28,7 @@ pub enum Node {
     Program(Vec<AstNode>),
 
     // Types
+    NamedType(String), // for named types like String, Number, etc.
     UnaryType {
         operator: String,
         inner: Option<Box<AstNode>>,
@@ -39,7 +40,7 @@ pub enum Node {
         right: Option<Box<AstNode>>,
     },
     GenericType {
-        name: String,
+        name: Box<AstNode>, // should be a Node::Identifier
         args: Vec<Box<AstNode>>,
     },
     FunctionType {
