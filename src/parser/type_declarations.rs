@@ -228,7 +228,7 @@ fn parse_trait(pair: Pair<'static, Rule>) -> (AstNode, Vec<ParseError>) {
 
     (
         Spanned {
-            node: Node::Trait {
+            node: Node::TraitDef {
                 name,
                 body: Box::new(body),
             },
@@ -470,7 +470,7 @@ mod tests {
             } => {
                 assert_eq!(name, "Drawable");
                 match def.node {
-                    Node::Trait {
+                    Node::TraitDef {
                         name: trait_name,
                         body,
                     } => {

@@ -64,7 +64,7 @@ pub enum Node {
     },
     Struct(Vec<Spanned<StructField>>),
     SumDef(Vec<SumTypeConstructor>),
-    Trait {
+    TraitDef {
         name: String,
         body: Box<AstNode>,
     },

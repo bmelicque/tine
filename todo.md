@@ -7,7 +7,6 @@
 
 ### Type checker
 
-- traits
 - type declaration
 - generic type declaration
 - function types

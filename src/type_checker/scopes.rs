@@ -38,12 +38,14 @@ impl SymbolTable {
 }
 
 pub struct TypeRegistry {
+    pub current_self: Option<String>,
     types: HashMap<String, Type>,
 }
 
 impl TypeRegistry {
     pub fn new() -> Self {
         Self {
+            current_self: None,
             types: HashMap::new(),
         }
     }
@@ -53,6 +55,9 @@ impl TypeRegistry {
     }
 
     pub fn lookup(&self, name: &str) -> Option<&Type> {
-        self.types.get(name)
+        match self.current_self {
+            Some(ref current_self) if name == current_self => Some(&Type::SelfType),
+            _ => self.types.get(name),
+        }
     }
 }

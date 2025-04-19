@@ -1,7 +1,7 @@
 use crate::{
     ast::{AstNode, Node},
     parser::parser::ParseError,
-    types::{StructField, SumVariant, Type},
+    types::{StructField, SumVariant, TraitMethod, Type},
 };
 
 use super::TypeChecker;
@@ -162,6 +162,37 @@ impl TypeChecker {
 
         Type::Sum {
             variants: variant_types,
+        }
+    }
+
+    pub(super) fn visit_trait_def(&mut self, ast_node: &AstNode) -> Type {
+        let node = &ast_node.node;
+        let Node::TraitDef { name, body } = node else {
+            panic!("Expected a trait definition")
+        };
+
+        self.type_registry.current_self = Some(name.clone());
+        let Node::Struct(methods) = &body.node else {
+            panic!("Expected a struct for trait body, found {:?}", body.node)
+        };
+
+        let mut method_types = Vec::<TraitMethod>::new();
+        for method in methods {
+            let name = method.node.name.clone();
+            let method_type = match method.node.def {
+                Some(ref def) => self.visit(def),
+                None => Type::Unknown,
+            };
+            method_types.push(TraitMethod {
+                name,
+                def: method_type,
+            });
+        }
+
+        self.type_registry.current_self = None;
+
+        Type::Trait {
+            methods: method_types,
         }
     }
 }

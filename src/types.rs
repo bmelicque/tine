@@ -16,6 +16,9 @@ pub enum Type {
     Sum {
         variants: Vec<SumVariant>,
     },
+    Trait {
+        methods: Vec<TraitMethod>,
+    },
     Tuple(Vec<Type>),
     Generic {
         name: String,
@@ -31,7 +34,8 @@ pub enum Type {
         error: Option<Box<Type>>,
         ok: Box<Type>,
     },
-    Dynamic, // Represents a type that will have to be inferred later
+    Dynamic,  // Represents a type that will have to be inferred later
+    SelfType, // Represents the current type in a method context
 
     Unknown,
 }
@@ -45,6 +49,12 @@ pub struct StructField {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SumVariant {
+    pub name: String,
+    pub def: Type,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TraitMethod {
     pub name: String,
     pub def: Type,
 }

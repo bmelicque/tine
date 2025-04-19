@@ -208,6 +208,7 @@ impl TypeChecker {
             Node::NamedType(_) => self.visit_named_type(node),
             Node::Struct(_) => self.visit_struct_type(node),
             Node::SumDef(_) => self.visit_sum_def(node),
+            Node::TraitDef { .. } => self.visit_trait_def(node),
             _ => {
                 // FIXME:
                 panic!("Not implemented yet!")
