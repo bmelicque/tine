@@ -3,15 +3,15 @@
 ### Parser
 
 - allow type constraints in generics
+- define generic type
 
 ### Type checker
 
 - differentiate between generic type def with type params and generic annotation with type args
-- generic types
-- structs
 - sum types
 - traits
 - type declaration
+- generic type declaration
 - function types
 - type instantiation
 - inferred type instances `#{ key: 42 }`

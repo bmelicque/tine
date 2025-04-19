@@ -11,7 +11,7 @@ pub enum Type {
     Named(String),
     Array(Box<Type>),
     Struct {
-        fields: Vec<(String, Type)>,
+        fields: Vec<StructField>,
     },
     Tuple(Vec<Type>),
     Generic {
@@ -31,4 +31,11 @@ pub enum Type {
     Dynamic, // Represents a type that will have to be inferred later
 
     Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructField {
+    pub name: String,
+    pub def: Type,
+    pub optional: bool,
 }

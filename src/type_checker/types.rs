@@ -1,7 +1,7 @@
 use crate::{
     ast::{AstNode, Node},
     parser::parser::ParseError,
-    types::Type,
+    types::{StructField, Type},
 };
 
 use super::TypeChecker;
@@ -114,6 +114,32 @@ impl TypeChecker {
             "&" => Type::Reference(Box::new(operand_type)),
             "[]" => Type::Array(Box::new(operand_type)),
             _ => unreachable!("Unexpected operator in unary type: {}", operator),
+        }
+    }
+
+    pub(super) fn visit_struct_type(&mut self, ast_node: &AstNode) -> Type {
+        let node = &ast_node.node;
+        let Node::Struct(fields) = node else {
+            panic!("Expected Node::Struct")
+        };
+
+        let mut struct_fields = Vec::<StructField>::new();
+        for field in fields {
+            let field = &field.node;
+            let name = field.name.clone();
+            let field_type = match field.def {
+                Some(ref def) => self.visit(def),
+                None => Type::Unknown,
+            };
+            struct_fields.push(StructField {
+                name,
+                def: field_type,
+                optional: field.optional,
+            });
+        }
+
+        Type::Struct {
+            fields: struct_fields,
         }
     }
 }

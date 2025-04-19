@@ -206,6 +206,7 @@ impl TypeChecker {
             Node::UnaryType { .. } => self.visit_unary_type(node),
             Node::GenericType { .. } => self.visit_generic_type(node),
             Node::NamedType(_) => self.visit_named_type(node),
+            Node::Struct(_) => self.visit_struct_type(node),
             _ => {
                 // FIXME:
                 panic!("Not implemented yet!")
