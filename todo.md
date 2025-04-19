@@ -7,8 +7,6 @@
 
 ### Type checker
 
-- differentiate between generic type def with type params and generic annotation with type args
-- sum types
 - traits
 - type declaration
 - generic type declaration

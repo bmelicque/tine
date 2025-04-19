@@ -207,6 +207,7 @@ impl TypeChecker {
             Node::GenericType { .. } => self.visit_generic_type(node),
             Node::NamedType(_) => self.visit_named_type(node),
             Node::Struct(_) => self.visit_struct_type(node),
+            Node::SumDef(_) => self.visit_sum_def(node),
             _ => {
                 // FIXME:
                 panic!("Not implemented yet!")

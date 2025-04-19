@@ -13,6 +13,9 @@ pub enum Type {
     Struct {
         fields: Vec<StructField>,
     },
+    Sum {
+        variants: Vec<SumVariant>,
+    },
     Tuple(Vec<Type>),
     Generic {
         name: String,
@@ -38,4 +41,10 @@ pub struct StructField {
     pub name: String,
     pub def: Type,
     pub optional: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SumVariant {
+    pub name: String,
+    pub def: Type,
 }

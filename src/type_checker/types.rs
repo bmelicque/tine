@@ -1,7 +1,7 @@
 use crate::{
     ast::{AstNode, Node},
     parser::parser::ParseError,
-    types::{StructField, Type},
+    types::{StructField, SumVariant, Type},
 };
 
 use super::TypeChecker;
@@ -140,6 +140,28 @@ impl TypeChecker {
 
         Type::Struct {
             fields: struct_fields,
+        }
+    }
+
+    pub(super) fn visit_sum_def(&mut self, ast_node: &AstNode) -> Type {
+        let node = &ast_node.node;
+        let Node::SumDef(variants) = node else {
+            panic!("Expected a sum definition")
+        };
+
+        let mut variant_types = Vec::<SumVariant>::new();
+        for var in variants {
+            variant_types.push(SumVariant {
+                name: var.name.clone(),
+                def: match var.param {
+                    Some(ref param) => self.visit(param),
+                    None => Type::Unknown,
+                },
+            });
+        }
+
+        Type::Sum {
+            variants: variant_types,
         }
     }
 }

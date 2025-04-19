@@ -166,7 +166,7 @@ pub fn parse_sum_type(pair: Pair<'static, Rule>) -> (AstNode, Vec<ParseError>) {
 
     (
         Spanned {
-            node: Node::Sum(constructors),
+            node: Node::SumDef(constructors),
             span,
         },
         errors,
@@ -367,7 +367,7 @@ mod tests {
             } => {
                 assert_eq!(name, "Shape");
                 match def.node {
-                    Node::Sum(constructors) => {
+                    Node::SumDef(constructors) => {
                         assert_eq!(constructors.len(), 2);
                         assert_eq!(constructors[0].name, "Circle");
                         assert_eq!(constructors[1].name, "Rectangle");
@@ -394,7 +394,7 @@ mod tests {
             } => {
                 assert_eq!(name, "Result");
                 match def.node {
-                    Node::Sum(constructors) => {
+                    Node::SumDef(constructors) => {
                         assert_eq!(constructors.len(), 2);
                         assert_eq!(constructors[0].name, "Ok");
                         assert_eq!(constructors[1].name, "Err");
@@ -439,7 +439,7 @@ mod tests {
             } => {
                 assert_eq!(name, "Shape");
                 match def.node {
-                    Node::Sum(constructors) => {
+                    Node::SumDef(constructors) => {
                         // Ensure all constructors are parsed
                         assert_eq!(constructors.len(), 3);
                         assert_eq!(constructors[0].name, "Circle");
