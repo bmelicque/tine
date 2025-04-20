@@ -4,7 +4,9 @@ use swc_ecma_ast as ast;
 
 use crate::ast::Node;
 
-use super::{expressions::node_to_swc_expr, CodeGenerator};
+use super::{
+    expressions::node_to_swc_expr, type_declaration::type_declaration_to_swc_decl, CodeGenerator,
+};
 
 pub fn node_to_swc_stmt(
     generator: &CodeGenerator,
@@ -52,6 +54,7 @@ pub fn node_to_swc_stmt(
                 })),
             ))))
         }
+        Node::TypeDeclaration { .. } => type_declaration_to_swc_decl(generator, node),
         Node::Assignment { name, value } => {
             let value_expr = if let Some(v) = value {
                 node_to_swc_expr(generator, v.node)?
