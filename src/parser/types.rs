@@ -39,7 +39,7 @@ fn parse_tuple_type(pair: Pair<'static, Rule>) -> ParseResult {
         0 => None,
         1 => sub_types.pop().unwrap(),
         _ => Some(Spanned {
-            node: Node::Tuple(sub_types),
+            node: Node::TupleType(sub_types),
             span,
         }),
     };
@@ -244,7 +244,7 @@ mod tests {
         assert!(result.errors.is_empty());
 
         match result.node.unwrap().node {
-            Node::Tuple(items) => {
+            Node::TupleType(items) => {
                 assert_eq!(items.len(), 2);
                 assert_eq!(
                     items[0].as_ref().unwrap().node,
@@ -325,7 +325,7 @@ mod tests {
                 return_type,
             } => {
                 match parameters.node {
-                    Node::Tuple(params) => {
+                    Node::TupleType(params) => {
                         assert_eq!(params.len(), 2);
                         assert_eq!(
                             params[0].as_ref().unwrap().node,

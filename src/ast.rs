@@ -33,7 +33,7 @@ pub enum Node {
         operator: String,
         inner: Option<Box<AstNode>>,
     }, // []Type | ?Type | &Type
-    Tuple(Vec<Option<AstNode>>),
+    TupleType(Vec<Option<AstNode>>),
     BinaryType {
         left: Option<Box<AstNode>>,
         operator: String,

@@ -7,7 +7,6 @@
 
 ### Type checker
 
-- function types
 - type instantiation
 - inferred type instances `#{ key: 42 }`
 
@@ -23,8 +22,6 @@
 - handle all FIXMEs and TODOs
 
 ## Expressions
-
-### From zero
 
 - tuples: `a, b`
 - access: `object.key`, `tuple.0`

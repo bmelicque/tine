@@ -201,6 +201,8 @@ impl TypeChecker {
             Node::UnaryType { .. } => self.visit_unary_type(node),
             Node::GenericType { .. } => self.visit_generic_type(node),
             Node::NamedType(_) => self.visit_named_type(node),
+            Node::FunctionType { .. } => self.visit_function_type(node),
+            Node::TupleType(_) => self.visit_tuple_type(node),
             Node::Struct(_) => self.visit_struct_type(node),
             Node::SumDef(_) => self.visit_sum_def(node),
             Node::TraitDef { .. } => self.visit_trait_def(node),

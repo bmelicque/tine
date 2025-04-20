@@ -117,6 +117,47 @@ impl TypeChecker {
         }
     }
 
+    pub(super) fn visit_tuple_type(&mut self, ast_node: &AstNode) -> Type {
+        let node = &ast_node.node;
+        let Node::TupleType(types) = node else {
+            panic!("Expected TupleType node")
+        };
+
+        let tuple_types: Vec<Type> = types
+            .iter()
+            .map(|ty| match ty {
+                Some(spanned) => self.visit(spanned),
+                None => Type::Unknown,
+            })
+            .collect();
+
+        Type::Tuple(tuple_types)
+    }
+
+    pub(super) fn visit_function_type(&mut self, ast_node: &AstNode) -> Type {
+        let node = &ast_node.node;
+        let Node::FunctionType {
+            parameters,
+            return_type,
+        } = node
+        else {
+            panic!("Expected FunctionType node")
+        };
+
+        let params_type = self.visit(&parameters);
+        let param_types: Vec<Type> = match params_type {
+            Type::Tuple(tuple_type) => tuple_type,
+            ty => vec![ty],
+        };
+
+        let return_type = Box::new(self.visit(&return_type));
+
+        Type::Function {
+            params: param_types,
+            return_type,
+        }
+    }
+
     pub(super) fn visit_struct_type(&mut self, ast_node: &AstNode) -> Type {
         let node = &ast_node.node;
         let Node::Struct(fields) = node else {
@@ -359,6 +400,55 @@ mod tests {
                 assert!(matches!(args[1], Type::String));
             }
             _ => panic!("Expected Generic type"),
+        }
+    }
+
+    #[test]
+    fn test_visit_tuple_type() {
+        let ast_node = spanned(Node::TupleType(vec![
+            Some(spanned(Node::NamedType("number".to_string()))),
+            Some(spanned(Node::NamedType("string".to_string()))),
+            None, // Represents an unknown type
+        ]));
+
+        let mut checker = TypeChecker::new();
+        let result = checker.visit_tuple_type(&ast_node);
+
+        match result {
+            Type::Tuple(types) => {
+                assert_eq!(types.len(), 3);
+                assert!(matches!(types[0], Type::Number));
+                assert!(matches!(types[1], Type::String));
+                assert!(matches!(types[2], Type::Unknown));
+            }
+            _ => panic!("Expected Tuple type"),
+        }
+    }
+
+    #[test]
+    fn test_visit_function_type() {
+        let ast_node = spanned(Node::FunctionType {
+            parameters: Box::new(spanned(Node::TupleType(vec![
+                Some(spanned(Node::NamedType("number".to_string()))),
+                Some(spanned(Node::NamedType("string".to_string()))),
+            ]))),
+            return_type: Box::new(spanned(Node::NamedType("boolean".to_string()))),
+        });
+
+        let mut checker = TypeChecker::new();
+        let result = checker.visit_function_type(&ast_node);
+
+        match result {
+            Type::Function {
+                params,
+                return_type,
+            } => {
+                assert_eq!(params.len(), 2);
+                assert!(matches!(params[0], Type::Number));
+                assert!(matches!(params[1], Type::String));
+                assert!(matches!(*return_type, Type::Boolean));
+            }
+            _ => panic!("Expected Function type"),
         }
     }
 }
