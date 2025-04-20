@@ -7,14 +7,13 @@
 
 ### Type checker
 
-- type declaration
-- generic type declaration
 - function types
 - type instantiation
 - inferred type instances `#{ key: 42 }`
 
 ### Codegen
 
+- type declaration
 - struct declaration
 - sum type declaration
 - type instantiation

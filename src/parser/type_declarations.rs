@@ -23,20 +23,70 @@ pub fn parse_type_declaration(pair: Pair<'static, Rule>) -> ParseResult {
         });
     }
 
-    let Some(def_pair) = inner.next() else {
-        errors.push(ParseError {
-            message: "Missing type definition".into(),
-            span,
-        });
-        return ParseResult {
-            node: Some(Spanned {
-                node: Node::TypeDeclaration { name, def: None },
-                span,
-            }),
-            errors,
-        };
-    };
+    let mut type_params = None;
+    let mut def = None;
+    while let Some(pair) = inner.next() {
+        match pair.as_rule() {
+            Rule::type_params => {
+                let mut result = parse_type_params(pair);
+                errors.append(&mut result.1);
+                type_params = Some(result.0);
+            }
+            Rule::type_def => {
+                let mut result = parse_type_definition(pair);
+                errors.append(&mut result.1);
+                def = Some(Box::new(result.0));
+            }
+            _ => unreachable!(),
+        }
+    }
 
+    ParseResult {
+        node: Some(Spanned {
+            node: Node::TypeDeclaration {
+                name,
+                type_params,
+                def,
+            },
+            span,
+        }),
+        errors,
+    }
+}
+
+fn parse_type_params(pair: Pair<'static, Rule>) -> (Vec<String>, Vec<ParseError>) {
+    assert_eq!(pair.as_rule(), Rule::type_params);
+    let mut type_params = Vec::new();
+    let mut type_param_names = std::collections::HashSet::new();
+    let mut errors = Vec::new();
+    let inner = pair.into_inner();
+    for param_pair in inner {
+        assert_eq!(param_pair.as_rule(), Rule::identifier);
+        let param_name = param_pair.as_str().to_string();
+        if !is_pascal_case(&param_name) {
+            errors.push(ParseError {
+                message: format!(
+                    "Type parameter name '{}' should be in Pascal case",
+                    param_name
+                ),
+                span: param_pair.as_span(),
+            });
+        }
+        if !type_param_names.insert(param_name.clone()) {
+            errors.push(ParseError {
+                message: format!("Duplicate type parameter name '{}'", param_name),
+                span: param_pair.as_span(),
+            });
+        }
+        type_params.push(param_name);
+    }
+    (type_params, errors)
+}
+
+fn parse_type_definition(pair: Pair<'static, Rule>) -> (AstNode, Vec<ParseError>) {
+    assert_eq!(pair.as_rule(), Rule::type_def);
+    let def_pair = pair.into_inner().next().unwrap();
+    let mut errors = Vec::new();
     let def = match def_pair.as_rule() {
         Rule::struct_body => {
             let (d, mut errs) = parse_struct_body(def_pair);
@@ -55,15 +105,9 @@ pub fn parse_type_declaration(pair: Pair<'static, Rule>) -> ParseResult {
         }
         _ => unreachable!(),
     }
-    .map(Box::new);
+    .unwrap();
 
-    ParseResult {
-        node: Some(Spanned {
-            node: Node::TypeDeclaration { name, def },
-            span,
-        }),
-        errors,
-    }
+    (def, errors)
 }
 
 fn parse_struct_body(pair: Pair<'static, Rule>) -> (AstNode, Vec<ParseError>) {
@@ -267,6 +311,7 @@ mod tests {
         match result.node.unwrap().node {
             Node::TypeDeclaration {
                 name,
+                type_params: None,
                 def: Some(def),
             } => {
                 assert_eq!(name, "Person");
@@ -299,6 +344,7 @@ mod tests {
         match result.node.unwrap().node {
             Node::TypeDeclaration {
                 name,
+                type_params: None,
                 def: Some(def),
             } => {
                 assert_eq!(name, "Person");
@@ -334,6 +380,7 @@ mod tests {
         match result.node.unwrap().node {
             Node::TypeDeclaration {
                 name,
+                type_params: None,
                 def: Some(def),
             } => {
                 assert_eq!(name, "Person");
@@ -363,6 +410,7 @@ mod tests {
         match result.node.unwrap().node {
             Node::TypeDeclaration {
                 name,
+                type_params: None,
                 def: Some(def),
             } => {
                 assert_eq!(name, "Shape");
@@ -390,6 +438,7 @@ mod tests {
         match result.node.unwrap().node {
             Node::TypeDeclaration {
                 name,
+                type_params: None,
                 def: Some(def),
             } => {
                 assert_eq!(name, "Result");
@@ -435,6 +484,7 @@ mod tests {
         match result.node.unwrap().node {
             Node::TypeDeclaration {
                 name,
+                type_params: None,
                 def: Some(def),
             } => {
                 assert_eq!(name, "Shape");
@@ -466,6 +516,7 @@ mod tests {
         match result.node.unwrap().node {
             Node::TypeDeclaration {
                 name,
+                type_params: None,
                 def: Some(def),
             } => {
                 assert_eq!(name, "Drawable");

@@ -34,8 +34,9 @@ pub enum Type {
         error: Option<Box<Type>>,
         ok: Box<Type>,
     },
-    Dynamic,  // Represents a type that will have to be inferred later
-    SelfType, // Represents the current type in a method context
+    Dynamic,              // Represents a type that will have to be inferred later
+    GenericParam(String), // Represents a generic type parameter
+    SelfType,             // Represents the current type in a method context
 
     Unknown,
 }

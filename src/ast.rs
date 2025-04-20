@@ -60,6 +60,7 @@ pub enum Node {
     },
     TypeDeclaration {
         name: String,
+        type_params: Option<Vec<String>>,
         def: Option<Box<AstNode>>,
     },
     Struct(Vec<Spanned<StructField>>),

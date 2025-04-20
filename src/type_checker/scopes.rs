@@ -39,6 +39,7 @@ impl SymbolTable {
 
 pub struct TypeRegistry {
     pub current_self: Option<String>,
+    pub current_type_params: Option<Vec<String>>,
     types: HashMap<String, Type>,
 }
 
@@ -46,6 +47,7 @@ impl TypeRegistry {
     pub fn new() -> Self {
         Self {
             current_self: None,
+            current_type_params: None,
             types: HashMap::new(),
         }
     }
@@ -54,10 +56,17 @@ impl TypeRegistry {
         self.types.insert(name.to_string(), ty);
     }
 
-    pub fn lookup(&self, name: &str) -> Option<&Type> {
-        match self.current_self {
-            Some(ref current_self) if name == current_self => Some(&Type::SelfType),
-            _ => self.types.get(name),
+    pub fn lookup(&self, name: &str) -> Option<Type> {
+        if let Some(ref current_self) = self.current_self {
+            if name == current_self {
+                return Some(Type::SelfType);
+            }
         }
+        if let Some(ref current_type_params) = self.current_type_params {
+            if current_type_params.contains(&name.to_string()) {
+                return Some(Type::GenericParam(name.to_string()));
+            }
+        };
+        self.types.get(name).cloned()
     }
 }

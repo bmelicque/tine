@@ -1,5 +1,3 @@
-use swc_ecma_ast::Id;
-
 use super::scopes::{SymbolTable, TypeRegistry, VariableInfo};
 
 use crate::ast::{AstNode, Node, Spanned};
@@ -119,10 +117,7 @@ impl TypeChecker {
                     }
                 }
             }
-            Node::TypeDeclaration { name, def } => {
-                _ = (name, def);
-                Type::Unknown
-            }
+            Node::TypeDeclaration { .. } => self.visit_type_declaration(node),
             Node::ReturnStatement(expr_opt) => {
                 if let Some(expr) = expr_opt {
                     self.visit(&expr)
