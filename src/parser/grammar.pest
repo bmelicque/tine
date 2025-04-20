@@ -78,4 +78,4 @@ trait_type = { "(" ~ identifier ~ ")" ~ "." ~ struct_body }
 
 // Program
 blank_line = _{ NEWLINE }
-program = { SOI ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ EOI }
+program = { SOI ~ ((blank_line | statement) ~ (NEWLINE+ ~ (blank_line | statement))*)? ~ NEWLINE* ~ EOI }
