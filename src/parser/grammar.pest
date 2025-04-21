@@ -10,9 +10,28 @@ number_literal = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 boolean_literal = @{ "true" | "false" }
 
 // Type annotations
-// TODO: handle more complex types
 type_annotation = { type_name }
-type_name = { identifier }
+type_name = { function_type | tuple_type }
+function_type = { "(" ~ tuple_type ~ ")" ~ "->" ~ type_name}
+tuple_type = { binary_type ~ ("," ~ binary_type)* } // e.g., number, string
+binary_type = { (unary_type ~ (binary_type_op ~ unary_type?)*)|((binary_type_op ~ unary_type?)+) }
+binary_type_op = { "!" | "#" }
+unary_type = { (unary_type_op)* ~ (generic_type | ("(" ~ type_name ~ ")")) }
+unary_type_op = { "[]" | "?" | "&" }
+// uses binary_type in generic_type to avoid unwrapping tuples
+generic_type = { identifier ~ ("[" ~ binary_type ~ ("," ~ binary_type)* ~ "]")? } // e.g., List[number]
+
+// Types instantiations
+type_instantiation = { struct_body | unary_instantiation | map_instantiation }
+map_instantiation = { binary_type ~ "{" ~ map_body ~ "}" }
+map_body = { (map_entry? ~ ("," ~ map_entry)*)? }
+map_entry = { map_key ~ ":" ~ expression }
+map_key = { string_literal | number_literal | "[" ~ expression ~ "]" }
+unary_instantiation = { unary_type ~ "{" ~ unary_body ~ "}" }
+unary_body = { (expression? ~ ("," ~ expression)*)? }
+struct_instantiation = { generic_type ~ "{" ~ struct_instance_body ~ "}" }
+struct_instance_body = { (field_assignment ~ ("," ~ field_assignment)*)? }
+field_assignment = { identifier ~ ":" ~ expression }
 
 // Expressions
 expression = { equality }
@@ -34,7 +53,7 @@ parameter = { identifier ~ type_annotation? }
 
 
 // Statements
-statement = { block | variable_declaration | assignment | return_statement | expression_statement }
+statement = { block | type_declaration | variable_declaration | assignment | return_statement | expression_statement }
 variable_declaration = { identifier? ~ decl_op ~ expression? }
 decl_op = { ":=" | "::" }
 assignment = { identifier? ~ "=" ~ expression? }
@@ -42,6 +61,21 @@ return_statement = { "return" ~ expression? }
 expression_statement = { expression }
 block = { "{" ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ "}" }
 
+type_declaration = { identifier ~ type_params? ~ "::" ~ type_def }
+type_params = { "[" ~ identifier ~ ("," ~ identifier)* ~ "]" }
+type_def = { struct_body | sum_type | trait_type }
+struct_body = { "{" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ "}" }
+field_declaration = { mandatory_field | optional_field | embedded_field }
+embedded_field = { identifier }
+mandatory_field = { identifier ~ field_type }
+// cannot use type_name because tuples types mess with the parser
+field_type = { function_type | binary_type }
+optional_field = { identifier ~ ":" ~ expression }
+sum_type = { (NEWLINE? ~ "|")? ~ sum_constructor ~ (NEWLINE? ~ "|" ~ sum_constructor)+ }
+sum_constructor = { identifier ~ (sum_param | struct_body)? }
+sum_param = { "{" ~ type_name ~ "}" }
+trait_type = { "(" ~ identifier ~ ")" ~ "." ~ struct_body }
+
 // Program
 blank_line = _{ NEWLINE }
-program = { SOI ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ EOI }
+program = { SOI ~ ((blank_line | statement) ~ (NEWLINE+ ~ (blank_line | statement))*)? ~ NEWLINE* ~ EOI }

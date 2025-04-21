@@ -1,24 +1,26 @@
 use pest::iterators::Pair;
 
-use crate::ast::{Node, Spanned, TypeNode};
+use crate::ast::{Node, Spanned};
 
 use super::{
-    function_expression::parse_function_expression,
     parser::{ParseError, ParseResult, Rule},
+    type_instantiations::parse_type_instantiation,
 };
 
 pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
     let span = pair.as_span().clone();
 
     match pair.as_rule() {
-        Rule::expression | Rule::primary => match pair.into_inner().next() {
-            Some(inner) => parse_expression(inner),
-            None => ParseResult {
-                node: None,
-                errors: vec![],
-            },
-        },
-        Rule::function_expression => parse_function_expression(pair),
+        Rule::expression | Rule::primary | Rule::type_annotation => {
+            match pair.into_inner().next() {
+                Some(inner) => parse_expression(inner),
+                None => ParseResult {
+                    node: None,
+                    errors: vec![],
+                },
+            }
+        }
+        Rule::type_instantiation => parse_type_instantiation(pair),
         Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
             parse_binary_ltr_expression(pair)
         }
@@ -114,11 +116,6 @@ fn parse_binary_ltr_expression(pair: Pair<'static, Rule>) -> ParseResult {
     ParseResult { node: left, errors }
 }
 
-pub fn parse_type_annotation(pair: Pair<'static, Rule>) -> TypeNode {
-    let mut inner = pair.into_inner();
-    inner.next().unwrap().as_str().to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,7 +168,6 @@ mod tests {
     fn test_simple_addition() {
         let result = parse("1 + 2");
         assert!(result.errors.is_empty());
-        println!("{:?}", result.node);
         match result.node.unwrap().node {
             Node::BinaryExpression {
                 left: Some(left),

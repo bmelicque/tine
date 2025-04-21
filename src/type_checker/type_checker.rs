@@ -1,12 +1,13 @@
-use super::symbol_table::{SymbolTable, VariableInfo};
+use super::scopes::{SymbolTable, TypeRegistry, VariableInfo};
 
-use crate::ast::{AstNode, Node};
+use crate::ast::{AstNode, Node, Spanned};
 use crate::parser::parser::ParseError;
 use crate::types::Type;
 
 pub struct TypeChecker {
     pub errors: Vec<ParseError>,
     pub symbols: SymbolTable,
+    pub type_registry: TypeRegistry,
 }
 
 impl TypeChecker {
@@ -16,6 +17,7 @@ impl TypeChecker {
         Self {
             errors: Vec::new(),
             symbols,
+            type_registry: TypeRegistry::new(),
         }
     }
 
@@ -115,6 +117,7 @@ impl TypeChecker {
                     }
                 }
             }
+            Node::TypeDeclaration { .. } => self.visit_type_declaration(node),
             Node::ReturnStatement(expr_opt) => {
                 if let Some(expr) = expr_opt {
                     self.visit(&expr)
@@ -193,16 +196,59 @@ impl TypeChecker {
             Node::StringLiteral(_) => Type::String,
             Node::NumberLiteral(_) => Type::Number,
             Node::BooleanLiteral(_) => Type::Boolean,
+
+            Node::BinaryType { .. } => self.visit_binary_type(node),
+            Node::UnaryType { .. } => self.visit_unary_type(node),
+            Node::GenericType { .. } => self.visit_generic_type(node),
+            Node::NamedType(_) => self.visit_named_type(node),
+            Node::FunctionType { .. } => self.visit_function_type(node),
+            Node::TupleType(_) => self.visit_tuple_type(node),
+            Node::Struct(_) => self.visit_struct_type(node),
+            Node::SumDef(_) => self.visit_sum_def(node),
+            Node::TraitDef { .. } => self.visit_trait_def(node),
+            _ => {
+                // FIXME:
+                panic!("Not implemented yet!")
+            }
         }
     }
 
-    pub(super) fn resolve_type(&self, type_str: &str) -> Type {
-        match type_str {
-            "string" => Type::String,
-            "number" => Type::Number,
-            "boolean" => Type::Boolean,
-            "void" => Type::Void,
-            _ => Type::Unknown,
+    pub(super) fn visit_identifier(&mut self, ast_node: &AstNode) -> Type {
+        let Spanned { node, span } = &ast_node;
+        let Node::Identifier(id) = node else {
+            panic!("Expected Identifier node")
+        };
+        if let Some(variable_info) = self.symbols.lookup(id) {
+            variable_info.ty.clone()
+        } else {
+            self.errors.push(ParseError {
+                message: format!("Cannot find name '{}'", id),
+                span: *span,
+            });
+            Type::Unknown
+        }
+    }
+
+    pub(super) fn resolve_type(&mut self, ast_node: &AstNode) -> Type {
+        let Spanned { node, span } = &ast_node;
+        match node {
+            Node::Identifier(id) => match id.as_str() {
+                "string" => Type::String,
+                "number" => Type::Number,
+                "boolean" => Type::Boolean,
+                "void" => Type::Void,
+                id => match self.type_registry.lookup(id) {
+                    Some(ty) => ty.clone(),
+                    None => {
+                        self.errors.push(ParseError {
+                            message: format!("Unknown type: {}", id),
+                            span: *span,
+                        });
+                        Type::Unknown
+                    }
+                },
+            },
+            _ => panic!("Not implemented yet!"),
         }
     }
 }

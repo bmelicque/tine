@@ -5,6 +5,7 @@ use crate::ast::{AstNode, Node, Spanned};
 use super::{
     expressions::parse_expression,
     parser::{ParseError, ParseResult, Rule},
+    type_declarations::parse_type_declaration,
 };
 
 pub fn parse_statement(pair: Pair<'static, Rule>) -> ParseResult {
@@ -15,6 +16,7 @@ pub fn parse_statement(pair: Pair<'static, Rule>) -> ParseResult {
         }
         Rule::variable_declaration => parse_variable_declaration(pair),
         Rule::assignment => parse_assignment(pair),
+        Rule::type_declaration => parse_type_declaration(pair),
         Rule::return_statement => parse_return_statement(pair),
         Rule::block => parse_block(pair),
         Rule::expression_statement => parse_expression_statement(pair),
