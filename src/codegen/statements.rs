@@ -5,7 +5,8 @@ use swc_ecma_ast as ast;
 use crate::ast::Node;
 
 use super::{
-    expressions::node_to_swc_expr, type_declaration::type_declaration_to_swc_decl, CodeGenerator,
+    expressions::node_to_swc_expr,
+    type_declaration::type_declaration::type_declaration_to_swc_decl, CodeGenerator,
 };
 
 pub fn node_to_swc_stmt(
