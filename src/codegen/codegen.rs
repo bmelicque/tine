@@ -57,7 +57,7 @@ impl CodeGenerator {
 
                 for stmt in statements {
                     if let Some(swc_stmt) = node_to_swc_stmt(&self, stmt.node)? {
-                        swc_stmts.push(swc_stmt);
+                        swc_stmts.push(swc_stmt.into());
                     }
                 }
 

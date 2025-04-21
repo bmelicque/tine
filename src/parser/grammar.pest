@@ -72,7 +72,7 @@ mandatory_field = { identifier ~ field_type }
 field_type = { function_type | binary_type }
 optional_field = { identifier ~ ":" ~ expression }
 sum_type = { (NEWLINE? ~ "|")? ~ sum_constructor ~ (NEWLINE? ~ "|" ~ sum_constructor)+ }
-sum_constructor = { identifier ~ (sum_param | struct_body) }
+sum_constructor = { identifier ~ (sum_param | struct_body)? }
 sum_param = { "{" ~ type_name ~ "}" }
 trait_type = { "(" ~ identifier ~ ")" ~ "." ~ struct_body }
 

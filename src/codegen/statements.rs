@@ -11,7 +11,7 @@ use super::{
 pub fn node_to_swc_stmt(
     generator: &CodeGenerator,
     node: Node,
-) -> Result<Option<ast::ModuleItem>, Box<dyn Error>> {
+) -> Result<Option<ast::Stmt>, Box<dyn Error>> {
     match node {
         Node::VariableDeclaration {
             name,
@@ -45,14 +45,14 @@ pub fn node_to_swc_stmt(
                 _ => panic!("Unexpected declaration operator '{}'", op),
             };
 
-            Ok(Some(ast::ModuleItem::Stmt(ast::Stmt::Decl(
-                ast::Decl::Var(Box::new(ast::VarDecl {
+            Ok(Some(ast::Stmt::Decl(ast::Decl::Var(Box::new(
+                ast::VarDecl {
                     span: DUMMY_SP,
                     kind,
                     declare: false,
                     decls: vec![decl],
-                })),
-            ))))
+                },
+            )))))
         }
         Node::TypeDeclaration { .. } => type_declaration_to_swc_decl(generator, node),
         Node::Assignment { name, value } => {
@@ -74,17 +74,15 @@ pub fn node_to_swc_stmt(
 
             let swc_assignee = ast::Expr::Ident(swc_name);
 
-            Ok(Some(ast::ModuleItem::Stmt(ast::Stmt::Expr(
-                ast::ExprStmt {
+            Ok(Some(ast::Stmt::Expr(ast::ExprStmt {
+                span: DUMMY_SP,
+                expr: Box::new(ast::Expr::Assign(ast::AssignExpr {
                     span: DUMMY_SP,
-                    expr: Box::new(ast::Expr::Assign(ast::AssignExpr {
-                        span: DUMMY_SP,
-                        op: ast::AssignOp::Assign,
-                        left: ast::PatOrExpr::Expr(Box::new(swc_assignee)),
-                        right: Box::new(value_expr),
-                    })),
-                },
-            ))))
+                    op: ast::AssignOp::Assign,
+                    left: ast::PatOrExpr::Expr(Box::new(swc_assignee)),
+                    right: Box::new(value_expr),
+                })),
+            })))
         }
         Node::ReturnStatement(expr) => {
             let arg = if let Some(e) = expr {
@@ -94,21 +92,17 @@ pub fn node_to_swc_stmt(
                 None
             };
 
-            Ok(Some(ast::ModuleItem::Stmt(ast::Stmt::Return(
-                ast::ReturnStmt {
-                    span: DUMMY_SP,
-                    arg,
-                },
-            ))))
+            Ok(Some(ast::Stmt::Return(ast::ReturnStmt {
+                span: DUMMY_SP,
+                arg,
+            })))
         }
         Node::ExpressionStatement(expr) => {
             let swc_expr = node_to_swc_expr(generator, expr.node)?;
-            Ok(Some(ast::ModuleItem::Stmt(ast::Stmt::Expr(
-                ast::ExprStmt {
-                    span: DUMMY_SP,
-                    expr: Box::new(swc_expr),
-                },
-            ))))
+            Ok(Some(ast::Stmt::Expr(ast::ExprStmt {
+                span: DUMMY_SP,
+                expr: Box::new(swc_expr),
+            })))
         }
         _ => Ok(None),
     }
