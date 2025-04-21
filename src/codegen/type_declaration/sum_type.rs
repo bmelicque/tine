@@ -2,7 +2,10 @@ use crate::ast::{Node, SumTypeConstructor};
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as ast;
 
-use super::{struct_type::struct_to_swc_constructor_stmts, utils::this_assignment};
+use super::{
+    struct_type::struct_to_swc_constructor_stmts,
+    utils::{name_to_swc_param, this_assignment},
+};
 
 pub fn sum_def_swc_constructor(variants: Vec<SumTypeConstructor>) -> ast::Constructor {
     let stmts = match variants_to_swc_switch(variants) {
@@ -17,28 +20,13 @@ pub fn sum_def_swc_constructor(variants: Vec<SumTypeConstructor>) -> ast::Constr
             optional: false,
         }),
         is_optional: false,
-        params: vec![get_sum_tag_param(), get_sum_values_param()],
+        params: vec![name_to_swc_param("__"), get_sum_values_param()],
         body: Some(ast::BlockStmt {
             span: DUMMY_SP,
             stmts,
         }),
         accessibility: None,
     }
-}
-
-fn get_sum_tag_param() -> ast::ParamOrTsParamProp {
-    ast::ParamOrTsParamProp::Param(ast::Param {
-        span: DUMMY_SP,
-        decorators: vec![],
-        pat: ast::Pat::Ident(ast::BindingIdent {
-            id: ast::Ident {
-                span: DUMMY_SP,
-                sym: "__".into(),
-                optional: false,
-            },
-            type_ann: None,
-        }),
-    })
 }
 
 fn get_sum_values_param() -> ast::ParamOrTsParamProp {

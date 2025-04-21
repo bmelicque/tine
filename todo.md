@@ -3,7 +3,6 @@
 ### Parser
 
 - allow type constraints in generics
-- define generic type
 
 ### Type checker
 
@@ -12,9 +11,6 @@
 
 ### Codegen
 
-- type declaration
-- struct declaration
-- sum type declaration
 - type instantiation
 
 ### Other
