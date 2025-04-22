@@ -90,15 +90,15 @@ pub enum Node {
     BooleanLiteral(bool),
 
     // Instances
-    MapInstantiation {
+    MapLiteral {
         ty: Option<Box<AstNode>>,
         entries: Vec<Spanned<MapEntry>>,
     },
-    UnaryInstantiation {
+    UnaryLiteral {
         unary_type: Box<AstNode>,
         body: Vec<AstNode>,
     },
-    StructInstantiation {
+    StructLiteral {
         struct_type: Box<AstNode>,
         fields: Vec<Spanned<FieldAssignment>>,
     },

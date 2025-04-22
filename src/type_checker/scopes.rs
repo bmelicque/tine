@@ -69,4 +69,26 @@ impl TypeRegistry {
         };
         self.types.get(name).cloned()
     }
+
+    pub fn lookup_nested(&self, name: &str) -> Option<Type> {
+        let mut found = self.lookup(name);
+        while let Some(ty) = found {
+            match ty {
+                Type::Generic { name, .. } | Type::Named(name) => {
+                    found = self.lookup(name.as_str())
+                }
+                _ => return Some(ty),
+            }
+        }
+        None
+    }
+
+    pub fn resolve_type(&self, ty: &Type) -> Type {
+        match ty {
+            Type::Generic { name, .. } | Type::Named(name) => {
+                self.lookup_nested(name).unwrap_or_else(|| Type::Unknown)
+            }
+            _ => ty.clone(),
+        }
+    }
 }

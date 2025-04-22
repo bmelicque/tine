@@ -52,7 +52,7 @@ fn parse_map_instantiation(pair: Pair<'static, Rule>) -> ParseResult {
 
     ParseResult {
         node: Some(Spanned {
-            node: Node::MapInstantiation {
+            node: Node::MapLiteral {
                 ty: type_result.node.map(Box::new),
                 entries: body_result.0,
             },
@@ -113,7 +113,7 @@ fn parse_unary_instantiation(pair: Pair<'static, Rule>) -> ParseResult {
 
     ParseResult {
         node: Some(Spanned {
-            node: Node::UnaryInstantiation {
+            node: Node::UnaryLiteral {
                 unary_type: Box::new(unary_type.node.unwrap()),
                 body,
             },
@@ -152,7 +152,7 @@ fn parse_struct_instantiation(pair: Pair<'static, Rule>) -> ParseResult {
 
     ParseResult {
         node: Some(Spanned {
-            node: Node::StructInstantiation {
+            node: Node::StructLiteral {
                 struct_type: Box::new(struct_type.node.unwrap()),
                 fields,
             },
@@ -223,7 +223,7 @@ mod tests {
         assert!(result.errors.is_empty());
 
         match result.node.unwrap().node {
-            Node::MapInstantiation { ty, entries } => {
+            Node::MapLiteral { ty, entries } => {
                 assert!(
                     matches!(ty.unwrap().node, Node::BinaryType { left:_, operator, right:_ } if  operator == "#" )
                 );
@@ -256,7 +256,7 @@ mod tests {
         assert!(result.errors.is_empty());
 
         match result.node.unwrap().node {
-            Node::UnaryInstantiation { unary_type, body } => {
+            Node::UnaryLiteral { unary_type, body } => {
                 match unary_type.node {
                     Node::UnaryType {
                         ref operator,
@@ -287,7 +287,7 @@ mod tests {
         assert!(result.errors.is_empty());
 
         match result.node.unwrap().node {
-            Node::StructInstantiation {
+            Node::StructLiteral {
                 struct_type,
                 fields,
             } => {

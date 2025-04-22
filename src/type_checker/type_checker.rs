@@ -197,6 +197,8 @@ impl TypeChecker {
             Node::NumberLiteral(_) => Type::Number,
             Node::BooleanLiteral(_) => Type::Boolean,
 
+            Node::MapLiteral { .. } => self.visit_map_literal(node),
+
             Node::BinaryType { .. } => self.visit_binary_type(node),
             Node::UnaryType { .. } => self.visit_unary_type(node),
             Node::GenericType { .. } => self.visit_generic_type(node),
@@ -210,22 +212,6 @@ impl TypeChecker {
                 // FIXME:
                 panic!("Not implemented yet!")
             }
-        }
-    }
-
-    pub(super) fn visit_identifier(&mut self, ast_node: &AstNode) -> Type {
-        let Spanned { node, span } = &ast_node;
-        let Node::Identifier(id) = node else {
-            panic!("Expected Identifier node")
-        };
-        if let Some(variable_info) = self.symbols.lookup(id) {
-            variable_info.ty.clone()
-        } else {
-            self.errors.push(ParseError {
-                message: format!("Cannot find name '{}'", id),
-                span: *span,
-            });
-            Type::Unknown
         }
     }
 

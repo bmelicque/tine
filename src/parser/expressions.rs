@@ -3,8 +3,8 @@ use pest::iterators::Pair;
 use crate::ast::{Node, Spanned};
 
 use super::{
+    composite_literals::parse_type_instantiation,
     parser::{ParseError, ParseResult, Rule},
-    type_instantiations::parse_type_instantiation,
 };
 
 pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
