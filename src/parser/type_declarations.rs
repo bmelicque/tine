@@ -158,7 +158,7 @@ fn parse_struct_field(pair: Pair<'static, Rule>, errors: &mut Vec<ParseError>) -
             let next = field_inner.next().unwrap();
             let mut def_result = match pair.as_rule() {
                 Rule::mandatory_field => {
-                    assert!(next.as_rule() == Rule::field_type);
+                    assert!(next.as_rule() == Rule::type_annotation);
                     parse_type(next.into_inner().next().unwrap())
                 }
                 Rule::optional_field => parse_expression(next),

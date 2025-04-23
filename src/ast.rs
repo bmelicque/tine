@@ -29,22 +29,24 @@ pub enum Node {
 
     // Types
     NamedType(String), // for named types like String, Number, etc.
-    UnaryType {
-        operator: String,
-        inner: Option<Box<AstNode>>,
-    }, // []Type | ?Type | &Type
+    MapType {
+        key: Option<Box<AstNode>>,
+        value: Option<Box<AstNode>>,
+    }, // Key#Value
+    ResultType {
+        ok: Option<Box<AstNode>>,
+        err: Option<Box<AstNode>>,
+    }, // Err!Ok
+    ArrayType(Option<Box<AstNode>>), // []Type
+    OptionType(Option<Box<AstNode>>), // ?Type
+    ReferenceType(Option<Box<AstNode>>), // &Type
     TupleType(Vec<Option<AstNode>>),
-    BinaryType {
-        left: Option<Box<AstNode>>,
-        operator: String,
-        right: Option<Box<AstNode>>,
-    },
     GenericType {
         name: Box<AstNode>, // should be a Node::Identifier
         args: Vec<Box<AstNode>>,
     },
     FunctionType {
-        parameters: Box<AstNode>,
+        parameters: Vec<Box<AstNode>>,
         return_type: Box<AstNode>,
     },
 

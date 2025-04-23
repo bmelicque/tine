@@ -10,16 +10,26 @@ number_literal = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 boolean_literal = @{ "true" | "false" }
 
 // Type annotations
-type_annotation = { type_name }
-type_name = { function_type | tuple_type }
-function_type = { "(" ~ tuple_type ~ ")" ~ "->" ~ type_name}
-tuple_type = { binary_type ~ ("," ~ binary_type)* } // e.g., number, string
-binary_type = { (unary_type ~ (binary_type_op ~ unary_type?)*)|((binary_type_op ~ unary_type?)+) }
-binary_type_op = { "!" | "#" }
-unary_type = { (unary_type_op)* ~ (generic_type | ("(" ~ type_name ~ ")")) }
-unary_type_op = { "[]" | "?" | "&" }
+type_annotation = { tuple_type | function_type | binary_type | unary_type | primary_type }
+tuple_type = { type_element  ~ ("," ~ type_element)+ }
+function_type = { "(" ~ function_type_params ~ ")" ~ "->" ~ type_element }
+function_type_params = { type_element  ~ ("," ~ type_element)* }
+binary_type = { map_type | result_type }
+map_type = { map_type_key? ~ "#" ~ map_type_value? }
+map_type_key = { unary_type | primary_type }
+map_type_value = { unary_type | primary_type }
+result_type = { result_error_type? ~ "!" ~ result_ok_type? }
+result_error_type = { unary_type | primary_type }
+result_ok_type = { unary_type | primary_type }
+unary_type = { reference_type | option_type | array_type }
+reference_type = { "&" ~ (unary_type | primary_type)? }
+option_type = { "?" ~ (unary_type | primary_type)? }
+array_type = { "[]" ~ (unary_type | primary_type)? }
+primary_type = { generic_type | grouped_type }
+grouped_type = { "(" ~ type_annotation ~ ")" }
 // uses binary_type in generic_type to avoid unwrapping tuples
-generic_type = { identifier ~ ("[" ~ binary_type ~ ("," ~ binary_type)* ~ "]")? } // e.g., List[number]
+generic_type = { identifier ~ ("[" ~ type_element ~ ("," ~ type_element)* ~ "]")? } // e.g., List[number]
+type_element = { function_type | binary_type | unary_type | primary_type }
 
 // Types instantiations
 type_instantiation = { struct_body | unary_instantiation | map_instantiation }
@@ -67,13 +77,11 @@ type_def = { struct_body | sum_type | trait_type }
 struct_body = { "{" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ "}" }
 field_declaration = { mandatory_field | optional_field | embedded_field }
 embedded_field = { identifier }
-mandatory_field = { identifier ~ field_type }
-// cannot use type_name because tuples types mess with the parser
-field_type = { function_type | binary_type }
+mandatory_field = { identifier ~ type_annotation }
 optional_field = { identifier ~ ":" ~ expression }
 sum_type = { (NEWLINE? ~ "|")? ~ sum_constructor ~ (NEWLINE? ~ "|" ~ sum_constructor)+ }
 sum_constructor = { identifier ~ (sum_param | struct_body)? }
-sum_param = { "{" ~ type_name ~ "}" }
+sum_param = { "{" ~ type_annotation ~ "}" }
 trait_type = { "(" ~ identifier ~ ")" ~ "." ~ struct_body }
 
 // Program

@@ -200,9 +200,8 @@ impl TypeChecker {
             Node::MapLiteral { .. } => self.visit_map_literal(node),
             Node::UnaryLiteral { .. } => self.visit_unary_literal(node),
 
-            Node::BinaryType { .. } => self.visit_binary_type(node),
-            Node::UnaryType { .. } => self.visit_unary_type(node),
             Node::GenericType { .. } => self.visit_generic_type(node),
+            Node::ArrayType(_) => self.visit_array_type(node),
             Node::NamedType(_) => self.visit_named_type(node),
             Node::FunctionType { .. } => self.visit_function_type(node),
             Node::TupleType(_) => self.visit_tuple_type(node),
