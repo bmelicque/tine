@@ -198,6 +198,7 @@ impl TypeChecker {
             Node::BooleanLiteral(_) => Type::Boolean,
 
             Node::MapLiteral { .. } => self.visit_map_literal(node),
+            Node::UnaryLiteral { .. } => self.visit_unary_literal(node),
 
             Node::BinaryType { .. } => self.visit_binary_type(node),
             Node::UnaryType { .. } => self.visit_unary_type(node),
