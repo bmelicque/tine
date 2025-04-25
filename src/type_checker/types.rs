@@ -65,59 +65,91 @@ impl TypeChecker {
         }
     }
 
-    pub(super) fn visit_binary_type(&mut self, ast_node: &AstNode) -> Type {
+    pub fn visit_reference_type(&mut self, ast_node: &AstNode) -> Type {
         let node = &ast_node.node;
-        let Node::BinaryType {
-            left,
-            operator,
-            right,
-        } = node
-        else {
-            panic!("Expected BinaryType node")
+        let Node::ReferenceType(inner) = node else {
+            panic!("Expected ReferenceType node")
         };
 
-        let left_type = match left {
-            Some(spanned) => self.visit(spanned),
-            None => Type::Dynamic,
-        };
-        let right_type = match right {
+        let inner_type = match inner {
             Some(spanned) => self.visit(spanned),
             None => Type::Dynamic,
         };
 
-        match operator.as_str() {
-            "#" => Type::Map {
-                key: Box::new(left_type),
-                value: Box::new(right_type),
-            },
-            "!" => Type::Result {
-                error: Some(Box::new(left_type)),
-                ok: Box::new(right_type),
-            },
-            _ => unreachable!("Unexpected operator in binary type: {}", operator),
-        }
+        Type::Reference(Box::new(inner_type))
     }
 
-    pub(super) fn visit_unary_type(&mut self, ast_node: &AstNode) -> Type {
+    pub fn visit_option_type(&mut self, ast_node: &AstNode) -> Type {
         let node = &ast_node.node;
-        let Node::UnaryType { operator, inner } = node else {
-            panic!("Expected UnaryType node")
+        let Node::OptionType(inner) = node else {
+            panic!("Expected OptionType node")
         };
 
-        let operand_type = match inner {
-            Some(spanned) => self.visit(&spanned),
+        let inner_type = match inner {
+            Some(spanned) => self.visit(spanned),
             None => Type::Dynamic,
         };
 
-        match operator.as_str() {
-            "?" => Type::Option(Box::new(operand_type)),
-            "&" => Type::Reference(Box::new(operand_type)),
-            "[]" => Type::Array(Box::new(operand_type)),
-            _ => unreachable!("Unexpected operator in unary type: {}", operator),
+        Type::Option(Box::new(inner_type))
+    }
+
+    pub fn visit_array_type(&mut self, ast_node: &AstNode) -> Type {
+        let node = &ast_node.node;
+        let Node::ArrayType(inner) = node else {
+            panic!("Expected ArrayType node")
+        };
+
+        let inner_type = match inner {
+            Some(spanned) => self.visit(spanned),
+            None => Type::Dynamic,
+        };
+
+        Type::Array(Box::new(inner_type))
+    }
+
+    pub fn visit_map_type(&mut self, ast_node: &AstNode) -> Type {
+        let node = &ast_node.node;
+        let Node::MapType { key, value } = node else {
+            panic!("Expected MapType node")
+        };
+
+        let key_type = match key {
+            Some(spanned) => self.visit(spanned),
+            None => Type::Dynamic,
+        };
+        let value_type = match value {
+            Some(spanned) => self.visit(spanned),
+            None => Type::Dynamic,
+        };
+
+        Type::Map {
+            key: Box::new(key_type),
+            value: Box::new(value_type),
         }
     }
 
-    pub(super) fn visit_tuple_type(&mut self, ast_node: &AstNode) -> Type {
+    pub fn visit_result_type(&mut self, ast_node: &AstNode) -> Type {
+        let node = &ast_node.node;
+        let Node::ResultType { ok, err } = node else {
+            panic!("Expected ResultType node")
+        };
+
+        let ok_type = match ok {
+            Some(spanned) => self.visit(spanned),
+            None => Type::Dynamic,
+        };
+        let err_type = match err {
+            Some(spanned) => self.visit(spanned),
+            None => Type::Dynamic,
+        };
+
+        Type::Result {
+            error: Some(Box::new(err_type)),
+            ok: Box::new(ok_type),
+        }
+    }
+
+    pub fn visit_tuple_type(&mut self, ast_node: &AstNode) -> Type {
         let node = &ast_node.node;
         let Node::TupleType(types) = node else {
             panic!("Expected TupleType node")
@@ -144,16 +176,15 @@ impl TypeChecker {
             panic!("Expected FunctionType node")
         };
 
-        let params_type = self.visit(&parameters);
-        let param_types: Vec<Type> = match params_type {
-            Type::Tuple(tuple_type) => tuple_type,
-            ty => vec![ty],
-        };
+        let params: Vec<Type> = parameters
+            .into_iter()
+            .map(|param| self.visit(&param))
+            .collect();
 
         let return_type = Box::new(self.visit(&return_type));
 
         Type::Function {
-            params: param_types,
+            params,
             return_type,
         }
     }
@@ -293,86 +324,6 @@ mod tests {
     }
 
     #[test]
-    fn test_visit_unary_type_option() {
-        let ast_node = spanned(Node::UnaryType {
-            operator: "?".to_string(),
-            inner: Some(Box::new(spanned(Node::NamedType("number".to_string())))),
-        });
-
-        let mut checker = TypeChecker::new();
-        let result = checker.visit_unary_type(&ast_node);
-
-        match result {
-            Type::Option(inner) => {
-                assert!(
-                    matches!(*inner, Type::Number),
-                    "expected number type, got {:?}",
-                    inner
-                );
-            }
-            _ => panic!("Expected Option type"),
-        }
-    }
-
-    #[test]
-    fn test_visit_unary_type_array() {
-        let ast_node = spanned(Node::UnaryType {
-            operator: "[]".to_string(),
-            inner: Some(Box::new(spanned(Node::NamedType("string".to_string())))),
-        });
-
-        let mut checker = TypeChecker::new();
-        let result = checker.visit_unary_type(&ast_node);
-
-        match result {
-            Type::Array(inner) => {
-                assert!(matches!(*inner, Type::String));
-            }
-            _ => panic!("Expected Array type"),
-        }
-    }
-
-    #[test]
-    fn test_visit_binary_type_map() {
-        let ast_node = spanned(Node::BinaryType {
-            left: Some(Box::new(spanned(Node::NamedType("string".to_string())))),
-            operator: "#".to_string(),
-            right: Some(Box::new(spanned(Node::NamedType("number".to_string())))),
-        });
-
-        let mut checker = TypeChecker::new();
-        let result = checker.visit_binary_type(&ast_node);
-
-        match result {
-            Type::Map { key, value } => {
-                assert!(matches!(*key, Type::String));
-                assert!(matches!(*value, Type::Number));
-            }
-            _ => panic!("Expected Map type"),
-        }
-    }
-
-    #[test]
-    fn test_visit_binary_type_result() {
-        let ast_node = spanned(Node::BinaryType {
-            left: Some(Box::new(spanned(Node::NamedType("string".to_string())))),
-            operator: "!".to_string(),
-            right: Some(Box::new(spanned(Node::NamedType("number".to_string())))),
-        });
-
-        let mut checker = TypeChecker::new();
-        let result = checker.visit_binary_type(&ast_node);
-
-        match result {
-            Type::Result { error, ok } => {
-                assert!(matches!(error.unwrap().as_ref(), Type::String));
-                assert!(matches!(ok.as_ref(), Type::Number));
-            }
-            _ => panic!("Expected Result type"),
-        }
-    }
-
-    #[test]
     fn test_visit_generic_type() {
         let ast_node = spanned(Node::GenericType {
             name: Box::new(spanned(Node::NamedType("List".to_string()))),
@@ -428,10 +379,10 @@ mod tests {
     #[test]
     fn test_visit_function_type() {
         let ast_node = spanned(Node::FunctionType {
-            parameters: Box::new(spanned(Node::TupleType(vec![
-                Some(spanned(Node::NamedType("number".to_string()))),
-                Some(spanned(Node::NamedType("string".to_string()))),
-            ]))),
+            parameters: vec![
+                Box::new(spanned(Node::NamedType("number".to_string()))),
+                Box::new(spanned(Node::NamedType("string".to_string()))),
+            ],
             return_type: Box::new(spanned(Node::NamedType("boolean".to_string()))),
         });
 
@@ -449,6 +400,78 @@ mod tests {
                 assert!(matches!(*return_type, Type::Boolean));
             }
             _ => panic!("Expected Function type"),
+        }
+    }
+
+    #[test]
+    fn test_visit_array_type() {
+        let ast_node = spanned(Node::ArrayType(Some(Box::new(spanned(Node::NamedType(
+            "number".to_string(),
+        ))))));
+
+        let mut checker = TypeChecker::new();
+        let result = checker.visit_array_type(&ast_node);
+
+        match result {
+            Type::Array(inner) => {
+                assert!(matches!(*inner, Type::Number));
+            }
+            _ => panic!("Expected Array type"),
+        }
+    }
+
+    #[test]
+    fn test_visit_option_type() {
+        let ast_node = spanned(Node::OptionType(Some(Box::new(spanned(Node::NamedType(
+            "number".to_string(),
+        ))))));
+
+        let mut checker = TypeChecker::new();
+        let result = checker.visit_option_type(&ast_node);
+
+        match result {
+            Type::Option(inner) => {
+                assert!(matches!(*inner, Type::Number));
+            }
+            _ => panic!("Expected Option type"),
+        }
+    }
+
+    #[test]
+    fn test_visit_map_type() {
+        let ast_node = spanned(Node::MapType {
+            key: Some(Box::new(spanned(Node::NamedType("string".to_string())))),
+            value: Some(Box::new(spanned(Node::NamedType("number".to_string())))),
+        });
+
+        let mut checker = TypeChecker::new();
+        let result = checker.visit_map_type(&ast_node);
+
+        match result {
+            Type::Map { key, value } => {
+                assert!(matches!(*key, Type::String));
+                assert!(matches!(*value, Type::Number));
+            }
+            _ => panic!("Expected Map type"),
+        }
+    }
+
+    #[test]
+    fn test_visit_result_type() {
+        let ast_node = spanned(Node::ResultType {
+            ok: Some(Box::new(spanned(Node::NamedType("number".to_string())))),
+            err: Some(Box::new(spanned(Node::NamedType("string".to_string())))),
+        });
+
+        let mut checker = TypeChecker::new();
+        let result = checker.visit_result_type(&ast_node);
+
+        match result {
+            Type::Result { ok, error } => {
+                assert!(matches!(ok.as_ref(), Type::Number));
+                assert!(matches!(*error.unwrap(), Type::String));
+            }
+            _ => panic!("Expected Result type"),
         }
     }
 }

@@ -44,7 +44,7 @@ pub fn struct_to_swc_constructor(
     }
 }
 
-pub fn struct_to_swc_constructor_stmts(fields: &Vec<Spanned<StructField>>) -> Vec<ast::Stmt> {
+fn struct_to_swc_constructor_stmts(fields: &Vec<Spanned<StructField>>) -> Vec<ast::Stmt> {
     fields
         .iter()
         .map(|spanned| &spanned.node)
@@ -67,9 +67,10 @@ fn struct_field_to_swc_param<'a>(
                     },
                     type_ann: None,
                 })),
-                right: Box::new(
-                    node_to_swc_expr(generator, field.def.as_ref().unwrap().node.clone()).unwrap(),
-                ),
+                right: Box::new(node_to_swc_expr(
+                    generator,
+                    field.def.as_ref().unwrap().node.clone(),
+                )),
             })
         } else {
             ast::Pat::Ident(ast::BindingIdent {

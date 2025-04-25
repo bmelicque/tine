@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{collections::HashMap, error::Error};
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as ast;
 use swc_ecma_codegen::{text_writer::JsWriter, Config, Emitter};
@@ -21,17 +21,19 @@ impl std::fmt::Display for TranspilerError {
 impl Error for TranspilerError {}
 
 pub struct CodeGenerator {
+    class_defs: HashMap<String, ast::ClassDecl>,
     pub source_map: Lrc<SourceMap>,
 }
 
 impl CodeGenerator {
     pub fn new() -> Self {
         Self {
+            class_defs: HashMap::new(),
             source_map: Lrc::new(SourceMap::new(Default::default())),
         }
     }
 
-    pub fn generate_js(&self, node: AstNode) -> Result<String, Box<dyn Error>> {
+    pub fn generate_js(&mut self, node: AstNode) -> Result<String, Box<dyn Error>> {
         let program = self.node_to_swc_module(node.node)?;
 
         let mut buf = Vec::new();
@@ -50,13 +52,13 @@ impl CodeGenerator {
         Ok(String::from_utf8(buf)?)
     }
 
-    fn node_to_swc_module(&self, node: Node) -> Result<ast::Module, Box<dyn Error>> {
+    fn node_to_swc_module(&mut self, node: Node) -> Result<ast::Module, Box<dyn Error>> {
         match node {
             Node::Program(statements) => {
                 let mut swc_stmts = Vec::new();
 
                 for stmt in statements {
-                    if let Some(swc_stmt) = node_to_swc_stmt(&self, stmt.node)? {
+                    if let Some(swc_stmt) = node_to_swc_stmt(self, stmt.node)? {
                         swc_stmts.push(swc_stmt.into());
                     }
                 }
@@ -71,5 +73,13 @@ impl CodeGenerator {
                 message: "Expected Program node at root".to_string(),
             })),
         }
+    }
+
+    pub fn add_class_def(&mut self, name: String, class_decl: ast::ClassDecl) {
+        self.class_defs.insert(name, class_decl);
+    }
+
+    pub fn get_class_def(&self, name: &str) -> Option<&ast::ClassDecl> {
+        self.class_defs.get(name)
     }
 }

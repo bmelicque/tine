@@ -158,7 +158,7 @@ fn parse_struct_field(pair: Pair<'static, Rule>, errors: &mut Vec<ParseError>) -
             let next = field_inner.next().unwrap();
             let mut def_result = match pair.as_rule() {
                 Rule::mandatory_field => {
-                    assert!(next.as_rule() == Rule::field_type);
+                    assert!(next.as_rule() == Rule::type_element);
                     parse_type(next.into_inner().next().unwrap())
                 }
                 Rule::optional_field => parse_expression(next),
@@ -185,13 +185,12 @@ fn parse_struct_field(pair: Pair<'static, Rule>, errors: &mut Vec<ParseError>) -
 
 pub fn parse_sum_type(pair: Pair<'static, Rule>) -> (AstNode, Vec<ParseError>) {
     let span = pair.as_span();
-    let mut inner = pair.into_inner();
 
     let mut constructors = Vec::new();
     let mut constructor_names = std::collections::HashSet::new();
     let mut errors = Vec::new();
 
-    while let Some(pair) = inner.next() {
+    for pair in pair.into_inner() {
         assert!(pair.as_rule() == Rule::sum_constructor);
         let span = pair.as_span();
         let mut result = parse_sum_constructor(pair);
@@ -472,7 +471,7 @@ mod tests {
         let result = parse(input);
 
         // Ensure there is one error for the duplicate constructor
-        assert_eq!(result.errors.len(), 1);
+        assert_eq!(result.errors.len(), 1, "got {:?}", result.errors);
         assert!(
             result.errors[0]
                 .message

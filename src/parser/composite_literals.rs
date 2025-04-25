@@ -5,74 +5,48 @@ use super::{
     parser::{ParseError, ParseResult, Rule},
     types::parse_type,
 };
-use crate::ast::{AstNode, FieldAssignment, MapEntry, Node, Spanned};
+use crate::ast::{FieldAssignment, MapEntry, Node, Spanned};
 
-pub fn parse_type_instantiation(pair: Pair<'static, Rule>) -> ParseResult {
+pub fn parse_composite_literal(pair: Pair<'static, Rule>) -> ParseResult {
+    assert!(pair.as_rule() == Rule::composite_literal);
+    let pair = pair.into_inner().next().unwrap();
     match pair.as_rule() {
-        Rule::map_instantiation => parse_map_instantiation(pair),
-        Rule::unary_instantiation => parse_unary_instantiation(pair),
-        Rule::struct_instantiation => parse_struct_instantiation(pair),
-        _ => unreachable!(),
+        Rule::map_literal => parse_map_literal(pair),
+        Rule::array_literal => parse_array_literal(pair),
+        Rule::option_literal => parse_option_literal(pair),
+        Rule::struct_literal => parse_struct_literal(pair),
+        _ => panic!("Not implemented, got rule: {:?}", pair.as_rule()),
     }
 }
 
-fn parse_map_instantiation(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::map_instantiation);
-    let mut errors = Vec::new();
+fn parse_map_literal(pair: Pair<'static, Rule>) -> ParseResult {
+    assert!(pair.as_rule() == Rule::map_literal);
     let span = pair.as_span();
     let mut inner = pair.into_inner();
+    let mut errors = Vec::new();
 
     let type_result = parse_type(inner.next().unwrap());
     errors.extend(type_result.errors);
-    let type_is_map = match type_result.node {
-        Some(Spanned {
-            node:
-                Node::BinaryType {
-                    left: _,
-                    ref operator,
-                    right: _,
-                },
-            ..
-        }) => operator == "#",
-        _ => false,
-    };
-    if !type_is_map {
-        errors.push(ParseError {
-            message: "Expected a map type".to_string(),
-            span: match type_result.node {
-                Some(ref spanned) => spanned.span,
-                None => span,
-            },
-        });
-    }
 
     let map_body = inner.next().unwrap();
-    let body_result = parse_map_body(map_body);
-    errors.extend(body_result.1);
+    assert!(map_body.as_rule() == Rule::map_body);
+    let mut entries = Vec::new();
+    for entry_pair in map_body.into_inner() {
+        let (entry, errs) = parse_map_entry(entry_pair);
+        entries.push(entry);
+        errors.extend(errs);
+    }
 
     ParseResult {
         node: Some(Spanned {
-            node: Node::MapInstantiation {
-                ty: type_result.node.map(Box::new),
-                entries: body_result.0,
+            node: Node::MapLiteral {
+                ty: Box::new(type_result.node.unwrap()),
+                entries,
             },
             span,
         }),
         errors,
     }
-}
-
-fn parse_map_body(pair: Pair<'static, Rule>) -> (Vec<Spanned<MapEntry>>, Vec<ParseError>) {
-    let mut entries = Vec::new();
-    let mut errors = Vec::new();
-
-    for entry_pair in pair.into_inner() {
-        let result = parse_map_entry(entry_pair);
-        entries.push(result.0);
-        errors.extend(result.1);
-    }
-
-    (entries, errors)
 }
 
 fn parse_map_entry(pair: Pair<'static, Rule>) -> (Spanned<MapEntry>, Vec<ParseError>) {
@@ -99,23 +73,29 @@ fn parse_map_entry(pair: Pair<'static, Rule>) -> (Spanned<MapEntry>, Vec<ParseEr
     )
 }
 
-fn parse_unary_instantiation(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::unary_instantiation);
+fn parse_array_literal(pair: Pair<'static, Rule>) -> ParseResult {
+    assert!(pair.as_rule() == Rule::array_literal);
     let span = pair.as_span();
     let mut inner = pair.into_inner();
+    let mut errors = Vec::new();
 
-    let unary_type = parse_type(inner.next().unwrap());
-    let body_result = parse_unary_body(inner.next().unwrap());
-    let body = body_result.0;
+    let type_result = parse_type(inner.next().unwrap());
+    errors.extend(type_result.errors);
 
-    let mut errors = unary_type.errors;
-    errors.extend(body_result.1);
+    let mut elements = Vec::new();
+    while let Some(element_pair) = inner.next() {
+        let result = parse_expression(element_pair);
+        if let Some(expr) = result.node {
+            elements.push(expr);
+        }
+        errors.extend(result.errors);
+    }
 
     ParseResult {
         node: Some(Spanned {
-            node: Node::UnaryInstantiation {
-                unary_type: Box::new(unary_type.node.unwrap()),
-                body,
+            node: Node::ArrayLiteral {
+                ty: Box::new(type_result.node.unwrap()),
+                elements,
             },
             span,
         }),
@@ -123,23 +103,38 @@ fn parse_unary_instantiation(pair: Pair<'static, Rule>) -> ParseResult {
     }
 }
 
-fn parse_unary_body(pair: Pair<'static, Rule>) -> (Vec<AstNode>, Vec<ParseError>) {
-    let mut elements = Vec::new();
+fn parse_option_literal(pair: Pair<'static, Rule>) -> ParseResult {
+    assert!(pair.as_rule() == Rule::option_literal);
+    let span = pair.as_span();
+    let mut inner = pair.into_inner();
     let mut errors = Vec::new();
 
-    for expr_pair in pair.into_inner() {
-        let result = parse_expression(expr_pair);
-        if let Some(expr) = result.node {
-            elements.push(expr);
-        }
-        errors.extend(result.errors);
-    }
+    let type_result = parse_type(inner.next().unwrap());
+    errors.extend(type_result.errors);
 
-    (elements, errors)
+    let value = inner
+        .next()
+        .and_then(|pair| {
+            let result = parse_expression(pair);
+            errors.extend(result.errors);
+            result.node
+        })
+        .map(Box::new);
+
+    ParseResult {
+        node: Some(Spanned {
+            node: Node::OptionLiteral {
+                ty: Box::new(type_result.node.unwrap()),
+                value,
+            },
+            span,
+        }),
+        errors,
+    }
 }
 
-fn parse_struct_instantiation(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::struct_instantiation);
+fn parse_struct_literal(pair: Pair<'static, Rule>) -> ParseResult {
+    assert!(pair.as_rule() == Rule::struct_literal);
     let span = pair.as_span();
     let mut inner = pair.into_inner();
 
@@ -152,7 +147,7 @@ fn parse_struct_instantiation(pair: Pair<'static, Rule>) -> ParseResult {
 
     ParseResult {
         node: Some(Spanned {
-            node: Node::StructInstantiation {
+            node: Node::StructLiteral {
                 struct_type: Box::new(struct_type.node.unwrap()),
                 fields,
             },
@@ -207,26 +202,23 @@ mod tests {
     use crate::parser::parser::{MyLanguageParser, Rule};
     use pest::Parser;
 
-    fn parse(input: &'static str, rule: Rule) -> ParseResult {
-        let pair = MyLanguageParser::parse(rule, input)
+    fn parse(input: &'static str) -> ParseResult {
+        let pair = MyLanguageParser::parse(Rule::composite_literal, input)
             .unwrap()
             .next()
             .unwrap();
-        parse_type_instantiation(pair)
+        parse_composite_literal(pair)
     }
 
     #[test]
-    fn test_parse_map_instantiation() {
+    fn test_parse_map_literal() {
         let input = r#"string#number{ "key": 42, "another_key": 99 }"#;
 
-        let result = parse(input, Rule::map_instantiation);
+        let result = parse(input);
         assert!(result.errors.is_empty());
 
         match result.node.unwrap().node {
-            Node::MapInstantiation { ty, entries } => {
-                assert!(
-                    matches!(ty.unwrap().node, Node::BinaryType { left:_, operator, right:_ } if  operator == "#" )
-                );
+            Node::MapLiteral { ty: _, entries } => {
                 assert_eq!(entries.len(), 2);
 
                 assert!(
@@ -244,54 +236,67 @@ mod tests {
                     Node::NumberLiteral(99.0)
                 ));
             }
-            _ => panic!("Expected MapInstantiation"),
+            _ => panic!("Expected MapLiteral"),
         }
     }
 
     #[test]
-    fn test_parse_unary_instantiation() {
+    fn test_parse_array_literal() {
         let input = r#"[]number{1, 2, 3}"#;
 
-        let result = parse(input, Rule::unary_instantiation);
+        let result = parse(input);
         assert!(result.errors.is_empty());
 
-        match result.node.unwrap().node {
-            Node::UnaryInstantiation { unary_type, body } => {
-                match unary_type.node {
-                    Node::UnaryType {
-                        ref operator,
-                        ref inner,
-                    } => {
-                        assert_eq!(operator, "[]");
-                        assert!(
-                            matches!(inner.clone().unwrap().node, Node::Identifier(ref name) if name == "number")
-                        );
-                    }
-                    _ => panic!("Expected UnaryType"),
-                }
-                assert_eq!(body.len(), 3);
+        let Node::ArrayLiteral { ty, elements } = result.node.unwrap().node else {
+            panic!("Expected ArrayLiteral");
+        };
 
-                assert!(matches!(body[0].node, Node::NumberLiteral(1.0)));
-                assert!(matches!(body[1].node, Node::NumberLiteral(2.0)));
-                assert!(matches!(body[2].node, Node::NumberLiteral(3.0)));
-            }
-            _ => panic!("Expected UnaryInstantiation"),
-        }
+        let Node::ArrayType(Some(boxed)) = ty.node else {
+            panic!("Expected ArrayType");
+        };
+        assert!(matches!(boxed.node, Node::NamedType(ref name) if name == "number"));
+
+        assert_eq!(elements.len(), 3);
+
+        assert!(matches!(elements[0].node, Node::NumberLiteral(1.0)));
+        assert!(matches!(elements[1].node, Node::NumberLiteral(2.0)));
+        assert!(matches!(elements[2].node, Node::NumberLiteral(3.0)));
     }
 
     #[test]
-    fn test_parse_struct_instantiation() {
+    fn test_parse_option_literal() {
+        let input = r#"?number{42}"#;
+
+        let result = parse(input);
+        assert!(result.errors.is_empty());
+
+        let Node::OptionLiteral { ty, value } = result.node.unwrap().node else {
+            panic!("Expected OptionLiteral");
+        };
+        let Node::OptionType(Some(boxed)) = ty.node else {
+            panic!("Expected OptionType");
+        };
+        assert!(
+            matches!(boxed.node, Node::NamedType(ref name) if name == "number"),
+            "Expected NamedType, got {:?}",
+            boxed.node
+        );
+        assert!(matches!(value.unwrap().node, Node::NumberLiteral(42.0)));
+    }
+
+    #[test]
+    fn test_parse_struct_literal() {
         let input = r#"User{ name: "John", age: 21 }"#;
 
-        let result = parse(input, Rule::struct_instantiation);
+        let result = parse(input);
         assert!(result.errors.is_empty());
 
         match result.node.unwrap().node {
-            Node::StructInstantiation {
+            Node::StructLiteral {
                 struct_type,
                 fields,
             } => {
-                assert!(matches!(struct_type.node, Node::Identifier(ref name) if name == "User"));
+                assert!(matches!(struct_type.node, Node::NamedType(ref name) if name == "User"));
                 assert_eq!(fields.len(), 2);
 
                 assert_eq!(fields[0].node.name, "name");
@@ -305,7 +310,7 @@ mod tests {
                     Node::NumberLiteral(21.0)
                 ));
             }
-            _ => panic!("Expected StructInstantiation"),
+            _ => panic!("Expected StructLiteral"),
         }
     }
 }

@@ -1,11 +1,8 @@
-use crate::ast::{Node, SumTypeConstructor};
+use crate::ast::{Node, Spanned, StructField, SumTypeConstructor};
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as ast;
 
-use super::{
-    struct_type::struct_to_swc_constructor_stmts,
-    utils::{name_to_swc_param, this_assignment},
-};
+use super::utils::{name_to_swc_param, this_assignment};
 
 pub fn sum_def_swc_constructor(variants: Vec<SumTypeConstructor>) -> ast::Constructor {
     let stmts = match variants_to_swc_switch(variants) {
@@ -79,7 +76,7 @@ fn variant_to_swc_switch_case(variant: &SumTypeConstructor) -> ast::SwitchCase {
         })))),
         cons: match &variant.param.as_ref().unwrap().node {
             Node::Struct(ref fields) => {
-                let mut stmts = struct_to_swc_constructor_stmts(fields);
+                let mut stmts = variant_to_swc_constructor_stmts(fields);
                 stmts.push(ast::Stmt::Break(ast::BreakStmt {
                     span: DUMMY_SP,
                     label: None,
@@ -88,7 +85,7 @@ fn variant_to_swc_switch_case(variant: &SumTypeConstructor) -> ast::SwitchCase {
             }
             _ => {
                 vec![
-                    this_sum_default_assignement(),
+                    this_assignement_from_values("_0", 0.0),
                     ast::Stmt::Break(ast::BreakStmt {
                         span: DUMMY_SP,
                         label: None,
@@ -99,7 +96,16 @@ fn variant_to_swc_switch_case(variant: &SumTypeConstructor) -> ast::SwitchCase {
     }
 }
 
-fn this_sum_default_assignement() -> ast::Stmt {
+fn variant_to_swc_constructor_stmts(fields: &Vec<Spanned<StructField>>) -> Vec<ast::Stmt> {
+    fields
+        .iter()
+        .map(|spanned| &spanned.node)
+        .enumerate()
+        .map(|(index, field)| this_assignement_from_values(&field.name, index as f64))
+        .collect()
+}
+
+fn this_assignement_from_values(name: &str, index: f64) -> ast::Stmt {
     ast::Stmt::Expr(ast::ExprStmt {
         span: DUMMY_SP,
         expr: Box::new(ast::Expr::Assign(ast::AssignExpr {
@@ -110,7 +116,7 @@ fn this_sum_default_assignement() -> ast::Stmt {
                 obj: Box::new(ast::Expr::This(ast::ThisExpr { span: DUMMY_SP })),
                 prop: ast::MemberProp::Ident(ast::Ident {
                     span: DUMMY_SP,
-                    sym: "_0".into(),
+                    sym: name.into(),
                     optional: false,
                 }),
             }))),
@@ -125,7 +131,7 @@ fn this_sum_default_assignement() -> ast::Stmt {
                     span: DUMMY_SP,
                     expr: Box::new(ast::Expr::Lit(ast::Lit::Num(ast::Number {
                         span: DUMMY_SP,
-                        value: 0.0,
+                        value: index,
                         raw: None,
                     }))),
                 }),
