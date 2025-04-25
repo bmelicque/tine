@@ -93,12 +93,16 @@ pub enum Node {
 
     // Instances
     MapLiteral {
-        ty: Option<Box<AstNode>>,
+        ty: Box<AstNode>,
         entries: Vec<Spanned<MapEntry>>,
     },
-    UnaryLiteral {
-        unary_type: Box<AstNode>,
-        body: Vec<AstNode>,
+    ArrayLiteral {
+        ty: Box<AstNode>,
+        elements: Vec<AstNode>,
+    },
+    OptionLiteral {
+        ty: Box<AstNode>,
+        value: Option<Box<AstNode>>,
     },
     StructLiteral {
         struct_type: Box<AstNode>,

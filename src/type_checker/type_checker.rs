@@ -198,20 +198,22 @@ impl TypeChecker {
             Node::BooleanLiteral(_) => Type::Boolean,
 
             Node::MapLiteral { .. } => self.visit_map_literal(node),
-            Node::UnaryLiteral { .. } => self.visit_unary_literal(node),
+            Node::OptionLiteral { .. } => self.visit_option_literal(node),
+            Node::ArrayLiteral { .. } => self.visit_array_literal(node),
+            Node::StructLiteral { .. } => self.visit_struct_literal(node),
 
             Node::GenericType { .. } => self.visit_generic_type(node),
+            Node::OptionType(_) => self.visit_option_type(node),
+            Node::ReferenceType(_) => self.visit_reference_type(node),
             Node::ArrayType(_) => self.visit_array_type(node),
             Node::NamedType(_) => self.visit_named_type(node),
+            Node::MapType { .. } => self.visit_map_type(node),
+            Node::ResultType { .. } => self.visit_result_type(node),
             Node::FunctionType { .. } => self.visit_function_type(node),
             Node::TupleType(_) => self.visit_tuple_type(node),
             Node::Struct(_) => self.visit_struct_type(node),
             Node::SumDef(_) => self.visit_sum_def(node),
             Node::TraitDef { .. } => self.visit_trait_def(node),
-            _ => {
-                // FIXME:
-                panic!("Not implemented yet!")
-            }
         }
     }
 

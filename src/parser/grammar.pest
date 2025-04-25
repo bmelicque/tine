@@ -31,16 +31,17 @@ grouped_type = { "(" ~ type_annotation ~ ")" }
 generic_type = { identifier ~ ("[" ~ type_element ~ ("," ~ type_element)* ~ "]")? } // e.g., List[number]
 type_element = { function_type | binary_type | unary_type | primary_type }
 
-// Types instantiations
-type_instantiation = { struct_body | unary_instantiation | map_instantiation }
-map_instantiation = { binary_type ~ "{" ~ map_body ~ "}" }
-map_body = { (map_entry? ~ ("," ~ map_entry)*)? }
+// TODO: variants:      Sum.Variant{}
+// Composite literals
+composite_literal = { map_literal | struct_literal | array_literal | option_literal }
+map_literal = { map_type ~ "{" ~ NEWLINE? ~ map_body ~ NEWLINE? ~ "}" }
+map_body = { (map_entry? ~ ((","|NEWLINE) ~ map_entry)*)? }
 map_entry = { map_key ~ ":" ~ expression }
 map_key = { string_literal | number_literal | "[" ~ expression ~ "]" }
-unary_instantiation = { unary_type ~ "{" ~ unary_body ~ "}" }
-unary_body = { (expression? ~ ("," ~ expression)*)? }
-struct_instantiation = { generic_type ~ "{" ~ struct_instance_body ~ "}" }
-struct_instance_body = { (field_assignment ~ ("," ~ field_assignment)*)? }
+array_literal = { array_type ~ "{" ~ NEWLINE? ~ (expression ~ ((","|NEWLINE) ~ expression )*)? ~ NEWLINE? ~ "}" }
+option_literal = { option_type ~ "{" ~ NEWLINE? ~ (expression ~ NEWLINE?)? ~ "}" }
+struct_literal = { generic_type ~ "{" ~ NEWLINE? ~ struct_literal_body ~ NEWLINE? ~ "}" }
+struct_literal_body = { (field_assignment ~ ((","|NEWLINE) ~ field_assignment)*)? }
 field_assignment = { identifier ~ ":" ~ expression }
 
 // Expressions
@@ -77,7 +78,7 @@ type_def = { struct_body | sum_type | trait_type }
 struct_body = { "{" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ "}" }
 field_declaration = { mandatory_field | optional_field | embedded_field }
 embedded_field = { identifier }
-mandatory_field = { identifier ~ type_annotation }
+mandatory_field = { identifier ~ type_element }
 optional_field = { identifier ~ ":" ~ expression }
 sum_type = { (NEWLINE? ~ "|")? ~ sum_constructor ~ (NEWLINE? ~ "|" ~ sum_constructor)+ }
 sum_constructor = { identifier ~ (sum_param | struct_body)? }

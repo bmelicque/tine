@@ -24,7 +24,7 @@ pub fn parse_type(pair: Pair<'static, Rule>) -> ParseResult {
         Rule::array_type => parse_array_type(pair),
         Rule::generic_type => parse_generic_type(pair),
         Rule::identifier => parse_expression(pair),
-        _ => unreachable!(),
+        _ => unreachable!("Unexpected rule '{:?}'", pair.as_rule()),
     }
 }
 
@@ -57,12 +57,12 @@ fn parse_map_type(pair: Pair<'static, Rule>) -> ParseResult {
     for sub_pair in pair.into_inner() {
         match sub_pair.as_rule() {
             Rule::map_type_key => {
-                let mut result = parse_type(sub_pair);
+                let mut result = parse_type(sub_pair.into_inner().next().unwrap());
                 key = result.node.map(Box::new);
                 errors.append(&mut result.errors);
             }
             Rule::map_type_value => {
-                let mut result = parse_type(sub_pair);
+                let mut result = parse_type(sub_pair.into_inner().next().unwrap());
                 value = result.node.map(Box::new);
                 errors.append(&mut result.errors);
             }
@@ -79,7 +79,7 @@ fn parse_map_type(pair: Pair<'static, Rule>) -> ParseResult {
 }
 
 fn parse_result_type(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::map_type);
+    assert!(pair.as_rule() == Rule::result_type);
     let span = pair.as_span();
     let mut ok = None;
     let mut err = None;
@@ -88,12 +88,12 @@ fn parse_result_type(pair: Pair<'static, Rule>) -> ParseResult {
     for sub_pair in pair.into_inner() {
         match sub_pair.as_rule() {
             Rule::result_ok_type => {
-                let mut result = parse_type(sub_pair);
+                let mut result = parse_type(sub_pair.into_inner().next().unwrap());
                 ok = result.node.map(Box::new);
                 errors.append(&mut result.errors);
             }
             Rule::result_error_type => {
-                let mut result = parse_type(sub_pair);
+                let mut result = parse_type(sub_pair.into_inner().next().unwrap());
                 err = result.node.map(Box::new);
                 errors.append(&mut result.errors);
             }
@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn test_parse_array_type() {
-        let result = parse_type_input("[number]");
+        let result = parse_type_input("[]number");
         assert!(result.errors.is_empty());
 
         match result.node.unwrap().node {
@@ -375,7 +375,7 @@ mod tests {
 
     #[test]
     fn test_parse_map_type() {
-        let result = parse_type_input("{key: string, value: number}");
+        let result = parse_type_input("string#number");
         assert!(result.errors.is_empty());
 
         match result.node.unwrap().node {
@@ -389,7 +389,7 @@ mod tests {
 
     #[test]
     fn test_parse_result_type() {
-        let result = parse_type_input("Result[number, string]");
+        let result = parse_type_input("string!number");
         assert!(result.errors.is_empty());
 
         match result.node.unwrap().node {

@@ -3,7 +3,7 @@ use pest::iterators::Pair;
 use crate::ast::{Node, Spanned};
 
 use super::{
-    composite_literals::parse_type_instantiation,
+    composite_literals::parse_composite_literal,
     parser::{ParseError, ParseResult, Rule},
 };
 
@@ -20,7 +20,7 @@ pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
                 },
             }
         }
-        Rule::type_instantiation => parse_type_instantiation(pair),
+        Rule::composite_literal => parse_composite_literal(pair),
         Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
             parse_binary_ltr_expression(pair)
         }

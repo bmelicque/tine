@@ -44,7 +44,7 @@ pub fn struct_to_swc_constructor(
     }
 }
 
-pub fn struct_to_swc_constructor_stmts(fields: &Vec<Spanned<StructField>>) -> Vec<ast::Stmt> {
+fn struct_to_swc_constructor_stmts(fields: &Vec<Spanned<StructField>>) -> Vec<ast::Stmt> {
     fields
         .iter()
         .map(|spanned| &spanned.node)
