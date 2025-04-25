@@ -4,7 +4,7 @@ use swc_common::DUMMY_SP;
 use swc_ecma_ast as ast;
 
 use crate::{
-    ast::{AstNode, FieldAssignment, Node, Spanned},
+    ast::{AstNode, FieldAssignment, MapEntry, Node, Spanned},
     codegen::{expressions::node_to_swc_expr, CodeGenerator},
 };
 
@@ -19,6 +19,42 @@ pub fn array_literal_to_swc_array(
     ast::ArrayLit {
         span: DUMMY_SP,
         elems: swc_elements,
+    }
+}
+
+pub fn map_literal_to_swc_new_map(
+    generator: &CodeGenerator,
+    entries: Vec<Spanned<MapEntry>>,
+) -> ast::NewExpr {
+    let swc_args = entries
+        .into_iter()
+        .map(|entry| {
+            let key = node_to_swc_expr(generator, entry.node.key.node.clone());
+            let value = node_to_swc_expr(generator, entry.node.value.node.clone());
+            Some(ast::ExprOrSpread {
+                spread: None,
+                expr: Box::new(ast::Expr::Array(ast::ArrayLit {
+                    span: DUMMY_SP,
+                    elems: vec![Some(key.into()), Some(value.into())],
+                })),
+            })
+        })
+        .collect::<Vec<_>>();
+    ast::NewExpr {
+        span: DUMMY_SP,
+        callee: Box::new(ast::Expr::Ident(ast::Ident {
+            span: DUMMY_SP,
+            sym: "Map".into(),
+            optional: false,
+        })),
+        args: Some(vec![ast::ExprOrSpread {
+            spread: None,
+            expr: Box::new(ast::Expr::Array(ast::ArrayLit {
+                span: DUMMY_SP,
+                elems: swc_args,
+            })),
+        }]),
+        type_args: None,
     }
 }
 

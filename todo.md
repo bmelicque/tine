@@ -1,28 +1,19 @@
-## Types
-
-### Parser
-
+- codegen option literals
+  - add `__Option` class
+- type check generics
 - allow type constraints in generics
+- grammar: `identifier` vs. `type_identifier`
+  - `type_identifier` = PascalCase | number, etc.
+- member expression: `object.key`, `tuple.0`
 
-### Type checker
+  - parsing
+  - type check
+  - type check as sum variant
+  - codegen
 
-- type check composite_literals
-  - handle generics
+- tuples expressions: `a, b`
 
-### Codegen
-
-- type instantiation
-
-### Other
-
-- handle all FIXMEs and TODOs
-
-## Expressions
-
-- tuples: `a, b`
-- access: `object.key`, `tuple.0`
-
-## Flow
+  - parsing
 
 - blocks as expressions
 - if - else
@@ -30,7 +21,5 @@
 - handle return in functions (check nested blocks)
 - function call
 
-## Other
-
 - adjust reserved names (`function`, `let`, etc.) when transpiling
-- fix exponentiation (should be rtl)
+- FIXME: exponentiation (should be rtl)

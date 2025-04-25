@@ -7,8 +7,8 @@ use swc_ecma_ast::{
 use crate::ast::Node;
 
 use super::{
-    composite_literal::composite_literal::{
-        array_literal_to_swc_array, struct_literal_to_swc_new_expr,
+    composite_literal::{
+        array_literal_to_swc_array, map_literal_to_swc_new_map, struct_literal_to_swc_new_expr,
     },
     CodeGenerator,
 };
@@ -78,33 +78,14 @@ pub fn node_to_swc_expr(generator: &CodeGenerator, node: Node) -> Expr {
             left,
             operator,
             right,
-        } => {
-            let left_expr = node_to_swc_expr(generator, left.unwrap().node);
-            let right_expr = node_to_swc_expr(generator, right.unwrap().node);
+        } => binary_expression_to_swc_expr(
+            generator,
+            left.unwrap().node,
+            operator,
+            right.unwrap().node,
+        ),
 
-            let op = match operator.as_str() {
-                "+" => BinaryOp::Add,
-                "-" => BinaryOp::Sub,
-                "*" => BinaryOp::Mul,
-                "/" => BinaryOp::Div,
-                "==" => BinaryOp::EqEq,
-                "!=" => BinaryOp::NotEq,
-                "<" => BinaryOp::Lt,
-                ">" => BinaryOp::Gt,
-                "<=" => BinaryOp::LtEq,
-                ">=" => BinaryOp::GtEq,
-                _ => panic!("Unsupported binary operator: {}", operator),
-            };
-
-            Expr::Bin(BinExpr {
-                span: DUMMY_SP,
-                op,
-                left: Box::new(left_expr),
-                right: Box::new(right_expr),
-            })
-        }
-
-        // TODO: MapLiteral
+        Node::MapLiteral { entries, .. } => map_literal_to_swc_new_map(generator, entries).into(),
         Node::ArrayLiteral { elements, .. } => {
             array_literal_to_swc_array(generator, elements).into()
         }
@@ -135,4 +116,35 @@ pub fn node_to_swc_expr(generator: &CodeGenerator, node: Node) -> Expr {
         })),
         _ => panic!("Unsupported node type for expression: {:?}", node),
     }
+}
+
+fn binary_expression_to_swc_expr(
+    generator: &CodeGenerator,
+    left: Node,
+    operator: String,
+    right: Node,
+) -> Expr {
+    let left_expr = node_to_swc_expr(generator, left);
+    let right_expr = node_to_swc_expr(generator, right);
+
+    let op = match operator.as_str() {
+        "+" => BinaryOp::Add,
+        "-" => BinaryOp::Sub,
+        "*" => BinaryOp::Mul,
+        "/" => BinaryOp::Div,
+        "==" => BinaryOp::EqEq,
+        "!=" => BinaryOp::NotEq,
+        "<" => BinaryOp::Lt,
+        ">" => BinaryOp::Gt,
+        "<=" => BinaryOp::LtEq,
+        ">=" => BinaryOp::GtEq,
+        _ => panic!("Unsupported binary operator: {}", operator),
+    };
+
+    Expr::Bin(BinExpr {
+        span: DUMMY_SP,
+        op,
+        left: Box::new(left_expr),
+        right: Box::new(right_expr),
+    })
 }
