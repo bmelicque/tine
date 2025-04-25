@@ -183,11 +183,11 @@ impl TypeChecker {
         }
 
         // Look for fields that are not in the struct definition
-        for (name, _) in field_map {
-            if !fields.iter().any(|f| f.node.name == name) {
+        for field in fields {
+            if !field_map.contains_key(&field.node.name) {
                 self.errors.push(ParseError {
                     message: "No such field found".to_string(),
-                    span: struct_literal.span,
+                    span: field.span,
                 });
             }
         }
