@@ -67,9 +67,10 @@ fn struct_field_to_swc_param<'a>(
                     },
                     type_ann: None,
                 })),
-                right: Box::new(
-                    node_to_swc_expr(generator, field.def.as_ref().unwrap().node.clone()).unwrap(),
-                ),
+                right: Box::new(node_to_swc_expr(
+                    generator,
+                    field.def.as_ref().unwrap().node.clone(),
+                )),
             })
         } else {
             ast::Pat::Ident(ast::BindingIdent {

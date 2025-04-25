@@ -10,7 +10,7 @@ use super::{
 };
 
 pub fn node_to_swc_stmt(
-    generator: &CodeGenerator,
+    generator: &mut CodeGenerator,
     node: Node,
 ) -> Result<Option<ast::Stmt>, Box<dyn Error>> {
     match node {
@@ -20,7 +20,7 @@ pub fn node_to_swc_stmt(
             initializer,
         } => {
             let init = if let Some(expr) = initializer {
-                let swc_expr = node_to_swc_expr(generator, expr.node)?;
+                let swc_expr = node_to_swc_expr(generator, expr.node);
                 Some(Box::new(swc_expr))
             } else {
                 None
@@ -58,7 +58,7 @@ pub fn node_to_swc_stmt(
         Node::TypeDeclaration { .. } => type_declaration_to_swc_decl(generator, node),
         Node::Assignment { name, value } => {
             let value_expr = if let Some(v) = value {
-                node_to_swc_expr(generator, v.node)?
+                node_to_swc_expr(generator, v.node)
             } else {
                 panic!("Missing expression in assignment!");
             };
@@ -87,7 +87,7 @@ pub fn node_to_swc_stmt(
         }
         Node::ReturnStatement(expr) => {
             let arg = if let Some(e) = expr {
-                let swc_expr = node_to_swc_expr(generator, e.node)?;
+                let swc_expr = node_to_swc_expr(generator, e.node);
                 Some(Box::new(swc_expr))
             } else {
                 None
@@ -99,7 +99,7 @@ pub fn node_to_swc_stmt(
             })))
         }
         Node::ExpressionStatement(expr) => {
-            let swc_expr = node_to_swc_expr(generator, expr.node)?;
+            let swc_expr = node_to_swc_expr(generator, expr.node);
             Ok(Some(ast::Stmt::Expr(ast::ExprStmt {
                 span: DUMMY_SP,
                 expr: Box::new(swc_expr),

@@ -45,7 +45,7 @@ struct_literal_body = { (field_assignment ~ ((","|NEWLINE) ~ field_assignment)*)
 field_assignment = { identifier ~ ":" ~ expression }
 
 // Expressions
-expression = { equality }
+expression = { composite_literal | equality }
 equality = { relation? ~ (("=="|"!=") ~ relation?)* }
 eq_op = { "==" | "!=" }
 relation = { addition? ~ (rel_op ~ addition?)*}

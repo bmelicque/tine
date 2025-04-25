@@ -13,7 +13,7 @@ use super::{
 };
 
 pub fn type_declaration_to_swc_decl(
-    generator: &CodeGenerator,
+    generator: &mut CodeGenerator,
     node: Node,
 ) -> Result<Option<ast::Stmt>, Box<dyn Error>> {
     let Node::TypeDeclaration {
@@ -36,10 +36,7 @@ pub fn type_declaration_to_swc_decl(
             vec![literal_alias_to_swc_constructor().into()]
         }
         _ => {
-            super_class = match node_to_swc_expr(generator, def_node) {
-                Ok(expr) => Some(Box::new(expr)),
-                Err(e) => return Err(e.into()),
-            };
+            super_class = Some(Box::new(node_to_swc_expr(generator, def_node)));
             Vec::new()
         }
     };
@@ -47,7 +44,7 @@ pub fn type_declaration_to_swc_decl(
         declare: false,
         ident: ast::Ident {
             span: DUMMY_SP,
-            sym: name.into(),
+            sym: name.clone().into(),
             optional: false,
         },
         class: Box::new(ast::Class {
@@ -61,6 +58,7 @@ pub fn type_declaration_to_swc_decl(
             implements: vec![],
         }),
     };
+    generator.add_class_def(name, declaration.clone());
     Ok(Some(declaration.into()))
 }
 

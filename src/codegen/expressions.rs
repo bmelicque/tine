@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use swc_common::DUMMY_SP;
 use swc_ecma_ast::{
     ArrowExpr, BinExpr, BinaryOp, BindingIdent, BlockStmt, BlockStmtOrExpr, Bool, Expr, Ident, Lit,
@@ -8,9 +6,14 @@ use swc_ecma_ast::{
 
 use crate::ast::Node;
 
-use super::{codegen::TranspilerError, CodeGenerator};
+use super::{
+    composite_literal::composite_literal::{
+        array_literal_to_swc_array, struct_literal_to_swc_new_expr,
+    },
+    CodeGenerator,
+};
 
-pub fn node_to_swc_expr(generator: &CodeGenerator, node: Node) -> Result<Expr, Box<dyn Error>> {
+pub fn node_to_swc_expr(generator: &CodeGenerator, node: Node) -> Expr {
     match node {
         Node::FunctionExpression {
             parameters,
@@ -39,7 +42,7 @@ pub fn node_to_swc_expr(generator: &CodeGenerator, node: Node) -> Result<Expr, B
                         // Convert block statement
                         let mut stmts = vec![];
                         for stmt in statements {
-                            let expr = node_to_swc_expr(generator, stmt.node.clone())?;
+                            let expr = node_to_swc_expr(generator, stmt.node.clone());
                             stmts.push(Stmt::Return(ReturnStmt {
                                 span: DUMMY_SP,
                                 arg: Some(Box::new(expr)),
@@ -53,17 +56,15 @@ pub fn node_to_swc_expr(generator: &CodeGenerator, node: Node) -> Result<Expr, B
                     }
                     _ => {
                         // Expression-style body
-                        let expr = node_to_swc_expr(generator, body_node.node.clone())?;
+                        let expr = node_to_swc_expr(generator, body_node.node.clone());
                         BlockStmtOrExpr::Expr(Box::new(expr))
                     }
                 }
             } else {
-                return Err(Box::new(TranspilerError {
-                    message: "Function body is missing".to_string(),
-                }));
+                panic!("Function body is missing");
             };
 
-            Ok(Expr::Arrow(ArrowExpr {
+            Expr::Arrow(ArrowExpr {
                 span: DUMMY_SP,
                 params: swc_params,
                 body: Box::new(swc_body),
@@ -71,15 +72,15 @@ pub fn node_to_swc_expr(generator: &CodeGenerator, node: Node) -> Result<Expr, B
                 is_generator: false,
                 type_params: None,
                 return_type: None,
-            }))
+            })
         }
         Node::BinaryExpression {
             left,
             operator,
             right,
         } => {
-            let left_expr = node_to_swc_expr(generator, left.unwrap().node)?;
-            let right_expr = node_to_swc_expr(generator, right.unwrap().node)?;
+            let left_expr = node_to_swc_expr(generator, left.unwrap().node);
+            let right_expr = node_to_swc_expr(generator, right.unwrap().node);
 
             let op = match operator.as_str() {
                 "+" => BinaryOp::Add,
@@ -92,41 +93,46 @@ pub fn node_to_swc_expr(generator: &CodeGenerator, node: Node) -> Result<Expr, B
                 ">" => BinaryOp::Gt,
                 "<=" => BinaryOp::LtEq,
                 ">=" => BinaryOp::GtEq,
-                _ => {
-                    return Err(Box::new(TranspilerError {
-                        message: format!("Unknown operator: {}", operator),
-                    }))
-                }
+                _ => panic!("Unsupported binary operator: {}", operator),
             };
 
-            Ok(Expr::Bin(BinExpr {
+            Expr::Bin(BinExpr {
                 span: DUMMY_SP,
                 op,
                 left: Box::new(left_expr),
                 right: Box::new(right_expr),
-            }))
+            })
         }
-        Node::Identifier(name) => Ok(Expr::Ident(Ident {
+
+        // TODO: MapLiteral
+        Node::ArrayLiteral { elements, .. } => {
+            array_literal_to_swc_array(generator, elements).into()
+        }
+        // TODO: OptionLiteral
+        Node::StructLiteral {
+            struct_type,
+            fields,
+        } => struct_literal_to_swc_new_expr(generator, struct_type.node, fields).into(),
+
+        Node::Identifier(name) => Expr::Ident(Ident {
             span: DUMMY_SP,
             sym: name.into(),
             optional: false,
-        })),
-        Node::StringLiteral(value) => Ok(Expr::Lit(Lit::Str(Str {
+        }),
+        Node::StringLiteral(value) => Expr::Lit(Lit::Str(Str {
             span: DUMMY_SP,
             value: value.into(),
             raw: None,
-        }))),
-        Node::NumberLiteral(value) => Ok(Expr::Lit(Lit::Num(Number {
+        })),
+        Node::NumberLiteral(value) => Expr::Lit(Lit::Num(Number {
             span: DUMMY_SP,
             value,
             raw: None,
-        }))),
-        Node::BooleanLiteral(value) => Ok(Expr::Lit(Lit::Bool(Bool {
+        })),
+        Node::BooleanLiteral(value) => Expr::Lit(Lit::Bool(Bool {
             span: DUMMY_SP,
             value,
-        }))),
-        _ => Err(Box::new(TranspilerError {
-            message: format!("Unsupported expression: {:?}", node),
         })),
+        _ => panic!("Unsupported node type for expression: {:?}", node),
     }
 }
