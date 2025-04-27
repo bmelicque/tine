@@ -70,7 +70,7 @@ fn parse_assignment_like(
 
     while let Some(item) = inner.next() {
         match item.as_rule() {
-            Rule::identifier => name = Some(item.as_str().to_string()),
+            Rule::value_identifier => name = Some(item.as_str().to_string()),
             Rule::expression => {
                 let mut result = parse_expression(item);
                 value = result.node;

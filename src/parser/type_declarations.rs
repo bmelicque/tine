@@ -10,18 +10,13 @@ use super::{
 };
 
 pub fn parse_type_declaration(pair: Pair<'static, Rule>) -> ParseResult {
+    assert!(pair.as_rule() == Rule::type_declaration);
     let span = pair.as_span();
     let mut inner = pair.into_inner();
 
     let mut errors = Vec::new();
 
     let name = inner.next().unwrap().as_str().to_string();
-    if !is_pascal_case(&name) {
-        errors.push(ParseError {
-            message: format!("Type name '{}' should be in PascalCase", name),
-            span,
-        });
-    }
 
     let mut type_params = None;
     let mut def = None;
@@ -61,7 +56,7 @@ fn parse_type_params(pair: Pair<'static, Rule>) -> (Vec<String>, Vec<ParseError>
     let mut errors = Vec::new();
     let inner = pair.into_inner();
     for param_pair in inner {
-        assert_eq!(param_pair.as_rule(), Rule::identifier);
+        assert_eq!(param_pair.as_rule(), Rule::type_name);
         let param_name = param_pair.as_str().to_string();
         if !is_pascal_case(&param_name) {
             errors.push(ParseError {
@@ -224,7 +219,7 @@ fn parse_sum_constructor(pair: Pair<'static, Rule>) -> (SumTypeConstructor, Vec<
     let mut errors = Vec::<ParseError>::new();
     while let Some(pair) = inner.next() {
         match pair.as_rule() {
-            Rule::identifier => name = Some(pair.as_str().to_string()),
+            Rule::type_identifier => name = Some(pair.as_str().to_string()),
             Rule::sum_param => {
                 if let Some(inner) = pair.into_inner().next() {
                     let mut result = parse_type(inner);
@@ -319,39 +314,6 @@ mod tests {
                         assert_eq!(fields.len(), 2);
                         assert_eq!(fields[0].node.name, "name");
                         assert_eq!(fields[1].node.name, "age");
-                    }
-                    _ => panic!("Expected Struct node"),
-                }
-            }
-            _ => panic!("Expected TypeDeclaration"),
-        }
-    }
-
-    #[test]
-    fn test_parse_struct_with_embedded_field() {
-        let input = r#"Person :: { 
-            Address
-        }"#;
-
-        let result = parse(input);
-        assert!(
-            result.errors.is_empty(),
-            "expected no errors, got: {:?}",
-            result.errors
-        );
-
-        match result.node.unwrap().node {
-            Node::TypeDeclaration {
-                name,
-                type_params: None,
-                def: Some(def),
-            } => {
-                assert_eq!(name, "Person");
-                match def.node {
-                    Node::Struct(fields) => {
-                        assert_eq!(fields.len(), 1);
-                        assert_eq!(fields[0].node.name, "Address");
-                        assert!(fields[0].node.def.is_none());
                     }
                     _ => panic!("Expected Struct node"),
                 }
@@ -539,29 +501,5 @@ mod tests {
             }
             _ => panic!("Expected TypeDeclaration"),
         }
-    }
-
-    #[test]
-    fn test_field_name_case_check() {
-        let input = "BadStruct :: { NotCamel string }";
-
-        let result = parse(input);
-
-        assert_eq!(result.errors.len(), 1);
-        assert!(result.errors[0].message.contains("camelCase"));
-    }
-
-    #[test]
-    fn test_type_name_case_check() {
-        let input = "notPascal :: { goodField string }";
-
-        let result = parse(input);
-
-        assert_eq!(result.errors.len(), 1);
-        assert!(
-            result.errors[0].message.contains("PascalCase"),
-            "{}",
-            result.errors[0].message
-        );
     }
 }

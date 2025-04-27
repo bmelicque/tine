@@ -28,6 +28,13 @@ impl ParseResult {
             errors: vec![],
         }
     }
+
+    pub fn ok(node: AstNode) -> Self {
+        ParseResult {
+            node: Some(node),
+            errors: Vec::new(),
+        }
+    }
 }
 
 pub struct ParserEngine;

@@ -2,10 +2,7 @@ use pest::iterators::Pair;
 
 use crate::ast::{AstNode, Node, Spanned};
 
-use super::{
-    expressions::parse_expression,
-    parser::{ParseError, ParseResult, Rule},
-};
+use super::parser::{ParseError, ParseResult, Rule};
 
 pub fn parse_type(pair: Pair<'static, Rule>) -> ParseResult {
     match pair.as_rule() {
@@ -14,7 +11,8 @@ pub fn parse_type(pair: Pair<'static, Rule>) -> ParseResult {
         | Rule::binary_type
         | Rule::unary_type
         | Rule::primary_type
-        | Rule::grouped_type => parse_type(pair.into_inner().next().unwrap()),
+        | Rule::grouped_type
+        | Rule::type_name => parse_type(pair.into_inner().next().unwrap()),
         Rule::function_type => parse_function_type(pair),
         Rule::tuple_type => parse_tuple_type(pair),
         Rule::map_type => parse_map_type(pair),
@@ -23,7 +21,7 @@ pub fn parse_type(pair: Pair<'static, Rule>) -> ParseResult {
         Rule::option_type => parse_option_type(pair),
         Rule::array_type => parse_array_type(pair),
         Rule::generic_type => parse_generic_type(pair),
-        Rule::identifier => parse_expression(pair),
+        Rule::type_identifier | Rule::primitive_type => parse_named_type(pair),
         _ => unreachable!("Unexpected rule '{:?}'", pair.as_rule()),
     }
 }
@@ -172,7 +170,7 @@ fn parse_generic_type(pair: Pair<'static, Rule>) -> ParseResult {
 
     for part in pair.into_inner() {
         match part.as_rule() {
-            Rule::identifier => {
+            Rule::type_identifier => {
                 name = Some(Box::new(Spanned {
                     node: Node::NamedType(part.as_str().to_string()),
                     span: part.as_span(),
@@ -200,6 +198,13 @@ fn parse_generic_type(pair: Pair<'static, Rule>) -> ParseResult {
         node: Some(Spanned { node, span }),
         errors,
     }
+}
+
+fn parse_named_type(pair: Pair<'static, Rule>) -> ParseResult {
+    ParseResult::ok(Spanned {
+        node: Node::NamedType(pair.as_str().into()),
+        span: pair.as_span(),
+    })
 }
 
 fn parse_function_type(pair: Pair<'static, Rule>) -> ParseResult {

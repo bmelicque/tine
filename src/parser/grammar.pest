@@ -4,7 +4,7 @@ WHITESPACE = _{ " " | "\t" }
 COMMENT = _{ "//" ~ (!"\n" ~ ANY)* ~ "\n" | "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 
 // Identifiers and literals
-identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+value_identifier = @{ ASCII_ALPHA_LOWER ~ (ASCII_ALPHANUMERIC | "_")* }
 string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
 number_literal = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 boolean_literal = @{ "true" | "false" }
@@ -25,10 +25,13 @@ unary_type = { reference_type | option_type | array_type }
 reference_type = { "&" ~ (unary_type | primary_type)? }
 option_type = { "?" ~ (unary_type | primary_type)? }
 array_type = { "[]" ~ (unary_type | primary_type)? }
-primary_type = { generic_type | grouped_type }
+primary_type = { generic_type | type_name | grouped_type }
 grouped_type = { "(" ~ type_annotation ~ ")" }
 // uses binary_type in generic_type to avoid unwrapping tuples
-generic_type = { identifier ~ ("[" ~ type_element ~ ("," ~ type_element)* ~ "]")? } // e.g., List[number]
+generic_type = { type_identifier ~ ("[" ~ type_element ~ ("," ~ type_element)* ~ "]")? } // e.g., List[number]
+type_name = { type_identifier | primitive_type }
+type_identifier = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_")* }
+primitive_type = @{ "number" | "boolean" | "string" }
 type_element = { function_type | binary_type | unary_type | primary_type }
 
 // TODO: variants:      Sum.Variant{}
@@ -42,7 +45,7 @@ array_literal = { array_type ~ "{" ~ NEWLINE? ~ (expression ~ ((","|NEWLINE) ~ e
 option_literal = { option_type ~ "{" ~ NEWLINE? ~ (expression ~ NEWLINE?)? ~ "}" }
 struct_literal = { generic_type ~ "{" ~ NEWLINE? ~ struct_literal_body ~ NEWLINE? ~ "}" }
 struct_literal_body = { (field_assignment ~ ((","|NEWLINE) ~ field_assignment)*)? }
-field_assignment = { identifier ~ ":" ~ expression }
+field_assignment = { value_identifier ~ ":" ~ expression }
 
 // Expressions
 expression = { composite_literal | equality }
@@ -55,35 +58,35 @@ add_op = { "+" | "-" }
 multiplication = { exponentiation? ~ (mul_op ~ exponentiation?)* }
 mul_op = { "*" | "/" | "%" }
 exponentiation = { primary? ~ ("**" ~ primary?)* }
-primary = {  string_literal | number_literal | boolean_literal | identifier | function_expression | "(" ~ expression ~ ")" }
+primary = {  string_literal | number_literal | boolean_literal | value_identifier | function_expression | "(" ~ expression ~ ")" }
 
 function_expression = { parameter_list? ~ "=>" ~ (function_body | expression)? }
 function_body = { type_annotation? ~ block }
 parameter_list = { "(" ~ (parameter ~ ("," ~ parameter)*)? ~ ")" }
-parameter = { identifier ~ type_annotation? }
+parameter = { value_identifier ~ type_annotation? }
 
 
 // Statements
 statement = { block | type_declaration | variable_declaration | assignment | return_statement | expression_statement }
-variable_declaration = { identifier? ~ decl_op ~ expression? }
+variable_declaration = { value_identifier? ~ decl_op ~ expression? }
 decl_op = { ":=" | "::" }
-assignment = { identifier? ~ "=" ~ expression? }
+assignment = { value_identifier? ~ "=" ~ expression? }
 return_statement = { "return" ~ expression? }
 expression_statement = { expression }
 block = { "{" ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ "}" }
 
-type_declaration = { identifier ~ type_params? ~ "::" ~ type_def }
-type_params = { "[" ~ identifier ~ ("," ~ identifier)* ~ "]" }
+type_declaration = { type_identifier ~ type_params? ~ "::" ~ type_def }
+type_params = { "[" ~ type_identifier ~ ("," ~ type_identifier)* ~ "]" }
 type_def = { struct_body | sum_type | trait_type }
 struct_body = { "{" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ "}" }
 field_declaration = { mandatory_field | optional_field  }
-embedded_field = { identifier }
-mandatory_field = { identifier ~ type_element }
-optional_field = { identifier ~ ":" ~ expression }
+embedded_field = { type_identifier }
+mandatory_field = { value_identifier ~ type_element }
+optional_field = { value_identifier ~ ":" ~ expression }
 sum_type = { (NEWLINE? ~ "|")? ~ sum_constructor ~ (NEWLINE? ~ "|" ~ sum_constructor)+ }
-sum_constructor = { identifier ~ (sum_param | struct_body)? }
+sum_constructor = { type_identifier ~ (sum_param | struct_body)? }
 sum_param = { "{" ~ type_annotation ~ "}" }
-trait_type = { "(" ~ identifier ~ ")" ~ "." ~ struct_body }
+trait_type = { "(" ~ type_identifier ~ ")" ~ "." ~ struct_body }
 
 // Program
 blank_line = _{ NEWLINE }

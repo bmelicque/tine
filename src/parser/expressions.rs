@@ -25,7 +25,7 @@ pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
             parse_binary_ltr_expression(pair)
         }
         Rule::exponentiation => parse_binary_ltr_expression(pair),
-        Rule::identifier => ParseResult {
+        Rule::value_identifier => ParseResult {
             node: Some(Spanned {
                 node: Node::Identifier(pair.as_str().to_string()),
                 span,
