@@ -7,27 +7,35 @@ use crate::{
 use super::TypeChecker;
 
 impl TypeChecker {
-    pub(super) fn visit_named_type(&mut self, ast_node: &AstNode) -> Type {
+    pub fn visit_named_type(&mut self, ast_node: &AstNode) -> Type {
         let node = &ast_node.node;
         let Node::NamedType(name) = node else {
             panic!("Expected NamedType node")
         };
 
         match name.as_str() {
-            "string" => Type::String,
-            "number" => Type::Number,
-            "boolean" => Type::Boolean,
-            "void" => Type::Void,
-            _ => match self.type_registry.lookup(&name) {
-                Some(_) => Type::Named(name.clone()),
-                None => {
-                    self.errors.push(ParseError {
-                        message: format!("Type '{}' not found", name),
-                        span: ast_node.span.clone(),
-                    });
-                    Type::Unknown
-                }
-            },
+            "string" => return Type::String,
+            "number" => return Type::Number,
+            "boolean" => return Type::Boolean,
+            "void" => return Type::Void,
+            _ => {}
+        }
+        if self.type_registry.lookup(name).is_none() {
+            self.errors.push(ParseError {
+                message: format!("Type '{}' not found", name),
+                span: ast_node.span.clone(),
+            });
+            return Type::Unknown;
+        }
+        let type_params = self
+            .type_registry
+            .get_type_params(name)
+            .iter()
+            .map(|_| Type::Dynamic)
+            .collect();
+        Type::Named {
+            name: name.into(),
+            args: type_params,
         }
     }
 
@@ -38,20 +46,30 @@ impl TypeChecker {
         };
 
         let base = self.visit_named_type(name);
-        match base {
-            Type::Generic { .. } | Type::Unknown => {}
-            _ => {
-                self.errors.push(ParseError {
-                    message: format!("Expected a generic type, found {:?}", base),
-                    span: ast_node.span.clone(),
-                });
-            }
+        let arity = match base {
+            Type::Named { args, .. } => args.len(),
+            _ => 0,
         };
 
-        let mut generic_args = Vec::new();
-        for arg in args {
+        if args.len() > arity {
+            self.errors.push(ParseError {
+                message: format!(
+                    "Too many arguments, expected at most {}, got {}",
+                    arity,
+                    args.len()
+                ),
+                span: ast_node.span,
+            });
+        }
+
+        // FIXME: add Dynamic to fill expected params
+        let mut type_args = Vec::new();
+        for arg in args.iter().take(arity) {
             let arg_type = self.visit(arg);
-            generic_args.push(arg_type);
+            type_args.push(arg_type);
+        }
+        while type_args.len() < arity {
+            type_args.push(Type::Dynamic);
         }
 
         let name = if let Node::NamedType(name) = &name.node {
@@ -59,9 +77,9 @@ impl TypeChecker {
         } else {
             panic!("Expected NamedType node for generic type name")
         };
-        Type::Generic {
+        Type::Named {
             name,
-            args: generic_args,
+            args: type_args,
         }
     }
 
@@ -189,7 +207,7 @@ impl TypeChecker {
         }
     }
 
-    pub(super) fn visit_struct_type(&mut self, ast_node: &AstNode) -> Type {
+    pub(super) fn visit_struct_def(&mut self, ast_node: &AstNode) -> Type {
         let node = &ast_node.node;
         let Node::Struct(fields) = node else {
             panic!("Expected Node::Struct")
@@ -273,6 +291,7 @@ impl TypeChecker {
 mod tests {
     use super::*;
     use crate::ast::{Node, Spanned};
+    use crate::type_checker::scopes::TypeMetadata;
     use crate::types::Type;
     use pest::Span;
 
@@ -314,11 +333,13 @@ mod tests {
 
         // Test for user-defined types
         let custom_type_node = spanned(Node::NamedType("CustomType".to_string()));
-        checker.type_registry.define("CustomType", Type::Number);
+        checker
+            .type_registry
+            .define("CustomType", Type::Number, None);
         let result = checker.visit_named_type(&custom_type_node);
 
         match result {
-            Type::Named(name) => assert_eq!(name, "CustomType"),
+            Type::Named { name, .. } => assert_eq!(name, "CustomType"),
             _ => panic!("Expected Named type, got {:?}", result),
         }
     }
@@ -336,15 +357,18 @@ mod tests {
         let mut checker = TypeChecker::new();
         checker.type_registry.define(
             "List",
-            Type::Generic {
+            Type::Named {
                 name: "List".to_string(),
                 args: vec![Type::Number, Type::String],
             },
+            Some(TypeMetadata {
+                type_params: vec!["A".into(), "B".into()],
+            }),
         );
         let result = checker.visit_generic_type(&ast_node);
 
         match result {
-            Type::Generic { name, args } => {
+            Type::Named { name, args } => {
                 assert_eq!(name, "List");
                 assert_eq!(args.len(), 2);
                 assert!(matches!(args[0], Type::Number));

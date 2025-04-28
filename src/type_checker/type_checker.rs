@@ -211,7 +211,7 @@ impl TypeChecker {
             Node::ResultType { .. } => self.visit_result_type(node),
             Node::FunctionType { .. } => self.visit_function_type(node),
             Node::TupleType(_) => self.visit_tuple_type(node),
-            Node::Struct(_) => self.visit_struct_type(node),
+            Node::Struct(_) => self.visit_struct_def(node),
             Node::SumDef(_) => self.visit_sum_def(node),
             Node::TraitDef { .. } => self.visit_trait_def(node),
         }

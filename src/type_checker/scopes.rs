@@ -37,23 +37,43 @@ impl SymbolTable {
     }
 }
 
+pub struct TypeMetadata {
+    pub type_params: Vec<String>,
+}
+
 pub struct TypeRegistry {
     pub current_self: Option<String>,
-    pub current_type_params: Option<Vec<String>>,
-    types: HashMap<String, Type>,
+    generics: HashMap<String, Type>,
+    pub types: HashMap<String, Type>,
+    metadata: HashMap<String, TypeMetadata>,
 }
 
 impl TypeRegistry {
     pub fn new() -> Self {
         Self {
             current_self: None,
-            current_type_params: None,
+            generics: HashMap::new(),
             types: HashMap::new(),
+            metadata: HashMap::new(),
         }
     }
 
-    pub fn define(&mut self, name: &str, ty: Type) {
+    pub fn create(names: &Vec<String>, types: &Vec<Type>) -> TypeRegistry {
+        let mut registry = TypeRegistry::new();
+
+        for (i, name) in names.iter().enumerate() {
+            let t = types.get(i).cloned().unwrap_or(Type::Dynamic);
+            registry.define(name, t, None);
+        }
+
+        registry
+    }
+
+    pub fn define(&mut self, name: &str, ty: Type, metadata: Option<TypeMetadata>) {
         self.types.insert(name.to_string(), ty);
+        if let Some(data) = metadata {
+            self.metadata.insert(name.into(), data);
+        }
     }
 
     pub fn lookup(&self, name: &str) -> Option<Type> {
@@ -62,11 +82,22 @@ impl TypeRegistry {
                 return Some(Type::SelfType);
             }
         }
-        if let Some(ref current_type_params) = self.current_type_params {
-            if current_type_params.contains(&name.to_string()) {
-                return Some(Type::GenericParam(name.to_string()));
-            }
-        };
-        self.types.get(name).cloned()
+        self.generics.get(name).or(self.types.get(name)).cloned()
+    }
+
+    pub fn get_type_params(&self, name: &str) -> Vec<String> {
+        self.metadata
+            .get(name)
+            .map(|data| data.type_params.clone())
+            .unwrap_or(Vec::new())
+    }
+
+    pub fn define_generic(&mut self, name: &str) {
+        self.generics
+            .insert(name.to_string(), Type::Generic(name.into()));
+    }
+
+    pub fn clear_generics(&mut self) {
+        self.generics.clear();
     }
 }

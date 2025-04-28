@@ -2,12 +2,12 @@ use core::panic;
 use std::collections::HashMap;
 
 use crate::{
-    ast::{AstNode, Node},
+    ast::{AstNode, FieldAssignment, Node, Spanned},
     parser::parser::ParseError,
     types::Type,
 };
 
-use super::TypeChecker;
+use super::{scopes::TypeRegistry, TypeChecker};
 
 impl TypeChecker {
     pub fn visit_map_literal(&mut self, map: &AstNode) -> Type {
@@ -134,7 +134,7 @@ impl TypeChecker {
         };
 
         let ty = self.visit(struct_type);
-        let Type::Named(ref name) = ty else {
+        let Type::Named { ref name, ref args } = ty else {
             panic!("Expected a named type");
         };
 
@@ -149,6 +149,12 @@ impl TypeChecker {
             }
             None => panic!("Named type should refer to something"),
         };
+
+        // setup generics registry
+        let names = self.type_registry.get_type_params(name);
+        let mut generics_registry = TypeRegistry::create(&names, &args);
+
+        // set up map of expected field types
         let mut field_map = HashMap::new();
         for field in field_types {
             let name = field.name.clone();
@@ -157,42 +163,64 @@ impl TypeChecker {
         }
 
         for field in fields {
-            let name = &field.node.name;
-            let value = self.visit(&field.node.value);
-            let expected = field_map.get(name).cloned();
-            let Some(expected) = expected else {
-                self.errors.push(ParseError {
-                    message: format!("Field {} not found in struct", name),
-                    span: field.span,
-                });
-                continue;
-            };
-            match check_dynamic_type(&value, &expected) {
-                Ok(ty) => {
-                    if let Some(field) = field_map.get_mut(name) {
-                        *field = *ty;
-                    }
-                }
-                Err(message) => {
-                    self.errors.push(ParseError {
-                        message,
-                        span: field.span,
-                    });
-                }
-            }
+            self.visit_field_assignment(field, &field_map, &mut generics_registry);
         }
 
-        // Look for fields that are not in the struct definition
+        self.report_unknown_fields(fields, &field_map);
+
+        // TODO: adjust type using inferred generics
+        ty
+    }
+
+    fn visit_field_assignment(
+        &mut self,
+        field: &Spanned<FieldAssignment>,
+        expected_map: &HashMap<String, Type>,
+        generics_registry: &mut TypeRegistry,
+    ) {
+        let name = &field.node.name;
+        let value = self.visit(&field.node.value);
+        let expected = expected_map.get(name).cloned();
+        let Some(mut expected) = expected else {
+            self.errors.push(ParseError {
+                message: format!("Field {} not found in struct", name),
+                span: field.span,
+            });
+            return;
+        };
+
+        if let Type::Generic(ref name) = expected {
+            // if type is generic there should be something in the registry
+            let current = generics_registry.types.get_mut(name).unwrap();
+            if matches!(current, Type::Dynamic) {
+                *current = value;
+                return;
+            }
+            expected = current.clone();
+        }
+
+        if !value.is_assignable_to(&expected) {
+            self.errors.push(ParseError {
+                message: format!("Key type mismatch: expected {}, found {}", expected, value),
+                span: field.span,
+            });
+        }
+    }
+
+    /// Push an error for every built field not found in the struct definition
+    fn report_unknown_fields(
+        &mut self,
+        fields: &Vec<Spanned<FieldAssignment>>,
+        expected: &HashMap<String, Type>,
+    ) {
         for field in fields {
-            if !field_map.contains_key(&field.node.name) {
+            if !expected.contains_key(&field.node.name) {
                 self.errors.push(ParseError {
                     message: "No such field found".to_string(),
                     span: field.span,
                 });
             }
         }
-
-        ty
     }
 }
 

@@ -1,12 +1,25 @@
 - codegen option literals
+
   - add `__Option` class
-- type check generics
-- allow type constraints in generics
+    - add flags to codegen
+    - push `__Option` definition the first time (will probably need to do better with bundling later)
+
+- infer arg types in options, arrays, maps (if expected is not a trait)
+
+  - `?User{{name: "John"}}`
+  - `[]User{{name: "John"}, {name: "Jane"}}`
+  - `string#User{"john": {name: "John"}, "jane": {name: "Jane"}}`
+
 - member expression: `object.key`, `tuple.0`
 
-  - parsing
+  - parse `camelCase.camelCase` or `camelCase.number`
   - type check
-  - type check as sum variant
+  - codegen
+
+- variants
+
+  - parse `PascalCase.PascalCase` as sum variant
+  - type check
   - codegen
 
 - tuples expressions: `a, b`

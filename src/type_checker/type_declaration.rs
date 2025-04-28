@@ -4,7 +4,7 @@ use crate::{
     types::Type,
 };
 
-use super::TypeChecker;
+use super::{scopes::TypeMetadata, TypeChecker};
 
 impl TypeChecker {
     pub fn visit_type_declaration(&mut self, declaration: &AstNode) -> Type {
@@ -17,19 +17,28 @@ impl TypeChecker {
             panic!("Expected a type declaration");
         };
 
-        self.type_registry.current_type_params = type_params.clone();
+        if let Some(type_params) = type_params {
+            for type_param in type_params {
+                self.type_registry.define_generic(&type_param);
+            }
+        }
         let typ = match def {
             Some(def) => self.visit(&def),
             None => Type::Unknown,
         };
-        self.type_registry.current_type_params = None;
+        self.type_registry.clear_generics();
 
         match self.type_registry.lookup(&name) {
             Some(_) => self.errors.push(ParseError {
                 message: format!("Type {} already defined", name),
                 span: declaration.span,
             }),
-            None => self.type_registry.define(&name, typ),
+            None => {
+                let metadata = type_params.clone().map(|params| TypeMetadata {
+                    type_params: params,
+                });
+                self.type_registry.define(&name, typ, metadata);
+            }
         }
 
         Type::Void

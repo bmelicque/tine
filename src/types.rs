@@ -10,7 +10,10 @@ pub enum Type {
         params: Vec<Type>,
         return_type: Box<Type>,
     },
-    Named(String),
+    Named {
+        name: String,
+        args: Vec<Type>,
+    },
     Array(Box<Type>),
     Struct {
         fields: Vec<StructField>,
@@ -22,10 +25,6 @@ pub enum Type {
         methods: Vec<TraitMethod>,
     },
     Tuple(Vec<Type>),
-    Generic {
-        name: String,
-        args: Vec<Type>,
-    },
     Map {
         key: Box<Type>,
         value: Box<Type>,
@@ -36,9 +35,9 @@ pub enum Type {
         error: Option<Box<Type>>,
         ok: Box<Type>,
     },
-    Dynamic,              // Represents a type that will have to be inferred later
-    GenericParam(String), // Represents a generic type parameter
-    SelfType,             // Represents the current type in a method context
+    Dynamic,         // Represents a type that will have to be inferred later
+    Generic(String), // Represents a generic type parameter
+    SelfType,        // Represents the current type in a method context
 
     Unknown,
 }
@@ -90,7 +89,18 @@ impl fmt::Display for Type {
                     .join(", ");
                 write!(f, "({}) => {}", params_str, return_type)
             }
-            Type::Named(name) => write!(f, "{}", name),
+            Type::Named { name, args } => {
+                if args.len() > 0 {
+                    let args_str = args
+                        .iter()
+                        .map(|a| a.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    write!(f, "{}[{}]", name, args_str)
+                } else {
+                    write!(f, "{}", name)
+                }
+            }
             Type::Array(inner) => write!(f, "[]{}", inner),
             Type::Struct { fields } => {
                 let fields_str = fields
@@ -124,14 +134,6 @@ impl fmt::Display for Type {
                     .join(", ");
                 write!(f, "({})", types_str)
             }
-            Type::Generic { name, args } => {
-                let args_str = args
-                    .iter()
-                    .map(|a| a.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                write!(f, "{}[{}]", name, args_str)
-            }
             Type::Map { key, value } => write!(f, "{}#{}", key, value),
             Type::Option(inner) => write!(f, "?{}", inner),
             Type::Reference(inner) => write!(f, "&{}", inner),
@@ -143,7 +145,7 @@ impl fmt::Display for Type {
                 }
             }
             Type::Dynamic => write!(f, "any"),
-            Type::GenericParam(name) => write!(f, "{}", name),
+            Type::Generic(name) => write!(f, "{}", name),
             Type::SelfType => write!(f, "Self"),
             Type::Unknown => write!(f, "unknown"),
         }
