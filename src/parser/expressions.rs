@@ -1,6 +1,9 @@
 use pest::iterators::Pair;
 
-use crate::ast::{Node, Spanned};
+use crate::{
+    ast::{Node, Spanned},
+    parser::utils::merge_span,
+};
 
 use super::{
     composite_literals::parse_composite_literal,
@@ -24,7 +27,7 @@ pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
         Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
             parse_binary_ltr_expression(pair)
         }
-        Rule::exponentiation => parse_binary_ltr_expression(pair),
+        Rule::exponentiation => parse_exponentiation(pair),
         Rule::value_identifier => ParseResult {
             node: Some(Spanned {
                 node: Node::Identifier(pair.as_str().to_string()),
@@ -114,6 +117,31 @@ fn parse_binary_ltr_expression(pair: Pair<'static, Rule>) -> ParseResult {
     }
 
     ParseResult { node: left, errors }
+}
+
+fn parse_exponentiation(pair: Pair<'static, Rule>) -> ParseResult {
+    assert!(pair.as_rule() == Rule::exponentiation);
+    let mut node = None;
+    let mut errors = Vec::new();
+    for sub_pair in pair.into_inner().rev() {
+        let left_span = sub_pair.as_span();
+        let result = parse_expression(sub_pair);
+        errors.extend(result.errors);
+        if node.is_none() {
+            node = result.node;
+            continue;
+        }
+        let right_span = node.clone().unwrap().span;
+        node = Some(Spanned {
+            node: Node::BinaryExpression {
+                left: result.node.map(Box::new),
+                operator: "**".into(),
+                right: node.map(Box::new),
+            },
+            span: merge_span(left_span, right_span),
+        });
+    }
+    ParseResult { node, errors }
 }
 
 #[cfg(test)]
