@@ -2,7 +2,7 @@ use std::error::Error;
 
 use crate::{
     ast::Node,
-    codegen::{expressions::node_to_swc_expr, CodeGenerator},
+    codegen::{expressions::node_to_swc_expr, utils::create_ident, CodeGenerator},
 };
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as ast;
@@ -42,11 +42,7 @@ pub fn type_declaration_to_swc_decl(
     };
     let declaration = ast::ClassDecl {
         declare: false,
-        ident: ast::Ident {
-            span: DUMMY_SP,
-            sym: name.clone().into(),
-            optional: false,
-        },
+        ident: create_ident(&name),
         class: Box::new(ast::Class {
             span: DUMMY_SP,
             body,

@@ -1,6 +1,6 @@
 use crate::{
     ast::{Spanned, StructField},
-    codegen::{expressions::node_to_swc_expr, CodeGenerator},
+    codegen::{expressions::node_to_swc_expr, utils::create_ident, CodeGenerator},
 };
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as ast;
@@ -29,11 +29,7 @@ pub fn struct_to_swc_constructor(
 
     ast::Constructor {
         span: DUMMY_SP,
-        key: ast::PropName::Ident(ast::Ident {
-            span: DUMMY_SP,
-            sym: "constructor".into(),
-            optional: false,
-        }),
+        key: create_ident("constructor").into(),
         is_optional: false,
         params,
         body: Some(ast::BlockStmt {
@@ -60,11 +56,7 @@ fn struct_field_to_swc_param<'a>(
             ast::Pat::Assign(ast::AssignPat {
                 span: DUMMY_SP,
                 left: Box::new(ast::Pat::Ident(ast::BindingIdent {
-                    id: ast::Ident {
-                        span: DUMMY_SP,
-                        sym: field.name.clone().into(),
-                        optional: false,
-                    },
+                    id: create_ident(&field.name),
                     type_ann: None,
                 })),
                 right: Box::new(node_to_swc_expr(
@@ -74,11 +66,7 @@ fn struct_field_to_swc_param<'a>(
             })
         } else {
             ast::Pat::Ident(ast::BindingIdent {
-                id: ast::Ident {
-                    span: DUMMY_SP,
-                    sym: field.name.clone().into(),
-                    optional: false,
-                },
+                id: create_ident(&field.name),
                 type_ann: None,
             })
         };

@@ -18,5 +18,3 @@
 - for loops
 - handle return in functions (check nested blocks)
 - function call
-
-- adjust reserved names (`function`, `let`, etc.) when transpiling

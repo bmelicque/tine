@@ -6,7 +6,8 @@ use crate::ast::Node;
 
 use super::{
     expressions::node_to_swc_expr,
-    type_declaration::type_declaration::type_declaration_to_swc_decl, CodeGenerator,
+    type_declaration::type_declaration::type_declaration_to_swc_decl, utils::create_ident,
+    CodeGenerator,
 };
 
 pub fn node_to_swc_stmt(
@@ -29,11 +30,7 @@ pub fn node_to_swc_stmt(
             let decl = ast::VarDeclarator {
                 span: DUMMY_SP,
                 name: ast::Pat::Ident(ast::BindingIdent {
-                    id: ast::Ident {
-                        span: DUMMY_SP,
-                        sym: name.unwrap().into(),
-                        optional: false,
-                    },
+                    id: create_ident(&name.unwrap()),
                     type_ann: None,
                 }),
                 init,
@@ -67,11 +64,7 @@ pub fn node_to_swc_stmt(
                 panic!("Missing variable name in assignment.");
             };
 
-            let swc_name = ast::Ident {
-                span: DUMMY_SP,
-                sym: name.into(),
-                optional: false,
-            };
+            let swc_name = create_ident(&name);
 
             let swc_assignee = ast::Expr::Ident(swc_name);
 

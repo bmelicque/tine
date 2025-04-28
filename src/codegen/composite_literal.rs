@@ -8,6 +8,8 @@ use crate::{
     codegen::{expressions::node_to_swc_expr, CodeGenerator},
 };
 
+use super::utils::create_ident;
+
 pub fn array_literal_to_swc_array(
     generator: &CodeGenerator,
     elements: Vec<AstNode>,
@@ -42,11 +44,7 @@ pub fn map_literal_to_swc_new_map(
         .collect::<Vec<_>>();
     ast::NewExpr {
         span: DUMMY_SP,
-        callee: Box::new(ast::Expr::Ident(ast::Ident {
-            span: DUMMY_SP,
-            sym: "Map".into(),
-            optional: false,
-        })),
+        callee: Box::new(create_ident("Map").into()),
         args: Some(vec![ast::ExprOrSpread {
             spread: None,
             expr: Box::new(ast::Expr::Array(ast::ArrayLit {
@@ -67,11 +65,7 @@ pub fn struct_literal_to_swc_new_expr(
     let swc_args = get_sorted_args(generator, &name, fields);
     ast::NewExpr {
         span: DUMMY_SP,
-        callee: Box::new(ast::Expr::Ident(ast::Ident {
-            span: DUMMY_SP,
-            sym: name.into(),
-            optional: false,
-        })),
+        callee: Box::new(create_ident(&name).into()),
         args: Some(swc_args),
         type_args: None,
     }

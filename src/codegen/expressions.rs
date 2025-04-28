@@ -10,6 +10,7 @@ use super::{
     composite_literal::{
         array_literal_to_swc_array, map_literal_to_swc_new_map, struct_literal_to_swc_new_expr,
     },
+    utils::create_ident,
     CodeGenerator,
 };
 
@@ -95,11 +96,7 @@ pub fn node_to_swc_expr(generator: &CodeGenerator, node: Node) -> Expr {
             fields,
         } => struct_literal_to_swc_new_expr(generator, struct_type.node, fields).into(),
 
-        Node::Identifier(name) => Expr::Ident(Ident {
-            span: DUMMY_SP,
-            sym: name.into(),
-            optional: false,
-        }),
+        Node::Identifier(name) => create_ident(&name).into(),
         Node::StringLiteral(value) => Expr::Lit(Lit::Str(Str {
             span: DUMMY_SP,
             value: value.into(),

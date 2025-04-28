@@ -1,16 +1,14 @@
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as ast;
 
+use crate::codegen::utils::create_ident;
+
 pub fn name_to_swc_param(name: &str) -> ast::ParamOrTsParamProp {
     ast::ParamOrTsParamProp::Param(ast::Param {
         span: DUMMY_SP,
         decorators: vec![],
         pat: ast::Pat::Ident(ast::BindingIdent {
-            id: ast::Ident {
-                span: DUMMY_SP,
-                sym: name.into(),
-                optional: false,
-            },
+            id: create_ident(name),
             type_ann: None,
         }),
     })
@@ -26,17 +24,9 @@ pub fn this_assignment(field_name: &str) -> ast::Stmt {
             left: ast::PatOrExpr::Expr(Box::new(ast::Expr::Member(ast::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(ast::Expr::This(ast::ThisExpr { span: DUMMY_SP })),
-                prop: ast::MemberProp::Ident(ast::Ident {
-                    span: DUMMY_SP,
-                    sym: field_name.into(),
-                    optional: false,
-                }),
+                prop: create_ident(field_name).into(),
             }))),
-            right: Box::new(ast::Expr::Ident(ast::Ident {
-                span: DUMMY_SP,
-                sym: field_name.into(),
-                optional: false,
-            })),
+            right: Box::new(create_ident(field_name).into()),
         })),
     })
 }

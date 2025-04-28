@@ -1,4 +1,7 @@
-use crate::ast::{Node, Spanned, StructField, SumTypeConstructor};
+use crate::{
+    ast::{Node, Spanned, StructField, SumTypeConstructor},
+    codegen::utils::create_ident,
+};
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as ast;
 
@@ -11,11 +14,7 @@ pub fn sum_def_swc_constructor(variants: Vec<SumTypeConstructor>) -> ast::Constr
     };
     ast::Constructor {
         span: DUMMY_SP,
-        key: ast::PropName::Ident(ast::Ident {
-            span: DUMMY_SP,
-            sym: "constructor".into(),
-            optional: false,
-        }),
+        key: create_ident("constructor").into(),
         is_optional: false,
         params: vec![name_to_swc_param("__"), get_sum_values_param()],
         body: Some(ast::BlockStmt {
@@ -33,11 +32,7 @@ fn get_sum_values_param() -> ast::ParamOrTsParamProp {
         pat: ast::Pat::Rest(ast::RestPat {
             span: DUMMY_SP,
             arg: Box::new(ast::Pat::Ident(ast::BindingIdent {
-                id: ast::Ident {
-                    span: DUMMY_SP,
-                    sym: "values".into(),
-                    optional: false,
-                },
+                id: create_ident("values"),
                 type_ann: None,
             })),
             dot3_token: DUMMY_SP,
@@ -57,11 +52,7 @@ fn variants_to_swc_switch(variants: Vec<SumTypeConstructor>) -> Option<ast::Swit
     }
     Some(ast::SwitchStmt {
         span: DUMMY_SP,
-        discriminant: Box::new(ast::Expr::Ident(ast::Ident {
-            span: DUMMY_SP,
-            sym: "__".into(),
-            optional: false,
-        })),
+        discriminant: Box::new(create_ident("__").into()),
         cases,
     })
 }
@@ -114,19 +105,11 @@ fn this_assignement_from_values(name: &str, index: f64) -> ast::Stmt {
             left: ast::PatOrExpr::Expr(Box::new(ast::Expr::Member(ast::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(ast::Expr::This(ast::ThisExpr { span: DUMMY_SP })),
-                prop: ast::MemberProp::Ident(ast::Ident {
-                    span: DUMMY_SP,
-                    sym: name.into(),
-                    optional: false,
-                }),
+                prop: create_ident(name).into(),
             }))),
             right: Box::new(ast::Expr::Member(ast::MemberExpr {
                 span: DUMMY_SP,
-                obj: Box::new(ast::Expr::Ident(ast::Ident {
-                    span: DUMMY_SP,
-                    sym: "values".into(),
-                    optional: false,
-                })),
+                obj: Box::new(create_ident(name).into()),
                 prop: ast::MemberProp::Computed(ast::ComputedPropName {
                     span: DUMMY_SP,
                     expr: Box::new(ast::Expr::Lit(ast::Lit::Num(ast::Number {
