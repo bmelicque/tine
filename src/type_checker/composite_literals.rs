@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::{
     ast::{AstNode, FieldAssignment, Node, Spanned},
     parser::parser::ParseError,
-    types::Type,
+    types::{StructField, Type},
 };
 
 use super::{scopes::TypeRegistry, TypeChecker};
@@ -28,7 +28,7 @@ impl TypeChecker {
             let entry_key = self.visit(&entry.node.key);
             let entry_value = self.visit(&entry.node.value);
 
-            match check_dynamic_type(&entry_key, &key) {
+            match self.check_dynamic_type(&entry_key, &key) {
                 Ok(ty) => key = ty,
                 Err(message) => {
                     self.errors.push(ParseError {
@@ -38,7 +38,7 @@ impl TypeChecker {
                 }
             }
 
-            match check_dynamic_type(&entry_value, &value) {
+            match self.check_dynamic_type(&entry_value, &value) {
                 Ok(ty) => value = ty,
                 Err(message) => {
                     self.errors.push(ParseError {
@@ -64,7 +64,7 @@ impl TypeChecker {
 
         if let Some(value) = value {
             let value_ty = self.visit(value);
-            match check_dynamic_type(&value_ty, &inner) {
+            match self.check_dynamic_type(&value_ty, &inner) {
                 Ok(ty) => inner = ty,
                 Err(message) => {
                     self.errors.push(ParseError {
@@ -102,7 +102,7 @@ impl TypeChecker {
 
         for value in elements {
             let value_ty = self.visit(value);
-            match check_dynamic_type(&value_ty, &inner) {
+            match self.check_dynamic_type(&value_ty, &inner) {
                 Ok(ty) => inner = ty,
                 Err(message) => {
                     self.errors.push(ParseError {
@@ -128,6 +128,10 @@ impl TypeChecker {
         let Node::AnonymousArrayLiteral(ref elements) = spanned.node else {
             panic!("Expected an option type");
         };
+
+        if elements.len() == 0 {
+            return Type::Dynamic;
+        }
 
         let mut ty = Type::Dynamic;
         for value in elements {
@@ -195,6 +199,28 @@ impl TypeChecker {
         ty
     }
 
+    pub fn visit_anonymous_struct_literal(&mut self, struct_literal: &AstNode) -> Type {
+        let Node::AnonymousStructLiteral(ref fields) = struct_literal.node else {
+            panic!("Expected a struct literal");
+        };
+
+        let mut type_fields = Vec::<StructField>::new();
+
+        for field in fields {
+            let name = field.node.name.clone();
+            let def = self.visit(&field.node.value);
+            type_fields.push(StructField {
+                name,
+                def,
+                optional: true,
+            })
+        }
+
+        Type::Struct {
+            fields: type_fields,
+        }
+    }
+
     fn visit_field_assignment(
         &mut self,
         field: &Spanned<FieldAssignment>,
@@ -244,20 +270,5 @@ impl TypeChecker {
                 });
             }
         }
-    }
-}
-
-fn check_dynamic_type(ty: &Type, expected: &Type) -> Result<Box<Type>, String> {
-    if matches!(ty, Type::Dynamic) {
-        return Ok(Box::new(expected.clone()));
-    }
-
-    if ty.is_assignable_to(expected) {
-        Ok(Box::new(expected.clone()))
-    } else {
-        Err(format!(
-            "Key type mismatch: expected {}, found {}",
-            expected, ty
-        ))
     }
 }

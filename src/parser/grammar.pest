@@ -36,14 +36,14 @@ type_element = { function_type | binary_type | unary_type | primary_type }
 
 // TODO: variants:      Sum.Variant{}
 // Composite literals
-composite_literal = { map_literal | struct_literal | array_literal | option_literal | array_literal_body }
+composite_literal = { map_literal | struct_literal | array_literal | option_literal }
 map_literal = { map_type ~ "{" ~ NEWLINE? ~ map_body ~ NEWLINE? ~ "}" }
 map_body = { (map_entry? ~ ((","|NEWLINE) ~ map_entry)*)? }
 map_entry = { map_key ~ ":" ~ anonymous_expression }
 map_key = { string_literal | number_literal | "[" ~ expression ~ "]" }
 array_literal = { array_type ~ array_literal_body }
 array_literal_body = { "{" ~ NEWLINE? ~ (anonymous_expression ~ ((","|NEWLINE) ~ anonymous_expression )*)? ~ NEWLINE? ~ "}" }
-option_literal = { option_type ~ "{" ~ NEWLINE? ~ (expression ~ NEWLINE?)? ~ "}" }
+option_literal = { option_type ~ "{" ~ NEWLINE? ~ (anonymous_expression ~ NEWLINE?)? ~ "}" }
 struct_literal = { generic_type ~ struct_literal_body }
 struct_literal_body = { "{" ~ NEWLINE? ~ (field_assignment ~ ((","|NEWLINE) ~ field_assignment)*)?  ~ NEWLINE? ~ "}" }
 field_assignment = { value_identifier ~ ":" ~ expression }

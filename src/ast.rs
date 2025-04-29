@@ -109,6 +109,7 @@ pub enum Node {
         struct_type: Box<AstNode>,
         fields: Vec<Spanned<FieldAssignment>>,
     },
+    AnonymousStructLiteral(Vec<Spanned<FieldAssignment>>),
 }
 
 #[derive(Debug, Clone, PartialEq)]

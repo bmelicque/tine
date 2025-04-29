@@ -15,7 +15,7 @@ pub fn parse_composite_literal(pair: Pair<'static, Rule>) -> ParseResult {
         Rule::array_literal => parse_array_literal(pair),
         Rule::option_literal => parse_option_literal(pair),
         Rule::struct_literal => parse_struct_literal(pair),
-        Rule::array_literal_body => parse_anonymous_array_literal(pair),
+
         _ => panic!("Not implemented, got rule: {:?}", pair.as_rule()),
     }
 }
@@ -99,7 +99,7 @@ fn parse_array_literal(pair: Pair<'static, Rule>) -> ParseResult {
     }
 }
 
-fn parse_anonymous_array_literal(pair: Pair<'static, Rule>) -> ParseResult {
+pub fn parse_anonymous_array_literal(pair: Pair<'static, Rule>) -> ParseResult {
     assert!(pair.as_rule() == Rule::array_literal_body);
     let span = pair.as_span();
     let result = parse_array_literal_body(pair.into_inner().next().unwrap());
@@ -174,6 +174,20 @@ fn parse_struct_literal(pair: Pair<'static, Rule>) -> ParseResult {
                 struct_type: Box::new(struct_type.node.unwrap()),
                 fields,
             },
+            span,
+        }),
+        errors,
+    }
+}
+
+pub fn parse_anonymous_struct_literal(pair: Pair<'static, Rule>) -> ParseResult {
+    assert!(pair.as_rule() == Rule::struct_literal_body);
+    let span = pair.as_span();
+    let (fields, errors) = parse_struct_instance_body(pair.into_inner().next().unwrap());
+
+    ParseResult {
+        node: Some(Spanned {
+            node: Node::AnonymousStructLiteral(fields),
             span,
         }),
         errors,

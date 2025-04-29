@@ -6,7 +6,9 @@ use crate::{
 };
 
 use super::{
-    composite_literals::parse_composite_literal,
+    composite_literals::{
+        parse_anonymous_array_literal, parse_anonymous_struct_literal, parse_composite_literal,
+    },
     parser::{ParseError, ParseResult, Rule},
 };
 
@@ -22,6 +24,8 @@ pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
             }
         }
         Rule::composite_literal => parse_composite_literal(pair),
+        Rule::array_literal_body => parse_anonymous_array_literal(pair),
+        Rule::struct_literal_body => parse_anonymous_struct_literal(pair),
         Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
             parse_binary_ltr_expression(pair)
         }

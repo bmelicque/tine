@@ -1,9 +1,3 @@
-- infer arg types in options, arrays, maps (if expected is not a trait)
-
-  - `?User{{name: "John"}}`
-  - `[]User{{name: "John"}, {name: "Jane"}}`
-  - `string#User{"john": {name: "John"}, "jane": {name: "Jane"}}`
-
 - member expression: `object.key`, `tuple.0`
 
   - parse `camelCase.camelCase` or `camelCase.number`
