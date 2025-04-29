@@ -1,9 +1,3 @@
-- codegen option literals
-
-  - add `__Option` class
-    - add flags to codegen
-    - push `__Option` definition the first time (will probably need to do better with bundling later)
-
 - infer arg types in options, arrays, maps (if expected is not a trait)
 
   - `?User{{name: "John"}}`
