@@ -86,18 +86,18 @@ impl TypeChecker {
         Type::Option(inner)
     }
 
-    pub fn visit_array_literal(&mut self, option: &AstNode) -> Type {
+    pub fn visit_array_literal(&mut self, array: &AstNode) -> Type {
         let Node::ArrayLiteral {
             ref ty,
             ref elements,
-        } = option.node
+        } = array.node
         else {
-            panic!("Expected an option type");
+            panic!("Expected an array literal");
         };
 
         let ty = self.visit(ty);
-        let Type::Option(mut inner) = ty else {
-            panic!("Expected an option type");
+        let Type::Array(mut inner) = ty else {
+            panic!("Expected an array type");
         };
 
         for value in elements {
@@ -116,12 +116,35 @@ impl TypeChecker {
         if matches!(inner.as_ref(), Type::Dynamic) {
             self.errors.push(ParseError {
                 message: "Cannot infer type".to_string(),
-                span: option.span,
+                span: array.span,
             });
             inner = Box::new(Type::Unknown);
         }
 
         Type::Array(inner)
+    }
+
+    pub fn visit_anonymous_array_literal(&mut self, spanned: &AstNode) -> Type {
+        let Node::AnonymousArrayLiteral(ref elements) = spanned.node else {
+            panic!("Expected an option type");
+        };
+
+        let mut ty = Type::Dynamic;
+        for value in elements {
+            let value_ty = self.visit(value);
+            if ty == Type::Dynamic {
+                ty = value_ty;
+                continue;
+            }
+            if !value_ty.is_assignable_to(&ty) {
+                self.errors.push(ParseError {
+                    message: format!("Key type mismatch: expected {}, found {}", ty, value_ty),
+                    span: value.span,
+                })
+            }
+        }
+
+        Type::Array(Box::new(ty))
     }
 
     pub fn visit_struct_literal(&mut self, struct_literal: &AstNode) -> Type {

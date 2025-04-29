@@ -5,7 +5,7 @@ use super::{
     parser::{ParseError, ParseResult, Rule},
     types::parse_type,
 };
-use crate::ast::{FieldAssignment, MapEntry, Node, Spanned};
+use crate::ast::{AstNode, FieldAssignment, MapEntry, Node, Spanned};
 
 pub fn parse_composite_literal(pair: Pair<'static, Rule>) -> ParseResult {
     assert!(pair.as_rule() == Rule::composite_literal);
@@ -15,6 +15,7 @@ pub fn parse_composite_literal(pair: Pair<'static, Rule>) -> ParseResult {
         Rule::array_literal => parse_array_literal(pair),
         Rule::option_literal => parse_option_literal(pair),
         Rule::struct_literal => parse_struct_literal(pair),
+        Rule::array_literal_body => parse_anonymous_array_literal(pair),
         _ => panic!("Not implemented, got rule: {:?}", pair.as_rule()),
     }
 }
@@ -82,14 +83,9 @@ fn parse_array_literal(pair: Pair<'static, Rule>) -> ParseResult {
     let type_result = parse_type(inner.next().unwrap());
     errors.extend(type_result.errors);
 
-    let mut elements = Vec::new();
-    while let Some(element_pair) = inner.next() {
-        let result = parse_expression(element_pair);
-        if let Some(expr) = result.node {
-            elements.push(expr);
-        }
-        errors.extend(result.errors);
-    }
+    let result = parse_array_literal_body(inner.next().unwrap());
+    let elements = result.0;
+    errors.extend(result.1);
 
     ParseResult {
         node: Some(Spanned {
@@ -101,6 +97,33 @@ fn parse_array_literal(pair: Pair<'static, Rule>) -> ParseResult {
         }),
         errors,
     }
+}
+
+fn parse_anonymous_array_literal(pair: Pair<'static, Rule>) -> ParseResult {
+    assert!(pair.as_rule() == Rule::array_literal_body);
+    let span = pair.as_span();
+    let result = parse_array_literal_body(pair.into_inner().next().unwrap());
+    ParseResult {
+        node: Some(Spanned {
+            node: Node::AnonymousArrayLiteral(result.0),
+            span,
+        }),
+        errors: result.1,
+    }
+}
+
+fn parse_array_literal_body(pair: Pair<'static, Rule>) -> (Vec<AstNode>, Vec<ParseError>) {
+    assert!(pair.as_rule() == Rule::array_literal_body);
+    let mut errors = Vec::new();
+    let mut elements = Vec::new();
+    for element_pair in pair.into_inner() {
+        let result = parse_expression(element_pair);
+        if let Some(expr) = result.node {
+            elements.push(expr);
+        }
+        errors.extend(result.errors);
+    }
+    (elements, errors)
 }
 
 fn parse_option_literal(pair: Pair<'static, Rule>) -> ParseResult {

@@ -200,6 +200,7 @@ impl TypeChecker {
             Node::MapLiteral { .. } => self.visit_map_literal(node),
             Node::OptionLiteral { .. } => self.visit_option_literal(node),
             Node::ArrayLiteral { .. } => self.visit_array_literal(node),
+            Node::AnonymousArrayLiteral { .. } => self.visit_anonymous_array_literal(node),
             Node::StructLiteral { .. } => self.visit_struct_literal(node),
 
             Node::GenericType { .. } => self.visit_generic_type(node),

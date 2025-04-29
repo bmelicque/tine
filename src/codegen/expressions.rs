@@ -81,7 +81,9 @@ impl CodeGenerator {
             ),
 
             Node::MapLiteral { entries, .. } => self.map_literal_to_swc_new_map(entries).into(),
-            Node::ArrayLiteral { elements, .. } => self.array_literal_to_swc_array(elements).into(),
+            Node::ArrayLiteral { elements, .. } | Node::AnonymousArrayLiteral(elements) => {
+                self.array_literal_to_swc_array(elements).into()
+            }
             Node::OptionLiteral { value, .. } => {
                 self.option_literal_to_swc_new_option(value).into()
             }

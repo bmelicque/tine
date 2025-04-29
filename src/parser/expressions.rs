@@ -14,13 +14,11 @@ pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
     let span = pair.as_span().clone();
 
     match pair.as_rule() {
-        Rule::expression | Rule::primary | Rule::type_annotation => {
-            match pair.into_inner().next() {
-                Some(inner) => parse_expression(inner),
-                None => ParseResult {
-                    node: None,
-                    errors: vec![],
-                },
+        Rule::anonymous_expression | Rule::expression | Rule::primary | Rule::type_annotation => {
+            if let Some(inner) = pair.into_inner().next() {
+                parse_expression(inner)
+            } else {
+                ParseResult::empty()
             }
         }
         Rule::composite_literal => parse_composite_literal(pair),

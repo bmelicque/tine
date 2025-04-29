@@ -100,6 +100,7 @@ pub enum Node {
         ty: Box<AstNode>,
         elements: Vec<AstNode>,
     },
+    AnonymousArrayLiteral(Vec<AstNode>),
     OptionLiteral {
         ty: Box<AstNode>,
         value: Option<Box<AstNode>>,
