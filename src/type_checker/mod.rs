@@ -1,4 +1,5 @@
 mod composite_literals;
+mod expressions;
 mod function_expression;
 mod scopes;
 mod type_checker;

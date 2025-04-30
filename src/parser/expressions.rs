@@ -37,6 +37,8 @@ pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
             }),
             errors: vec![],
         },
+        Rule::member_expression => parse_member_expression(pair),
+        Rule::tuple_indexing => parse_tuple_indexing(pair),
         Rule::string_literal => {
             let value = pair.as_str();
             ParseResult {
@@ -144,6 +146,52 @@ fn parse_exponentiation(pair: Pair<'static, Rule>) -> ParseResult {
         });
     }
     ParseResult { node, errors }
+}
+
+fn parse_member_expression(pair: Pair<'static, Rule>) -> ParseResult {
+    assert!(pair.as_rule() == Rule::member_expression);
+    let mut node = None;
+    let mut errors = Vec::new();
+    for sub_pair in pair.into_inner() {
+        let right_span = sub_pair.as_span();
+        let result = parse_expression(sub_pair);
+        errors.extend(result.errors);
+        if node.is_none() {
+            node = result.node;
+            continue;
+        }
+        let left_span = node.clone().unwrap().span;
+        node = Some(Spanned {
+            node: Node::MemberExpression {
+                expr: node.map(Box::new),
+                identifier: Box::new(result.node.unwrap()),
+            },
+            span: merge_span(left_span, right_span),
+        });
+    }
+    ParseResult { node, errors }
+}
+
+fn parse_tuple_indexing(pair: Pair<'static, Rule>) -> ParseResult {
+    assert!(pair.as_rule() == Rule::tuple_indexing);
+    let span = pair.as_span();
+    let mut inner = pair.into_inner();
+
+    let result = parse_expression(inner.next().unwrap());
+    let mut errors = result.errors;
+    let expr = result.node.map(Box::new);
+
+    let result = parse_expression(inner.next().unwrap());
+    errors.extend(result.errors);
+    let index = Box::new(result.node.unwrap());
+
+    ParseResult {
+        node: Some(Spanned {
+            node: Node::TupleIndexing { expr, index },
+            span,
+        }),
+        errors,
+    }
 }
 
 #[cfg(test)]

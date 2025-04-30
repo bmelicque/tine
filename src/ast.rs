@@ -90,6 +90,14 @@ pub enum Node {
     StringLiteral(String),
     NumberLiteral(f64),
     BooleanLiteral(bool),
+    MemberExpression {
+        expr: Option<Box<AstNode>>,
+        identifier: Box<AstNode>, // Identifier
+    },
+    TupleIndexing {
+        expr: Option<Box<AstNode>>,
+        index: Box<AstNode>, // NumberLiteral
+    },
 
     // Instances
     MapLiteral {

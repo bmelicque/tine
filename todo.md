@@ -1,4 +1,10 @@
-- member expression: `object.key`, `tuple.0`
+- member expression: `tuple.index`
+
+  - parse `camelCase.number`
+  - type check
+  - codegen
+
+- member expression: `object.key`
 
   - parse `camelCase.camelCase` or `camelCase.number`
   - type check

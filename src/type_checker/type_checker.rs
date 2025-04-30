@@ -204,6 +204,12 @@ impl TypeChecker {
             Node::StructLiteral { .. } => self.visit_struct_literal(node),
             Node::AnonymousStructLiteral(_) => self.visit_anonymous_struct_literal(node),
 
+            Node::MemberExpression { .. } => self.visit_member_expression(node),
+            Node::TupleIndexing { .. } => {
+                // FIXME:
+                Type::Unknown
+            }
+
             Node::GenericType { .. } => self.visit_generic_type(node),
             Node::OptionType(_) => self.visit_option_type(node),
             Node::ReferenceType(_) => self.visit_reference_type(node),

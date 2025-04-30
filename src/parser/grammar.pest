@@ -61,6 +61,8 @@ multiplication = { exponentiation? ~ (mul_op ~ exponentiation?)* }
 mul_op = { "*" | "/" | "%" }
 exponentiation = { primary? ~ ("**" ~ primary?)* }
 primary = {  string_literal | number_literal | boolean_literal | value_identifier | function_expression | "(" ~ expression ~ ")" }
+tuple_indexing = { (member_expression|value_identifier|"(" ~ expression ~ ")") ~ "." ~ number_literal }
+member_expression = { value_identifier ~ ("." ~ value_identifier)+ }
 
 function_expression = { parameter_list? ~ "=>" ~ (function_body | expression)? }
 function_body = { type_annotation? ~ block }
