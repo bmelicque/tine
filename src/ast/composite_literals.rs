@@ -15,6 +15,19 @@ pub enum CompositeLiteral {
     AnonymousStruct(AnonymousStructLiteral),
 }
 
+impl CompositeLiteral {
+    pub fn as_span(&self) -> Span<'static> {
+        match self {
+            Self::AnonymousArray(c) => c.span,
+            Self::AnonymousStruct(c) => c.span,
+            Self::Array(c) => c.span,
+            Self::Map(c) => c.span,
+            Self::Option(c) => c.span,
+            Self::Struct(c) => c.span,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MapLiteral {
     pub span: Span<'static>,
@@ -30,6 +43,7 @@ impl Into<CompositeLiteral> for MapLiteral {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MapEntry {
+    pub span: Span<'static>,
     pub key: Box<Expression>,
     pub value: Box<ExpressionOrAnonymous>,
 }
@@ -38,7 +52,7 @@ pub struct MapEntry {
 pub struct ArrayLiteral {
     pub span: Span<'static>,
     pub ty: ArrayType,
-    pub entries: Vec<ExpressionOrAnonymous>,
+    pub elements: Vec<ExpressionOrAnonymous>,
 }
 
 impl Into<CompositeLiteral> for ArrayLiteral {
@@ -50,7 +64,7 @@ impl Into<CompositeLiteral> for ArrayLiteral {
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnonymousArrayLiteral {
     pub span: Span<'static>,
-    pub entries: Vec<ExpressionOrAnonymous>,
+    pub elements: Vec<ExpressionOrAnonymous>,
 }
 
 impl Into<CompositeLiteral> for AnonymousArrayLiteral {
@@ -101,7 +115,7 @@ impl Into<CompositeLiteral> for AnonymousStructLiteral {
 pub struct StructLiteralField {
     pub span: Span<'static>,
     pub prop: String,
-    pub value: ExpressionOrAnonymous,
+    pub value: Expression,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,6 +123,16 @@ pub enum ExpressionOrAnonymous {
     Expression(Expression),
     Array(AnonymousArrayLiteral),
     Struct(AnonymousStructLiteral),
+}
+
+impl ExpressionOrAnonymous {
+    pub fn as_span(&self) -> Span<'static> {
+        match self {
+            Self::Array(array) => array.span.clone(),
+            Self::Expression(expr) => expr.as_span(),
+            Self::Struct(s) => s.span.clone(),
+        }
+    }
 }
 
 impl From<Expression> for ExpressionOrAnonymous {

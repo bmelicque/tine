@@ -1,124 +1,129 @@
 use crate::{
-    ast::{AstNode, Node},
+    ast::{self, StructDefinitionField},
     parser::parser::ParseError,
-    types::Type,
+    types::{StructField, SumVariant, TraitMethod, Type},
 };
 
 use super::{scopes::TypeMetadata, TypeChecker};
 
 impl TypeChecker {
-    pub fn visit_type_declaration(&mut self, declaration: &AstNode) -> Type {
-        let Node::TypeDeclaration {
-            ref name,
-            ref type_params,
-            ref def,
-        } = declaration.node
-        else {
-            panic!("Expected a type declaration");
-        };
-
-        if let Some(type_params) = type_params {
+    pub fn visit_type_declaration(&mut self, node: &ast::TypeAlias) -> Type {
+        if let Some(ref type_params) = node.params {
             for type_param in type_params {
                 self.type_registry.define_generic(&type_param);
             }
         }
-        let typ = match def {
-            Some(def) => self.visit(&def),
-            None => Type::Unknown,
-        };
+        let ty = self.visit_type_definition(&node.definition);
         self.type_registry.clear_generics();
 
-        match self.type_registry.lookup(&name) {
+        let name = &node.name;
+        match self.type_registry.lookup(name) {
             Some(_) => self.errors.push(ParseError {
                 message: format!("Type {} already defined", name),
-                span: declaration.span,
+                span: node.span,
             }),
             None => {
-                let metadata = type_params.clone().map(|params| TypeMetadata {
+                let metadata = node.params.clone().map(|params| TypeMetadata {
                     type_params: params,
                 });
-                self.type_registry.define(&name, typ, metadata);
+                self.type_registry.define(&name, ty, metadata);
             }
         }
 
         Type::Void
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ast::{Node, Spanned};
-    use crate::types::Type;
-    use pest::Span;
-
-    fn dummy_span() -> Span<'static> {
-        Span::new("dummy", 0, 5).unwrap()
-    }
-
-    fn spanned(node: Node) -> AstNode {
-        Spanned {
-            node,
-            span: dummy_span(),
+    fn visit_type_definition(&mut self, node: &ast::TypeDefinition) -> Type {
+        match node {
+            ast::TypeDefinition::Enum(e) => self.visit_enum_definition(e),
+            ast::TypeDefinition::Struct(s) => self.visit_struct_definition(s),
+            ast::TypeDefinition::Trait(t) => self.visit_trait_definition(t),
+            ast::TypeDefinition::Type(t) => self.visit_type(t),
         }
     }
 
-    #[test]
-    fn test_valid_type_declaration() {
-        let mut checker = TypeChecker::new();
+    fn visit_enum_definition(&mut self, node: &ast::EnumDefinition) -> Type {
+        let variants = node
+            .variants
+            .iter()
+            .map(|variant| self.visit_variant_definition(variant))
+            .collect();
 
-        let type_declaration = spanned(Node::TypeDeclaration {
-            name: "MyType".to_string(),
-            type_params: None,
-            def: Some(Box::new(spanned(Node::NamedType("number".to_string())))),
-        });
-
-        let result = checker.visit_type_declaration(&type_declaration);
-
-        assert!(checker.errors.is_empty());
-        assert_eq!(result, Type::Void);
-        assert!(
-            matches!(checker.type_registry.lookup("MyType"), Some(_)),
-            "Expected MyType to be defined in the type registry"
-        );
+        Type::Sum { variants }
     }
 
-    #[test]
-    fn test_duplicate_type_declaration() {
-        let mut checker = TypeChecker::new();
-
-        let type_declaration = spanned(Node::TypeDeclaration {
-            name: "MyType".to_string(),
-            type_params: None,
-            def: Some(Box::new(spanned(Node::NamedType("number".to_string())))),
-        });
-
-        checker.visit_type_declaration(&type_declaration);
-        checker.visit_type_declaration(&type_declaration);
-
-        assert_eq!(checker.errors.len(), 1);
-        assert!(checker.errors[0]
-            .message
-            .contains("Type MyType already defined"));
+    fn visit_variant_definition(&mut self, node: &ast::VariantDefinition) -> SumVariant {
+        let def = match node {
+            ast::VariantDefinition::Struct(s) => self.visit_struct_definition(&s.def),
+            ast::VariantDefinition::Tuple(t) => {
+                let elements = t.elements.iter().map(|el| self.visit_type(el)).collect();
+                Type::Tuple(elements)
+            }
+            ast::VariantDefinition::Unit(_) => Type::Unit,
+        };
+        SumVariant {
+            name: node.as_name(),
+            def,
+        }
     }
 
-    #[test]
-    fn test_type_declaration_with_no_definition() {
-        let mut checker = TypeChecker::new();
+    fn visit_struct_definition(&mut self, node: &ast::StructDefinition) -> Type {
+        let fields = node
+            .fields
+            .iter()
+            .map(|field| self.visit_struct_definition_field(field))
+            .collect();
+        Type::Struct { fields }
+    }
 
-        let type_declaration = spanned(Node::TypeDeclaration {
-            name: "MyType".to_string(),
-            type_params: None,
-            def: None,
-        });
+    fn visit_struct_definition_field(&mut self, field: &ast::StructDefinitionField) -> StructField {
+        let name = field.as_name();
+        let def = match field {
+            ast::StructDefinitionField::Mandatory(ref field) => self.visit_type(&field.definition),
+            ast::StructDefinitionField::Optional(field) => self.visit_expression(&field.default),
+        };
+        StructField {
+            name,
+            def,
+            optional: field.is_optional(),
+        }
+    }
 
-        let result = checker.visit_type_declaration(&type_declaration);
+    fn visit_trait_definition(&mut self, node: &ast::TraitDefinition) -> Type {
+        self.type_registry.current_self = Some(node.name.clone());
 
-        assert!(checker.errors.is_empty());
-        assert_eq!(result, Type::Void);
-        assert!(matches!(
-            checker.type_registry.lookup("MyType"),
-            Some(Type::Unknown)
-        ));
+        let method_types = node
+            .body
+            .fields
+            .iter()
+            .filter_map(|field| self.visit_trait_method_definition(field))
+            .collect();
+
+        self.type_registry.current_self = None;
+
+        Type::Trait {
+            methods: method_types,
+        }
+    }
+
+    fn visit_trait_method_definition(
+        &mut self,
+        node: &StructDefinitionField,
+    ) -> Option<TraitMethod> {
+        let as_field = self.visit_struct_definition_field(node);
+        if !matches!(as_field.def, Type::Function { .. }) {
+            self.errors.push(ParseError {
+                message: format!(
+                    "Only methods are allowed in trait definitions, found {}",
+                    as_field.def
+                ),
+                span: node.as_span(),
+            });
+            return None;
+        }
+        Some(TraitMethod {
+            name: as_field.name,
+            def: as_field.def,
+        })
     }
 }

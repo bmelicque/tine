@@ -1,47 +1,44 @@
-use std::error::Error;
-
 use crate::{
-    ast::Node,
+    ast,
     codegen::{utils::create_ident, CodeGenerator},
 };
 use swc_common::DUMMY_SP;
-use swc_ecma_ast as ast;
+use swc_ecma_ast as swc;
 
-use super::{literal_alias::literal_alias_to_swc_constructor, sum_type::sum_def_swc_constructor};
+use super::{enums::enum_def_to_swc_constructor, literal_alias::literal_alias_to_swc_constructor};
 
 impl CodeGenerator {
-    pub fn type_declaration_to_swc_decl(
-        &mut self,
-        node: Node,
-    ) -> Result<Option<ast::Stmt>, Box<dyn Error>> {
-        let Node::TypeDeclaration {
-            name,
-            type_params: _,
-            def,
-        } = node
-        else {
-            panic!("Expected a type declaration node!");
-        };
-        let def_node = def.unwrap().node;
+    pub fn alias_to_swc(&mut self, node: ast::TypeAlias) -> Option<swc::Stmt> {
         let mut super_class = None;
-        let body: Vec<ast::ClassMember> = match def_node {
-            Node::Struct(ref fields) => vec![self.struct_to_swc_constructor(fields).into()],
-            Node::SumDef(variants) => vec![sum_def_swc_constructor(variants).into()],
-            Node::TraitDef { .. } => {
-                return Ok(None);
+        let body: Vec<swc::ClassMember> = match *node.definition {
+            ast::TypeDefinition::Enum(node) => vec![enum_def_to_swc_constructor(node).into()],
+            ast::TypeDefinition::Struct(node) => {
+                vec![self.struct_to_swc_constructor(node).into()]
             }
-            Node::Identifier(id) if is_literal_type(&id) => {
-                vec![literal_alias_to_swc_constructor().into()]
-            }
-            _ => {
-                super_class = Some(Box::new(self.node_to_swc_expr(def_node)));
-                Vec::new()
+            ast::TypeDefinition::Trait(_) => return None,
+            ast::TypeDefinition::Type(t) => {
+                let ast::Type::Named(named) = t else {
+                    panic!("Not implemented yet!")
+                };
+                if is_literal_type(&named.name) {
+                    vec![literal_alias_to_swc_constructor().into()]
+                } else {
+                    super_class = Some(Box::new(
+                        swc::Ident {
+                            span: DUMMY_SP,
+                            sym: named.name.into(),
+                            optional: false,
+                        }
+                        .into(),
+                    ));
+                    Vec::new()
+                }
             }
         };
-        let declaration = ast::ClassDecl {
+        let declaration = swc::ClassDecl {
             declare: false,
-            ident: create_ident(&name),
-            class: Box::new(ast::Class {
+            ident: create_ident(&node.name),
+            class: Box::new(swc::Class {
                 span: DUMMY_SP,
                 body,
                 super_class,
@@ -52,8 +49,8 @@ impl CodeGenerator {
                 implements: vec![],
             }),
         };
-        self.add_class_def(name, declaration.clone());
-        Ok(Some(declaration.into()))
+        self.add_class_def(node.name, declaration.clone());
+        Some(declaration.into())
     }
 }
 

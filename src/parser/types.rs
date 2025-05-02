@@ -1,406 +1,329 @@
 use pest::iterators::Pair;
 
-use crate::ast::{AstNode, Node, Spanned};
+use crate::ast;
 
-use super::parser::{ParseError, ParseResult, Rule};
+use super::{parser::Rule, ParserEngine};
 
-pub fn parse_type(pair: Pair<'static, Rule>) -> ParseResult {
-    match pair.as_rule() {
-        Rule::type_annotation
-        | Rule::type_element
-        | Rule::binary_type
-        | Rule::unary_type
-        | Rule::primary_type
-        | Rule::grouped_type
-        | Rule::type_name => parse_type(pair.into_inner().next().unwrap()),
-        Rule::function_type => parse_function_type(pair),
-        Rule::tuple_type => parse_tuple_type(pair),
-        Rule::map_type => parse_map_type(pair),
-        Rule::result_type => parse_result_type(pair),
-        Rule::reference_type => parse_reference_type(pair),
-        Rule::option_type => parse_option_type(pair),
-        Rule::array_type => parse_array_type(pair),
-        Rule::generic_type => parse_generic_type(pair),
-        Rule::type_identifier | Rule::primitive_type => parse_named_type(pair),
-        _ => unreachable!("Unexpected rule '{:?}'", pair.as_rule()),
-    }
-}
-
-fn parse_tuple_type(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::tuple_type);
-    let span = pair.as_span();
-    let mut sub_types = Vec::new();
-    let mut errors = Vec::new();
-    for sub_pair in pair.into_inner() {
-        let mut result = parse_type(sub_pair);
-        sub_types.push(result.node);
-        errors.append(&mut result.errors);
-    }
-
-    let node = Some(Spanned {
-        node: Node::TupleType(sub_types),
-        span,
-    });
-
-    ParseResult { node, errors }
-}
-
-fn parse_map_type(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::map_type);
-    let span = pair.as_span();
-    let mut key = None;
-    let mut value = None;
-    let mut errors = Vec::new();
-
-    for sub_pair in pair.into_inner() {
-        match sub_pair.as_rule() {
-            Rule::map_type_key => {
-                let mut result = parse_type(sub_pair.into_inner().next().unwrap());
-                key = result.node.map(Box::new);
-                errors.append(&mut result.errors);
-            }
-            Rule::map_type_value => {
-                let mut result = parse_type(sub_pair.into_inner().next().unwrap());
-                value = result.node.map(Box::new);
-                errors.append(&mut result.errors);
-            }
-            _ => unreachable!(),
+impl ParserEngine {
+    pub fn parse_type(&mut self, pair: Pair<'static, Rule>) -> ast::Type {
+        match pair.as_rule() {
+            Rule::type_annotation
+            | Rule::type_element
+            | Rule::binary_type
+            | Rule::unary_type
+            | Rule::primary_type
+            | Rule::grouped_type
+            | Rule::type_name => self.parse_type(pair.into_inner().next().unwrap()),
+            Rule::function_type => self.parse_function_type(pair).into(),
+            Rule::tuple_type => self.parse_tuple_type(pair).into(),
+            Rule::map_type => self.parse_map_type(pair).into(),
+            Rule::result_type => self.parse_result_type(pair).into(),
+            Rule::reference_type => self.parse_reference_type(pair).into(),
+            Rule::option_type => self.parse_option_type(pair).into(),
+            Rule::array_type => self.parse_array_type(pair).into(),
+            Rule::generic_type => self.parse_named_type_with_args(pair).into(),
+            Rule::type_identifier | Rule::primitive_type => self.parse_named_type(pair).into(),
+            _ => unreachable!("Unexpected rule '{:?}'", pair.as_rule()),
         }
     }
 
-    let node = Some(Spanned {
-        node: Node::MapType { key, value },
-        span,
-    });
+    fn parse_tuple_type(&mut self, pair: Pair<'static, Rule>) -> ast::TupleType {
+        assert!(pair.as_rule() == Rule::tuple_type);
+        let span = pair.as_span();
+        let elements = pair
+            .into_inner()
+            .map(|pair| self.parse_type(pair))
+            .collect();
+        return ast::TupleType { span, elements };
+    }
 
-    ParseResult { node, errors }
-}
+    pub fn parse_map_type(&mut self, pair: Pair<'static, Rule>) -> ast::MapType {
+        assert!(pair.as_rule() == Rule::map_type);
+        let span = pair.as_span();
+        let mut key = None;
+        let mut value = None;
 
-fn parse_result_type(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::result_type);
-    let span = pair.as_span();
-    let mut ok = None;
-    let mut err = None;
-    let mut errors = Vec::new();
-
-    for sub_pair in pair.into_inner() {
-        match sub_pair.as_rule() {
-            Rule::result_ok_type => {
-                let mut result = parse_type(sub_pair.into_inner().next().unwrap());
-                ok = result.node.map(Box::new);
-                errors.append(&mut result.errors);
+        for sub_pair in pair.into_inner() {
+            match sub_pair.as_rule() {
+                Rule::map_type_key => {
+                    let ty = self.parse_type(sub_pair.into_inner().next().unwrap());
+                    key = Some(Box::new(ty));
+                }
+                Rule::map_type_value => {
+                    let ty = self.parse_type(sub_pair.into_inner().next().unwrap());
+                    value = Some(Box::new(ty));
+                }
+                _ => unreachable!(
+                    "Map type should contain at most a map_type_key and a map_type_value"
+                ),
             }
-            Rule::result_error_type => {
-                let mut result = parse_type(sub_pair.into_inner().next().unwrap());
-                err = result.node.map(Box::new);
-                errors.append(&mut result.errors);
+        }
+
+        ast::MapType { span, key, value }
+    }
+
+    fn parse_result_type(&mut self, pair: Pair<'static, Rule>) -> ast::ResultType {
+        assert!(pair.as_rule() == Rule::result_type);
+        let span = pair.as_span();
+        let mut ok = None;
+        let mut error = None;
+
+        for sub_pair in pair.into_inner() {
+            match sub_pair.as_rule() {
+                Rule::result_error_type => {
+                    let ty = self.parse_type(sub_pair.into_inner().next().unwrap());
+                    error = Some(Box::new(ty));
+                }
+                Rule::result_ok_type => {
+                    let ty = self.parse_type(sub_pair.into_inner().next().unwrap());
+                    ok = Some(Box::new(ty));
+                }
+                _ => unreachable!(
+                    "Result typeq should contain at most a result_ok_type and a result_error_type"
+                ),
             }
-            _ => unreachable!(),
+        }
+
+        ast::ResultType { span, error, ok }
+    }
+
+    fn parse_reference_type(&mut self, pair: Pair<'static, Rule>) -> ast::ReferenceType {
+        assert!(pair.as_rule() == Rule::reference_type);
+        let span = pair.as_span();
+        let target = pair
+            .into_inner()
+            .next()
+            .map(|pair| Box::new(self.parse_type(pair)));
+
+        ast::ReferenceType { span, target }
+    }
+
+    pub fn parse_option_type(&mut self, pair: Pair<'static, Rule>) -> ast::OptionType {
+        assert!(pair.as_rule() == Rule::option_type);
+        let span = pair.as_span();
+        let base = pair
+            .into_inner()
+            .next()
+            .map(|pair| Box::new(self.parse_type(pair)));
+
+        ast::OptionType { span, base }
+    }
+
+    pub fn parse_array_type(&mut self, pair: Pair<'static, Rule>) -> ast::ArrayType {
+        assert!(pair.as_rule() == Rule::array_type);
+        let span = pair.as_span();
+        let element = pair
+            .into_inner()
+            .next()
+            .map(|pair| Box::new(self.parse_type(pair)));
+
+        ast::ArrayType { span, element }
+    }
+
+    pub fn parse_named_type_with_args(&mut self, pair: Pair<'static, Rule>) -> ast::NamedType {
+        assert!(pair.as_rule() == Rule::generic_type);
+        let span = pair.as_span();
+
+        let mut inner = pair.into_inner();
+        let name = inner.next().unwrap().as_str().into();
+
+        let mut args = Vec::new();
+        while let Some(element_pair) = inner.next() {
+            args.push(self.parse_type(element_pair));
+        }
+        let args = if args.len() > 0 { Some(args) } else { None };
+
+        ast::NamedType { span, name, args }
+    }
+
+    fn parse_named_type(&mut self, pair: Pair<'static, Rule>) -> ast::NamedType {
+        ast::NamedType {
+            span: pair.as_span(),
+            name: pair.as_str().into(),
+            args: None,
         }
     }
 
-    let node = Some(Spanned {
-        node: Node::ResultType { ok, err },
-        span,
-    });
+    fn parse_function_type(&mut self, pair: Pair<'static, Rule>) -> ast::FunctionType {
+        assert!(pair.as_rule() == Rule::function_type);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
 
-    ParseResult { node, errors }
-}
+        let params = inner
+            .next()
+            .unwrap()
+            .into_inner()
+            .map(|sub_pair| self.parse_type(sub_pair))
+            .collect();
 
-fn parse_reference_type(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::reference_type);
-    let span = pair.as_span();
-    let inner_type = pair
-        .into_inner()
-        .next()
-        .map(parse_type)
-        .unwrap_or_else(ParseResult::empty);
+        let returned = Box::new(self.parse_type(inner.next().unwrap()));
 
-    let errors = inner_type.errors;
-    let node = Some(Spanned {
-        node: Node::ReferenceType(inner_type.node.map(Box::new)),
-        span,
-    });
-
-    ParseResult { node, errors }
-}
-
-fn parse_option_type(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::option_type);
-    let span = pair.as_span();
-    let inner_type = pair
-        .into_inner()
-        .next()
-        .map(parse_type)
-        .unwrap_or_else(ParseResult::empty);
-
-    let errors = inner_type.errors;
-    let node = Some(Spanned {
-        node: Node::OptionType(inner_type.node.map(Box::new)),
-        span,
-    });
-
-    ParseResult { node, errors }
-}
-
-fn parse_array_type(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::array_type);
-    let span = pair.as_span();
-    let inner_type = pair
-        .into_inner()
-        .next()
-        .map(parse_type)
-        .unwrap_or_else(ParseResult::empty);
-
-    let errors = inner_type.errors;
-    let node = Some(Spanned {
-        node: Node::ArrayType(inner_type.node.map(Box::new)),
-        span,
-    });
-
-    ParseResult { node, errors }
-}
-
-fn parse_generic_type(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::generic_type);
-    let span = pair.as_span();
-    let mut name = None;
-    let mut args = Vec::new();
-    let mut errors = Vec::new();
-
-    for part in pair.into_inner() {
-        match part.as_rule() {
-            Rule::type_identifier => {
-                name = Some(Box::new(Spanned {
-                    node: Node::NamedType(part.as_str().to_string()),
-                    span: part.as_span(),
-                }));
-            }
-            Rule::type_element => {
-                let mut result = parse_type(part);
-                errors.append(&mut result.errors);
-                args.push(Box::new(result.node.unwrap()));
-            }
-            rule => unreachable!("Unexpected rule '{:?}'", rule),
-        }
-    }
-
-    let node = if args.len() > 0 {
-        Node::GenericType {
-            name: name.unwrap(),
-            args,
-        }
-    } else {
-        name.unwrap().node
-    };
-
-    ParseResult {
-        node: Some(Spanned { node, span }),
-        errors,
-    }
-}
-
-fn parse_named_type(pair: Pair<'static, Rule>) -> ParseResult {
-    ParseResult::ok(Spanned {
-        node: Node::NamedType(pair.as_str().into()),
-        span: pair.as_span(),
-    })
-}
-
-fn parse_function_type(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::function_type);
-    let span = pair.as_span();
-
-    let mut errors = Vec::new();
-
-    let mut inner = pair.into_inner();
-    let param_result = parse_function_type_params(inner.next().unwrap());
-    let parameters = param_result
-        .0
-        .into_iter()
-        .map(|param| Box::new(param))
-        .collect();
-    errors.extend(param_result.1);
-
-    let returned_result = parse_type(inner.next().unwrap());
-    let return_type = Box::new(returned_result.node.unwrap());
-    errors.extend(returned_result.errors);
-
-    ParseResult {
-        node: Some(Spanned {
-            node: Node::FunctionType {
-                parameters,
-                return_type,
-            },
+        ast::FunctionType {
             span,
-        }),
-        errors,
-    }
-}
-
-fn parse_function_type_params(pair: Pair<'static, Rule>) -> (Vec<AstNode>, Vec<ParseError>) {
-    assert!(pair.as_rule() == Rule::function_type_params);
-    let mut sub_types = Vec::new();
-    let mut errors = Vec::new();
-    for sub_pair in pair.into_inner() {
-        let mut result = parse_type(sub_pair);
-        if let Some(node) = result.node {
-            sub_types.push(node);
+            params,
+            returned,
         }
-        errors.append(&mut result.errors);
     }
-
-    (sub_types, errors)
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::parser::parser::{MyLanguageParser, Rule};
     use pest::Parser;
 
-    use super::*;
-    use crate::parser::parser::MyLanguageParser;
-
-    fn parse_type_input(input: &'static str) -> ParseResult {
-        let pair = MyLanguageParser::parse(Rule::type_annotation, input)
+    fn parse_type_input(input: &'static str, rule: Rule) -> ast::Type {
+        let pair = MyLanguageParser::parse(rule, input)
             .unwrap()
             .next()
             .unwrap();
-        parse_type(pair)
+        let mut parser_engine = ParserEngine::new();
+        parser_engine.parse_type(pair)
     }
 
     #[test]
     fn test_parse_named_type() {
-        let result = parse_type_input("number");
-        assert!(result.errors.is_empty());
+        let input = "number";
+        let result = parse_type_input(input, Rule::primitive_type);
 
-        match result.node.unwrap().node {
-            Node::NamedType(name) => assert_eq!(name, "number"),
+        match result {
+            ast::Type::Named(named) => {
+                assert_eq!(named.name, "number");
+                assert!(named.args.is_none());
+            }
             _ => panic!("Expected NamedType"),
         }
     }
 
     #[test]
-    fn test_parse_tuple_type() {
-        let result = parse_type_input("(number, string)");
-        assert!(result.errors.is_empty());
+    fn test_parse_generic_type() {
+        let input = "Box[number]";
+        let result = parse_type_input(input, Rule::generic_type);
 
-        match result.node.unwrap().node {
-            Node::TupleType(items) => {
-                assert_eq!(items.len(), 2);
-                assert_eq!(
-                    items[0].as_ref().unwrap().node,
-                    Node::NamedType("number".into())
-                );
-                assert_eq!(
-                    items[1].as_ref().unwrap().node,
-                    Node::NamedType("string".into())
-                );
+        match result {
+            ast::Type::Named(named) => {
+                assert_eq!(named.name, "Box");
+                assert!(named.args.is_some());
+                let args = named.args.unwrap();
+                assert_eq!(args.len(), 1);
+                match &args[0] {
+                    ast::Type::Named(arg_named) => assert_eq!(arg_named.name, "number"),
+                    _ => panic!("Expected NamedType as generic argument"),
+                }
             }
-            _ => panic!("Expected TupleType"),
-        }
-    }
-
-    #[test]
-    fn test_parse_generic_type_no_args() {
-        let result = parse_type_input("Box");
-        assert!(result.errors.is_empty());
-
-        match result.node.unwrap().node {
-            Node::NamedType(name) => assert_eq!(name, "Box"),
-            _ => panic!("Expected NamedType (generic type without args)"),
-        }
-    }
-
-    #[test]
-    fn test_parse_generic_type_with_args() {
-        let result = parse_type_input("List[number, string]");
-        assert!(result.errors.is_empty());
-
-        match result.node.unwrap().node {
-            Node::GenericType { name, args } => {
-                assert_eq!(name.node, Node::NamedType("List".into()));
-                assert_eq!(args.len(), 2);
-                assert_eq!(args[0].node, Node::NamedType("number".into()));
-                assert_eq!(args[1].node, Node::NamedType("string".into()));
-            }
-            _ => panic!("Expected GenericType"),
-        }
-    }
-
-    #[test]
-    fn test_parse_function_type() {
-        let result = parse_type_input("(number, string) -> boolean");
-        assert!(result.errors.is_empty());
-
-        match result.node.unwrap().node {
-            Node::FunctionType {
-                parameters,
-                return_type,
-            } => {
-                assert_eq!(parameters.len(), 2);
-                assert_eq!(
-                    parameters[0].as_ref().node,
-                    Node::NamedType("number".into())
-                );
-                assert_eq!(
-                    parameters[1].as_ref().node,
-                    Node::NamedType("string".into())
-                );
-                assert_eq!(return_type.node, Node::NamedType("boolean".into()));
-            }
-            _ => panic!("Expected FunctionType"),
+            _ => panic!("Expected NamedType"),
         }
     }
 
     #[test]
     fn test_parse_array_type() {
-        let result = parse_type_input("[]number");
-        assert!(result.errors.is_empty());
+        let input = "[]number";
+        let result = parse_type_input(input, Rule::array_type);
 
-        match result.node.unwrap().node {
-            Node::ArrayType(inner) => {
-                assert_eq!(inner.unwrap().node, Node::NamedType("number".into()));
-            }
+        match result {
+            ast::Type::Array(array) => match *array.element.unwrap() {
+                ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                _ => panic!("Expected NamedType as array element"),
+            },
             _ => panic!("Expected ArrayType"),
         }
     }
 
     #[test]
     fn test_parse_option_type() {
-        let result = parse_type_input("?number");
-        assert!(result.errors.is_empty());
+        let input = "?number";
+        let result = parse_type_input(input, Rule::option_type);
 
-        match result.node.unwrap().node {
-            Node::OptionType(inner) => {
-                assert_eq!(inner.unwrap().node, Node::NamedType("number".into()));
-            }
+        match result {
+            ast::Type::Option(option) => match *option.base.unwrap() {
+                ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                _ => panic!("Expected NamedType as option base"),
+            },
             _ => panic!("Expected OptionType"),
         }
     }
 
     #[test]
     fn test_parse_map_type() {
-        let result = parse_type_input("string#number");
-        assert!(result.errors.is_empty());
+        let input = "string#number";
+        let result = parse_type_input(input, Rule::map_type);
 
-        match result.node.unwrap().node {
-            Node::MapType { key, value } => {
-                assert_eq!(key.unwrap().node, Node::NamedType("string".into()));
-                assert_eq!(value.unwrap().node, Node::NamedType("number".into()));
+        match result {
+            ast::Type::Map(map) => {
+                match *map.key.unwrap() {
+                    ast::Type::Named(named) => assert_eq!(named.name, "string"),
+                    _ => panic!("Expected NamedType as map key"),
+                }
+                match *map.value.unwrap() {
+                    ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                    _ => panic!("Expected NamedType as map value"),
+                }
             }
             _ => panic!("Expected MapType"),
         }
     }
 
     #[test]
-    fn test_parse_result_type() {
-        let result = parse_type_input("string!number");
-        assert!(result.errors.is_empty());
+    fn test_parse_tuple_type() {
+        let input = "(number, string)";
+        let result = parse_type_input(input, Rule::type_annotation);
 
-        match result.node.unwrap().node {
-            Node::ResultType { ok, err } => {
-                assert_eq!(ok.unwrap().node, Node::NamedType("number".into()));
-                assert_eq!(err.unwrap().node, Node::NamedType("string".into()));
+        match result {
+            ast::Type::Tuple(tuple) => {
+                assert_eq!(tuple.elements.len(), 2);
+                match &tuple.elements[0] {
+                    ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                    _ => panic!("Expected NamedType as first tuple element"),
+                }
+                match &tuple.elements[1] {
+                    ast::Type::Named(named) => assert_eq!(named.name, "string"),
+                    _ => panic!("Expected NamedType as second tuple element"),
+                }
+            }
+            _ => panic!("Expected TupleType"),
+        }
+    }
+
+    #[test]
+    fn test_parse_function_type() {
+        let input = "(number, string) -> boolean";
+        let result = parse_type_input(input, Rule::function_type);
+
+        match result {
+            ast::Type::Function(function) => {
+                assert_eq!(function.params.len(), 2);
+                match &function.params[0] {
+                    ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                    _ => panic!("Expected NamedType as first function parameter"),
+                }
+                match &function.params[1] {
+                    ast::Type::Named(named) => assert_eq!(named.name, "string"),
+                    _ => panic!("Expected NamedType as second function parameter"),
+                }
+                match *function.returned {
+                    ast::Type::Named(named) => assert_eq!(named.name, "boolean"),
+                    _ => panic!("Expected NamedType as function return type"),
+                }
+            }
+            _ => panic!("Expected FunctionType"),
+        }
+    }
+
+    #[test]
+    fn test_parse_result_type() {
+        let input = "string!number";
+        let result = parse_type_input(input, Rule::result_type);
+
+        match result {
+            ast::Type::Result(result_type) => {
+                match *result_type.ok.unwrap() {
+                    ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                    _ => panic!("Expected NamedType as result ok type"),
+                }
+                match *result_type.error.unwrap() {
+                    ast::Type::Named(named) => assert_eq!(named.name, "string"),
+                    _ => panic!("Expected NamedType as result error type"),
+                }
             }
             _ => panic!("Expected ResultType"),
         }

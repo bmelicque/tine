@@ -1,26 +1,23 @@
 use crate::{
-    ast::{Spanned, StructField},
+    ast::{self, StructDefinitionField},
     codegen::{utils::create_ident, CodeGenerator},
 };
 use swc_common::DUMMY_SP;
-use swc_ecma_ast as ast;
+use swc_ecma_ast as swc;
 
 use super::utils::this_assignment;
 
 impl CodeGenerator {
-    pub fn struct_to_swc_constructor(
-        &mut self,
-        fields: &Vec<Spanned<StructField>>,
-    ) -> ast::Constructor {
-        let mandatory_fields: Vec<&StructField> = fields
+    pub fn struct_to_swc_constructor(&mut self, node: ast::StructDefinition) -> swc::Constructor {
+        let mandatory_fields: Vec<&ast::StructDefinitionField> = node
+            .fields
             .iter()
-            .map(|spanned| &spanned.node)
-            .filter(|f| !f.optional)
+            .filter(|field| !field.is_optional())
             .collect();
-        let optional_fields: Vec<&StructField> = fields
+        let optional_fields: Vec<&ast::StructDefinitionField> = node
+            .fields
             .iter()
-            .map(|spanned| &spanned.node)
-            .filter(|f| f.optional)
+            .filter(|field| field.is_optional())
             .collect();
         let params = mandatory_fields
             .iter()
@@ -28,14 +25,14 @@ impl CodeGenerator {
             .map(self.struct_field_to_swc_param())
             .collect::<Vec<_>>();
 
-        ast::Constructor {
+        swc::Constructor {
             span: DUMMY_SP,
             key: create_ident("constructor").into(),
             is_optional: false,
             params,
-            body: Some(ast::BlockStmt {
+            body: Some(swc::BlockStmt {
                 span: DUMMY_SP,
-                stmts: struct_to_swc_constructor_stmts(fields),
+                stmts: struct_to_swc_constructor_stmts(&node.fields),
             }),
             accessibility: None,
         }
@@ -43,27 +40,26 @@ impl CodeGenerator {
 
     fn struct_field_to_swc_param<'a>(
         &'a mut self,
-    ) -> impl FnMut(&&'a StructField) -> ast::ParamOrTsParamProp + 'a {
+    ) -> impl FnMut(&&'a StructDefinitionField) -> swc::ParamOrTsParamProp + 'a {
         move |field| {
-            let pattern = if field.optional {
-                ast::Pat::Assign(ast::AssignPat {
+            let pattern = match field {
+                ast::StructDefinitionField::Mandatory(field) => {
+                    swc::Pat::Ident(swc::BindingIdent {
+                        id: create_ident(&field.name),
+                        type_ann: None,
+                    })
+                }
+                ast::StructDefinitionField::Optional(field) => swc::Pat::Assign(swc::AssignPat {
                     span: DUMMY_SP,
-                    left: Box::new(ast::Pat::Ident(ast::BindingIdent {
+                    left: Box::new(swc::Pat::Ident(swc::BindingIdent {
                         id: create_ident(&field.name),
                         type_ann: None,
                     })),
-                    right: Box::new(
-                        self.node_to_swc_expr(field.def.as_ref().unwrap().node.clone()),
-                    ),
-                })
-            } else {
-                ast::Pat::Ident(ast::BindingIdent {
-                    id: create_ident(&field.name),
-                    type_ann: None,
-                })
+                    right: Box::new(self.expr_to_swc(field.default.clone())),
+                }),
             };
 
-            ast::ParamOrTsParamProp::Param(ast::Param {
+            swc::ParamOrTsParamProp::Param(swc::Param {
                 span: DUMMY_SP,
                 decorators: vec![],
                 pat: pattern,
@@ -72,10 +68,9 @@ impl CodeGenerator {
     }
 }
 
-fn struct_to_swc_constructor_stmts(fields: &Vec<Spanned<StructField>>) -> Vec<ast::Stmt> {
+fn struct_to_swc_constructor_stmts(fields: &Vec<StructDefinitionField>) -> Vec<swc::Stmt> {
     fields
         .iter()
-        .map(|spanned| &spanned.node)
-        .map(|field| this_assignment(&field.name))
+        .map(|field| this_assignment(&field.as_name()))
         .collect()
 }

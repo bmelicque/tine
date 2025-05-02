@@ -16,7 +16,7 @@ pub enum Type {
 pub struct NamedType {
     pub span: Span<'static>,
     pub name: String,
-    pub generic_params: Option<Vec<Type>>,
+    pub args: Option<Vec<Type>>,
 }
 
 impl Into<Type> for NamedType {
@@ -64,7 +64,7 @@ impl Into<Type> for ReferenceType {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TupleType {
     pub span: Span<'static>,
-    pub elements: Vec<Box<Type>>,
+    pub elements: Vec<Type>,
 }
 
 impl Into<Type> for TupleType {
@@ -103,7 +103,7 @@ impl Into<Type> for ResultType {
 pub struct FunctionType {
     pub span: Span<'static>,
     pub params: Vec<Type>,
-    pub returned: Option<Box<Type>>,
+    pub returned: Box<Type>,
 }
 
 impl Into<Type> for FunctionType {

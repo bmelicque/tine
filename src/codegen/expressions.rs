@@ -1,141 +1,148 @@
 use swc_common::DUMMY_SP;
-use swc_ecma_ast::{
-    ArrowExpr, BinExpr, BinaryOp, BindingIdent, BlockStmt, BlockStmtOrExpr, Bool, Expr, Ident, Lit,
-    Number, Pat, ReturnStmt, Stmt, Str,
-};
+use swc_ecma_ast as swc;
 
-use crate::ast::Node;
+use crate::ast;
 
-use super::{utils::create_ident, CodeGenerator};
+use super::CodeGenerator;
 
 impl CodeGenerator {
-    pub fn node_to_swc_expr(&mut self, node: Node) -> Expr {
+    pub fn expr_or_an_to_swc(&mut self, node: ast::ExpressionOrAnonymous) -> swc::Expr {
         match node {
-            Node::FunctionExpression {
-                parameters,
-                return_type: _,
-                body,
-            } => {
-                // Convert parameters
-                let swc_params = parameters
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|param| {
-                        Pat::Ident(BindingIdent {
-                            id: Ident {
-                                span: DUMMY_SP,
-                                sym: param.name.into(),
-                                optional: false,
-                            },
-                            type_ann: None,
-                        })
-                    })
-                    .collect();
-
-                let swc_body = if let Some(body_node) = body {
-                    match &body_node.node {
-                        Node::Block(statements) => {
-                            // Convert block statement
-                            let mut stmts = vec![];
-                            for stmt in statements {
-                                let expr = self.node_to_swc_expr(stmt.node.clone());
-                                stmts.push(Stmt::Return(ReturnStmt {
-                                    span: DUMMY_SP,
-                                    arg: Some(Box::new(expr)),
-                                }));
-                            }
-
-                            BlockStmtOrExpr::BlockStmt(BlockStmt {
-                                span: DUMMY_SP,
-                                stmts,
-                            })
-                        }
-                        _ => {
-                            // Expression-style body
-                            let expr = self.node_to_swc_expr(body_node.node.clone());
-                            BlockStmtOrExpr::Expr(Box::new(expr))
-                        }
-                    }
-                } else {
-                    panic!("Function body is missing");
-                };
-
-                Expr::Arrow(ArrowExpr {
-                    span: DUMMY_SP,
-                    params: swc_params,
-                    body: Box::new(swc_body),
-                    is_async: false,
-                    is_generator: false,
-                    type_params: None,
-                    return_type: None,
-                })
-            }
-            Node::BinaryExpression {
-                left,
-                operator,
-                right,
-            } => self.binary_expression_to_swc_expr(
-                left.unwrap().node,
-                operator,
-                right.unwrap().node,
-            ),
-
-            Node::MapLiteral { entries, .. } => self.map_literal_to_swc_new_map(entries).into(),
-            Node::ArrayLiteral { elements, .. } | Node::AnonymousArrayLiteral(elements) => {
-                self.array_literal_to_swc_array(elements).into()
-            }
-            Node::OptionLiteral { value, .. } => {
-                self.option_literal_to_swc_new_option(value).into()
-            }
-            Node::StructLiteral {
-                struct_type,
-                fields,
-            } => self
-                .struct_literal_to_swc_new_expr(struct_type.node, fields)
-                .into(),
-
-            Node::Identifier(name) => create_ident(&name).into(),
-            Node::StringLiteral(value) => Expr::Lit(Lit::Str(Str {
-                span: DUMMY_SP,
-                value: value.into(),
-                raw: None,
-            })),
-            Node::NumberLiteral(value) => Expr::Lit(Lit::Num(Number {
-                span: DUMMY_SP,
-                value,
-                raw: None,
-            })),
-            Node::BooleanLiteral(value) => Expr::Lit(Lit::Bool(Bool {
-                span: DUMMY_SP,
-                value,
-            })),
-            _ => panic!("Unsupported node type for expression: {:?}", node),
+            ast::ExpressionOrAnonymous::Array(node) => self.anonymous_array_to_swc(node).into(),
+            ast::ExpressionOrAnonymous::Expression(node) => self.expr_to_swc(node),
+            ast::ExpressionOrAnonymous::Struct(node) => self.anonymous_struct_to_swc(node).into(),
         }
     }
 
-    fn binary_expression_to_swc_expr(&mut self, left: Node, operator: String, right: Node) -> Expr {
-        let left_expr = self.node_to_swc_expr(left);
-        let right_expr = self.node_to_swc_expr(right);
+    pub fn expr_to_swc(&mut self, node: ast::Expression) -> swc::Expr {
+        match node {
+            ast::Expression::Binary(node) => self.binary_expression_to_swc_expr(node),
+            ast::Expression::BooleanLiteral(node) => swc::Lit::Bool(swc::Bool {
+                span: DUMMY_SP,
+                value: node.value,
+            })
+            .into(),
+            ast::Expression::CompositeLiteral(node) => self.composite_literal_to_swc_expr(node),
+            ast::Expression::Empty => panic!("shouldn't have empty expressions at codegen step"),
+            ast::Expression::FieldAccess(node) => self.field_access_to_swc(node).into(),
+            ast::Expression::Function(node) => self.function_expression_to_swc(node).into(),
+            ast::Expression::Identifier(node) => self.ident_to_swc(node).into(),
+            ast::Expression::NumberLiteral(node) => swc::Lit::Num(swc::Number {
+                span: DUMMY_SP,
+                value: node.value,
+                raw: None,
+            })
+            .into(),
+            ast::Expression::StringLiteral(node) => swc::Lit::Str(swc::Str {
+                span: DUMMY_SP,
+                value: node.as_str().into(),
+                raw: None,
+            })
+            .into(),
+            ast::Expression::TupleIndexing(node) => self.tuple_indexing_to_swc(node).into(),
+        }
+    }
 
-        let op = match operator.as_str() {
-            "+" => BinaryOp::Add,
-            "-" => BinaryOp::Sub,
-            "*" => BinaryOp::Mul,
-            "/" => BinaryOp::Div,
-            "==" => BinaryOp::EqEq,
-            "!=" => BinaryOp::NotEq,
-            "<" => BinaryOp::Lt,
-            ">" => BinaryOp::Gt,
-            "<=" => BinaryOp::LtEq,
-            ">=" => BinaryOp::GtEq,
-            _ => panic!("Unsupported binary operator: {}", operator),
+    fn binary_expression_to_swc_expr(&mut self, node: ast::BinaryExpression) -> swc::Expr {
+        let left_expr = self.expr_to_swc(*node.left);
+        let right_expr = self.expr_to_swc(*node.right);
+
+        let op = match node.operator {
+            ast::BinaryOperator::Add => swc::BinaryOp::Add,
+            ast::BinaryOperator::Div => swc::BinaryOp::Div,
+            ast::BinaryOperator::Eq => swc::BinaryOp::EqEqEq,
+            ast::BinaryOperator::Geq => swc::BinaryOp::GtEq,
+            ast::BinaryOperator::Grt => swc::BinaryOp::Gt,
+            ast::BinaryOperator::LAnd => swc::BinaryOp::LogicalAnd,
+            ast::BinaryOperator::LOr => swc::BinaryOp::LogicalOr,
+            ast::BinaryOperator::Leq => swc::BinaryOp::LtEq,
+            ast::BinaryOperator::Less => swc::BinaryOp::Lt,
+            ast::BinaryOperator::Mod => swc::BinaryOp::Mod,
+            ast::BinaryOperator::Mul => swc::BinaryOp::Mul,
+            ast::BinaryOperator::Neq => swc::BinaryOp::NotEqEq,
+            ast::BinaryOperator::Pow => swc::BinaryOp::Exp,
+            ast::BinaryOperator::Sub => swc::BinaryOp::Sub,
         };
 
-        Expr::Bin(BinExpr {
+        swc::BinExpr {
             span: DUMMY_SP,
             op,
             left: Box::new(left_expr),
             right: Box::new(right_expr),
-        })
+        }
+        .into()
+    }
+
+    fn field_access_to_swc(&mut self, node: ast::FieldAccessExpression) -> swc::MemberExpr {
+        swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(self.expr_to_swc(*node.object)),
+            prop: swc::MemberProp::Ident(self.ident_to_swc(node.prop)),
+        }
+    }
+
+    fn function_expression_to_swc(&mut self, node: ast::FunctionExpression) -> swc::ArrowExpr {
+        let swc_params = node
+            .params
+            .into_iter()
+            .map(|param| {
+                swc::Pat::Ident(swc::BindingIdent {
+                    id: swc::Ident {
+                        span: DUMMY_SP,
+                        sym: param.name.as_str().into(),
+                        optional: false,
+                    },
+                    type_ann: None,
+                })
+            })
+            .collect();
+
+        let swc_body = match &node.body {
+            ast::FunctionBody::TypedBlock(typed_block) => {
+                let stmts = typed_block
+                    .block
+                    .statements
+                    .iter()
+                    .filter_map(|stmt| self.stmt_to_swc(stmt.clone()))
+                    .collect();
+
+                swc::BlockStmtOrExpr::BlockStmt(swc::BlockStmt {
+                    span: DUMMY_SP,
+                    stmts,
+                })
+            }
+            ast::FunctionBody::Expression(expr) => {
+                swc::BlockStmtOrExpr::Expr(Box::new(self.expr_to_swc(*expr.clone())))
+            }
+        };
+
+        swc::ArrowExpr {
+            span: DUMMY_SP,
+            params: swc_params,
+            body: Box::new(swc_body),
+            is_async: false,
+            is_generator: false,
+            type_params: None,
+            return_type: None,
+        }
+    }
+
+    pub fn ident_to_swc(&mut self, node: ast::Identifier) -> swc::Ident {
+        swc::Ident {
+            span: DUMMY_SP,
+            sym: node.as_str().into(),
+            optional: false,
+        }
+    }
+
+    fn tuple_indexing_to_swc(&mut self, node: ast::TupleIndexingExpression) -> swc::MemberExpr {
+        swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(self.expr_to_swc(*node.tuple)),
+            prop: swc::MemberProp::Computed(swc::ComputedPropName {
+                span: DUMMY_SP,
+                expr: Box::new(self.expr_to_swc(node.index.into())),
+            }),
+        }
     }
 }

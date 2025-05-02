@@ -1,9 +1,12 @@
+use std::fmt;
+
 use pest::Span;
 
 use super::{composite_literals::CompositeLiteral, statements::BlockStatement, types::Type};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
+    Empty,
     Identifier(Identifier),
     StringLiteral(StringLiteral),
     NumberLiteral(NumberLiteral),
@@ -13,6 +16,27 @@ pub enum Expression {
     FieldAccess(FieldAccessExpression),
     TupleIndexing(TupleIndexingExpression),
     Function(FunctionExpression),
+}
+
+impl Expression {
+    pub fn as_span(&self) -> Span<'static> {
+        match self {
+            Self::Binary(e) => e.span.clone(),
+            Self::BooleanLiteral(e) => e.span.clone(),
+            Self::CompositeLiteral(e) => e.as_span(),
+            Self::Empty => Span::new("", 0, 0).unwrap(),
+            Self::FieldAccess(e) => e.span.clone(),
+            Self::Function(e) => e.span.clone(),
+            Self::Identifier(e) => e.span.clone(),
+            Self::NumberLiteral(e) => e.span.clone(),
+            Self::StringLiteral(e) => e.span.clone(),
+            Self::TupleIndexing(e) => e.span.clone(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        *self == Expression::Empty
+    }
 }
 
 impl From<CompositeLiteral> for Expression {
@@ -27,8 +51,14 @@ pub struct Identifier {
 }
 
 impl Identifier {
-    fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         self.span.as_str()
+    }
+}
+
+impl From<Span<'static>> for Identifier {
+    fn from(span: Span<'static>) -> Self {
+        Identifier { span }
     }
 }
 
@@ -44,7 +74,7 @@ pub struct StringLiteral {
 }
 
 impl StringLiteral {
-    fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &str {
         self.span.as_str()
     }
 }
@@ -109,6 +139,61 @@ pub enum BinaryOperator {
     Geq,
     Less,
     Leq,
+}
+
+impl BinaryOperator {
+    fn as_string(&self) -> String {
+        match self {
+            BinaryOperator::Add => "+",
+            BinaryOperator::Sub => "-",
+            BinaryOperator::Mul => "*",
+            BinaryOperator::Div => "/",
+            BinaryOperator::Mod => "%",
+            BinaryOperator::Pow => "**",
+
+            BinaryOperator::Eq => "==",
+            BinaryOperator::Neq => "!=",
+            BinaryOperator::Less => "<",
+            BinaryOperator::Leq => "<=",
+            BinaryOperator::Grt => ">",
+            BinaryOperator::Geq => ">=",
+
+            BinaryOperator::LAnd => "&&",
+            BinaryOperator::LOr => "||",
+        }
+        .into()
+    }
+}
+
+impl fmt::Display for BinaryOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_string())
+    }
+}
+
+impl From<String> for BinaryOperator {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "+" => BinaryOperator::Add,
+            "-" => BinaryOperator::Sub,
+            "*" => BinaryOperator::Mul,
+            "/" => BinaryOperator::Div,
+            "%" => BinaryOperator::Mod,
+            "**" => BinaryOperator::Pow,
+
+            "==" => BinaryOperator::Eq,
+            "!=" => BinaryOperator::Neq,
+            "<" => BinaryOperator::Less,
+            "<=" => BinaryOperator::Leq,
+            ">" => BinaryOperator::Grt,
+            ">=" => BinaryOperator::Geq,
+
+            "&&" => BinaryOperator::LAnd,
+            "||" => BinaryOperator::LOr,
+
+            _ => panic!("Invalid operator"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

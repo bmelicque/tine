@@ -32,12 +32,10 @@ fn main() {
         }
     };
 
-    let parser = ParserEngine::new();
+    let mut parser = ParserEngine::new();
     let static_input: &'static str = Box::leak(input.to_string().into_boxed_str());
     let result = parser.parse(&static_input);
-    let Some(ast) = result.node else {
-        panic!("parse should make sure that this is Some")
-    };
+    let ast = result.node;
     let has_parse_errors = !result.errors.is_empty();
     for error in result.errors {
         utils::pretty_print_error(&input, &error);

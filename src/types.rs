@@ -38,6 +38,7 @@ pub enum Type {
     Dynamic,         // Represents a type that will have to be inferred later
     Generic(String), // Represents a generic type parameter
     SelfType,        // Represents the current type in a method context
+    Unit,
 
     Unknown,
 }
@@ -148,6 +149,7 @@ impl fmt::Display for Type {
             Type::Generic(name) => write!(f, "{}", name),
             Type::SelfType => write!(f, "Self"),
             Type::Unknown => write!(f, "unknown"),
+            Type::Unit => write!(f, "()"),
         }
     }
 }

@@ -1,104 +1,87 @@
-use core::panic;
-use std::error::Error;
 use swc_common::DUMMY_SP;
-use swc_ecma_ast as ast;
+use swc_ecma_ast as swc;
 
-use crate::ast::Node;
+use crate::ast;
 
 use super::{utils::create_ident, CodeGenerator};
 
 impl CodeGenerator {
-    pub fn node_to_swc_stmt(&mut self, node: Node) -> Result<Option<ast::Stmt>, Box<dyn Error>> {
+    pub fn stmt_to_swc(&mut self, node: ast::Statement) -> Option<swc::Stmt> {
         match node {
-            Node::VariableDeclaration { .. } => self.declaration_to_swc_statement(node),
-            Node::TypeDeclaration { .. } => self.type_declaration_to_swc_decl(node),
-            Node::Assignment { name, value } => {
-                let value_expr = if let Some(v) = value {
-                    self.node_to_swc_expr(v.node)
-                } else {
-                    panic!("Missing expression in assignment!");
-                };
-
-                let Some(name) = name else {
-                    panic!("Missing variable name in assignment.");
-                };
-
-                let swc_name = create_ident(&name);
-
-                let swc_assignee = ast::Expr::Ident(swc_name);
-
-                Ok(Some(ast::Stmt::Expr(ast::ExprStmt {
+            ast::Statement::Assignment(node) => Some(self.assignment_to_swc(node).into()),
+            ast::Statement::Block(node) => Some(self.block_to_swc(node).into()),
+            ast::Statement::Empty => None,
+            ast::Statement::Expression(node) => Some(
+                swc::ExprStmt {
                     span: DUMMY_SP,
-                    expr: Box::new(ast::Expr::Assign(ast::AssignExpr {
-                        span: DUMMY_SP,
-                        op: ast::AssignOp::Assign,
-                        left: ast::PatOrExpr::Expr(Box::new(swc_assignee)),
-                        right: Box::new(value_expr),
-                    })),
-                })))
-            }
-            Node::ReturnStatement(expr) => {
-                let arg = if let Some(e) = expr {
-                    let swc_expr = self.node_to_swc_expr(e.node);
-                    Some(Box::new(swc_expr))
-                } else {
-                    None
-                };
-
-                Ok(Some(ast::Stmt::Return(ast::ReturnStmt {
-                    span: DUMMY_SP,
-                    arg,
-                })))
-            }
-            Node::ExpressionStatement(expr) => {
-                let swc_expr = self.node_to_swc_expr(expr.node);
-                Ok(Some(ast::Stmt::Expr(ast::ExprStmt {
-                    span: DUMMY_SP,
-                    expr: Box::new(swc_expr),
-                })))
-            }
-            _ => Ok(None),
+                    expr: Box::new(self.expr_to_swc(*node.expression)),
+                }
+                .into(),
+            ),
+            ast::Statement::Return(node) => Some(self.return_to_swc(node).into()),
+            ast::Statement::TypeAlias(node) => self.alias_to_swc(node).into(),
+            ast::Statement::VariableDeclaration(node) => Some(self.declaration_to_swc(node).into()),
         }
     }
 
-    fn declaration_to_swc_statement(
-        &mut self,
-        node: Node,
-    ) -> Result<Option<ast::Stmt>, Box<dyn Error>> {
-        let Node::VariableDeclaration {
-            name,
-            op,
-            initializer,
-        } = node
-        else {
-            panic!("Variable declaration expected")
-        };
-
-        let init = initializer.map(|expr| Box::new(self.node_to_swc_expr(expr.node)));
-
-        let decl = ast::VarDeclarator {
+    fn assignment_to_swc(&mut self, node: ast::Assignment) -> swc::ExprStmt {
+        swc::ExprStmt {
             span: DUMMY_SP,
-            name: ast::Pat::Ident(ast::BindingIdent {
-                id: create_ident(&name.unwrap()),
+            expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
+                span: DUMMY_SP,
+                op: swc::AssignOp::Assign,
+                left: swc::PatOrExpr::Expr(Box::new(create_ident(&node.name).into())),
+                right: Box::new(self.expr_to_swc(node.value)),
+            })),
+        }
+    }
+
+    fn block_to_swc(&mut self, node: ast::BlockStatement) -> swc::BlockStmt {
+        let stmts: Vec<swc::Stmt> = node
+            .statements
+            .iter()
+            .filter_map(|stmt| self.stmt_to_swc(stmt.clone()))
+            .collect();
+
+        swc::BlockStmt {
+            span: DUMMY_SP,
+            stmts,
+        }
+    }
+
+    fn declaration_to_swc(&mut self, node: ast::VariableDeclaration) -> swc::Decl {
+        let init = Some(Box::new(self.expr_to_swc(*node.value)));
+
+        let decl = swc::VarDeclarator {
+            span: DUMMY_SP,
+            name: swc::Pat::Ident(swc::BindingIdent {
+                id: create_ident(&node.name),
                 type_ann: None,
             }),
             init,
             definite: false,
         };
 
-        let kind = match op.as_str() {
-            ":=" => ast::VarDeclKind::Let,
-            "::" => ast::VarDeclKind::Const,
-            _ => panic!("Unexpected declaration operator '{}'", op),
+        let kind = match node.op {
+            ast::DeclarationOp::Mut => swc::VarDeclKind::Let,
+            ast::DeclarationOp::Const => swc::VarDeclKind::Const,
         };
 
-        Ok(Some(ast::Stmt::Decl(ast::Decl::Var(Box::new(
-            ast::VarDecl {
-                span: DUMMY_SP,
-                kind,
-                declare: false,
-                decls: vec![decl],
-            },
-        )))))
+        swc::Decl::Var(Box::new(swc::VarDecl {
+            span: DUMMY_SP,
+            kind,
+            declare: false,
+            decls: vec![decl],
+        }))
+    }
+
+    fn return_to_swc(&mut self, node: ast::ReturnStatement) -> swc::ReturnStmt {
+        swc::ReturnStmt {
+            span: DUMMY_SP,
+            arg: node
+                .value
+                .map(|value| self.expr_to_swc(*value))
+                .map(Box::new),
+        }
     }
 }
