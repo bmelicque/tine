@@ -16,7 +16,7 @@ impl ParserEngine {
             Rule::type_alias => self.parse_type_alias(pair).into(),
             Rule::return_statement => self.parse_return_statement(pair).into(),
             Rule::block => self.parse_block(pair).into(),
-            Rule::expression_statement => self.parse_expression_statement(pair).into(),
+            Rule::expression_statement => self.parse_expression_statement(pair),
             _ => ast::Statement::Empty,
         }
     }
@@ -66,18 +66,146 @@ impl ParserEngine {
         let statements = pair
             .into_inner()
             .map(|pair| self.parse_statement(pair))
+            .filter(|stmt| !stmt.is_empty())
             .collect();
 
         ast::BlockStatement { span, statements }
     }
 
-    fn parse_expression_statement(
-        &mut self,
-        pair: Pair<'static, Rule>,
-    ) -> ast::ExpressionStatement {
+    fn parse_expression_statement(&mut self, pair: Pair<'static, Rule>) -> ast::Statement {
         let Some(inner) = pair.into_inner().next() else {
-            return ast::Expression::Empty.into();
+            return ast::Statement::Empty;
         };
-        self.parse_expression(inner).into()
+        match self.parse_expression(inner) {
+            ast::Expression::Empty => ast::Statement::Empty,
+            expression => ast::ExpressionStatement {
+                expression: Box::new(expression),
+            }
+            .into(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::parser::{MyLanguageParser, Rule};
+    use pest::Parser;
+
+    fn parse_statement_input(input: &'static str, rule: Rule) -> ast::Statement {
+        let pair = MyLanguageParser::parse(rule, input)
+            .unwrap()
+            .next()
+            .unwrap();
+        let mut parser_engine = ParserEngine::new();
+        parser_engine.parse_statement(pair)
+    }
+
+    #[test]
+    fn test_parse_variable_declaration() {
+        let input = "x := 42";
+        let result = parse_statement_input(input, Rule::variable_declaration);
+
+        match result {
+            ast::Statement::VariableDeclaration(var_decl) => {
+                assert_eq!(var_decl.name, "x");
+                assert_eq!(var_decl.op, ast::DeclarationOp::Mut);
+                match *var_decl.value {
+                    ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
+                    _ => panic!("Expected NumberLiteral as variable value"),
+                }
+            }
+            _ => panic!("Expected VariableDeclaration"),
+        }
+    }
+
+    #[test]
+    fn test_parse_assignment() {
+        let input = "x = 42";
+        let result = parse_statement_input(input, Rule::assignment);
+
+        match result {
+            ast::Statement::Assignment(assignment) => {
+                assert_eq!(assignment.name, "x");
+                match assignment.value {
+                    ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
+                    _ => panic!("Expected NumberLiteral as assignment value"),
+                }
+            }
+            _ => panic!("Expected Assignment"),
+        }
+    }
+
+    #[test]
+    fn test_parse_return_statement() {
+        let input = "return 42";
+        let result = parse_statement_input(input, Rule::return_statement);
+
+        match result {
+            ast::Statement::Return(return_stmt) => match *return_stmt.value.unwrap() {
+                ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
+                _ => panic!("Expected NumberLiteral as return value"),
+            },
+            _ => panic!("Expected ReturnStatement"),
+        }
+    }
+
+    #[test]
+    fn test_parse_block_statement() {
+        let input = r#"{
+            x := 42
+            x = 43
+        }
+        "#;
+        let result = parse_statement_input(input, Rule::statement);
+
+        match result {
+            ast::Statement::Block(block) => {
+                assert_eq!(block.statements.len(), 2, "{:?}", block.statements);
+
+                // Check the first statement
+                match &block.statements[0] {
+                    ast::Statement::VariableDeclaration(var_decl) => {
+                        assert_eq!(var_decl.name, "x");
+                        match *var_decl.value.clone() {
+                            ast::Expression::NumberLiteral(literal) => {
+                                assert_eq!(literal.value, 42.0)
+                            }
+                            _ => panic!("Expected NumberLiteral as variable value"),
+                        }
+                    }
+                    _ => panic!("Expected VariableDeclaration"),
+                }
+
+                // Check the second statement
+                match &block.statements[1] {
+                    ast::Statement::Assignment(assignment) => {
+                        assert_eq!(assignment.name, "x");
+                        match &assignment.value {
+                            ast::Expression::NumberLiteral(literal) => {
+                                assert_eq!(literal.value, 43.0)
+                            }
+                            _ => panic!("Expected NumberLiteral as assignment value"),
+                        }
+                    }
+                    _ => panic!("Expected Assignment"),
+                }
+            }
+            _ => panic!("Expected BlockStatement, got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_parse_expression_statement() {
+        let input = "42;";
+        let result = parse_statement_input(input, Rule::expression_statement);
+
+        match result {
+            ast::Statement::Expression(expr_stmt) => match *expr_stmt.expression {
+                ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
+                _ => panic!("Expected NumberLiteral as expression"),
+            },
+            _ => panic!("Expected ExpressionStatement"),
+        }
     }
 }

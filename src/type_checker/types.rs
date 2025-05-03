@@ -140,3 +140,204 @@ impl TypeChecker {
         Type::Tuple(tuple_types)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast;
+    use crate::types::Type;
+
+    fn create_type_checker() -> TypeChecker {
+        TypeChecker {
+            errors: Vec::new(),
+            symbols: Default::default(),
+            type_registry: Default::default(),
+        }
+    }
+
+    fn dummy_span() -> pest::Span<'static> {
+        pest::Span::new("_", 0, 0).unwrap()
+    }
+
+    #[test]
+    fn test_visit_array_type() {
+        let mut checker = create_type_checker();
+        let array_type = ast::ArrayType {
+            element: Some(Box::new(ast::Type::Named(ast::NamedType {
+                name: "number".to_string(),
+                args: None,
+                span: dummy_span(),
+            }))),
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_array_type(&array_type);
+        assert_eq!(result, Type::Array(Box::new(Type::Number)));
+    }
+
+    #[test]
+    fn test_visit_function_type() {
+        let mut checker = create_type_checker();
+        let function_type = ast::FunctionType {
+            params: vec![
+                ast::Type::Named(ast::NamedType {
+                    name: "number".to_string(),
+                    args: None,
+                    span: dummy_span(),
+                }),
+                ast::Type::Named(ast::NamedType {
+                    name: "string".to_string(),
+                    args: None,
+                    span: dummy_span(),
+                }),
+            ],
+            returned: Box::new(ast::Type::Named(ast::NamedType {
+                name: "boolean".to_string(),
+                args: None,
+                span: dummy_span(),
+            })),
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_function_type(&function_type);
+        assert_eq!(
+            result,
+            Type::Function {
+                params: vec![Type::Number, Type::String],
+                return_type: Box::new(Type::Boolean),
+            }
+        );
+    }
+
+    #[test]
+    fn test_visit_map_type() {
+        let mut checker = create_type_checker();
+        let map_type = ast::MapType {
+            key: Some(Box::new(ast::Type::Named(ast::NamedType {
+                name: "string".to_string(),
+                args: None,
+                span: dummy_span(),
+            }))),
+            value: Some(Box::new(ast::Type::Named(ast::NamedType {
+                name: "number".to_string(),
+                args: None,
+                span: dummy_span(),
+            }))),
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_map_type(&map_type);
+        assert_eq!(
+            result,
+            Type::Map {
+                key: Box::new(Type::String),
+                value: Box::new(Type::Number),
+            }
+        );
+    }
+
+    #[test]
+    fn test_visit_named_type() {
+        let mut checker = create_type_checker();
+        checker
+            .type_registry
+            .define("Box", Type::Struct { fields: vec![] }, None);
+
+        let named_type = ast::NamedType {
+            name: "Box".to_string(),
+            args: None,
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_named_type(&named_type);
+        assert_eq!(
+            result,
+            Type::Named {
+                name: "Box".to_string(),
+                args: vec![],
+            }
+        );
+    }
+
+    #[test]
+    fn test_visit_option_type() {
+        let mut checker = create_type_checker();
+        let option_type = ast::OptionType {
+            base: Some(Box::new(ast::Type::Named(ast::NamedType {
+                name: "number".to_string(),
+                args: None,
+                span: dummy_span(),
+            }))),
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_option_type(&option_type);
+        assert_eq!(result, Type::Option(Box::new(Type::Number)));
+    }
+
+    #[test]
+    fn test_visit_reference_type() {
+        let mut checker = create_type_checker();
+        let reference_type = ast::ReferenceType {
+            target: Some(Box::new(ast::Type::Named(ast::NamedType {
+                name: "string".to_string(),
+                args: None,
+                span: dummy_span(),
+            }))),
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_reference_type(&reference_type);
+        assert_eq!(result, Type::Reference(Box::new(Type::String)));
+    }
+
+    #[test]
+    fn test_visit_result_type() {
+        let mut checker = create_type_checker();
+        let result_type = ast::ResultType {
+            ok: Some(Box::new(ast::Type::Named(ast::NamedType {
+                name: "number".to_string(),
+                args: None,
+                span: dummy_span(),
+            }))),
+            error: Some(Box::new(ast::Type::Named(ast::NamedType {
+                name: "string".to_string(),
+                args: None,
+                span: dummy_span(),
+            }))),
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_result_type(&result_type);
+        assert_eq!(
+            result,
+            Type::Result {
+                ok: Box::new(Type::Number),
+                error: Some(Box::new(Type::String)),
+            }
+        );
+    }
+
+    #[test]
+    fn test_visit_tuple_type() {
+        let mut checker = create_type_checker();
+        let tuple_type = ast::TupleType {
+            elements: vec![
+                ast::Type::Named(ast::NamedType {
+                    name: "number".to_string(),
+                    args: None,
+                    span: dummy_span(),
+                }),
+                ast::Type::Named(ast::NamedType {
+                    name: "string".to_string(),
+                    args: None,
+                    span: dummy_span(),
+                }),
+            ],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_tuple_type(&tuple_type);
+        assert_eq!(result, Type::Tuple(vec![Type::Number, Type::String]));
+    }
+}

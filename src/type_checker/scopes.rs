@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::types::Type;
 
+#[derive(Debug)]
 pub struct VariableInfo {
     pub ty: Type,
     pub mutable: bool,
@@ -41,6 +42,7 @@ pub struct TypeMetadata {
     pub type_params: Vec<String>,
 }
 
+#[derive(Default)]
 pub struct TypeRegistry {
     pub current_self: Option<String>,
     generics: HashMap<String, Type>,

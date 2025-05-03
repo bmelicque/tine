@@ -127,3 +127,205 @@ impl TypeChecker {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast;
+    use crate::types::{StructField, SumVariant, TraitMethod, Type};
+
+    fn create_type_checker() -> TypeChecker {
+        TypeChecker::new()
+    }
+
+    fn dummy_span() -> pest::Span<'static> {
+        pest::Span::new("_", 0, 0).unwrap()
+    }
+
+    #[test]
+    fn test_visit_type_declaration() {
+        let mut checker = create_type_checker();
+        let type_alias = ast::TypeAlias {
+            name: "MyType".to_string(),
+            params: None,
+            definition: Box::new(ast::TypeDefinition::Type(ast::Type::Named(
+                ast::NamedType {
+                    name: "number".to_string(),
+                    args: None,
+                    span: dummy_span(),
+                },
+            ))),
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_type_declaration(&type_alias);
+        assert_eq!(result, Type::Void);
+        assert!(checker.errors.is_empty());
+
+        let defined_type = checker.type_registry.lookup("MyType").unwrap();
+        assert_eq!(defined_type, Type::Number);
+    }
+
+    #[test]
+    fn test_visit_enum_definition() {
+        let mut checker = create_type_checker();
+        let enum_definition = ast::EnumDefinition {
+            variants: vec![
+                ast::VariantDefinition::Unit(ast::UnitVariant {
+                    name: "Variant1".to_string(),
+                    span: dummy_span(),
+                }),
+                ast::VariantDefinition::Struct(ast::StructVariant {
+                    name: "Variant2".to_string(),
+                    def: ast::StructDefinition {
+                        fields: vec![ast::StructDefinitionField::Mandatory(
+                            ast::StructMandatoryField {
+                                name: "field".to_string(),
+                                definition: ast::Type::Named(ast::NamedType {
+                                    name: "number".to_string(),
+                                    args: None,
+                                    span: dummy_span(),
+                                }),
+                                span: dummy_span(),
+                            },
+                        )],
+                        span: dummy_span(),
+                    },
+                    span: dummy_span(),
+                }),
+            ],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_enum_definition(&enum_definition);
+        assert_eq!(
+            result,
+            Type::Sum {
+                variants: vec![
+                    SumVariant {
+                        name: "Variant1".to_string(),
+                        def: Type::Unit,
+                    },
+                    SumVariant {
+                        name: "Variant2".to_string(),
+                        def: Type::Struct {
+                            fields: vec![StructField {
+                                name: "field".to_string(),
+                                def: Type::Number,
+                                optional: false,
+                            }],
+                        },
+                    },
+                ],
+            }
+        );
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_struct_definition() {
+        let mut checker = create_type_checker();
+        let struct_definition = ast::StructDefinition {
+            fields: vec![
+                ast::StructDefinitionField::Mandatory(ast::StructMandatoryField {
+                    name: "field1".to_string(),
+                    definition: ast::Type::Named(ast::NamedType {
+                        name: "number".to_string(),
+                        args: None,
+                        span: dummy_span(),
+                    }),
+                    span: dummy_span(),
+                }),
+                ast::StructDefinitionField::Optional(ast::StructOptionalField {
+                    name: "field2".to_string(),
+                    default: ast::Expression::NumberLiteral(ast::NumberLiteral {
+                        value: 42.0,
+                        span: dummy_span(),
+                    }),
+                    span: dummy_span(),
+                }),
+            ],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_struct_definition(&struct_definition);
+        assert_eq!(
+            result,
+            Type::Struct {
+                fields: vec![
+                    StructField {
+                        name: "field1".to_string(),
+                        def: Type::Number,
+                        optional: false,
+                    },
+                    StructField {
+                        name: "field2".to_string(),
+                        def: Type::Number,
+                        optional: true,
+                    },
+                ],
+            }
+        );
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_trait_definition() {
+        let mut checker = create_type_checker();
+        let trait_definition = ast::TraitDefinition {
+            name: "MyTrait".to_string(),
+            body: Box::new(ast::StructDefinition {
+                fields: vec![ast::StructDefinitionField::Mandatory(
+                    ast::StructMandatoryField {
+                        name: "method".to_string(),
+                        definition: ast::Type::Function(ast::FunctionType {
+                            params: vec![ast::Type::Named(ast::NamedType {
+                                name: "number".to_string(),
+                                args: None,
+                                span: dummy_span(),
+                            })],
+                            returned: Box::new(ast::Type::Named(ast::NamedType {
+                                name: "void".to_string(),
+                                args: None,
+                                span: dummy_span(),
+                            })),
+                            span: dummy_span(),
+                        }),
+                        span: dummy_span(),
+                    },
+                )],
+                span: dummy_span(),
+            }),
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_trait_definition(&trait_definition);
+        assert_eq!(
+            result,
+            Type::Trait {
+                methods: vec![TraitMethod {
+                    name: "method".to_string(),
+                    def: Type::Function {
+                        params: vec![Type::Number],
+                        return_type: Box::new(Type::Void),
+                    },
+                }],
+            }
+        );
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_type_definition() {
+        let mut checker = create_type_checker();
+        let type_definition = ast::TypeDefinition::Type(ast::Type::Named(ast::NamedType {
+            name: "string".to_string(),
+            args: None,
+            span: dummy_span(),
+        }));
+
+        let result = checker.visit_type_definition(&type_definition);
+        assert_eq!(result, Type::String);
+        assert!(checker.errors.is_empty());
+    }
+}

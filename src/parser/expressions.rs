@@ -177,3 +177,163 @@ impl ParserEngine {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::parser::{MyLanguageParser, Rule};
+    use pest::Parser;
+
+    fn parse_expression_input(input: &'static str, rule: Rule) -> ast::Expression {
+        let pair = MyLanguageParser::parse(rule, input)
+            .unwrap()
+            .next()
+            .unwrap();
+        let mut parser_engine = ParserEngine::new();
+        parser_engine.parse_expression(pair)
+    }
+
+    #[test]
+    fn test_parse_identifier() {
+        let input = "myVariable";
+        let result = parse_expression_input(input, Rule::value_identifier);
+
+        match result {
+            ast::Expression::Identifier(identifier) => {
+                assert_eq!(identifier.span.as_str(), "myVariable");
+            }
+            _ => panic!("Expected Identifier"),
+        }
+    }
+
+    #[test]
+    fn test_parse_number_literal() {
+        let input = "42";
+        let result = parse_expression_input(input, Rule::number_literal);
+
+        match result {
+            ast::Expression::NumberLiteral(literal) => {
+                assert_eq!(literal.value, 42.0);
+            }
+            _ => panic!("Expected NumberLiteral"),
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression() {
+        let input = "1 + 2 * 3";
+        let result = parse_expression_input(input, Rule::expression);
+
+        match result {
+            ast::Expression::Binary(binary) => {
+                assert_eq!(binary.operator, ast::BinaryOperator::Add);
+                match *binary.left {
+                    ast::Expression::NumberLiteral(left) => assert_eq!(left.value, 1.0),
+                    _ => panic!("Expected NumberLiteral on the left"),
+                }
+                match *binary.right {
+                    ast::Expression::Binary(inner_binary) => {
+                        assert_eq!(inner_binary.operator, ast::BinaryOperator::Mul);
+                        match *inner_binary.left {
+                            ast::Expression::NumberLiteral(left) => assert_eq!(left.value, 2.0),
+                            _ => panic!("Expected NumberLiteral on the left"),
+                        }
+                        match *inner_binary.right {
+                            ast::Expression::NumberLiteral(right) => assert_eq!(right.value, 3.0),
+                            _ => panic!("Expected NumberLiteral on the right"),
+                        }
+                    }
+                    _ => panic!("Expected BinaryExpression on the right"),
+                }
+            }
+            _ => panic!("Expected BinaryExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_field_access_expression() {
+        let input = "object.property";
+        let result = parse_expression_input(input, Rule::member_expression);
+
+        match result {
+            ast::Expression::FieldAccess(field_access) => {
+                assert_eq!(field_access.object.as_span().as_str(), "object");
+                assert_eq!(field_access.prop.span.as_str(), "property");
+            }
+            _ => panic!("Expected FieldAccessExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_tuple_indexing_expression() {
+        let input = "tuple.0";
+        let result = parse_expression_input(input, Rule::tuple_indexing);
+
+        match result {
+            ast::Expression::TupleIndexing(tuple_indexing) => {
+                assert_eq!(tuple_indexing.tuple.as_span().as_str(), "tuple");
+                assert_eq!(tuple_indexing.index.value, 0.0);
+            }
+            _ => panic!("Expected TupleIndexingExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_composite_literal() {
+        let input = r#"[]number{ 1, 2, 3 }"#;
+        let result = parse_expression_input(input, Rule::composite_literal);
+
+        match result {
+            ast::Expression::CompositeLiteral(composite) => match composite {
+                ast::CompositeLiteral::Array(array) => {
+                    assert_eq!(array.elements.len(), 3);
+                    assert!(matches!(
+                        array.elements[0],
+                        ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(ast::NumberLiteral{value, ..})) if value == 1.0
+                    ));
+                    assert!(matches!(
+                        array.elements[1],
+                        ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(ast::NumberLiteral{value, ..})) if value == 2.0
+                    ));
+                    assert!(matches!(
+                        array.elements[2],
+                        ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(ast::NumberLiteral{value, ..})) if value == 3.0
+                    ));
+                }
+                _ => panic!("Expected ArrayLiteral"),
+            },
+            _ => panic!("Expected CompositeLiteral"),
+        }
+    }
+
+    #[test]
+    fn test_parse_exponentiation_expression() {
+        let input = "2 ** 3 ** 2";
+        let result = parse_expression_input(input, Rule::exponentiation);
+
+        match result {
+            ast::Expression::Binary(binary) => {
+                assert_eq!(binary.operator, ast::BinaryOperator::Pow);
+                match *binary.left {
+                    ast::Expression::NumberLiteral(left) => assert_eq!(left.value, 2.0),
+                    _ => panic!("Expected NumberLiteral on the left"),
+                }
+                match *binary.right {
+                    ast::Expression::Binary(inner_binary) => {
+                        assert_eq!(inner_binary.operator, ast::BinaryOperator::Pow);
+                        match *inner_binary.left {
+                            ast::Expression::NumberLiteral(left) => assert_eq!(left.value, 3.0),
+                            _ => panic!("Expected NumberLiteral on the left"),
+                        }
+                        match *inner_binary.right {
+                            ast::Expression::NumberLiteral(right) => assert_eq!(right.value, 2.0),
+                            _ => panic!("Expected NumberLiteral on the right"),
+                        }
+                    }
+                    _ => panic!("Expected BinaryExpression on the right"),
+                }
+            }
+            _ => panic!("Expected BinaryExpression"),
+        }
+    }
+}

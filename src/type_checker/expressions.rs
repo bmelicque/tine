@@ -245,3 +245,168 @@ fn substitute_type(ty: &Type, substitutions: &HashMap<&String, Type>) -> Type {
         _ => ty.clone(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast;
+    use crate::types::{StructField, Type};
+
+    fn create_type_checker() -> TypeChecker {
+        TypeChecker::new()
+    }
+
+    fn dummy_span() -> pest::Span<'static> {
+        pest::Span::new("_", 0, 0).unwrap()
+    }
+
+    fn span(text: &'static str) -> pest::Span<'static> {
+        pest::Span::new(text, 0, text.len()).unwrap()
+    }
+
+    #[test]
+    fn test_visit_binary_expression() {
+        let mut checker = create_type_checker();
+        let binary_expression = ast::BinaryExpression {
+            left: Box::new(ast::Expression::NumberLiteral(ast::NumberLiteral {
+                value: 1.0,
+                span: dummy_span(),
+            })),
+            right: Box::new(ast::Expression::NumberLiteral(ast::NumberLiteral {
+                value: 2.0,
+                span: dummy_span(),
+            })),
+            operator: ast::BinaryOperator::Add,
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_binary_expression(&binary_expression);
+        assert_eq!(result, Type::Number);
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_field_access_expression() {
+        let mut checker = create_type_checker();
+        checker.type_registry.define(
+            "User",
+            Type::Struct {
+                fields: vec![
+                    StructField {
+                        name: "name".to_string(),
+                        def: Type::String,
+                        optional: false,
+                    },
+                    StructField {
+                        name: "age".to_string(),
+                        def: Type::Number,
+                        optional: false,
+                    },
+                ],
+            },
+            None,
+        );
+
+        let field_access_expression = ast::FieldAccessExpression {
+            object: Box::new(ast::Expression::Identifier(ast::Identifier {
+                span: span("user"),
+            })),
+            prop: ast::Identifier { span: span("name") },
+            span: dummy_span(),
+        };
+
+        checker.symbols.define(
+            "user",
+            Type::Named {
+                name: "User".to_string(),
+                args: vec![],
+            },
+            false,
+        );
+
+        let result = checker.visit_field_access_expression(&field_access_expression);
+        assert!(
+            checker.errors.is_empty(),
+            "Expected no errors, got {:?}",
+            checker.errors
+        );
+        assert_eq!(result, Type::String);
+    }
+
+    #[test]
+    fn test_visit_function_expression() {
+        let mut checker = create_type_checker();
+        let function_expression = ast::FunctionExpression {
+            params: vec![
+                ast::FunctionParam {
+                    name: ast::Identifier { span: span("x") },
+                    ty: ast::Type::Named(ast::NamedType {
+                        name: "number".to_string(),
+                        args: None,
+                        span: dummy_span(),
+                    }),
+                    span: dummy_span(),
+                },
+                ast::FunctionParam {
+                    name: ast::Identifier { span: span("y") },
+                    ty: ast::Type::Named(ast::NamedType {
+                        name: "number".to_string(),
+                        args: None,
+                        span: dummy_span(),
+                    }),
+                    span: dummy_span(),
+                },
+            ],
+            body: ast::FunctionBody::Expression(Box::new(ast::Expression::Binary(
+                ast::BinaryExpression {
+                    left: Box::new(ast::Expression::Identifier(ast::Identifier {
+                        span: span("x"),
+                    })),
+                    right: Box::new(ast::Expression::Identifier(ast::Identifier {
+                        span: span("y"),
+                    })),
+                    operator: ast::BinaryOperator::Add,
+                    span: dummy_span(),
+                },
+            ))),
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_function_expression(&function_expression);
+        assert_eq!(
+            result,
+            Type::Function {
+                params: vec![Type::Number, Type::Number],
+                return_type: Box::new(Type::Number),
+            }
+        );
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_identifier() {
+        let mut checker = create_type_checker();
+        checker.symbols.define("x", Type::Number, false);
+
+        let identifier = ast::Identifier { span: span("x") };
+
+        let result = checker.visit_identifier(&identifier);
+        assert_eq!(result, Type::Number);
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_expression_or_anonymous() {
+        let mut checker = create_type_checker();
+        let expression = ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
+            ast::NumberLiteral {
+                value: 42.0,
+                span: dummy_span(),
+            },
+        ));
+
+        let result = checker.visit_expression_or_anonymous(&expression);
+        assert_eq!(result, Type::Number);
+        assert!(checker.errors.is_empty());
+    }
+}

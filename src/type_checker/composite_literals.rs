@@ -246,3 +246,269 @@ impl TypeChecker {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast;
+    use crate::types::{StructField, Type};
+
+    fn create_type_checker() -> TypeChecker {
+        TypeChecker {
+            errors: Vec::new(),
+            symbols: Default::default(),
+            type_registry: Default::default(),
+        }
+    }
+
+    fn dummy_span() -> pest::Span<'static> {
+        pest::Span::new("_", 0, 0).unwrap()
+    }
+
+    #[test]
+    fn test_visit_anonymous_array_literal() {
+        let mut checker = create_type_checker();
+        let array_literal = ast::AnonymousArrayLiteral {
+            elements: vec![
+                ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
+                    ast::NumberLiteral {
+                        value: 1.0,
+                        span: dummy_span(),
+                    },
+                )),
+                ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
+                    ast::NumberLiteral {
+                        value: 2.0,
+                        span: dummy_span(),
+                    },
+                )),
+            ],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_anonymous_array_literal(&array_literal);
+        assert_eq!(result, Type::Array(Box::new(Type::Number)));
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_anonymous_struct_literal() {
+        let mut checker = create_type_checker();
+        let struct_literal = ast::AnonymousStructLiteral {
+            fields: vec![
+                ast::StructLiteralField {
+                    prop: "name".to_string(),
+                    value: ast::Expression::StringLiteral(ast::StringLiteral {
+                        span: pest::Span::new("John", 0, 4).unwrap(),
+                    }),
+                    span: dummy_span(),
+                },
+                ast::StructLiteralField {
+                    prop: "age".to_string(),
+                    value: ast::Expression::NumberLiteral(ast::NumberLiteral {
+                        value: 30.0,
+                        span: dummy_span(),
+                    }),
+                    span: dummy_span(),
+                },
+            ],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_anonymous_struct_literal(&struct_literal);
+        assert_eq!(
+            result,
+            Type::Struct {
+                fields: vec![
+                    StructField {
+                        name: "name".to_string(),
+                        def: Type::String,
+                        optional: true,
+                    },
+                    StructField {
+                        name: "age".to_string(),
+                        def: Type::Number,
+                        optional: true,
+                    },
+                ],
+            }
+        );
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_array_literal() {
+        let mut checker = create_type_checker();
+        let array_literal = ast::ArrayLiteral {
+            ty: ast::ArrayType {
+                element: Some(Box::new(ast::Type::Named(ast::NamedType {
+                    name: "number".to_string(),
+                    args: None,
+                    span: dummy_span(),
+                }))),
+                span: dummy_span(),
+            },
+            elements: vec![
+                ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
+                    ast::NumberLiteral {
+                        value: 1.0,
+                        span: dummy_span(),
+                    },
+                )),
+                ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
+                    ast::NumberLiteral {
+                        value: 2.0,
+                        span: dummy_span(),
+                    },
+                )),
+            ],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_array_literal(&array_literal);
+        assert_eq!(result, Type::Array(Box::new(Type::Number)));
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_map_literal() {
+        let mut checker = create_type_checker();
+        let map_literal = ast::MapLiteral {
+            ty: ast::MapType {
+                key: Some(Box::new(ast::Type::Named(ast::NamedType {
+                    name: "string".to_string(),
+                    args: None,
+                    span: dummy_span(),
+                }))),
+                value: Some(Box::new(ast::Type::Named(ast::NamedType {
+                    name: "number".to_string(),
+                    args: None,
+                    span: dummy_span(),
+                }))),
+                span: dummy_span(),
+            },
+            entries: vec![
+                ast::MapEntry {
+                    key: Box::new(ast::Expression::StringLiteral(ast::StringLiteral {
+                        span: pest::Span::new("key1", 0, 1).unwrap(),
+                    })),
+                    value: Box::new(ast::ExpressionOrAnonymous::Expression(
+                        ast::Expression::NumberLiteral(ast::NumberLiteral {
+                            value: 42.0,
+                            span: dummy_span(),
+                        }),
+                    )),
+                    span: dummy_span(),
+                },
+                ast::MapEntry {
+                    key: Box::new(ast::Expression::StringLiteral(ast::StringLiteral {
+                        span: pest::Span::new("key1", 0, 1).unwrap(),
+                    })),
+                    value: Box::new(ast::ExpressionOrAnonymous::Expression(
+                        ast::Expression::NumberLiteral(ast::NumberLiteral {
+                            value: 99.0,
+                            span: dummy_span(),
+                        }),
+                    )),
+                    span: dummy_span(),
+                },
+            ],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_map_literal(&map_literal);
+        assert_eq!(
+            result,
+            Type::Map {
+                key: Box::new(Type::String),
+                value: Box::new(Type::Number),
+            }
+        );
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_option_literal() {
+        let mut checker = create_type_checker();
+        let option_literal = ast::OptionLiteral {
+            ty: ast::OptionType {
+                base: Some(Box::new(ast::Type::Named(ast::NamedType {
+                    name: "number".to_string(),
+                    args: None,
+                    span: dummy_span(),
+                }))),
+                span: dummy_span(),
+            },
+            value: Some(Box::new(ast::ExpressionOrAnonymous::Expression(
+                ast::Expression::NumberLiteral(ast::NumberLiteral {
+                    value: 42.0,
+                    span: dummy_span(),
+                }),
+            ))),
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_option_literal(&option_literal);
+        assert_eq!(result, Type::Option(Box::new(Type::Number)));
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_struct_literal() {
+        let mut checker = create_type_checker();
+        checker.type_registry.define(
+            "User",
+            Type::Struct {
+                fields: vec![
+                    StructField {
+                        name: "name".to_string(),
+                        def: Type::String,
+                        optional: false,
+                    },
+                    StructField {
+                        name: "age".to_string(),
+                        def: Type::Number,
+                        optional: false,
+                    },
+                ],
+            },
+            None,
+        );
+
+        let struct_literal = ast::StructLiteral {
+            ty: ast::NamedType {
+                name: "User".to_string(),
+                args: None,
+                span: dummy_span(),
+            },
+            fields: vec![
+                ast::StructLiteralField {
+                    prop: "name".to_string(),
+                    value: ast::Expression::StringLiteral(ast::StringLiteral {
+                        span: pest::Span::new("John", 0, 1).unwrap(),
+                    }),
+                    span: dummy_span(),
+                },
+                ast::StructLiteralField {
+                    prop: "age".to_string(),
+                    value: ast::Expression::NumberLiteral(ast::NumberLiteral {
+                        value: 30.0,
+                        span: dummy_span(),
+                    }),
+                    span: dummy_span(),
+                },
+            ],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_struct_literal(&struct_literal);
+        assert_eq!(
+            result,
+            Type::Named {
+                name: "User".to_string(),
+                args: vec![],
+            }
+        );
+        assert!(checker.errors.is_empty());
+    }
+}

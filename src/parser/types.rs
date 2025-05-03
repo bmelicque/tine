@@ -310,6 +310,20 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_function_type_no_args() {
+        let input = "() -> boolean";
+        let result = parse_type_input(input, Rule::function_type);
+
+        match result {
+            ast::Type::Function(function) => match *function.returned {
+                ast::Type::Named(named) => assert_eq!(named.name, "boolean"),
+                _ => panic!("Expected NamedType as function return type"),
+            },
+            _ => panic!("Expected FunctionType"),
+        }
+    }
+
+    #[test]
     fn test_parse_result_type() {
         let input = "string!number";
         let result = parse_type_input(input, Rule::result_type);

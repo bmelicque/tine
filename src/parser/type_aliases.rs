@@ -44,7 +44,7 @@ impl ParserEngine {
         let mut type_param_names = std::collections::HashSet::new();
         let inner = pair.into_inner();
         for param_pair in inner {
-            assert_eq!(param_pair.as_rule(), Rule::type_name);
+            assert_eq!(param_pair.as_rule(), Rule::type_identifier);
             let param_name = param_pair.as_str().to_string();
             if !is_pascal_case(&param_name) {
                 self.errors.push(ParseError {
@@ -200,5 +200,147 @@ impl ParserEngine {
         let body = Box::new(self.parse_struct_body(body_pair));
 
         ast::TraitDefinition { span, name, body }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::parser::{MyLanguageParser, Rule};
+    use pest::Parser;
+
+    fn parse_type_alias_input(
+        input: &'static str,
+        rule: Rule,
+    ) -> (ast::TypeAlias, Vec<ParseError>) {
+        let pair = MyLanguageParser::parse(rule, input)
+            .unwrap()
+            .next()
+            .unwrap();
+        let mut parser_engine = ParserEngine::new();
+        (parser_engine.parse_type_alias(pair), parser_engine.errors)
+    }
+
+    // TODO: implement simple aliasing
+    // #[test]
+    // fn test_parse_simple_type_alias() {
+    //     let input = "MyAlias :: number";
+    //     let (result, _) = parse_type_alias_input(input, Rule::type_alias);
+
+    //     assert_eq!(result.name, "MyAlias");
+    //     assert!(result.params.is_none());
+    //     match *result.definition {
+    //         ast::TypeDefinition::Struct(def) => {
+    //             assert!(def.fields.is_empty());
+    //         }
+    //         _ => panic!("Expected StructDefinition"),
+    //     }
+    // }
+
+    #[test]
+    fn test_parse_generic_type_alias() {
+        let input = "Box[T] :: { value T }";
+        let (result, _) = parse_type_alias_input(input, Rule::type_alias);
+
+        assert_eq!(result.name, "Box");
+        assert!(result.params.is_some());
+        let params = result.params.unwrap();
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0], "T");
+
+        match *result.definition {
+            ast::TypeDefinition::Struct(def) => {
+                assert_eq!(def.fields.len(), 1);
+                let field = &def.fields[0];
+                assert_eq!(field.as_name(), "value");
+            }
+            _ => panic!("Expected StructDefinition"),
+        }
+    }
+
+    #[test]
+    fn test_parse_sum_type_alias() {
+        let input =
+            "Shape :: | Circle { radius number } | Rectangle { width number, height number }";
+        let (result, _) = parse_type_alias_input(input, Rule::type_alias);
+
+        assert_eq!(result.name, "Shape");
+        assert!(result.params.is_none());
+
+        match *result.definition {
+            ast::TypeDefinition::Enum(sum) => {
+                assert_eq!(sum.variants.len(), 2);
+
+                // Check the first variant
+                let variant1 = &sum.variants[0];
+                assert_eq!(variant1.as_name(), "Circle");
+
+                // Check the second variant
+                let variant2 = &sum.variants[1];
+                assert_eq!(variant2.as_name(), "Rectangle");
+            }
+            _ => panic!("Expected SumType"),
+        }
+    }
+
+    #[test]
+    fn test_parse_trait_type_alias() {
+        let input = "MyTrait :: (Self).{ method() -> Self }";
+        let (result, _) = parse_type_alias_input(input, Rule::type_alias);
+
+        assert_eq!(result.name, "MyTrait");
+        assert!(result.params.is_none());
+
+        match *result.definition {
+            ast::TypeDefinition::Trait(trait_def) => {
+                assert_eq!(trait_def.name, "Self");
+                assert_eq!(trait_def.body.fields.len(), 1);
+
+                let field = &trait_def.body.fields[0];
+                assert_eq!(field.as_name(), "method");
+            }
+            _ => panic!("Expected TraitDefinition"),
+        }
+    }
+
+    #[test]
+    fn test_parse_type_alias_with_duplicate_params() {
+        let input = "Box[T, T] :: { value T }";
+        let (result, errors) = parse_type_alias_input(input, Rule::type_alias);
+
+        assert_eq!(result.name, "Box");
+        assert!(result.params.is_some());
+        let params = result.params.unwrap();
+        assert_eq!(params.len(), 2);
+        assert_eq!(params[0], "T");
+        assert_eq!(params[1], "T");
+
+        // Check for errors
+        assert!(!errors.is_empty());
+        assert!(errors
+            .iter()
+            .any(|e| e.message.contains("Duplicate type parameter name")));
+    }
+
+    #[test]
+    fn test_parse_struct_with_duplicate_fields() {
+        let input = "MyStruct :: { field: number, field: string }";
+        let (result, errors) = parse_type_alias_input(input, Rule::type_alias);
+
+        assert_eq!(result.name, "MyStruct");
+        assert!(result.params.is_none());
+
+        match *result.definition {
+            ast::TypeDefinition::Struct(def) => {
+                assert_eq!(def.fields.len(), 2);
+
+                // Check for errors
+                assert!(!errors.is_empty());
+                assert!(errors
+                    .iter()
+                    .any(|e| e.message.contains("Duplicate field name")));
+            }
+            _ => panic!("Expected StructDefinition"),
+        }
     }
 }
