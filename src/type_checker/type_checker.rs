@@ -53,4 +53,17 @@ impl TypeChecker {
             _ => panic!("Not implemented yet!"),
         }
     }
+
+    pub fn unwrap_named_type(&self, ty: &Type) -> Type {
+        match ty {
+            Type::Named { name, .. } => match name.as_str() {
+                "string" => Type::String,
+                "number" => Type::Number,
+                "boolean" => Type::Boolean,
+                "void" => Type::Void,
+                id => self.type_registry.lookup(id).unwrap_or(Type::Unknown),
+            },
+            _ => ty.clone(),
+        }
+    }
 }

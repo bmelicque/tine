@@ -20,10 +20,7 @@ impl TypeChecker {
             ast::Expression::Identifier(node) => self.visit_identifier(node),
             ast::Expression::NumberLiteral(_) => Type::Number,
             ast::Expression::StringLiteral(_) => Type::String,
-            ast::Expression::TupleIndexing(_) => {
-                // FIXME:
-                Type::Unknown
-            }
+            ast::Expression::TupleIndexing(node) => self.visit_tuple_indexing(node),
         }
     }
 
@@ -195,12 +192,42 @@ impl TypeChecker {
         }
     }
 
-    // pub fn visit_tuple_indexing(&mut self, node: &AstNode) -> Type {
-    //     // TODO: visit left
-    //     // TODO: resolve left type to check if it is a tuple
-    //     // TODO: check if number literal is in range
-    //     // TODO: return type à tuple's index
-    // }
+    pub fn visit_tuple_indexing(&mut self, node: &ast::TupleIndexingExpression) -> Type {
+        let left_type = self.visit_expression(&node.tuple);
+        let Type::Tuple(tuple) = self.unwrap_named_type(&left_type) else {
+            self.errors.push(ParseError {
+                message: format!("Expected tuple type, got {}", left_type),
+                span: node.tuple.as_span(),
+            });
+            return Type::Unknown;
+        };
+        let value = node.index.value;
+        if value != value.round() {
+            self.errors.push(ParseError {
+                message: "Integer expected".into(),
+                span: node.index.span,
+            });
+            return Type::Unknown;
+        }
+        let value = value as isize;
+        if value < 0 {
+            self.errors.push(ParseError {
+                message: "Index out of range".into(),
+                span: node.index.span,
+            });
+            return Type::Unknown;
+        }
+        let value = value as usize;
+        if value >= tuple.len() {
+            self.errors.push(ParseError {
+                message: "Index out of range".into(),
+                span: node.index.span,
+            });
+            Type::Unknown
+        } else {
+            tuple[value].clone()
+        }
+    }
 }
 
 fn substitute_type(ty: &Type, substitutions: &HashMap<&String, Type>) -> Type {
@@ -408,5 +435,126 @@ mod tests {
         let result = checker.visit_expression_or_anonymous(&expression);
         assert_eq!(result, Type::Number);
         assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_tuple_indexing_valid() {
+        let mut checker = create_type_checker();
+        let tuple_type = Type::Tuple(vec![Type::Number, Type::String, Type::Boolean]);
+
+        checker
+            .symbols
+            .define("my_tuple", tuple_type.clone(), false);
+
+        let tuple_indexing = ast::TupleIndexingExpression {
+            tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
+                span: span("my_tuple"),
+            })),
+            index: ast::NumberLiteral {
+                value: 1.0,
+                span: dummy_span(),
+            },
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_tuple_indexing(&tuple_indexing);
+        assert_eq!(result, Type::String);
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_tuple_indexing_invalid_type() {
+        let mut checker = create_type_checker();
+        checker.symbols.define("not_a_tuple", Type::Number, false);
+
+        let tuple_indexing = ast::TupleIndexingExpression {
+            tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
+                span: span("not_a_tuple"),
+            })),
+            index: ast::NumberLiteral {
+                value: 0.0,
+                span: dummy_span(),
+            },
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_tuple_indexing(&tuple_indexing);
+        assert_eq!(result, Type::Unknown);
+        assert_eq!(checker.errors.len(), 1);
+        assert!(checker.errors[0]
+            .message
+            .contains("Expected tuple type, got number"));
+    }
+
+    #[test]
+    fn test_visit_tuple_indexing_non_integer_index() {
+        let mut checker = create_type_checker();
+        let tuple_type = Type::Tuple(vec![Type::Number, Type::String]);
+
+        checker.symbols.define("my_tuple", tuple_type, false);
+
+        let tuple_indexing = ast::TupleIndexingExpression {
+            tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
+                span: span("my_tuple"),
+            })),
+            index: ast::NumberLiteral {
+                value: 1.5,
+                span: dummy_span(),
+            },
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_tuple_indexing(&tuple_indexing);
+        assert_eq!(result, Type::Unknown);
+        assert_eq!(checker.errors.len(), 1);
+        assert!(checker.errors[0].message.contains("Integer expected"));
+    }
+
+    #[test]
+    fn test_visit_tuple_indexing_out_of_range() {
+        let mut checker = create_type_checker();
+        let tuple_type = Type::Tuple(vec![Type::Number, Type::String]);
+
+        checker.symbols.define("my_tuple", tuple_type, false);
+
+        let tuple_indexing = ast::TupleIndexingExpression {
+            tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
+                span: span("my_tuple"),
+            })),
+            index: ast::NumberLiteral {
+                value: 2.0,
+                span: dummy_span(),
+            },
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_tuple_indexing(&tuple_indexing);
+        assert_eq!(result, Type::Unknown);
+        assert_eq!(checker.errors.len(), 1);
+        assert!(checker.errors[0].message.contains("Index out of range"));
+    }
+
+    #[test]
+    fn test_visit_tuple_indexing_negative_index() {
+        let mut checker = create_type_checker();
+        let tuple_type = Type::Tuple(vec![Type::Number, Type::String]);
+
+        checker.symbols.define("my_tuple", tuple_type, false);
+
+        let tuple_indexing = ast::TupleIndexingExpression {
+            tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
+                span: span("my_tuple"),
+            })),
+            index: ast::NumberLiteral {
+                value: -1.0,
+                span: dummy_span(),
+            },
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_tuple_indexing(&tuple_indexing);
+        assert_eq!(result, Type::Unknown);
+        assert_eq!(checker.errors.len(), 1);
+        assert!(checker.errors[0].message.contains("Index out of range"));
     }
 }
