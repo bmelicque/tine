@@ -13,7 +13,7 @@ boolean_literal = @{ "true" | "false" }
 type_annotation = { tuple_type | function_type | binary_type | unary_type | primary_type }
 tuple_type = { type_element  ~ ("," ~ type_element)+ }
 function_type = { "(" ~ function_type_params ~ ")" ~ "->" ~ type_element }
-function_type_params = { type_element  ~ ("," ~ type_element)* }
+function_type_params = { (type_element  ~ ("," ~ type_element)*)? }
 binary_type = { map_type | result_type }
 map_type = { map_type_key? ~ "#" ~ map_type_value? }
 map_type_key = { unary_type | primary_type }
@@ -71,15 +71,15 @@ parameter = { value_identifier ~ type_annotation? }
 
 
 // Statements
-statement = { block | type_declaration | variable_declaration | assignment | return_statement | expression_statement }
-variable_declaration = { value_identifier? ~ decl_op ~ expression? }
+statement = { block | type_alias | variable_declaration | assignment | return_statement | expression_statement }
+variable_declaration = { value_identifier ~ decl_op ~ expression }
 decl_op = { ":=" | "::" }
-assignment = { value_identifier? ~ "=" ~ expression? }
+assignment = { value_identifier ~ "=" ~ expression }
 return_statement = { "return" ~ expression? }
 expression_statement = { expression }
-block = { "{" ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ "}" }
+block = { "{" ~ NEWLINE? ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ NEWLINE? ~ "}" }
 
-type_declaration = { type_identifier ~ type_params? ~ "::" ~ type_def }
+type_alias = { type_identifier ~ type_params? ~ "::" ~ type_def }
 type_params = { "[" ~ type_identifier ~ ("," ~ type_identifier)* ~ "]" }
 type_def = { struct_body | sum_type | trait_type }
 struct_body = { "{" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ "}" }

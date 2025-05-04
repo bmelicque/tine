@@ -1,10 +1,8 @@
-use pest::iterators::{Pair, Pairs};
+use pest::iterators::Pairs;
 use pest::Parser;
 use pest_derive::Parser;
 
-use crate::ast::{AstNode, Node, Spanned};
-
-use super::statements::parse_statement;
+use crate::ast;
 
 #[derive(Parser)]
 #[grammar = "parser/grammar.pest"]
@@ -17,72 +15,43 @@ pub struct ParseError {
 }
 
 pub struct ParseResult {
-    pub node: Option<AstNode>,
+    pub node: ast::Program,
     pub errors: Vec<ParseError>,
 }
 
-impl ParseResult {
-    pub fn empty() -> Self {
-        ParseResult {
-            node: None,
-            errors: vec![],
-        }
-    }
-
-    pub fn ok(node: AstNode) -> Self {
-        ParseResult {
-            node: Some(node),
-            errors: Vec::new(),
-        }
-    }
+pub struct ParserEngine {
+    pub errors: Vec<ParseError>,
 }
-
-pub struct ParserEngine;
 
 impl ParserEngine {
     pub fn new() -> Self {
-        Self
+        Self { errors: Vec::new() }
     }
 
-    pub fn parse(&self, input: &'static str) -> ParseResult {
+    pub fn parse(&mut self, input: &'static str) -> ParseResult {
         match MyLanguageParser::parse(Rule::program, input) {
             Ok(pairs) => self.build_ast(pairs),
             Err(err) => panic!("{}", err),
         }
     }
 
-    fn build_ast(&self, pairs: Pairs<'static, Rule>) -> ParseResult {
-        let mut errors = Vec::new();
-        let mut nodes = Vec::new();
-
-        for pair in pairs {
-            if pair.as_rule() != Rule::program {
-                continue;
-            }
-            for inner in pair.into_inner() {
-                let mut result = self.parse_statement(inner);
-                if let Some(node) = result.node {
-                    nodes.push(node);
-                }
-                errors.append(&mut result.errors);
-            }
-        }
-
-        let span = nodes
-            .first()
-            .map(|n| n.span.clone())
-            .unwrap_or_else(|| pest::Span::new("", 0, 0).unwrap());
+    fn build_ast(&mut self, pairs: Pairs<'static, Rule>) -> ParseResult {
+        let statements: Vec<ast::Statement> = pairs
+            .into_iter()
+            .filter(|pair| pair.as_rule() == Rule::program)
+            .flat_map(|pair| {
+                let statements: Vec<ast::Statement> = pair
+                    .into_inner()
+                    .map(|pair| self.parse_statement(pair))
+                    .filter(|statement| !statement.is_empty())
+                    .collect();
+                statements
+            })
+            .collect();
 
         ParseResult {
-            node: Some(Spanned {
-                node: Node::Program(nodes),
-                span,
-            }),
-            errors,
+            node: ast::Program { statements },
+            errors: self.errors.drain(..).collect(),
         }
-    }
-
-    fn parse_statement(&self, pair: Pair<'static, Rule>) -> ParseResult {
-        parse_statement(pair)
     }
 }

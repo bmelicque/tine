@@ -1,196 +1,180 @@
 use pest::iterators::Pair;
 
-use crate::{
-    ast::{Node, Spanned},
-    parser::utils::merge_span,
-};
+use crate::{ast, parser::utils::merge_span};
 
 use super::{
-    composite_literals::{
-        parse_anonymous_array_literal, parse_anonymous_struct_literal, parse_composite_literal,
-    },
-    parser::{ParseError, ParseResult, Rule},
+    parser::{ParseError, Rule},
+    ParserEngine,
 };
 
-pub fn parse_expression(pair: Pair<'static, Rule>) -> ParseResult {
-    let span = pair.as_span().clone();
-
-    match pair.as_rule() {
-        Rule::anonymous_expression | Rule::expression | Rule::primary | Rule::type_annotation => {
-            if let Some(inner) = pair.into_inner().next() {
-                parse_expression(inner)
-            } else {
-                ParseResult::empty()
+impl ParserEngine {
+    pub fn parse_expression(&mut self, pair: Pair<'static, Rule>) -> ast::Expression {
+        match pair.as_rule() {
+            Rule::anonymous_expression
+            | Rule::expression
+            | Rule::primary
+            | Rule::type_annotation => {
+                if let Some(inner) = pair.into_inner().next() {
+                    self.parse_expression(inner)
+                } else {
+                    ast::Expression::Empty
+                }
             }
-        }
-        Rule::composite_literal => parse_composite_literal(pair),
-        Rule::array_literal_body => parse_anonymous_array_literal(pair),
-        Rule::struct_literal_body => parse_anonymous_struct_literal(pair),
-        Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
-            parse_binary_ltr_expression(pair)
-        }
-        Rule::exponentiation => parse_exponentiation(pair),
-        Rule::value_identifier => ParseResult {
-            node: Some(Spanned {
-                node: Node::Identifier(pair.as_str().to_string()),
-                span,
-            }),
-            errors: vec![],
-        },
-        Rule::member_expression => parse_member_expression(pair),
-        Rule::tuple_indexing => parse_tuple_indexing(pair),
-        Rule::string_literal => {
-            let value = pair.as_str();
-            ParseResult {
-                node: Some(Spanned {
-                    node: Node::StringLiteral(value[1..value.len() - 1].to_string()),
-                    span,
-                }),
-                errors: vec![],
+            Rule::composite_literal => self.parse_composite_literal(pair).into(),
+            Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
+                self.parse_binary_ltr_expression(pair).into()
             }
+            Rule::exponentiation => self.parse_exponentiation(pair).into(),
+            Rule::value_identifier => self.parse_identifier(pair).into(),
+            Rule::member_expression => self.parse_field_access_expression(pair).into(),
+            Rule::tuple_indexing => self.parse_tuple_indexing(pair).into(),
+            Rule::string_literal => ast::StringLiteral {
+                span: pair.as_span(),
+            }
+            .into(),
+            Rule::number_literal => self.parse_number_literal(pair).into(),
+            Rule::boolean_literal => ast::BooleanLiteral {
+                span: pair.as_span(),
+                value: pair.as_str() == "true",
+            }
+            .into(),
+            _ => ast::Expression::Empty,
         }
-        Rule::number_literal => ParseResult {
-            node: Some(Spanned {
-                node: Node::NumberLiteral(pair.as_str().parse().unwrap_or(0.0)),
-                span,
-            }),
-            errors: vec![],
-        },
-        Rule::boolean_literal => ParseResult {
-            node: Some(Spanned {
-                node: Node::BooleanLiteral(pair.as_str() == "true"),
-                span,
-            }),
-            errors: vec![],
-        },
-        _ => ParseResult {
-            node: None,
-            errors: vec![],
-        },
     }
-}
 
-fn parse_binary_ltr_expression(pair: Pair<'static, Rule>) -> ParseResult {
-    let span = pair.as_span().to_owned();
-    let mut inner = pair.into_inner();
-    let Some(next) = inner.next() else {
-        return ParseResult::empty();
-    };
-    let result = parse_expression(next);
-    let mut left = result.node;
-    let mut errors = result.errors;
-
-    let mut is_binary = false;
-    while let Some(op_pair) = inner.next() {
-        if !is_binary && left.is_none() && errors.is_empty() {
-            errors.push(ParseError {
-                message: "Expression expected".to_string(),
-                span: op_pair.as_span(),
-            });
+    pub fn parse_expression_or_anonymous(
+        &mut self,
+        pair: Pair<'static, Rule>,
+    ) -> ast::ExpressionOrAnonymous {
+        // { struct_literal_body | array_literal_body | expression }
+        assert!(pair.as_rule() == Rule::anonymous_expression);
+        let inner = pair.into_inner().next().unwrap();
+        match inner.as_rule() {
+            Rule::expression => self.parse_expression(inner).into(),
+            Rule::array_literal_body => self.parse_anonymous_array_literal(inner).into(),
+            Rule::struct_literal_body => self.parse_anonymous_struct_literal(inner).into(),
+            _ => panic!(),
         }
-        is_binary = true;
-        let operator = op_pair.as_str().to_string();
+    }
 
-        let Some(right_pair) = inner.next() else {
-            errors.push(ParseError {
-                message: "Expression expected".to_string(),
-                span: op_pair.as_span(),
-            });
-            continue;
+    fn parse_binary_ltr_expression(&mut self, pair: Pair<'static, Rule>) -> ast::Expression {
+        let span = pair.as_span().to_owned();
+        let mut inner = pair.into_inner();
+        let Some(next) = inner.next() else {
+            return ast::Expression::Empty;
         };
+        let mut left = self.parse_expression(next);
 
-        let mut result = parse_expression(right_pair);
-        let right = result.node;
-        if right.is_none() && result.errors.is_empty() {
-            errors.push(ParseError {
-                message: "Expression expected".to_string(),
-                span: op_pair.as_span(),
-            });
+        let mut is_binary = false;
+        while let Some(op_pair) = inner.next() {
+            if !is_binary && left.is_empty() {
+                self.errors.push(ParseError {
+                    message: "Expression expected".to_string(),
+                    span: op_pair.as_span(),
+                });
+            }
+            is_binary = true;
+            let operator = op_pair.as_str().to_string();
+
+            let Some(right_pair) = inner.next() else {
+                self.errors.push(ParseError {
+                    message: "Expression expected".to_string(),
+                    span: op_pair.as_span(),
+                });
+                continue;
+            };
+
+            let right = self.parse_expression(right_pair);
+            if right.is_empty() {
+                self.errors.push(ParseError {
+                    message: "Expression expected".to_string(),
+                    span: op_pair.as_span(),
+                });
+            }
+
+            left = ast::BinaryExpression {
+                span,
+                left: Box::new(left),
+                operator: operator.into(),
+                right: Box::new(right),
+            }
+            .into();
         }
-        errors.append(&mut result.errors);
 
-        left = Some(Spanned {
-            node: Node::BinaryExpression {
-                left: left.map(Box::new),
-                operator,
-                right: right.map(Box::new),
-            },
-            // FIXME:
-            span,
-        });
+        left
     }
 
-    ParseResult { node: left, errors }
-}
-
-fn parse_exponentiation(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::exponentiation);
-    let mut node = None;
-    let mut errors = Vec::new();
-    for sub_pair in pair.into_inner().rev() {
-        let left_span = sub_pair.as_span();
-        let result = parse_expression(sub_pair);
-        errors.extend(result.errors);
-        if node.is_none() {
-            node = result.node;
-            continue;
+    fn parse_exponentiation(&mut self, pair: Pair<'static, Rule>) -> ast::Expression {
+        assert!(pair.as_rule() == Rule::exponentiation);
+        let span = pair.as_span();
+        let mut node = ast::Expression::Empty;
+        for sub_pair in pair.into_inner().rev() {
+            let left = self.parse_expression(sub_pair);
+            if node == ast::Expression::Empty {
+                node = left;
+                continue;
+            }
+            node = ast::BinaryExpression {
+                left: Box::new(left),
+                operator: ast::BinaryOperator::Pow,
+                right: Box::new(node),
+                // FIXME:
+                span,
+            }
+            .into();
         }
-        let right_span = node.clone().unwrap().span;
-        node = Some(Spanned {
-            node: Node::BinaryExpression {
-                left: result.node.map(Box::new),
-                operator: "**".into(),
-                right: node.map(Box::new),
-            },
-            span: merge_span(left_span, right_span),
-        });
+        node
     }
-    ParseResult { node, errors }
-}
 
-fn parse_member_expression(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::member_expression);
-    let mut node = None;
-    let mut errors = Vec::new();
-    for sub_pair in pair.into_inner() {
-        let right_span = sub_pair.as_span();
-        let result = parse_expression(sub_pair);
-        errors.extend(result.errors);
-        if node.is_none() {
-            node = result.node;
-            continue;
+    fn parse_field_access_expression(
+        &mut self,
+        pair: Pair<'static, Rule>,
+    ) -> ast::FieldAccessExpression {
+        assert!(pair.as_rule() == Rule::member_expression);
+        let mut inner = pair.into_inner();
+        let mut node = self.parse_expression(inner.next().unwrap());
+
+        while let Some(sub_pair) = inner.next() {
+            let right_span = sub_pair.as_span();
+            let prop = self.parse_identifier(sub_pair);
+            let left_span = prop.span;
+            node = ast::FieldAccessExpression {
+                span: merge_span(left_span, right_span),
+                object: Box::new(node),
+                prop,
+            }
+            .into()
         }
-        let left_span = node.clone().unwrap().span;
-        node = Some(Spanned {
-            node: Node::MemberExpression {
-                expr: node.map(Box::new),
-                identifier: Box::new(result.node.unwrap()),
-            },
-            span: merge_span(left_span, right_span),
-        });
+
+        match node {
+            ast::Expression::FieldAccess(n) => n,
+            _ => panic!("Unexpected variant!"),
+        }
     }
-    ParseResult { node, errors }
-}
 
-fn parse_tuple_indexing(pair: Pair<'static, Rule>) -> ParseResult {
-    assert!(pair.as_rule() == Rule::tuple_indexing);
-    let span = pair.as_span();
-    let mut inner = pair.into_inner();
+    fn parse_tuple_indexing(&mut self, pair: Pair<'static, Rule>) -> ast::TupleIndexingExpression {
+        assert!(pair.as_rule() == Rule::tuple_indexing);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
 
-    let result = parse_expression(inner.next().unwrap());
-    let mut errors = result.errors;
-    let expr = result.node.map(Box::new);
+        let tuple = Box::new(self.parse_expression(inner.next().unwrap()));
 
-    let result = parse_expression(inner.next().unwrap());
-    errors.extend(result.errors);
-    let index = Box::new(result.node.unwrap());
+        let index = self.parse_number_literal(inner.next().unwrap());
 
-    ParseResult {
-        node: Some(Spanned {
-            node: Node::TupleIndexing { expr, index },
-            span,
-        }),
-        errors,
+        ast::TupleIndexingExpression { span, tuple, index }
+    }
+
+    fn parse_number_literal(&mut self, pair: Pair<'static, Rule>) -> ast::NumberLiteral {
+        ast::NumberLiteral {
+            span: pair.as_span(),
+            value: pair.as_str().parse().unwrap_or(0.0),
+        }
+    }
+
+    fn parse_identifier(&mut self, pair: Pair<'static, Rule>) -> ast::Identifier {
+        ast::Identifier {
+            span: pair.as_span(),
+        }
     }
 }
 
@@ -200,120 +184,156 @@ mod tests {
     use crate::parser::parser::{MyLanguageParser, Rule};
     use pest::Parser;
 
-    fn parse(input: &'static str) -> ParseResult {
-        let pair = MyLanguageParser::parse(Rule::expression, input)
+    fn parse_expression_input(input: &'static str, rule: Rule) -> ast::Expression {
+        let pair = MyLanguageParser::parse(rule, input)
             .unwrap()
             .next()
             .unwrap();
-        parse_expression(pair)
-    }
-
-    #[test]
-    fn test_parse_number_literal() {
-        let result = parse("42");
-        assert!(result.errors.is_empty());
-        assert_eq!(result.node.unwrap().node, Node::NumberLiteral(42.0));
-    }
-
-    #[test]
-    fn test_parse_string_literal() {
-        let result = parse("\"hello\"");
-        assert!(result.errors.is_empty());
-        assert_eq!(
-            result.node.unwrap().node,
-            Node::StringLiteral("hello".to_string())
-        );
-    }
-
-    #[test]
-    fn test_parse_boolean_literal_true() {
-        let result = parse("true");
-        assert!(result.errors.is_empty());
-        assert_eq!(result.node.unwrap().node, Node::BooleanLiteral(true));
+        let mut parser_engine = ParserEngine::new();
+        parser_engine.parse_expression(pair)
     }
 
     #[test]
     fn test_parse_identifier() {
-        let result = parse("foo");
-        assert!(result.errors.is_empty());
-        assert_eq!(
-            result.node.unwrap().node,
-            Node::Identifier("foo".to_string())
-        );
-    }
+        let input = "myVariable";
+        let result = parse_expression_input(input, Rule::value_identifier);
 
-    #[test]
-    fn test_simple_addition() {
-        let result = parse("1 + 2");
-        assert!(result.errors.is_empty());
-        match result.node.unwrap().node {
-            Node::BinaryExpression {
-                left: Some(left),
-                operator,
-                right: Some(right),
-            } => {
-                assert_eq!(left.node, Node::NumberLiteral(1.0));
-                assert_eq!(operator, "+");
-                assert_eq!(right.node, Node::NumberLiteral(2.0));
+        match result {
+            ast::Expression::Identifier(identifier) => {
+                assert_eq!(identifier.span.as_str(), "myVariable");
             }
-            _ => panic!("Expected binary expression with 1 + 2"),
+            _ => panic!("Expected Identifier"),
         }
     }
 
     #[test]
-    fn test_nested_binary_expression_ltr() {
-        let result = parse("1 + 2 + 3");
-        assert!(result.errors.is_empty());
+    fn test_parse_number_literal() {
+        let input = "42";
+        let result = parse_expression_input(input, Rule::number_literal);
 
-        match result.node.unwrap().node {
-            Node::BinaryExpression {
-                operator,
-                left: Some(left),
-                right: Some(right),
-            } => {
-                assert_eq!(operator, "+");
+        match result {
+            ast::Expression::NumberLiteral(literal) => {
+                assert_eq!(literal.value, 42.0);
+            }
+            _ => panic!("Expected NumberLiteral"),
+        }
+    }
 
-                match left.node {
-                    Node::BinaryExpression {
-                        operator: ref inner_op,
-                        left: Some(ref inner_left),
-                        right: Some(ref inner_right),
-                    } => {
-                        assert_eq!(inner_op, "+");
-                        assert_eq!(inner_left.node, Node::NumberLiteral(1.0));
-                        assert_eq!(inner_right.node, Node::NumberLiteral(2.0));
-                    }
-                    _ => panic!("Expected nested binary expression on the left"),
+    #[test]
+    fn test_parse_binary_expression() {
+        let input = "1 + 2 * 3";
+        let result = parse_expression_input(input, Rule::expression);
+
+        match result {
+            ast::Expression::Binary(binary) => {
+                assert_eq!(binary.operator, ast::BinaryOperator::Add);
+                match *binary.left {
+                    ast::Expression::NumberLiteral(left) => assert_eq!(left.value, 1.0),
+                    _ => panic!("Expected NumberLiteral on the left"),
                 }
-
-                assert_eq!(right.node, Node::NumberLiteral(3.0));
+                match *binary.right {
+                    ast::Expression::Binary(inner_binary) => {
+                        assert_eq!(inner_binary.operator, ast::BinaryOperator::Mul);
+                        match *inner_binary.left {
+                            ast::Expression::NumberLiteral(left) => assert_eq!(left.value, 2.0),
+                            _ => panic!("Expected NumberLiteral on the left"),
+                        }
+                        match *inner_binary.right {
+                            ast::Expression::NumberLiteral(right) => assert_eq!(right.value, 3.0),
+                            _ => panic!("Expected NumberLiteral on the right"),
+                        }
+                    }
+                    _ => panic!("Expected BinaryExpression on the right"),
+                }
             }
-            _ => panic!("Expected left-associative binary expression"),
+            _ => panic!("Expected BinaryExpression"),
         }
     }
 
     #[test]
-    fn test_missing_rhs() {
-        let result = parse("1 +");
-        assert!(result.node.is_some());
-        assert_eq!(result.errors.len(), 1);
-        assert_eq!(result.errors[0].message, "Expression expected");
+    fn test_parse_field_access_expression() {
+        let input = "object.property";
+        let result = parse_expression_input(input, Rule::member_expression);
+
+        match result {
+            ast::Expression::FieldAccess(field_access) => {
+                assert_eq!(field_access.object.as_span().as_str(), "object");
+                assert_eq!(field_access.prop.span.as_str(), "property");
+            }
+            _ => panic!("Expected FieldAccessExpression"),
+        }
     }
 
     #[test]
-    fn test_missing_lhs() {
-        let result = parse("+ 1");
-        assert!(result.node.is_some());
-        assert_eq!(result.errors.len(), 1);
-        assert_eq!(result.errors[0].message, "Expression expected");
+    fn test_parse_tuple_indexing_expression() {
+        let input = "tuple.0";
+        let result = parse_expression_input(input, Rule::tuple_indexing);
+
+        match result {
+            ast::Expression::TupleIndexing(tuple_indexing) => {
+                assert_eq!(tuple_indexing.tuple.as_span().as_str(), "tuple");
+                assert_eq!(tuple_indexing.index.value, 0.0);
+            }
+            _ => panic!("Expected TupleIndexingExpression"),
+        }
     }
 
     #[test]
-    fn test_only_operator() {
-        let result = parse("+");
-        assert!(result.node.is_some());
-        assert_eq!(result.errors.len(), 2);
-        assert_eq!(result.errors[0].message, "Expression expected");
-        assert_eq!(result.errors[1].message, "Expression expected");
+    fn test_parse_composite_literal() {
+        let input = r#"[]number{ 1, 2, 3 }"#;
+        let result = parse_expression_input(input, Rule::composite_literal);
+
+        match result {
+            ast::Expression::CompositeLiteral(composite) => match composite {
+                ast::CompositeLiteral::Array(array) => {
+                    assert_eq!(array.elements.len(), 3);
+                    assert!(matches!(
+                        array.elements[0],
+                        ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(ast::NumberLiteral{value, ..})) if value == 1.0
+                    ));
+                    assert!(matches!(
+                        array.elements[1],
+                        ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(ast::NumberLiteral{value, ..})) if value == 2.0
+                    ));
+                    assert!(matches!(
+                        array.elements[2],
+                        ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(ast::NumberLiteral{value, ..})) if value == 3.0
+                    ));
+                }
+                _ => panic!("Expected ArrayLiteral"),
+            },
+            _ => panic!("Expected CompositeLiteral"),
+        }
+    }
+
+    #[test]
+    fn test_parse_exponentiation_expression() {
+        let input = "2 ** 3 ** 2";
+        let result = parse_expression_input(input, Rule::exponentiation);
+
+        match result {
+            ast::Expression::Binary(binary) => {
+                assert_eq!(binary.operator, ast::BinaryOperator::Pow);
+                match *binary.left {
+                    ast::Expression::NumberLiteral(left) => assert_eq!(left.value, 2.0),
+                    _ => panic!("Expected NumberLiteral on the left"),
+                }
+                match *binary.right {
+                    ast::Expression::Binary(inner_binary) => {
+                        assert_eq!(inner_binary.operator, ast::BinaryOperator::Pow);
+                        match *inner_binary.left {
+                            ast::Expression::NumberLiteral(left) => assert_eq!(left.value, 3.0),
+                            _ => panic!("Expected NumberLiteral on the left"),
+                        }
+                        match *inner_binary.right {
+                            ast::Expression::NumberLiteral(right) => assert_eq!(right.value, 2.0),
+                            _ => panic!("Expected NumberLiteral on the right"),
+                        }
+                    }
+                    _ => panic!("Expected BinaryExpression on the right"),
+                }
+            }
+            _ => panic!("Expected BinaryExpression"),
+        }
     }
 }

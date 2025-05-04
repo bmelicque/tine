@@ -1,10 +1,10 @@
 use bitflags::bitflags;
 use std::{collections::HashMap, error::Error};
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
-use swc_ecma_ast as ast;
+use swc_ecma_ast as swc;
 use swc_ecma_codegen::{text_writer::JsWriter, Config, Emitter};
 
-use crate::ast::{AstNode, Node};
+use crate::ast;
 
 use super::utils::get_option_class;
 
@@ -30,7 +30,7 @@ bitflags! {
 }
 
 pub struct CodeGenerator {
-    class_defs: HashMap<String, ast::ClassDecl>,
+    class_defs: HashMap<String, swc::ClassDecl>,
     pub source_map: Lrc<SourceMap>,
     flags: TranspilerFlags,
 }
@@ -44,8 +44,8 @@ impl CodeGenerator {
         }
     }
 
-    pub fn generate_js(&mut self, node: AstNode) -> Result<String, Box<dyn Error>> {
-        let program = self.node_to_swc_module(node.node)?;
+    pub fn generate_js(&mut self, node: ast::Program) -> Result<String, Box<dyn Error>> {
+        let program = self.node_to_swc_module(node);
 
         let mut buf = Vec::new();
         {
@@ -63,19 +63,13 @@ impl CodeGenerator {
         Ok(String::from_utf8(buf)?)
     }
 
-    fn node_to_swc_module(&mut self, node: Node) -> Result<ast::Module, Box<dyn Error>> {
-        let Node::Program(statements) = node else {
-            return Err(Box::new(TranspilerError {
-                message: "Expected Program node at root".to_string(),
-            }));
-        };
-        let mut swc_stmts = Vec::new();
-
-        for stmt in statements {
-            if let Some(swc_stmt) = self.node_to_swc_stmt(stmt.node)? {
-                swc_stmts.push(swc_stmt.into());
-            }
-        }
+    fn node_to_swc_module(&mut self, node: ast::Program) -> swc::Module {
+        let mut swc_stmts: Vec<swc::ModuleItem> = node
+            .statements
+            .into_iter()
+            .filter_map(|stmt| self.stmt_to_swc(stmt))
+            .map(|stmt| stmt.into())
+            .collect();
 
         for flag in self.flags {
             match flag {
@@ -84,22 +78,22 @@ impl CodeGenerator {
             }
         }
 
-        Ok(ast::Module {
+        swc::Module {
             span: DUMMY_SP,
             body: swc_stmts,
             shebang: None,
-        })
+        }
     }
 
     pub fn add_flag(&mut self, flag: TranspilerFlags) {
         self.flags = self.flags | flag;
     }
 
-    pub fn add_class_def(&mut self, name: String, class_decl: ast::ClassDecl) {
+    pub fn add_class_def(&mut self, name: String, class_decl: swc::ClassDecl) {
         self.class_defs.insert(name, class_decl);
     }
 
-    pub fn get_class_def(&self, name: &str) -> Option<&ast::ClassDecl> {
+    pub fn get_class_def(&self, name: &str) -> Option<&swc::ClassDecl> {
         self.class_defs.get(name)
     }
 }
