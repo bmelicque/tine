@@ -7,12 +7,13 @@ use super::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CompositeLiteral {
-    Map(MapLiteral),
     Array(ArrayLiteral),
     AnonymousArray(AnonymousArrayLiteral),
+    AnonymousStruct(AnonymousStructLiteral),
+    Map(MapLiteral),
     Option(OptionLiteral),
     Struct(StructLiteral),
-    AnonymousStruct(AnonymousStructLiteral),
+    Variant(VariantLiteral),
 }
 
 impl CompositeLiteral {
@@ -24,6 +25,7 @@ impl CompositeLiteral {
             Self::Map(c) => c.span,
             Self::Option(c) => c.span,
             Self::Struct(c) => c.span,
+            Self::Variant(c) => c.span,
         }
     }
 }
@@ -116,6 +118,38 @@ pub struct StructLiteralField {
     pub span: Span<'static>,
     pub prop: String,
     pub value: Expression,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VariantLiteral {
+    pub span: Span<'static>,
+    pub ty: NamedType,
+    pub name: String,
+    pub body: Option<VariantLiteralBody>,
+}
+
+impl Into<CompositeLiteral> for VariantLiteral {
+    fn into(self) -> CompositeLiteral {
+        CompositeLiteral::Variant(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum VariantLiteralBody {
+    Tuple(Vec<ExpressionOrAnonymous>),
+    Struct(Vec<StructLiteralField>),
+}
+
+impl From<Vec<ExpressionOrAnonymous>> for VariantLiteralBody {
+    fn from(value: Vec<ExpressionOrAnonymous>) -> Self {
+        VariantLiteralBody::Tuple(value)
+    }
+}
+
+impl From<Vec<StructLiteralField>> for VariantLiteralBody {
+    fn from(value: Vec<StructLiteralField>) -> Self {
+        VariantLiteralBody::Struct(value)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

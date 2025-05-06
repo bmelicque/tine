@@ -136,7 +136,7 @@ impl ParserEngine {
         ast::NamedType { span, name, args }
     }
 
-    fn parse_named_type(&mut self, pair: Pair<'static, Rule>) -> ast::NamedType {
+    pub fn parse_named_type(&mut self, pair: Pair<'static, Rule>) -> ast::NamedType {
         ast::NamedType {
             span: pair.as_span(),
             name: pair.as_str().into(),

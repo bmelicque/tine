@@ -1,12 +1,12 @@
 use bitflags::bitflags;
-use std::{collections::HashMap, error::Error};
+use std::error::Error;
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
 use swc_ecma_codegen::{text_writer::JsWriter, Config, Emitter};
 
 use crate::ast;
 
-use super::utils::get_option_class;
+use super::{sort::Scope, utils::get_option_class};
 
 #[derive(Debug, Clone)]
 pub struct TranspilerError {
@@ -30,7 +30,7 @@ bitflags! {
 }
 
 pub struct CodeGenerator {
-    class_defs: HashMap<String, swc::ClassDecl>,
+    scopes: Vec<Scope>,
     pub source_map: Lrc<SourceMap>,
     flags: TranspilerFlags,
 }
@@ -38,7 +38,7 @@ pub struct CodeGenerator {
 impl CodeGenerator {
     pub fn new() -> Self {
         Self {
-            class_defs: HashMap::new(),
+            scopes: vec![Scope::new()],
             source_map: Lrc::new(SourceMap::new(Default::default())),
             flags: TranspilerFlags::None,
         }
@@ -89,11 +89,20 @@ impl CodeGenerator {
         self.flags = self.flags | flag;
     }
 
-    pub fn add_class_def(&mut self, name: String, class_decl: swc::ClassDecl) {
-        self.class_defs.insert(name, class_decl);
+    pub fn get_scope(&self) -> &Scope {
+        self.scopes.last().unwrap()
     }
 
-    pub fn get_class_def(&self, name: &str) -> Option<&swc::ClassDecl> {
-        self.class_defs.get(name)
+    pub fn add_to_scope(&mut self, name: String, fields: Vec<String>) {
+        self.scopes.last_mut().unwrap().register(name, fields);
+    }
+
+    pub fn push_scope(&mut self) {
+        self.scopes.push(Scope::new());
+    }
+
+    pub fn drop_scope(&mut self) {
+        self.scopes.pop();
+        assert!(self.scopes.len() > 0)
     }
 }

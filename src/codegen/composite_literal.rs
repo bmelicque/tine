@@ -1,5 +1,3 @@
-use core::panic;
-
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
@@ -23,6 +21,7 @@ impl CodeGenerator {
                 self.option_literal_to_swc_new_option(node).into()
             }
             ast::CompositeLiteral::Struct(node) => self.struct_literal_to_swc_new_expr(node).into(),
+            ast::CompositeLiteral::Variant(node) => self.variant_literal_to_swc(node).into(),
         }
     }
 
@@ -135,27 +134,12 @@ impl CodeGenerator {
         name: &str,
         fields: Vec<StructLiteralField>,
     ) -> Vec<swc::ExprOrSpread> {
-        let class_def = self.get_class_def(&name).cloned();
-        let mut sorted_args = vec![];
-
         let mut remaining = fields.len();
-        let class_def = class_def.unwrap();
-        let first = class_def.class.body.iter().next().unwrap();
-        let swc::ClassMember::Constructor(constructor) = first else {
-            panic!("Expected a constructor in class definition!");
-        };
-
-        for param in constructor.params.iter() {
-            let swc::ParamOrTsParamProp::Param(param) = param else {
-                panic!("Expected a parameter in argument list!");
-            };
-            let param_name = match param.pat {
-                swc::Pat::Ident(ref id) => id.id.sym.to_string(),
-                swc::Pat::Assign(ref assign) => assign.left.as_ident().unwrap().id.sym.to_string(),
-                _ => panic!("Unexpected pattern type"),
-            };
-
-            let field = fields.iter().find(|field| param_name == field.prop);
+        let mut sorted_args = vec![];
+        let scope = self.get_scope();
+        let params = scope.get(&name.to_string()).unwrap().clone();
+        for param in params {
+            let field = fields.iter().find(|field| *param == field.prop);
             let expr = match field {
                 Some(field) => {
                     remaining -= 1;
@@ -177,5 +161,38 @@ impl CodeGenerator {
         }
 
         sorted_args
+    }
+
+    fn variant_literal_to_swc(&mut self, node: ast::VariantLiteral) -> swc::NewExpr {
+        let name = node.ty.name;
+
+        let mut args = Vec::<swc::ExprOrSpread>::new();
+        args.push(
+            swc::Expr::Lit(swc::Lit::Str(swc::Str {
+                span: DUMMY_SP,
+                value: node.name.clone().into(),
+                raw: None,
+            }))
+            .into(),
+        );
+        match node.body {
+            Some(ast::VariantLiteralBody::Struct(body)) => {
+                let name = format!("{}.{}", name, node.name.clone());
+                args.extend(self.get_sorted_args(&name, body));
+            }
+            Some(ast::VariantLiteralBody::Tuple(body)) => {
+                for arg in body {
+                    args.push(self.expr_or_an_to_swc(arg).into());
+                }
+            }
+            None => {}
+        }
+
+        swc::NewExpr {
+            span: DUMMY_SP,
+            callee: Box::new(create_ident(&name).into()),
+            args: Some(args),
+            type_args: None,
+        }
     }
 }

@@ -2,7 +2,7 @@ use core::panic;
 use std::collections::HashMap;
 
 use crate::{
-    ast::{self, StructLiteralField},
+    ast::{self, StructLiteralField, VariantLiteralBody},
     parser::parser::ParseError,
     types::{StructField, Type},
 };
@@ -20,6 +20,7 @@ impl TypeChecker {
             ast::CompositeLiteral::Map(node) => self.visit_map_literal(node),
             ast::CompositeLiteral::Option(node) => self.visit_option_literal(node),
             ast::CompositeLiteral::Struct(node) => self.visit_struct_literal(node),
+            ast::CompositeLiteral::Variant(node) => self.visit_variant_literal(node),
         }
     }
 
@@ -179,20 +180,26 @@ impl TypeChecker {
         let names = self.type_registry.get_type_params(name);
         let mut generics_registry = TypeRegistry::create(&names, &args);
 
-        // set up map of expected field types
-        let mut field_map = HashMap::new();
-        for field in fields.iter() {
-            field_map.insert(&field.name, field.def.clone());
-        }
-
-        node.fields.iter().for_each(|field| {
-            self.visit_field_assignment(field, &field_map, &mut generics_registry)
-        });
-
-        self.report_unknown_fields(&node.fields, &field_map);
+        self.visit_struct_body(fields, &node.fields, &mut generics_registry);
 
         // TODO: adjust type using inferred generics
         ty
+    }
+
+    fn visit_struct_body(
+        &mut self,
+        expected: Vec<StructField>,
+        got: &Vec<StructLiteralField>,
+        registry: &mut TypeRegistry,
+    ) {
+        // set up map of expected field types
+        let mut field_map = HashMap::new();
+        for field in expected.iter() {
+            field_map.insert(&field.name, field.def.clone());
+        }
+
+        got.iter()
+            .for_each(|field| self.visit_field_assignment(field, &field_map, registry));
     }
 
     fn visit_field_assignment(
@@ -230,20 +237,65 @@ impl TypeChecker {
         }
     }
 
-    /// Push an error for every built field not found in the struct definition
-    fn report_unknown_fields(
+    fn visit_variant_literal(&mut self, node: &ast::VariantLiteral) -> Type {
+        let ty = self.visit_named_type(&node.ty);
+        let unwrapped = self.unwrap_named_type(&ty);
+        let Type::Sum { variants } = unwrapped else {
+            self.errors.push(ParseError {
+                message: format!("Sum type expected, got {}", unwrapped),
+                span: node.ty.span,
+            });
+            return Type::Unknown;
+        };
+        let Some(variant) = variants.iter().find(|variant| variant.name == node.name) else {
+            self.errors.push(ParseError {
+                message: format!("Variant '{}' does not exist on type {}", node.name, ty),
+                span: node.span,
+            });
+            return Type::Unknown;
+        };
+        if let Err(message) = self.visit_variant_body(&node.body, &variant.def) {
+            self.errors.push(ParseError {
+                message,
+                span: node.span,
+            })
+        }
+
+        ty
+    }
+
+    fn visit_variant_body(
         &mut self,
-        fields: &Vec<StructLiteralField>,
-        expected: &HashMap<&String, Type>,
-    ) {
-        for field in fields {
-            if !expected.contains_key(&field.prop) {
-                self.errors.push(ParseError {
-                    message: "No such field found".to_string(),
-                    span: field.span,
-                });
+        body: &Option<VariantLiteralBody>,
+        expected: &Type,
+    ) -> Result<(), String> {
+        let Some(body) = body else {
+            return if *expected != Type::Unit {
+                Err("Arguments expected".into())
+            } else {
+                Ok(())
+            };
+        };
+        match body {
+            VariantLiteralBody::Tuple(body) => {
+                let got = Type::Tuple(
+                    body.iter()
+                        .map(|el| self.visit_expression_or_anonymous(el))
+                        .collect(),
+                );
+                if got != *expected {
+                    return Err("Invalid arguments".into());
+                }
+            }
+            VariantLiteralBody::Struct(body) => {
+                let Type::Struct { fields } = expected else {
+                    return Err("Structured body exprected".into());
+                };
+                self.visit_struct_body(fields.clone(), &body, &mut TypeRegistry::new());
             }
         }
+
+        Ok(())
     }
 }
 
@@ -251,7 +303,7 @@ impl TypeChecker {
 mod tests {
     use super::*;
     use crate::ast;
-    use crate::types::{StructField, Type};
+    use crate::types::{StructField, SumVariant, Type};
 
     fn create_type_checker() -> TypeChecker {
         TypeChecker {
@@ -510,5 +562,177 @@ mod tests {
             }
         );
         assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_variant_literal_valid() {
+        let mut checker = create_type_checker();
+
+        // Define a sum type with variants
+        checker.type_registry.define(
+            "Shape",
+            Type::Sum {
+                variants: vec![
+                    SumVariant {
+                        name: "Circle".to_string(),
+                        def: Type::Struct {
+                            fields: vec![StructField {
+                                name: "radius".to_string(),
+                                def: Type::Number,
+                                optional: false,
+                            }],
+                        },
+                    },
+                    SumVariant {
+                        name: "Rectangle".to_string(),
+                        def: Type::Struct {
+                            fields: vec![
+                                StructField {
+                                    name: "width".to_string(),
+                                    def: Type::Number,
+                                    optional: false,
+                                },
+                                StructField {
+                                    name: "height".to_string(),
+                                    def: Type::Number,
+                                    optional: false,
+                                },
+                            ],
+                        },
+                    },
+                ],
+            },
+            None,
+        );
+
+        // Create a valid variant literal
+        let variant_literal = ast::VariantLiteral {
+            ty: ast::NamedType {
+                name: "Shape".to_string(),
+                args: None,
+                span: dummy_span(),
+            },
+            name: "Circle".to_string(),
+            body: Some(ast::VariantLiteralBody::Struct(vec![
+                ast::StructLiteralField {
+                    prop: "radius".to_string(),
+                    value: ast::Expression::NumberLiteral(ast::NumberLiteral {
+                        value: 10.0,
+                        span: dummy_span(),
+                    }),
+                    span: dummy_span(),
+                },
+            ])),
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_variant_literal(&variant_literal);
+        assert_eq!(
+            result,
+            Type::Named {
+                name: "Shape".to_string(),
+                args: vec![],
+            }
+        );
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_variant_literal_non_existent_variant() {
+        let mut checker = create_type_checker();
+
+        // Define a sum type with variants
+        checker.type_registry.define(
+            "Shape",
+            Type::Sum {
+                variants: vec![SumVariant {
+                    name: "Circle".to_string(),
+                    def: Type::Struct {
+                        fields: vec![StructField {
+                            name: "radius".to_string(),
+                            def: Type::Number,
+                            optional: false,
+                        }],
+                    },
+                }],
+            },
+            None,
+        );
+
+        // Create a variant literal with a non-existent variant
+        let variant_literal = ast::VariantLiteral {
+            ty: ast::NamedType {
+                name: "Shape".to_string(),
+                args: None,
+                span: dummy_span(),
+            },
+            name: "Triangle".to_string(),
+            body: None,
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_variant_literal(&variant_literal);
+        assert_eq!(result, Type::Unknown);
+        assert_eq!(checker.errors.len(), 1);
+        assert!(checker.errors[0]
+            .message
+            .contains("Variant 'Triangle' does not exist on type Shape"));
+    }
+
+    #[test]
+    fn test_visit_variant_literal_mismatched_body() {
+        let mut checker = create_type_checker();
+
+        // Define a sum type with variants
+        checker.type_registry.define(
+            "Shape",
+            Type::Sum {
+                variants: vec![SumVariant {
+                    name: "Circle".to_string(),
+                    def: Type::Struct {
+                        fields: vec![StructField {
+                            name: "radius".to_string(),
+                            def: Type::Number,
+                            optional: false,
+                        }],
+                    },
+                }],
+            },
+            None,
+        );
+
+        // Create a variant literal with a mismatched body
+        let variant_literal = ast::VariantLiteral {
+            ty: ast::NamedType {
+                name: "Shape".to_string(),
+                args: None,
+                span: dummy_span(),
+            },
+            name: "Circle".to_string(),
+            body: Some(ast::VariantLiteralBody::Struct(vec![
+                ast::StructLiteralField {
+                    prop: "diameter".to_string(),
+                    value: ast::Expression::NumberLiteral(ast::NumberLiteral {
+                        value: 20.0,
+                        span: dummy_span(),
+                    }),
+                    span: dummy_span(),
+                },
+            ])),
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_variant_literal(&variant_literal);
+        assert_eq!(
+            result,
+            Type::Named {
+                name: "Shape".to_string(),
+                args: vec![]
+            }
+        );
+        assert_eq!(checker.errors.len(), 1, "{:?}", checker.errors);
+        assert!(checker.errors[0]
+            .message
+            .contains("Field diameter not found in struct"));
     }
 }

@@ -37,11 +37,13 @@ impl CodeGenerator {
     }
 
     fn block_to_swc(&mut self, node: ast::BlockStatement) -> swc::BlockStmt {
+        self.push_scope();
         let stmts: Vec<swc::Stmt> = node
             .statements
             .iter()
             .filter_map(|stmt| self.stmt_to_swc(stmt.clone()))
             .collect();
+        self.drop_scope();
 
         swc::BlockStmt {
             span: DUMMY_SP,

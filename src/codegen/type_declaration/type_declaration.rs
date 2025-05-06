@@ -1,5 +1,5 @@
 use crate::{
-    ast,
+    ast::{self, VariantDefinition},
     codegen::{utils::create_ident, CodeGenerator},
 };
 use swc_common::DUMMY_SP;
@@ -11,9 +11,20 @@ impl CodeGenerator {
     pub fn alias_to_swc(&mut self, node: ast::TypeAlias) -> Option<swc::Stmt> {
         let mut super_class = None;
         let body: Vec<swc::ClassMember> = match *node.definition {
-            ast::TypeDefinition::Enum(node) => vec![enum_def_to_swc_constructor(node).into()],
-            ast::TypeDefinition::Struct(node) => {
-                vec![self.struct_to_swc_constructor(node).into()]
+            ast::TypeDefinition::Enum(def) => {
+                for variant in def.variants.iter() {
+                    if let VariantDefinition::Struct(ast::StructVariant { def, .. }) = variant {
+                        self.register_struct(
+                            &format!("{}.{}", node.name, variant.as_name()),
+                            &def.fields,
+                        );
+                    }
+                }
+                vec![enum_def_to_swc_constructor(def).into()]
+            }
+            ast::TypeDefinition::Struct(def) => {
+                self.register_struct(&node.name, &def.fields);
+                vec![self.struct_to_swc_constructor(def).into()]
             }
             ast::TypeDefinition::Trait(_) => return None,
             ast::TypeDefinition::Type(t) => {
@@ -49,7 +60,6 @@ impl CodeGenerator {
                 implements: vec![],
             }),
         };
-        self.add_class_def(node.name, declaration.clone());
         Some(declaration.into())
     }
 }
