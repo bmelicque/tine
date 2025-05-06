@@ -39,6 +39,7 @@ impl CodeGenerator {
                 raw: None,
             })
             .into(),
+            ast::Expression::Tuple(node) => self.tuple_to_swc(node).into(),
             ast::Expression::TupleIndexing(node) => self.tuple_indexing_to_swc(node).into(),
         }
     }
@@ -132,6 +133,18 @@ impl CodeGenerator {
             span: DUMMY_SP,
             sym: node.as_str().into(),
             optional: false,
+        }
+    }
+
+    fn tuple_to_swc(&mut self, node: ast::TupleExpression) -> swc::ArrayLit {
+        let elems = node
+            .elements
+            .into_iter()
+            .map(|node| Some(self.expr_to_swc(node).into()))
+            .collect::<Vec<_>>();
+        swc::ArrayLit {
+            span: DUMMY_SP,
+            elems,
         }
     }
 

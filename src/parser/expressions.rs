@@ -13,6 +13,7 @@ impl ParserEngine {
             Rule::anonymous_expression
             | Rule::expression
             | Rule::primary
+            | Rule::tuple_or_expression
             | Rule::type_annotation => {
                 if let Some(inner) = pair.into_inner().next() {
                     self.parse_expression(inner)
@@ -27,6 +28,7 @@ impl ParserEngine {
             Rule::exponentiation => self.parse_exponentiation(pair).into(),
             Rule::value_identifier => self.parse_identifier(pair).into(),
             Rule::member_expression => self.parse_field_access_expression(pair).into(),
+            Rule::tuple_expression => self.parse_tuple_expression(pair).into(),
             Rule::tuple_indexing => self.parse_tuple_indexing(pair).into(),
             Rule::string_literal => ast::StringLiteral {
                 span: pair.as_span(),
@@ -150,6 +152,15 @@ impl ParserEngine {
             ast::Expression::FieldAccess(n) => n,
             _ => panic!("Unexpected variant!"),
         }
+    }
+
+    fn parse_tuple_expression(&mut self, pair: Pair<'static, Rule>) -> ast::TupleExpression {
+        let span = pair.as_span();
+        let elements = pair
+            .into_inner()
+            .map(|pair| self.parse_expression(pair))
+            .collect();
+        ast::TupleExpression { span, elements }
     }
 
     fn parse_tuple_indexing(&mut self, pair: Pair<'static, Rule>) -> ast::TupleIndexingExpression {
@@ -334,6 +345,71 @@ mod tests {
                 }
             }
             _ => panic!("Expected BinaryExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_tuple_expression_with_multiple_elements() {
+        let input = "(1, \"hello\", true)";
+        let result = parse_expression_input(input, Rule::tuple_or_expression);
+
+        let ast::Expression::Tuple(result) = result else {
+            panic!("Tuple expected")
+        };
+        assert_eq!(result.elements.len(), 3);
+
+        // Check the first element
+        assert!(matches!(
+            result.elements[0],
+            ast::Expression::NumberLiteral(ast::NumberLiteral { value, .. }) if value == 1.0
+        ));
+
+        // Check the second element
+        assert!(matches!(
+            result.elements[1],
+            ast::Expression::StringLiteral(ast::StringLiteral { ref span, .. }) if span.as_str() == "\"hello\""
+        ));
+
+        // Check the third element
+        assert!(matches!(
+            result.elements[2],
+            ast::Expression::BooleanLiteral(ast::BooleanLiteral { value, .. }) if value == true
+        ));
+    }
+
+    #[test]
+    fn test_parse_nested_tuple_expression() {
+        let input = "(1, (\"nested\", false))";
+        let result = parse_expression_input(input, Rule::tuple_or_expression);
+        let ast::Expression::Tuple(result) = result else {
+            panic!("Expected tuple!")
+        };
+
+        assert_eq!(result.elements.len(), 2);
+
+        // Check the first element
+        assert!(matches!(
+            result.elements[0],
+            ast::Expression::NumberLiteral(ast::NumberLiteral { value, .. }) if value == 1.0
+        ));
+
+        // Check the second element (nested tuple)
+        if let ast::Expression::Tuple(nested_tuple) = &result.elements[1] {
+            assert_eq!(nested_tuple.elements.len(), 2);
+
+            // Check the first element of the nested tuple
+            assert!(matches!(
+                nested_tuple.elements[0],
+                ast::Expression::StringLiteral(ast::StringLiteral { ref span, .. }) if span.as_str() == "\"nested\""
+            ));
+
+            // Check the second element of the nested tuple
+            assert!(matches!(
+                nested_tuple.elements[1],
+                ast::Expression::BooleanLiteral(ast::BooleanLiteral { value, .. }) if value == false
+            ));
+        } else {
+            panic!("Expected a nested tuple");
         }
     }
 }

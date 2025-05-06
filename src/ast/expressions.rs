@@ -14,6 +14,7 @@ pub enum Expression {
     CompositeLiteral(CompositeLiteral),
     Binary(BinaryExpression),
     FieldAccess(FieldAccessExpression),
+    Tuple(TupleExpression),
     TupleIndexing(TupleIndexingExpression),
     Function(FunctionExpression),
 }
@@ -30,6 +31,7 @@ impl Expression {
             Self::Identifier(e) => e.span.clone(),
             Self::NumberLiteral(e) => e.span.clone(),
             Self::StringLiteral(e) => e.span.clone(),
+            Self::Tuple(e) => e.span.clone(),
             Self::TupleIndexing(e) => e.span.clone(),
         }
     }
@@ -206,6 +208,18 @@ pub struct FieldAccessExpression {
 impl Into<Expression> for FieldAccessExpression {
     fn into(self) -> Expression {
         Expression::FieldAccess(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TupleExpression {
+    pub span: Span<'static>,
+    pub elements: Vec<Expression>,
+}
+
+impl Into<Expression> for TupleExpression {
+    fn into(self) -> Expression {
+        Expression::Tuple(self)
     }
 }
 

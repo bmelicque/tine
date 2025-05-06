@@ -20,6 +20,7 @@ impl TypeChecker {
             ast::Expression::Identifier(node) => self.visit_identifier(node),
             ast::Expression::NumberLiteral(_) => Type::Number,
             ast::Expression::StringLiteral(_) => Type::String,
+            ast::Expression::Tuple(node) => self.visit_tuple_expression(node),
             ast::Expression::TupleIndexing(node) => self.visit_tuple_indexing(node),
         }
     }
@@ -190,6 +191,15 @@ impl TypeChecker {
                 Type::Unknown
             }
         }
+    }
+
+    fn visit_tuple_expression(&mut self, node: &ast::TupleExpression) -> Type {
+        Type::Tuple(
+            node.elements
+                .iter()
+                .map(|el| self.visit_expression(el))
+                .collect(),
+        )
     }
 
     pub fn visit_tuple_indexing(&mut self, node: &ast::TupleIndexingExpression) -> Type {
@@ -434,6 +444,79 @@ mod tests {
 
         let result = checker.visit_expression_or_anonymous(&expression);
         assert_eq!(result, Type::Number);
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_tuple_expression_empty() {
+        let mut checker = create_type_checker();
+        let tuple_expression = ast::TupleExpression {
+            elements: vec![],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_tuple_expression(&tuple_expression);
+        assert_eq!(result, Type::Tuple(vec![]));
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_tuple_expression_multiple_elements() {
+        let mut checker = create_type_checker();
+        let tuple_expression = ast::TupleExpression {
+            elements: vec![
+                ast::Expression::NumberLiteral(ast::NumberLiteral {
+                    value: 42.0,
+                    span: dummy_span(),
+                }),
+                ast::Expression::StringLiteral(ast::StringLiteral { span: dummy_span() }),
+                ast::Expression::BooleanLiteral(ast::BooleanLiteral {
+                    value: true,
+                    span: dummy_span(),
+                }),
+            ],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_tuple_expression(&tuple_expression);
+        assert_eq!(
+            result,
+            Type::Tuple(vec![Type::Number, Type::String, Type::Boolean])
+        );
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_tuple_expression_nested() {
+        let mut checker = create_type_checker();
+        let tuple_expression = ast::TupleExpression {
+            elements: vec![
+                ast::Expression::NumberLiteral(ast::NumberLiteral {
+                    value: 1.0,
+                    span: dummy_span(),
+                }),
+                ast::Expression::Tuple(ast::TupleExpression {
+                    elements: vec![
+                        ast::Expression::StringLiteral(ast::StringLiteral { span: dummy_span() }),
+                        ast::Expression::BooleanLiteral(ast::BooleanLiteral {
+                            value: false,
+                            span: dummy_span(),
+                        }),
+                    ],
+                    span: dummy_span(),
+                }),
+            ],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_tuple_expression(&tuple_expression);
+        assert_eq!(
+            result,
+            Type::Tuple(vec![
+                Type::Number,
+                Type::Tuple(vec![Type::String, Type::Boolean])
+            ])
+        );
         assert!(checker.errors.is_empty());
     }
 
