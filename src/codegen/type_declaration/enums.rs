@@ -117,7 +117,7 @@ fn this_assignement_from_values(name: &str, index: f64) -> swc::Stmt {
         }))),
         right: Box::new(swc::Expr::Member(swc::MemberExpr {
             span: DUMMY_SP,
-            obj: Box::new(create_ident(name).into()),
+            obj: Box::new(create_ident("values").into()),
             prop: swc::MemberProp::Computed(swc::ComputedPropName {
                 span: DUMMY_SP,
                 expr: Box::new(swc::Expr::Lit(swc::Lit::Num(swc::Number {
