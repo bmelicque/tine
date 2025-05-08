@@ -21,6 +21,7 @@ impl ParserEngine {
                     ast::Expression::Empty
                 }
             }
+            Rule::array_expression => self.parse_array_expression(pair).into(),
             Rule::composite_literal => self.parse_composite_literal(pair).into(),
             Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
                 self.parse_binary_ltr_expression(pair).into()
@@ -53,10 +54,18 @@ impl ParserEngine {
         let inner = pair.into_inner().next().unwrap();
         match inner.as_rule() {
             Rule::expression => self.parse_expression(inner).into(),
-            Rule::array_literal_body => self.parse_anonymous_array_literal(inner).into(),
             Rule::struct_literal_body => self.parse_anonymous_struct_literal(inner).into(),
             _ => panic!(),
         }
+    }
+
+    fn parse_array_expression(&mut self, pair: Pair<'static, Rule>) -> ast::ArrayExpression {
+        let span = pair.as_span();
+        let elements = pair
+            .into_inner()
+            .map(|element| self.parse_expression(element))
+            .collect();
+        ast::ArrayExpression { span, elements }
     }
 
     fn parse_binary_ltr_expression(&mut self, pair: Pair<'static, Rule>) -> ast::Expression {
@@ -228,6 +237,34 @@ mod tests {
             }
             _ => panic!("Expected NumberLiteral"),
         }
+    }
+
+    #[test]
+    fn test_parse_array_expression() {
+        let input = "[1, 2, 3]";
+        let pair = MyLanguageParser::parse(Rule::array_expression, input)
+            .unwrap()
+            .next()
+            .unwrap();
+        let mut parser_engine = ParserEngine::new();
+        let result = parser_engine.parse_array_expression(pair);
+
+        assert_eq!(result.elements.len(), 3);
+
+        assert!(matches!(
+            result.elements[0],
+            ast::Expression::NumberLiteral(ast::NumberLiteral { value, .. }) if value == 1.0
+        ));
+
+        assert!(matches!(
+            result.elements[1],
+            ast::Expression::NumberLiteral(ast::NumberLiteral { value, .. }) if value == 2.0
+        ));
+
+        assert!(matches!(
+            result.elements[2],
+            ast::Expression::NumberLiteral(ast::NumberLiteral { value, .. }) if value == 3.0
+        ));
     }
 
     #[test]

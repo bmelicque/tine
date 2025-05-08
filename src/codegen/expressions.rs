@@ -8,7 +8,6 @@ use super::CodeGenerator;
 impl CodeGenerator {
     pub fn expr_or_an_to_swc(&mut self, node: ast::ExpressionOrAnonymous) -> swc::Expr {
         match node {
-            ast::ExpressionOrAnonymous::Array(node) => self.anonymous_array_to_swc(node).into(),
             ast::ExpressionOrAnonymous::Expression(node) => self.expr_to_swc(node),
             ast::ExpressionOrAnonymous::Struct(node) => self.anonymous_struct_to_swc(node).into(),
         }
@@ -16,6 +15,7 @@ impl CodeGenerator {
 
     pub fn expr_to_swc(&mut self, node: ast::Expression) -> swc::Expr {
         match node {
+            ast::Expression::Array(node) => self.array_to_swc(node).into(),
             ast::Expression::Binary(node) => self.binary_expression_to_swc_expr(node),
             ast::Expression::BooleanLiteral(node) => swc::Lit::Bool(swc::Bool {
                 span: DUMMY_SP,
@@ -41,6 +41,18 @@ impl CodeGenerator {
             .into(),
             ast::Expression::Tuple(node) => self.tuple_to_swc(node).into(),
             ast::Expression::TupleIndexing(node) => self.tuple_indexing_to_swc(node).into(),
+        }
+    }
+
+    pub fn array_to_swc(&mut self, node: ast::ArrayExpression) -> swc::ArrayLit {
+        let elems = node
+            .elements
+            .into_iter()
+            .map(|node| Some(self.expr_to_swc(node).into()))
+            .collect::<Vec<_>>();
+        swc::ArrayLit {
+            span: DUMMY_SP,
+            elems,
         }
     }
 

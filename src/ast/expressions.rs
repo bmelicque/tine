@@ -7,21 +7,23 @@ use super::{composite_literals::CompositeLiteral, statements::BlockStatement, ty
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     Empty,
-    Identifier(Identifier),
-    StringLiteral(StringLiteral),
-    NumberLiteral(NumberLiteral),
+    Array(ArrayExpression),
+    Binary(BinaryExpression),
     BooleanLiteral(BooleanLiteral),
     CompositeLiteral(CompositeLiteral),
-    Binary(BinaryExpression),
     FieldAccess(FieldAccessExpression),
+    Function(FunctionExpression),
+    Identifier(Identifier),
+    NumberLiteral(NumberLiteral),
+    StringLiteral(StringLiteral),
     Tuple(TupleExpression),
     TupleIndexing(TupleIndexingExpression),
-    Function(FunctionExpression),
 }
 
 impl Expression {
     pub fn as_span(&self) -> Span<'static> {
         match self {
+            Self::Array(e) => e.span.clone(),
             Self::Binary(e) => e.span.clone(),
             Self::BooleanLiteral(e) => e.span.clone(),
             Self::CompositeLiteral(e) => e.as_span(),
@@ -44,6 +46,18 @@ impl Expression {
 impl From<CompositeLiteral> for Expression {
     fn from(value: CompositeLiteral) -> Self {
         Expression::CompositeLiteral(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArrayExpression {
+    pub span: Span<'static>,
+    pub elements: Vec<Expression>,
+}
+
+impl Into<Expression> for ArrayExpression {
+    fn into(self) -> Expression {
+        Expression::Array(self)
     }
 }
 

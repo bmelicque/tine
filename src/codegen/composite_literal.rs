@@ -11,7 +11,6 @@ use super::{codegen::TranspilerFlags, utils::create_ident};
 impl CodeGenerator {
     pub fn composite_literal_to_swc_expr(&mut self, node: ast::CompositeLiteral) -> swc::Expr {
         match node {
-            ast::CompositeLiteral::AnonymousArray(node) => self.anonymous_array_to_swc(node).into(),
             ast::CompositeLiteral::AnonymousStruct(node) => {
                 self.anonymous_struct_to_swc(node).into()
             }
@@ -22,18 +21,6 @@ impl CodeGenerator {
             }
             ast::CompositeLiteral::Struct(node) => self.struct_literal_to_swc_new_expr(node).into(),
             ast::CompositeLiteral::Variant(node) => self.variant_literal_to_swc(node).into(),
-        }
-    }
-
-    pub fn anonymous_array_to_swc(&mut self, node: ast::AnonymousArrayLiteral) -> swc::ArrayLit {
-        let elems = node
-            .elements
-            .into_iter()
-            .map(|node| Some(self.expr_or_an_to_swc(node).into()))
-            .collect::<Vec<_>>();
-        swc::ArrayLit {
-            span: DUMMY_SP,
-            elems,
         }
     }
 

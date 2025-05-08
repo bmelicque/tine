@@ -24,7 +24,7 @@ result_ok_type = { unary_type | primary_type }
 unary_type = { reference_type | option_type | array_type }
 reference_type = { "&" ~ (unary_type | primary_type)? }
 option_type = { "?" ~ (unary_type | primary_type)? }
-array_type = { "[]" ~ (unary_type | primary_type)? }
+array_type = { "[]" ~ (unary_type | primary_type) }
 primary_type = { generic_type | type_name | grouped_type }
 grouped_type = { "(" ~ type_annotation ~ ")" }
 // uses binary_type in generic_type to avoid unwrapping tuples
@@ -48,12 +48,12 @@ struct_literal_body = { "(" ~ NEWLINE? ~ (field_assignment ~ ((","|NEWLINE) ~ fi
 field_assignment = { value_identifier ~ ":" ~ expression }
 variant_literal = { (generic_type|type_identifier) ~ "." ~ type_identifier ~ variant_literal_body? }
 variant_literal_body = { array_literal_body | struct_literal_body }
-anonymous_expression = { struct_literal_body | array_literal_body | expression }
+anonymous_expression = { struct_literal_body | expression }
 
 // Expressions
 tuple_or_expression = { tuple_expression | expression }
 tuple_expression = { expression ~ ("," ~ expression)+ }
-expression = { composite_literal | equality }
+expression = { composite_literal | array_expression | equality }
 equality = { relation? ~ (("=="|"!=") ~ relation?)* }
 eq_op = { "==" | "!=" }
 relation = { addition? ~ (rel_op ~ addition?)*}
@@ -66,6 +66,7 @@ exponentiation = { primary? ~ ("**" ~ primary?)* }
 primary = {  string_literal | number_literal | boolean_literal | value_identifier | function_expression | "(" ~ tuple_or_expression ~ ")" }
 tuple_indexing = { (member_expression|value_identifier|"(" ~ tuple_or_expression ~ ")") ~ "." ~ number_literal }
 member_expression = { value_identifier ~ ("." ~ value_identifier)+ }
+array_expression = { "[" ~ NEWLINE? ~ expression ~ (NEWLINE? ~ "," ~ expression)* ~ "]" }
 
 function_expression = { parameter_list? ~ "=>" ~ (function_body | expression)? }
 function_body = { type_annotation? ~ block }

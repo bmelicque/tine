@@ -11,6 +11,7 @@ use super::{scopes::VariableInfo, TypeChecker};
 impl TypeChecker {
     pub fn visit_expression(&mut self, node: &ast::Expression) -> Type {
         match node {
+            ast::Expression::Array(node) => self.visit_array_expression(node),
             ast::Expression::Binary(node) => self.visit_binary_expression(node),
             ast::Expression::BooleanLiteral(_) => Type::Boolean,
             ast::Expression::CompositeLiteral(node) => self.visit_composite_literal(node),
@@ -27,10 +28,33 @@ impl TypeChecker {
 
     pub fn visit_expression_or_anonymous(&mut self, node: &ast::ExpressionOrAnonymous) -> Type {
         match node {
-            ast::ExpressionOrAnonymous::Array(node) => self.visit_anonymous_array_literal(node),
             ast::ExpressionOrAnonymous::Expression(node) => self.visit_expression(node),
             ast::ExpressionOrAnonymous::Struct(node) => self.visit_anonymous_struct_literal(node),
         }
+    }
+
+    fn visit_array_expression(&mut self, node: &ast::ArrayExpression) -> Type {
+        if node.elements.len() == 0 {
+            return Type::Dynamic;
+        }
+
+        let mut ty = Type::Dynamic;
+        for value in node.elements.iter() {
+            let value_ty = self.visit_expression(value);
+            if ty == Type::Dynamic {
+                ty = value_ty;
+                continue;
+            }
+            if !value_ty.is_assignable_to(&ty) {
+                self.errors.push(ParseError {
+                    message: format!("Type mismatch: expected {}, found {}", ty, value_ty),
+                    span: value.as_span(),
+                });
+                ty = Type::Unknown;
+            }
+        }
+
+        Type::Array(Box::new(ty))
     }
 
     fn visit_binary_expression(&mut self, node: &ast::BinaryExpression) -> Type {
@@ -299,6 +323,69 @@ mod tests {
 
     fn span(text: &'static str) -> pest::Span<'static> {
         pest::Span::new(text, 0, text.len()).unwrap()
+    }
+
+    #[test]
+    fn test_visit_array_expression_empty() {
+        let mut checker = create_type_checker();
+        let array_expression = ast::ArrayExpression {
+            elements: vec![],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_array_expression(&array_expression);
+        assert_eq!(result, Type::Dynamic);
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_array_expression_consistent_types() {
+        let mut checker = create_type_checker();
+        let array_expression = ast::ArrayExpression {
+            elements: vec![
+                ast::Expression::NumberLiteral(ast::NumberLiteral {
+                    value: 1.0,
+                    span: dummy_span(),
+                }),
+                ast::Expression::NumberLiteral(ast::NumberLiteral {
+                    value: 2.0,
+                    span: dummy_span(),
+                }),
+                ast::Expression::NumberLiteral(ast::NumberLiteral {
+                    value: 3.0,
+                    span: dummy_span(),
+                }),
+            ],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_array_expression(&array_expression);
+        assert_eq!(result, Type::Array(Box::new(Type::Number)));
+        assert!(checker.errors.is_empty());
+    }
+
+    #[test]
+    fn test_visit_array_expression_mixed_types() {
+        let mut checker = create_type_checker();
+        let array_expression = ast::ArrayExpression {
+            elements: vec![
+                ast::Expression::NumberLiteral(ast::NumberLiteral {
+                    value: 1.0,
+                    span: dummy_span(),
+                }),
+                ast::Expression::StringLiteral(ast::StringLiteral {
+                    span: span("hello"),
+                }),
+            ],
+            span: dummy_span(),
+        };
+
+        let result = checker.visit_array_expression(&array_expression);
+        assert_eq!(result, Type::Array(Box::new(Type::Unknown)));
+        assert_eq!(checker.errors.len(), 1);
+        assert!(checker.errors[0]
+            .message
+            .contains("Type mismatch: expected number, found string"));
     }
 
     #[test]

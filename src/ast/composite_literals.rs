@@ -8,7 +8,6 @@ use super::{
 #[derive(Debug, Clone, PartialEq)]
 pub enum CompositeLiteral {
     Array(ArrayLiteral),
-    AnonymousArray(AnonymousArrayLiteral),
     AnonymousStruct(AnonymousStructLiteral),
     Map(MapLiteral),
     Option(OptionLiteral),
@@ -19,7 +18,6 @@ pub enum CompositeLiteral {
 impl CompositeLiteral {
     pub fn as_span(&self) -> Span<'static> {
         match self {
-            Self::AnonymousArray(c) => c.span,
             Self::AnonymousStruct(c) => c.span,
             Self::Array(c) => c.span,
             Self::Map(c) => c.span,
@@ -60,18 +58,6 @@ pub struct ArrayLiteral {
 impl Into<CompositeLiteral> for ArrayLiteral {
     fn into(self) -> CompositeLiteral {
         CompositeLiteral::Array(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct AnonymousArrayLiteral {
-    pub span: Span<'static>,
-    pub elements: Vec<ExpressionOrAnonymous>,
-}
-
-impl Into<CompositeLiteral> for AnonymousArrayLiteral {
-    fn into(self) -> CompositeLiteral {
-        CompositeLiteral::AnonymousArray(self)
     }
 }
 
@@ -155,14 +141,12 @@ impl From<Vec<StructLiteralField>> for VariantLiteralBody {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExpressionOrAnonymous {
     Expression(Expression),
-    Array(AnonymousArrayLiteral),
     Struct(AnonymousStructLiteral),
 }
 
 impl ExpressionOrAnonymous {
     pub fn as_span(&self) -> Span<'static> {
         match self {
-            Self::Array(array) => array.span.clone(),
             Self::Expression(expr) => expr.as_span(),
             Self::Struct(s) => s.span.clone(),
         }
@@ -172,11 +156,6 @@ impl ExpressionOrAnonymous {
 impl From<Expression> for ExpressionOrAnonymous {
     fn from(value: Expression) -> Self {
         ExpressionOrAnonymous::Expression(value)
-    }
-}
-impl From<AnonymousArrayLiteral> for ExpressionOrAnonymous {
-    fn from(value: AnonymousArrayLiteral) -> Self {
-        ExpressionOrAnonymous::Array(value)
     }
 }
 impl From<AnonymousStructLiteral> for ExpressionOrAnonymous {

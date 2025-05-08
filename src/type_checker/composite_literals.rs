@@ -12,7 +12,6 @@ use super::{scopes::TypeRegistry, TypeChecker};
 impl TypeChecker {
     pub fn visit_composite_literal(&mut self, node: &ast::CompositeLiteral) -> Type {
         match node {
-            ast::CompositeLiteral::AnonymousArray(node) => self.visit_anonymous_array_literal(node),
             ast::CompositeLiteral::AnonymousStruct(node) => {
                 self.visit_anonymous_struct_literal(node)
             }
@@ -22,29 +21,6 @@ impl TypeChecker {
             ast::CompositeLiteral::Struct(node) => self.visit_struct_literal(node),
             ast::CompositeLiteral::Variant(node) => self.visit_variant_literal(node),
         }
-    }
-
-    pub fn visit_anonymous_array_literal(&mut self, node: &ast::AnonymousArrayLiteral) -> Type {
-        if node.elements.len() == 0 {
-            return Type::Dynamic;
-        }
-
-        let mut ty = Type::Dynamic;
-        for value in node.elements.iter() {
-            let value_ty = self.visit_expression_or_anonymous(value);
-            if ty == Type::Dynamic {
-                ty = value_ty;
-                continue;
-            }
-            if !value_ty.is_assignable_to(&ty) {
-                self.errors.push(ParseError {
-                    message: format!("Key type mismatch: expected {}, found {}", ty, value_ty),
-                    span: value.as_span(),
-                })
-            }
-        }
-
-        Type::Array(Box::new(ty))
     }
 
     pub fn visit_anonymous_struct_literal(&mut self, node: &ast::AnonymousStructLiteral) -> Type {
@@ -315,32 +291,6 @@ mod tests {
 
     fn dummy_span() -> pest::Span<'static> {
         pest::Span::new("_", 0, 0).unwrap()
-    }
-
-    #[test]
-    fn test_visit_anonymous_array_literal() {
-        let mut checker = create_type_checker();
-        let array_literal = ast::AnonymousArrayLiteral {
-            elements: vec![
-                ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                    ast::NumberLiteral {
-                        value: 1.0,
-                        span: dummy_span(),
-                    },
-                )),
-                ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                    ast::NumberLiteral {
-                        value: 2.0,
-                        span: dummy_span(),
-                    },
-                )),
-            ],
-            span: dummy_span(),
-        };
-
-        let result = checker.visit_anonymous_array_literal(&array_literal);
-        assert_eq!(result, Type::Array(Box::new(Type::Number)));
-        assert!(checker.errors.is_empty());
     }
 
     #[test]

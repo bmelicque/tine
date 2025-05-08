@@ -59,17 +59,6 @@ impl ParserEngine {
         ast::ArrayLiteral { span, ty, elements }
     }
 
-    pub fn parse_anonymous_array_literal(
-        &mut self,
-        pair: Pair<'static, Rule>,
-    ) -> ast::AnonymousArrayLiteral {
-        assert!(pair.as_rule() == Rule::array_literal_body);
-        let span = pair.as_span();
-        let elements = self.parse_array_literal_body(pair);
-
-        ast::AnonymousArrayLiteral { span, elements }
-    }
-
     fn parse_array_literal_body(
         &mut self,
         pair: Pair<'static, Rule>,
@@ -305,38 +294,6 @@ mod tests {
         // Check the second field
         let field2 = &result.fields[1];
         assert_eq!(field2.prop, "age");
-    }
-
-    #[test]
-    fn test_parse_anonymous_array_literal() {
-        let input = r#"(1, 2, 3)"#;
-        let pair = MyLanguageParser::parse(Rule::array_literal_body, input)
-            .unwrap()
-            .next()
-            .unwrap();
-        let mut parser_engine = ParserEngine::new();
-        let array = parser_engine.parse_anonymous_array_literal(pair);
-
-        assert_eq!(array.elements.len(), 3);
-
-        assert!(matches!(
-            array.elements[0],
-            ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                ast::NumberLiteral { value, .. }
-            )) if value == 1.0
-        ));
-        assert!(matches!(
-            array.elements[1],
-            ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                ast::NumberLiteral { value, .. }
-            )) if value == 2.0
-        ));
-        assert!(matches!(
-            array.elements[2],
-            ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                ast::NumberLiteral { value, .. }
-            )) if value == 3.0
-        ));
     }
 
     #[test]
