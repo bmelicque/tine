@@ -190,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_parse_map_literal() {
-        let input = r#"string#number { "key": 42, "another_key": 99 }"#;
+        let input = r#"string#number("key": 42, "another_key": 99)"#;
         let result = parse_composite_literal_input(input, Rule::composite_literal);
 
         match result {
@@ -219,7 +219,7 @@ mod tests {
 
     #[test]
     fn test_parse_array_literal() {
-        let input = r#"[]number { 1, 2, 3 }"#;
+        let input = r#"[]number(1, 2, 3)"#;
         let result = parse_composite_literal_input(input, Rule::composite_literal);
 
         match result {
@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn test_parse_option_literal() {
-        let input = r#"?number { 42 }"#;
+        let input = r#"?number(42)"#;
         let result = parse_composite_literal_input(input, Rule::composite_literal);
 
         match result {
@@ -269,7 +269,7 @@ mod tests {
 
     #[test]
     fn test_parse_struct_literal() {
-        let input = r#"User { name: "John", age: 30 }"#;
+        let input = r#"User(name: "John", age: 30)"#;
         let result = parse_composite_literal_input(input, Rule::composite_literal);
 
         match result {
@@ -288,7 +288,7 @@ mod tests {
 
     #[test]
     fn test_parse_anonymous_struct_literal() {
-        let input = r#"{ name: "John", age: 30 }"#;
+        let input = r#"(name: "John", age: 30)"#;
         let pair = MyLanguageParser::parse(Rule::struct_literal_body, input)
             .unwrap()
             .next()
@@ -309,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_parse_anonymous_array_literal() {
-        let input = r#"{1, 2, 3}"#;
+        let input = r#"(1, 2, 3)"#;
         let pair = MyLanguageParser::parse(Rule::array_literal_body, input)
             .unwrap()
             .next()
@@ -341,7 +341,7 @@ mod tests {
 
     #[test]
     fn test_parse_variant_literal_with_struct_body() {
-        let input = r#"MyEnum.Variant { field1: "value1", field2: 42 }"#;
+        let input = r#"MyEnum.Variant(field1: "value1", field2: 42)"#;
         let result = parse_composite_literal_input(input, Rule::composite_literal);
 
         let ast::CompositeLiteral::Variant(result) = result else {
@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn test_parse_variant_literal_with_array_body() {
-        let input = r#"MyEnum.Variant { 1, 2, 3 }"#;
+        let input = r#"MyEnum.Variant(1, 2, 3)"#;
         let pair = MyLanguageParser::parse(Rule::variant_literal, input)
             .unwrap()
             .next()

@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     fn test_parse_generic_type_alias() {
-        let input = "Box[T] :: { value T }";
+        let input = "Box[T] :: (value T)";
         let (result, _) = parse_type_alias_input(input, Rule::type_alias);
 
         assert_eq!(result.name, "Box");
@@ -260,8 +260,7 @@ mod tests {
 
     #[test]
     fn test_parse_sum_type_alias() {
-        let input =
-            "Shape :: | Circle { radius number } | Rectangle { width number, height number }";
+        let input = "Shape :: | Circle(radius number) | Rectangle(width number, height number)";
         let (result, _) = parse_type_alias_input(input, Rule::type_alias);
 
         assert_eq!(result.name, "Shape");
@@ -285,7 +284,7 @@ mod tests {
 
     #[test]
     fn test_parse_trait_type_alias() {
-        let input = "MyTrait :: (Self).{ method() -> Self }";
+        let input = "MyTrait :: (Self).(method() -> Self)";
         let (result, _) = parse_type_alias_input(input, Rule::type_alias);
 
         assert_eq!(result.name, "MyTrait");
@@ -305,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_parse_type_alias_with_duplicate_params() {
-        let input = "Box[T, T] :: { value T }";
+        let input = "Box[T, T] :: (value T)";
         let (result, errors) = parse_type_alias_input(input, Rule::type_alias);
 
         assert_eq!(result.name, "Box");
@@ -324,7 +323,7 @@ mod tests {
 
     #[test]
     fn test_parse_struct_with_duplicate_fields() {
-        let input = "MyStruct :: { field: number, field: string }";
+        let input = "MyStruct :: (field: number, field: string)";
         let (result, errors) = parse_type_alias_input(input, Rule::type_alias);
 
         assert_eq!(result.name, "MyStruct");

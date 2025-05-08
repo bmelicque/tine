@@ -29,23 +29,22 @@ primary_type = { generic_type | type_name | grouped_type }
 grouped_type = { "(" ~ type_annotation ~ ")" }
 // uses binary_type in generic_type to avoid unwrapping tuples
 generic_type = { type_identifier ~ ("[" ~ type_element ~ ("," ~ type_element)* ~ "]")? } // e.g., List[number]
-type_name = { type_identifier | primitive_type }
+type_name = { primitive_type | type_identifier }
 type_identifier = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_")* }
 primitive_type = @{ "number" | "boolean" | "string" }
 type_element = { function_type | binary_type | unary_type | primary_type }
 
-// TODO: variants:      Sum.Variant{}
 // Composite literals
 composite_literal = { variant_literal | map_literal | struct_literal | array_literal | option_literal }
-map_literal = { map_type ~ "{" ~ NEWLINE? ~ map_body ~ NEWLINE? ~ "}" }
+map_literal = { map_type ~ "(" ~ NEWLINE? ~ map_body ~ NEWLINE? ~ ")" }
 map_body = { (map_entry? ~ ((","|NEWLINE) ~ map_entry)*)? }
 map_entry = { map_key ~ ":" ~ anonymous_expression }
 map_key = { string_literal | number_literal | "[" ~ expression ~ "]" }
 array_literal = { array_type ~ array_literal_body }
-array_literal_body = { "{" ~ NEWLINE? ~ (anonymous_expression ~ ((","|NEWLINE) ~ anonymous_expression )*)? ~ NEWLINE? ~ "}" }
-option_literal = { option_type ~ "{" ~ NEWLINE? ~ (anonymous_expression ~ NEWLINE?)? ~ "}" }
+array_literal_body = { "(" ~ NEWLINE? ~ (anonymous_expression ~ ((","|NEWLINE) ~ anonymous_expression )*)? ~ NEWLINE? ~ ")" }
+option_literal = { option_type ~ "(" ~ NEWLINE? ~ (anonymous_expression ~ NEWLINE?)? ~ ")" }
 struct_literal = { generic_type ~ struct_literal_body }
-struct_literal_body = { "{" ~ NEWLINE? ~ (field_assignment ~ ((","|NEWLINE) ~ field_assignment)*)?  ~ NEWLINE? ~ "}" }
+struct_literal_body = { "(" ~ NEWLINE? ~ (field_assignment ~ ((","|NEWLINE) ~ field_assignment)*)?  ~ NEWLINE? ~ ")" }
 field_assignment = { value_identifier ~ ":" ~ expression }
 variant_literal = { (generic_type|type_identifier) ~ "." ~ type_identifier ~ variant_literal_body? }
 variant_literal_body = { array_literal_body | struct_literal_body }
@@ -85,15 +84,15 @@ block = { "{" ~ NEWLINE? ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | 
 
 type_alias = { type_identifier ~ type_params? ~ "::" ~ type_def }
 type_params = { "[" ~ type_identifier ~ ("," ~ type_identifier)* ~ "]" }
-type_def = { struct_body | sum_type | trait_type }
-struct_body = { "{" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ "}" }
+type_def = { "("~NEWLINE?~sum_type~NEWLINE?~")" | struct_body | sum_type | trait_type }
+struct_body = { "(" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ ")" }
 field_declaration = { mandatory_field | optional_field  }
 embedded_field = { type_identifier }
 mandatory_field = { value_identifier ~ type_element }
 optional_field = { value_identifier ~ ":" ~ expression }
 sum_type = { (NEWLINE? ~ "|")? ~ sum_constructor ~ (NEWLINE? ~ "|" ~ sum_constructor)+ }
-sum_constructor = { type_identifier ~ (sum_param | struct_body)? }
-sum_param = { "{" ~ type_annotation ~ "}" }
+sum_constructor = { type_identifier ~ (struct_body | sum_param)? }
+sum_param = { "(" ~ type_annotation ~ ")" }
 trait_type = { "(" ~ type_identifier ~ ")" ~ "." ~ struct_body }
 
 // Program

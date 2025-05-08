@@ -290,34 +290,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_composite_literal() {
-        let input = r#"[]number{ 1, 2, 3 }"#;
-        let result = parse_expression_input(input, Rule::composite_literal);
-
-        match result {
-            ast::Expression::CompositeLiteral(composite) => match composite {
-                ast::CompositeLiteral::Array(array) => {
-                    assert_eq!(array.elements.len(), 3);
-                    assert!(matches!(
-                        array.elements[0],
-                        ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(ast::NumberLiteral{value, ..})) if value == 1.0
-                    ));
-                    assert!(matches!(
-                        array.elements[1],
-                        ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(ast::NumberLiteral{value, ..})) if value == 2.0
-                    ));
-                    assert!(matches!(
-                        array.elements[2],
-                        ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(ast::NumberLiteral{value, ..})) if value == 3.0
-                    ));
-                }
-                _ => panic!("Expected ArrayLiteral"),
-            },
-            _ => panic!("Expected CompositeLiteral"),
-        }
-    }
-
-    #[test]
     fn test_parse_exponentiation_expression() {
         let input = "2 ** 3 ** 2";
         let result = parse_expression_input(input, Rule::exponentiation);
