@@ -1,4 +1,9 @@
+- pattern matching
+  - declare pattern (e.g. `User(username, age) := user`)
+  - assign pattern
 - blocks as expressions
+  - handle as an expression in the ast
+  - return type is the one of the last statement (if an expression statement), else unit
 - if - else
 - for loops
 - handle return in functions (check nested blocks)
