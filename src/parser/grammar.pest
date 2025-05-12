@@ -73,10 +73,21 @@ function_body = { type_annotation? ~ block }
 parameter_list = { "(" ~ (parameter ~ ("," ~ parameter)*)? ~ ")" }
 parameter = { value_identifier ~ type_annotation? }
 
+// Patterns
+pattern = { tuple_pattern | pattern_element }
+tuple_pattern = { pattern_element ~ ("," ~ pattern_element)+ }
+pattern_element = { struct_pattern | grouped_pattern | identifier_pattern }
+grouped_pattern = { "(" ~ pattern ~ ")" }
+identifier_pattern = { value_identifier }
+struct_pattern = { type_identifier ~ "(" ~ struct_pattern_elements ~ ")" }
+struct_pattern_elements = { (struct_pattern_field ~ ("," ~ struct_pattern_field)*)? }
+struct_pattern_field = { value_identifier ~ (":" ~ pattern)? }
+// TODO: variant pattern `Enum.Variant(..)`
+
 
 // Statements
 statement = { block | type_alias | variable_declaration | assignment | return_statement | expression_statement }
-variable_declaration = { value_identifier ~ decl_op ~ expression }
+variable_declaration = { pattern ~ decl_op ~ expression }
 decl_op = { ":=" | "::" }
 assignment = { value_identifier ~ "=" ~ expression }
 return_statement = { "return" ~ expression? }

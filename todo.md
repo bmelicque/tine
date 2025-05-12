@@ -1,6 +1,7 @@
 - pattern matching
-  - declare pattern (e.g. `User(username, age) := user`)
-  - assign pattern
+  - [x] declare pattern (e.g. `User(username, age) := user`)
+  - assign pattern (e.g. `User(username, age) = user`)
+  - match expression (e.g. `match user.role { Role.User: {}, Role.Admin(acl): {} }`)
 - blocks as expressions
   - handle as an expression in the ast
   - return type is the one of the last statement (if an expression statement), else unit

@@ -54,6 +54,8 @@ impl TypeChecker {
         }
     }
 
+    /// If type is Named, unwraps the underlying type, else returns original type
+    /// TODO: it should also resolve type arguments
     pub fn unwrap_named_type(&self, ty: &Type) -> Type {
         match ty {
             Type::Named { name, .. } => match name.as_str() {

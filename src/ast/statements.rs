@@ -1,6 +1,6 @@
 use pest::Span;
 
-use super::{expressions::Expression, types::Type};
+use super::{expressions::Expression, types::Type, Pattern};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
@@ -22,7 +22,7 @@ impl Statement {
 #[derive(Debug, Clone, PartialEq)]
 pub struct VariableDeclaration {
     pub span: Span<'static>,
-    pub name: String,
+    pub pattern: Box<Pattern>,
     pub op: DeclarationOp,
     pub value: Box<Expression>,
 }

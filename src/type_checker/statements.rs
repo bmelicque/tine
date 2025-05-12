@@ -60,7 +60,11 @@ impl TypeChecker {
     fn visit_variable_declaration(&mut self, node: &ast::VariableDeclaration) -> Type {
         let inferred_type = self.visit_expression(&node.value);
         let mutable = node.op == ast::DeclarationOp::Mut;
-        self.symbols.define(&node.name, inferred_type, mutable);
+        let mut variables = Vec::<(String, Type)>::new();
+        self.match_pattern(&node.pattern, inferred_type, &mut variables);
+        for (name, ty) in variables {
+            self.symbols.define(&name, ty, mutable);
+        }
         Type::Void
     }
 }

@@ -1,9 +1,10 @@
-pub mod composite_literals;
-pub mod expressions;
+mod composite_literals;
+mod expressions;
 pub mod parser;
-pub mod statements;
-pub mod type_aliases;
-pub mod types;
-pub mod utils;
+mod patterns;
+mod statements;
+mod type_aliases;
+mod types;
+mod utils;
 
 pub use parser::ParserEngine;

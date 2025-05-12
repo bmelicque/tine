@@ -56,10 +56,7 @@ impl CodeGenerator {
 
         let decl = swc::VarDeclarator {
             span: DUMMY_SP,
-            name: swc::Pat::Ident(swc::BindingIdent {
-                id: create_ident(&node.name),
-                type_ann: None,
-            }),
+            name: self.pattern_to_swc(*node.pattern),
             init,
             definite: false,
         };

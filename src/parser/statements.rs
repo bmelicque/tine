@@ -28,13 +28,13 @@ impl ParserEngine {
         let span = pair.as_span();
         let mut inner = pair.into_inner();
 
-        let name = inner.next().unwrap().as_str().to_string();
+        let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
         let op = inner.next().unwrap().as_str().to_string().into();
         let value = Box::new(self.parse_expression(inner.next().unwrap()));
 
         ast::VariableDeclaration {
             span,
-            name,
+            pattern,
             op,
             value,
         }
@@ -108,7 +108,11 @@ mod tests {
 
         match result {
             ast::Statement::VariableDeclaration(var_decl) => {
-                assert_eq!(var_decl.name, "x");
+                match *var_decl.pattern {
+                    ast::Pattern::Identifier(ast::IdentifierPattern { span })
+                        if span.as_str() == "x" => {}
+                    _ => panic!("Identifier pattern expected"),
+                };
                 assert_eq!(var_decl.op, ast::DeclarationOp::Mut);
                 match *var_decl.value {
                     ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
@@ -166,7 +170,11 @@ mod tests {
                 // Check the first statement
                 match &block.statements[0] {
                     ast::Statement::VariableDeclaration(var_decl) => {
-                        assert_eq!(var_decl.name, "x");
+                        match *var_decl.pattern {
+                            ast::Pattern::Identifier(ast::IdentifierPattern { span })
+                                if span.as_str() == "x" => {}
+                            _ => panic!("Identifier pattern expected"),
+                        };
                         match *var_decl.value.clone() {
                             ast::Expression::NumberLiteral(literal) => {
                                 assert_eq!(literal.value, 42.0)
