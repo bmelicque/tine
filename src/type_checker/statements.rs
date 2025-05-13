@@ -16,30 +16,83 @@ impl TypeChecker {
 
     fn visit_assignment(&mut self, node: &ast::Assignment) -> Type {
         let value_type = self.visit_expression(&node.value);
-        let name = &node.name;
+        self.visit_assignee(&node.pattern, value_type);
 
-        let Some(info) = self.symbols.lookup(&name) else {
-            self.errors.push(ParseError {
-                message: format!("Cannot find name '{}'", name),
-                span: node.span,
-            });
-            return Type::Void;
+        Type::Void
+    }
+
+    fn visit_assignee(&mut self, pattern: &ast::PatternExpression, against: Type) {
+        match pattern {
+            ast::PatternExpression::Pattern(ref pattern) => {
+                self.visit_pattern_assignee(pattern, against)
+            }
+            ast::PatternExpression::Expression(expr) => match expr {
+                ast::Expression::FieldAccess(expr) => {
+                    self.visit_expr_assignee(expr, against);
+                }
+                ast::Expression::TupleIndexing(expr) => {
+                    self.visit_expr_assignee(expr, against);
+                }
+                expr => unreachable!("unexpected expression: {:?}", expr),
+            },
         };
+    }
 
+    fn visit_pattern_assignee(&mut self, pattern: &ast::Pattern, against: Type) {
+        let mut variables = Vec::new();
+        self.match_pattern(pattern, against, &mut variables);
+        for (name, ty) in variables {
+            let Some(info) = self.symbols.lookup(&name) else {
+                self.errors.push(ParseError {
+                    message: format!("Cannot find name '{}'", name),
+                    span: pattern.as_span(),
+                });
+                continue;
+            };
+            if info.ty != ty {
+                self.errors.push(ParseError {
+                    message: format!("Cannot assign type {:?} to {:?}", ty, info.ty),
+                    span: pattern.as_span(),
+                });
+            }
+            if !info.mutable {
+                self.errors.push(ParseError {
+                    message: "Cannot assign to immutable variable".to_string(),
+                    span: pattern.as_span(),
+                });
+            }
+        }
+    }
+
+    fn visit_expr_assignee(&mut self, expr: &dyn ast::PathExpression, against: Type) {
+        let ty = self.visit_expression(expr.base_expression());
+        if ty != against {
+            self.errors.push(ParseError {
+                message: format!("Cannot assign type {:?} to {:?}", against, ty),
+                span: expr.as_span(),
+            });
+        }
+        let root = expr.root_expression();
+        let ast::Expression::Identifier(root) = root else {
+            self.errors.push(ParseError {
+                message: "Expected identifier".to_string(),
+                span: root.as_span(),
+            });
+            return;
+        };
+        let Some(info) = self.symbols.lookup(root.as_str()) else {
+            self.errors.push(ParseError {
+                message: format!("Cannot find name '{}'", root.as_str()),
+                span: root.span,
+            });
+            return;
+        };
         if !info.mutable {
             self.errors.push(ParseError {
                 message: "Cannot assign to immutable variable".to_string(),
-                span: node.span,
+                span: expr.as_span(),
             });
         }
-        if info.ty != value_type {
-            self.errors.push(ParseError {
-                message: format!("Cannot assign type {:?} to {:?}", value_type, info.ty),
-                span: node.span,
-            });
-        }
-
-        Type::Void
     }
 
     pub fn visit_block_statement(&mut self, node: &ast::BlockStatement) -> Type {

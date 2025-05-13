@@ -1,10 +1,38 @@
-use super::NamedType;
+use super::{Expression, NamedType};
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PatternExpression {
+    Pattern(Pattern),
+    Expression(Expression),
+}
+
+impl From<Expression> for PatternExpression {
+    fn from(value: Expression) -> Self {
+        Self::Expression(value)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
     Identifier(IdentifierPattern),
     StructPattern(StructPattern),
     Tuple(TuplePattern),
+}
+
+impl Pattern {
+    pub fn as_span(&self) -> pest::Span<'static> {
+        match self {
+            Pattern::Identifier(p) => p.span,
+            Pattern::StructPattern(p) => p.span,
+            Pattern::Tuple(p) => p.span,
+        }
+    }
+}
+
+impl Into<PatternExpression> for Pattern {
+    fn into(self) -> PatternExpression {
+        PatternExpression::Pattern(self)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

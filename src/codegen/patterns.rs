@@ -6,6 +6,13 @@ use crate::ast;
 use super::{utils::create_ident, CodeGenerator};
 
 impl CodeGenerator {
+    pub fn pat_or_expr_to_swc(&mut self, node: ast::PatternExpression) -> swc::PatOrExpr {
+        match node {
+            ast::PatternExpression::Expression(e) => Box::new(self.expr_to_swc(e)).into(),
+            ast::PatternExpression::Pattern(p) => Box::new(self.pattern_to_swc(p)).into(),
+        }
+    }
+
     pub fn pattern_to_swc(&mut self, node: ast::Pattern) -> swc::Pat {
         match node {
             ast::Pattern::Identifier(pattern) => swc::Pat::Ident(swc::BindingIdent {

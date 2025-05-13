@@ -44,10 +44,24 @@ impl ParserEngine {
         let span = pair.as_span();
         let mut inner = pair.into_inner();
 
-        let name = inner.next().unwrap().as_str().to_string();
+        let pattern = self.parse_assignee(inner.next().unwrap());
         let value = self.parse_expression(inner.next().unwrap());
 
-        ast::Assignment { span, name, value }
+        ast::Assignment {
+            span,
+            pattern,
+            value,
+        }
+    }
+
+    fn parse_assignee(&mut self, pair: Pair<'static, Rule>) -> ast::PatternExpression {
+        assert!(pair.as_rule() == Rule::assignee);
+        let pair = pair.into_inner().next().unwrap();
+        match pair.as_rule() {
+            Rule::pattern => self.parse_pattern(pair).into(),
+            Rule::member_expression | Rule::tuple_indexing => self.parse_expression(pair).into(),
+            rule => unreachable!("Unexpected rule {:?}", rule),
+        }
     }
 
     fn parse_return_statement(&mut self, pair: Pair<'static, Rule>) -> ast::ReturnStatement {
@@ -124,16 +138,107 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_assignment() {
+    fn test_parse_simple_assignment() {
         let input = "x = 42";
         let result = parse_statement_input(input, Rule::assignment);
 
         match result {
             ast::Statement::Assignment(assignment) => {
-                assert_eq!(assignment.name, "x");
+                // Check the pattern
+                match assignment.pattern {
+                    ast::PatternExpression::Pattern(ast::Pattern::Identifier(id))
+                        if id.span.as_str() == "x" => {}
+                    _ => panic!("Expected 'x' as the assignee"),
+                }
+
+                // Check the value
                 match assignment.value {
                     ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
                     _ => panic!("Expected NumberLiteral as assignment value"),
+                }
+            }
+            _ => panic!("Expected Assignment"),
+        }
+    }
+
+    #[test]
+    fn test_parse_member_expression_assignment() {
+        let input = "user.name = \"John\"";
+        let result = parse_statement_input(input, Rule::assignment);
+
+        match result {
+            ast::Statement::Assignment(assignment) => {
+                // Check the pattern
+                match assignment.pattern {
+                    ast::PatternExpression::Expression(ast::Expression::FieldAccess(
+                        field_access,
+                    )) => {
+                        assert_eq!(field_access.object.as_span().as_str(), "user");
+                        assert_eq!(field_access.prop.span.as_str(), "name");
+                    }
+                    _ => panic!("Expected FieldAccessExpression as the assignee"),
+                }
+
+                // Check the value
+                match assignment.value {
+                    ast::Expression::StringLiteral(literal) => assert_eq!(literal.as_str(), "John"),
+                    _ => panic!("Expected StringLiteral as assignment value"),
+                }
+            }
+            _ => panic!("Expected Assignment"),
+        }
+    }
+
+    #[test]
+    fn test_parse_tuple_indexing_assignment() {
+        let input = "tuple.0 = 42";
+        let result = parse_statement_input(input, Rule::assignment);
+
+        match result {
+            ast::Statement::Assignment(assignment) => {
+                match assignment.pattern {
+                    ast::PatternExpression::Expression(ast::Expression::TupleIndexing(
+                        indexing,
+                    )) => {
+                        assert_eq!(indexing.tuple.as_span().as_str(), "tuple");
+                        assert_eq!(indexing.index.value, 0.0);
+                    }
+                    _ => panic!("Expected TupleIndexingExpression as the assignee"),
+                }
+
+                match assignment.value {
+                    ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
+                    _ => panic!("Expected NumberLiteral as assignment value"),
+                }
+            }
+            _ => panic!("Expected Assignment"),
+        }
+    }
+
+    #[test]
+    fn test_parse_nested_assignment() {
+        let input = "user.address.city = \"New York\"";
+        let result = parse_statement_input(input, Rule::assignment);
+
+        match result {
+            ast::Statement::Assignment(assignment) => {
+                // Check the pattern
+                match assignment.pattern {
+                    ast::PatternExpression::Expression(ast::Expression::FieldAccess(
+                        field_access,
+                    )) => {
+                        assert_eq!(field_access.object.as_span().as_str(), "user.address");
+                        assert_eq!(field_access.prop.span.as_str(), "city");
+                    }
+                    _ => panic!("Expected FieldAccessExpression as the assignee"),
+                }
+
+                // Check the value
+                match assignment.value {
+                    ast::Expression::StringLiteral(literal) => {
+                        assert_eq!(literal.as_str(), "New York")
+                    }
+                    _ => panic!("Expected StringLiteral as assignment value"),
                 }
             }
             _ => panic!("Expected Assignment"),
@@ -188,7 +293,11 @@ mod tests {
                 // Check the second statement
                 match &block.statements[1] {
                     ast::Statement::Assignment(assignment) => {
-                        assert_eq!(assignment.name, "x");
+                        match &assignment.pattern {
+                            ast::PatternExpression::Pattern(ast::Pattern::Identifier(id))
+                                if id.span.as_str() == "x" => {}
+                            _ => panic!("Expected 'x'"),
+                        }
                         match &assignment.value {
                             ast::Expression::NumberLiteral(literal) => {
                                 assert_eq!(literal.value, 43.0)

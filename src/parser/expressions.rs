@@ -148,7 +148,7 @@ impl ParserEngine {
         while let Some(sub_pair) = inner.next() {
             let right_span = sub_pair.as_span();
             let prop = self.parse_identifier(sub_pair);
-            let left_span = prop.span;
+            let left_span = node.as_span();
             node = ast::FieldAccessExpression {
                 span: merge_span(left_span, right_span),
                 object: Box::new(node),

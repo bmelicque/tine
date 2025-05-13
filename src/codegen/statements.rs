@@ -3,7 +3,7 @@ use swc_ecma_ast as swc;
 
 use crate::ast;
 
-use super::{utils::create_ident, CodeGenerator};
+use super::CodeGenerator;
 
 impl CodeGenerator {
     pub fn stmt_to_swc(&mut self, node: ast::Statement) -> Option<swc::Stmt> {
@@ -30,7 +30,7 @@ impl CodeGenerator {
             expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
                 span: DUMMY_SP,
                 op: swc::AssignOp::Assign,
-                left: swc::PatOrExpr::Expr(Box::new(create_ident(&node.name).into())),
+                left: self.pat_or_expr_to_swc(node.pattern),
                 right: Box::new(self.expr_to_swc(node.value)),
             })),
         }

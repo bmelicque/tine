@@ -213,11 +213,33 @@ impl From<String> for BinaryOperator {
     }
 }
 
+pub trait PathExpression {
+    fn root_expression(&self) -> Expression;
+    fn base_expression(&self) -> &Expression;
+    fn as_span(&self) -> pest::Span<'static>;
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldAccessExpression {
     pub span: Span<'static>,
     pub object: Box<Expression>,
     pub prop: Identifier,
+}
+
+impl PathExpression for FieldAccessExpression {
+    fn as_span(&self) -> pest::Span<'static> {
+        self.span
+    }
+    fn root_expression(&self) -> Expression {
+        match *self.object.clone() {
+            Expression::FieldAccess(expr) => expr.root_expression(),
+            Expression::TupleIndexing(expr) => expr.root_expression(),
+            expr => expr,
+        }
+    }
+    fn base_expression(&self) -> &Expression {
+        self.object.as_ref()
+    }
 }
 
 impl Into<Expression> for FieldAccessExpression {
@@ -243,6 +265,22 @@ pub struct TupleIndexingExpression {
     pub span: Span<'static>,
     pub tuple: Box<Expression>,
     pub index: NumberLiteral,
+}
+
+impl PathExpression for TupleIndexingExpression {
+    fn as_span(&self) -> pest::Span<'static> {
+        self.span
+    }
+    fn root_expression(&self) -> Expression {
+        match *self.tuple.clone() {
+            Expression::FieldAccess(expr) => expr.root_expression(),
+            Expression::TupleIndexing(expr) => expr.root_expression(),
+            expr => expr,
+        }
+    }
+    fn base_expression(&self) -> &Expression {
+        &self.tuple
+    }
 }
 
 impl Into<Expression> for TupleIndexingExpression {

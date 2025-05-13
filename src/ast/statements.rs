@@ -1,6 +1,6 @@
 use pest::Span;
 
-use super::{expressions::Expression, types::Type, Pattern};
+use super::{expressions::Expression, types::Type, Pattern, PatternExpression};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
@@ -228,8 +228,7 @@ impl Into<TypeDefinition> for TraitDefinition {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assignment {
     pub span: Span<'static>,
-    // TODO: could be a member expression or a tuple index expression
-    pub name: String,
+    pub pattern: PatternExpression,
     pub value: Expression,
 }
 
