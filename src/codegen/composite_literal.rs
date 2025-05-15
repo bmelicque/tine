@@ -123,8 +123,7 @@ impl CodeGenerator {
     ) -> Vec<swc::ExprOrSpread> {
         let mut remaining = fields.len();
         let mut sorted_args = vec![];
-        let scope = self.get_scope();
-        let params = scope.get(&name.to_string()).unwrap().clone();
+        let params = self.find(&name.to_string()).unwrap().clone();
         for param in params {
             let field = fields.iter().find(|field| *param == field.prop);
             let expr = match field {

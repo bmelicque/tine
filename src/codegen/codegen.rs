@@ -30,7 +30,7 @@ bitflags! {
 }
 
 pub struct CodeGenerator {
-    scopes: Vec<Scope>,
+    scope: Scope,
     pub source_map: Lrc<SourceMap>,
     flags: TranspilerFlags,
     current_block: Vec<Vec<swc::Stmt>>,
@@ -39,7 +39,7 @@ pub struct CodeGenerator {
 impl CodeGenerator {
     pub fn new() -> Self {
         Self {
-            scopes: vec![Scope::new()],
+            scope: Scope::new(),
             source_map: Lrc::new(SourceMap::new(Default::default())),
             flags: TranspilerFlags::None,
             current_block: vec![],
@@ -105,20 +105,16 @@ impl CodeGenerator {
         self.flags = self.flags | flag;
     }
 
-    pub fn get_scope(&self) -> &Scope {
-        self.scopes.last().unwrap()
-    }
-
     pub fn add_to_scope(&mut self, name: String, fields: Vec<String>) {
-        self.scopes.last_mut().unwrap().register(name, fields);
+        self.scope.register(name, fields);
     }
-
     pub fn push_scope(&mut self) {
-        self.scopes.push(Scope::new());
+        self.scope.enter();
     }
-
     pub fn drop_scope(&mut self) {
-        self.scopes.pop();
-        assert!(self.scopes.len() > 0)
+        self.scope.exit();
+    }
+    pub fn find(&self, name: &String) -> Option<&Vec<String>> {
+        self.scope.find(name)
     }
 }

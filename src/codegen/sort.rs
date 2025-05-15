@@ -5,22 +5,36 @@ use crate::ast;
 use super::CodeGenerator;
 
 pub struct Scope {
-    symbols: HashMap<String, Vec<String>>,
+    layers: Vec<HashMap<String, Vec<String>>>,
 }
 
 impl Scope {
     pub fn new() -> Self {
         Self {
-            symbols: HashMap::new(),
+            layers: vec![HashMap::new()],
         }
     }
 
     pub fn register(&mut self, name: String, sorted: Vec<String>) {
-        self.symbols.insert(name, sorted);
+        self.layers.last_mut().unwrap().insert(name, sorted);
     }
 
-    pub fn get(&self, name: &String) -> Option<&Vec<String>> {
-        self.symbols.get(name)
+    pub fn find(&self, name: &String) -> Option<&Vec<String>> {
+        for layer in self.layers.iter().rev() {
+            let got = layer.get(name);
+            if got.is_some() {
+                return got;
+            }
+        }
+        return None;
+    }
+
+    pub fn enter(&mut self) {
+        self.layers.push(HashMap::new());
+    }
+    pub fn exit(&mut self) {
+        self.layers.pop();
+        assert!(self.layers.len() > 0, "should not remove last scope layer!")
     }
 }
 
