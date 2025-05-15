@@ -2,7 +2,7 @@ use std::fmt;
 
 use pest::Span;
 
-use super::{composite_literals::CompositeLiteral, statements::BlockStatement, types::Type};
+use super::{composite_literals::CompositeLiteral, types::Type, Statement};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
@@ -10,6 +10,7 @@ pub enum Expression {
     Array(ArrayExpression),
     Binary(BinaryExpression),
     BooleanLiteral(BooleanLiteral),
+    Block(BlockExpression),
     CompositeLiteral(CompositeLiteral),
     FieldAccess(FieldAccessExpression),
     Function(FunctionExpression),
@@ -26,6 +27,7 @@ impl Expression {
             Self::Array(e) => e.span.clone(),
             Self::Binary(e) => e.span.clone(),
             Self::BooleanLiteral(e) => e.span.clone(),
+            Self::Block(e) => e.span.clone(),
             Self::CompositeLiteral(e) => e.as_span(),
             Self::Empty => Span::new("", 0, 0).unwrap(),
             Self::FieldAccess(e) => e.span.clone(),
@@ -213,6 +215,18 @@ impl From<String> for BinaryOperator {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct BlockExpression {
+    pub span: Span<'static>,
+    pub statements: Vec<Statement>,
+}
+
+impl Into<Expression> for BlockExpression {
+    fn into(self) -> Expression {
+        Expression::Block(self)
+    }
+}
+
 pub trait PathExpression {
     fn root_expression(&self) -> Expression;
     fn base_expression(&self) -> &Expression;
@@ -324,7 +338,7 @@ impl From<Expression> for FunctionBody {
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypedBlock {
     pub ty: Type,
-    pub block: BlockStatement,
+    pub block: BlockExpression,
 }
 
 impl Into<FunctionBody> for TypedBlock {

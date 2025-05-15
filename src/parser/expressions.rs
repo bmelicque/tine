@@ -22,6 +22,7 @@ impl ParserEngine {
                 }
             }
             Rule::array_expression => self.parse_array_expression(pair).into(),
+            Rule::block => self.parse_block(pair).into(),
             Rule::composite_literal => self.parse_composite_literal(pair).into(),
             Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
                 self.parse_binary_ltr_expression(pair).into()
@@ -113,6 +114,17 @@ impl ParserEngine {
         }
 
         left
+    }
+
+    fn parse_block(&mut self, pair: Pair<'static, Rule>) -> ast::BlockExpression {
+        let span = pair.as_span();
+        let statements = pair
+            .into_inner()
+            .map(|pair| self.parse_statement(pair))
+            .filter(|stmt| !stmt.is_empty())
+            .collect();
+
+        ast::BlockExpression { span, statements }
     }
 
     fn parse_exponentiation(&mut self, pair: Pair<'static, Rule>) -> ast::Expression {
@@ -295,6 +307,59 @@ mod tests {
                 }
             }
             _ => panic!("Expected BinaryExpression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_block_expression() {
+        let input = r#"{
+            x := 42
+            x = 43
+        }
+        "#;
+        let result = parse_expression_input(input, Rule::expression);
+
+        match result {
+            ast::Expression::Block(block) => {
+                assert_eq!(block.statements.len(), 2, "{:?}", block.statements);
+
+                // Check the first statement
+                match &block.statements[0] {
+                    ast::Statement::VariableDeclaration(var_decl) => {
+                        match *var_decl.pattern {
+                            ast::Pattern::Identifier(ast::IdentifierPattern { span })
+                                if span.as_str() == "x" => {}
+                            _ => panic!("Identifier pattern expected"),
+                        };
+                        match *var_decl.value.clone() {
+                            ast::Expression::NumberLiteral(literal) => {
+                                assert_eq!(literal.value, 42.0)
+                            }
+                            _ => panic!("Expected NumberLiteral as variable value"),
+                        }
+                    }
+                    _ => panic!("Expected VariableDeclaration"),
+                }
+
+                // Check the second statement
+                match &block.statements[1] {
+                    ast::Statement::Assignment(assignment) => {
+                        match &assignment.pattern {
+                            ast::PatternExpression::Pattern(ast::Pattern::Identifier(id))
+                                if id.span.as_str() == "x" => {}
+                            _ => panic!("Expected 'x'"),
+                        }
+                        match &assignment.value {
+                            ast::Expression::NumberLiteral(literal) => {
+                                assert_eq!(literal.value, 43.0)
+                            }
+                            _ => panic!("Expected NumberLiteral as assignment value"),
+                        }
+                    }
+                    _ => panic!("Expected Assignment"),
+                }
+            }
+            _ => panic!("Expected BlockStatement, got {:?}", result),
         }
     }
 

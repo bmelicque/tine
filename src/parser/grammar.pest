@@ -53,7 +53,7 @@ anonymous_expression = { struct_literal_body | expression }
 // Expressions
 tuple_or_expression = { tuple_expression | expression }
 tuple_expression = { expression ~ ("," ~ expression)+ }
-expression = { composite_literal | array_expression | equality }
+expression = { block | composite_literal | array_expression | equality }
 equality = { relation? ~ (("=="|"!=") ~ relation?)* }
 eq_op = { "==" | "!=" }
 relation = { addition? ~ (rel_op ~ addition?)*}
@@ -67,6 +67,7 @@ primary = {  member_expression | tuple_indexing | string_literal | number_litera
 tuple_indexing = { (member_expression|value_identifier|"(" ~ tuple_or_expression ~ ")") ~ "." ~ number_literal }
 member_expression = { value_identifier ~ ("." ~ value_identifier)+ }
 array_expression = { "[" ~ NEWLINE? ~ expression ~ (NEWLINE? ~ "," ~ expression)* ~ "]" }
+block = { "{" ~ NEWLINE? ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ NEWLINE? ~ "}" }
 
 function_expression = { parameter_list? ~ "=>" ~ (function_body | expression)? }
 function_body = { type_annotation? ~ block }
@@ -86,14 +87,13 @@ struct_pattern_field = { value_identifier ~ (":" ~ pattern)? }
 
 
 // Statements
-statement = { block | type_alias | variable_declaration | assignment | return_statement | expression_statement }
+statement = { type_alias | variable_declaration | assignment | return_statement | expression_statement }
 variable_declaration = { pattern ~ decl_op ~ expression }
 decl_op = { ":=" | "::" }
 assignment = { assignee ~ "=" ~ expression }
 assignee = { member_expression | tuple_indexing | pattern }
 return_statement = { "return" ~ expression? }
 expression_statement = { expression }
-block = { "{" ~ NEWLINE? ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ NEWLINE? ~ "}" }
 
 type_alias = { type_identifier ~ type_params? ~ "::" ~ type_def }
 type_params = { "[" ~ type_identifier ~ ("," ~ type_identifier)* ~ "]" }

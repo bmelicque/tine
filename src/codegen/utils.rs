@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use swc_common::DUMMY_SP;
-use swc_ecma_ast::{BlockStmt, Class, ClassDecl, Constructor, Expr, Ident, Lit, Str};
+use swc_ecma_ast as swc;
+
+use crate::ast;
 
 use super::type_declaration::utils::{name_to_swc_param, this_assignment};
 
@@ -74,35 +76,35 @@ fn safe_identifier(name: &str) -> String {
     }
 }
 
-pub fn create_ident(name: &str) -> Ident {
-    Ident {
+pub fn create_ident(name: &str) -> swc::Ident {
+    swc::Ident {
         sym: safe_identifier(name).into(),
         span: DUMMY_SP,
         optional: false,
     }
 }
 
-pub fn create_str(text: &str) -> Expr {
-    Expr::Lit(Lit::Str(Str {
+pub fn create_str(text: &str) -> swc::Expr {
+    swc::Expr::Lit(swc::Lit::Str(swc::Str {
         span: DUMMY_SP,
         value: text.into(),
         raw: None,
     }))
 }
 
-pub fn get_option_class() -> ClassDecl {
-    let constructor = Constructor {
+pub fn get_option_class() -> swc::ClassDecl {
+    let constructor = swc::Constructor {
         span: DUMMY_SP,
         key: create_ident("constructor").into(),
         is_optional: false,
         params: vec![name_to_swc_param("__"), name_to_swc_param("some")],
-        body: Some(BlockStmt {
+        body: Some(swc::BlockStmt {
             span: DUMMY_SP,
             stmts: vec![this_assignment("__"), this_assignment("some")],
         }),
         accessibility: None,
     };
-    let class = Class {
+    let class = swc::Class {
         span: DUMMY_SP,
         body: vec![constructor.into()],
         super_class: None,
@@ -112,9 +114,32 @@ pub fn get_option_class() -> ClassDecl {
         is_abstract: false,
         implements: vec![],
     };
-    ClassDecl {
+    swc::ClassDecl {
         declare: false,
         ident: create_ident("__Option"),
         class: Box::new(class),
     }
+}
+
+pub fn can_be_inlined(node: &ast::Statement) -> bool {
+    match node {
+        ast::Statement::Expression(e) => match e.expression.as_ref() {
+            ast::Expression::Block(b) => {
+                b.statements.iter().find(|st| !can_be_inlined(st)).is_none()
+            }
+            // TODO: if-else
+            // TODO: loops
+            // TODO: match statements
+            _ => true,
+        },
+        _ => false,
+    }
+}
+
+pub fn undefined() -> swc::Expr {
+    swc::Expr::Ident(swc::Ident {
+        span: DUMMY_SP,
+        sym: "undefined".into(),
+        optional: false,
+    })
 }

@@ -9,15 +9,19 @@ impl CodeGenerator {
     pub fn stmt_to_swc(&mut self, node: ast::Statement) -> Option<swc::Stmt> {
         match node {
             ast::Statement::Assignment(node) => Some(self.assignment_to_swc(node).into()),
-            ast::Statement::Block(node) => Some(self.block_to_swc(node).into()),
             ast::Statement::Empty => None,
-            ast::Statement::Expression(node) => Some(
-                swc::ExprStmt {
-                    span: DUMMY_SP,
-                    expr: Box::new(self.expr_to_swc(*node.expression)),
+            ast::Statement::Expression(node) => {
+                if let ast::Expression::Block(block) = *node.expression {
+                    return Some(self.block_st_to_swc(block).into());
                 }
-                .into(),
-            ),
+                Some(
+                    swc::ExprStmt {
+                        span: DUMMY_SP,
+                        expr: Box::new(self.expr_to_swc(*node.expression)),
+                    }
+                    .into(),
+                )
+            }
             ast::Statement::Return(node) => Some(self.return_to_swc(node).into()),
             ast::Statement::TypeAlias(node) => self.alias_to_swc(node).into(),
             ast::Statement::VariableDeclaration(node) => Some(self.declaration_to_swc(node).into()),
@@ -36,7 +40,7 @@ impl CodeGenerator {
         }
     }
 
-    fn block_to_swc(&mut self, node: ast::BlockStatement) -> swc::BlockStmt {
+    fn block_st_to_swc(&mut self, node: ast::BlockExpression) -> swc::BlockStmt {
         self.push_scope();
         let stmts: Vec<swc::Stmt> = node
             .statements

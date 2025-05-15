@@ -33,6 +33,7 @@ pub struct CodeGenerator {
     scopes: Vec<Scope>,
     pub source_map: Lrc<SourceMap>,
     flags: TranspilerFlags,
+    current_block: Vec<Vec<swc::Stmt>>,
 }
 
 impl CodeGenerator {
@@ -41,6 +42,7 @@ impl CodeGenerator {
             scopes: vec![Scope::new()],
             source_map: Lrc::new(SourceMap::new(Default::default())),
             flags: TranspilerFlags::None,
+            current_block: vec![],
         }
     }
 
@@ -64,12 +66,14 @@ impl CodeGenerator {
     }
 
     fn node_to_swc_module(&mut self, node: ast::Program) -> swc::Module {
-        let mut swc_stmts: Vec<swc::ModuleItem> = node
-            .statements
-            .into_iter()
-            .filter_map(|stmt| self.stmt_to_swc(stmt))
-            .map(|stmt| stmt.into())
-            .collect();
+        self.enter_block();
+        for stmt in node.statements {
+            let stmt = self.stmt_to_swc(stmt);
+            if let Some(stmt) = stmt {
+                self.push_to_block(stmt);
+            }
+        }
+        let mut swc_stmts = self.exit_block();
 
         for flag in self.flags {
             match flag {
@@ -80,9 +84,21 @@ impl CodeGenerator {
 
         swc::Module {
             span: DUMMY_SP,
-            body: swc_stmts,
+            body: swc_stmts.into_iter().map(|stmt| stmt.into()).collect(),
             shebang: None,
         }
+    }
+
+    pub fn enter_block(&mut self) {
+        self.push_scope();
+        self.current_block.push(Vec::<swc::Stmt>::new());
+    }
+    pub fn exit_block(&mut self) -> Vec<swc::Stmt> {
+        self.drop_scope();
+        self.current_block.pop().unwrap()
+    }
+    pub fn push_to_block(&mut self, stmt: swc::Stmt) {
+        self.current_block.last_mut().unwrap().push(stmt);
     }
 
     pub fn add_flag(&mut self, flag: TranspilerFlags) {

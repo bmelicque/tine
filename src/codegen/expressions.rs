@@ -1,9 +1,13 @@
+use rand::{distr::Alphanumeric, Rng};
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
 use crate::ast;
 
-use super::CodeGenerator;
+use super::{
+    utils::{can_be_inlined, create_ident, undefined},
+    CodeGenerator,
+};
 
 impl CodeGenerator {
     pub fn expr_or_an_to_swc(&mut self, node: ast::ExpressionOrAnonymous) -> swc::Expr {
@@ -22,6 +26,7 @@ impl CodeGenerator {
                 value: node.value,
             })
             .into(),
+            ast::Expression::Block(node) => self.block_expr_to_swc(node).into(),
             ast::Expression::CompositeLiteral(node) => self.composite_literal_to_swc_expr(node),
             ast::Expression::Empty => panic!("shouldn't have empty expressions at codegen step"),
             ast::Expression::FieldAccess(node) => self.field_access_to_swc(node).into(),
@@ -84,6 +89,123 @@ impl CodeGenerator {
             right: Box::new(right_expr),
         }
         .into()
+    }
+
+    fn block_expr_to_swc(&mut self, node: ast::BlockExpression) -> swc::Expr {
+        let clone = ast::Statement::Expression(ast::Expression::Block(node.clone()).into());
+        if node.statements.len() == 0 {
+            undefined()
+        } else if can_be_inlined(&clone) {
+            self.block_to_swc_inlined(node).into()
+        } else {
+            self.block_to_swc_extracted(node).into()
+        }
+    }
+
+    fn block_to_swc_inlined(&mut self, node: ast::BlockExpression) -> swc::SeqExpr {
+        let exprs = node
+            .statements
+            .iter()
+            .map(|stmt| {
+                let ast::Statement::Expression(expr) = stmt else {
+                    panic!()
+                };
+                Box::new(self.expr_to_swc(*expr.expression.clone()))
+            })
+            .collect();
+        swc::SeqExpr {
+            span: DUMMY_SP,
+            exprs,
+        }
+    }
+
+    /// Extract a block from the current expression.
+    /// For example:
+    ///
+    /// ```
+    /// 42 + {
+    ///     x := ...
+    ///     x + 1
+    /// }
+    /// ```
+    ///
+    /// into:
+    ///
+    /// ```js
+    /// let __cq6s81c68qzzej5i;
+    /// {
+    ///     let x = ...
+    ///     __cq6s81c68qzzej5i = x + 1;
+    /// }
+    /// 42 + __cq6s81c68qzzej5i;
+    /// ```
+    fn block_to_swc_extracted(&mut self, node: ast::BlockExpression) -> swc::Ident {
+        let len = node.statements.len();
+        assert!(len > 0);
+
+        let id = "__".to_string()
+            + &rand::rng()
+                .sample_iter(&Alphanumeric)
+                .take(16)
+                .map(char::from)
+                .collect::<String>();
+
+        self.add_temp_var_to_block(&id);
+
+        // create extracted block with assignment to temp variable at the end...
+        self.enter_block();
+        let mut stmts: Vec<swc::Stmt> = node
+            .statements
+            .iter()
+            .take(len - 1)
+            .filter_map(|stmt| self.stmt_to_swc(stmt.clone()))
+            .collect();
+        let last = match node.statements[len - 1] {
+            ast::Statement::Expression(ref expr) => swc::Stmt::Expr(swc::ExprStmt {
+                span: DUMMY_SP,
+                expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
+                    span: DUMMY_SP,
+                    op: swc::AssignOp::Assign,
+                    left: swc::PatOrExpr::Pat(Box::new(swc::Pat::Ident(swc::BindingIdent {
+                        id: create_ident(&id),
+                        type_ann: None,
+                    }))),
+                    right: Box::new(self.expr_to_swc(*expr.expression.clone())),
+                })),
+            }),
+            ref stmt => self.stmt_to_swc(stmt.clone()).unwrap(),
+        };
+        stmts.push(last);
+        self.exit_block();
+
+        // ... and push it to current block
+        self.push_to_block(
+            swc::BlockStmt {
+                span: DUMMY_SP,
+                stmts,
+            }
+            .into(),
+        );
+
+        // return temp variable
+        create_ident(&id)
+    }
+
+    fn add_temp_var_to_block(&mut self, id: &str) {
+        self.push_to_block(swc::Stmt::Decl(swc::Decl::Var(Box::new(swc::VarDecl {
+            span: DUMMY_SP,
+            kind: swc::VarDeclKind::Let,
+            declare: false,
+            decls: vec![swc::VarDeclarator {
+                span: DUMMY_SP,
+                name: swc::Pat::Ident(swc::BindingIdent {
+                    id: create_ident(id),
+                    type_ann: None,
+                }),
+                init: None,
+                definite: false,
+            }],
+        }))));
     }
 
     fn field_access_to_swc(&mut self, node: ast::FieldAccessExpression) -> swc::MemberExpr {

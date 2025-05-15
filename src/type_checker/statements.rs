@@ -5,7 +5,6 @@ impl TypeChecker {
     pub fn visit_statement(&mut self, node: &ast::Statement) -> Type {
         match node {
             ast::Statement::Assignment(node) => self.visit_assignment(node),
-            ast::Statement::Block(node) => self.visit_block_statement(node),
             ast::Statement::Empty => Type::Void,
             ast::Statement::Expression(node) => self.visit_expression(&node.expression),
             ast::Statement::Return(node) => self.visit_return_statement(node),
@@ -93,14 +92,6 @@ impl TypeChecker {
                 span: expr.as_span(),
             });
         }
-    }
-
-    pub fn visit_block_statement(&mut self, node: &ast::BlockStatement) -> Type {
-        // TODO: handle diverging statemnts (return, break, continue)
-        for stmt in node.statements.iter() {
-            self.visit_statement(&stmt);
-        }
-        Type::Void
     }
 
     fn visit_return_statement(&mut self, node: &ast::ReturnStatement) -> Type {

@@ -8,7 +8,6 @@ pub enum Statement {
     VariableDeclaration(VariableDeclaration),
     TypeAlias(TypeAlias),
     Assignment(Assignment),
-    Block(BlockStatement),
     Return(ReturnStatement),
     Expression(ExpressionStatement),
 }
@@ -235,18 +234,6 @@ pub struct Assignment {
 impl Into<Statement> for Assignment {
     fn into(self) -> Statement {
         Statement::Assignment(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct BlockStatement {
-    pub span: Span<'static>,
-    pub statements: Vec<Statement>,
-}
-
-impl Into<Statement> for BlockStatement {
-    fn into(self) -> Statement {
-        Statement::Block(self)
     }
 }
 

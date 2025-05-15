@@ -14,6 +14,7 @@ impl TypeChecker {
             ast::Expression::Array(node) => self.visit_array_expression(node),
             ast::Expression::Binary(node) => self.visit_binary_expression(node),
             ast::Expression::BooleanLiteral(_) => Type::Boolean,
+            ast::Expression::Block(node) => self.visit_block_expression(node),
             ast::Expression::CompositeLiteral(node) => self.visit_composite_literal(node),
             ast::Expression::Empty => Type::Void,
             ast::Expression::FieldAccess(node) => self.visit_field_access_expression(node),
@@ -132,6 +133,15 @@ impl TypeChecker {
         }
     }
 
+    fn visit_block_expression(&mut self, node: &ast::BlockExpression) -> Type {
+        // TODO: handle diverging statements (return, break, continue)
+        let mut ty = Type::Void;
+        for stmt in node.statements.iter() {
+            ty = self.visit_statement(&stmt);
+        }
+        ty
+    }
+
     fn visit_field_access_expression(&mut self, node: &ast::FieldAccessExpression) -> Type {
         let mut ty = self.visit_expression(&node.object);
         let type_str = format!("{}", ty.clone());
@@ -200,7 +210,7 @@ impl TypeChecker {
         };
 
         let ty = self.visit_type(&block.ty);
-        self.visit_block_statement(&block.block);
+        self.visit_block_expression(&block.block);
         ty
     }
 
