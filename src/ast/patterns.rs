@@ -27,6 +27,13 @@ impl Pattern {
             Pattern::Tuple(p) => p.span,
         }
     }
+
+    pub fn is_identifier(&self) -> bool {
+        match self {
+            Pattern::Identifier(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl Into<PatternExpression> for Pattern {

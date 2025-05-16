@@ -5,7 +5,7 @@ use swc_ecma_ast as swc;
 use crate::ast;
 
 use super::{
-    utils::{can_be_inlined, create_ident, undefined},
+    utils::{create_ident, undefined},
     CodeGenerator,
 };
 
@@ -32,6 +32,7 @@ impl CodeGenerator {
             ast::Expression::FieldAccess(node) => self.field_access_to_swc(node).into(),
             ast::Expression::Function(node) => self.function_expression_to_swc(node).into(),
             ast::Expression::Identifier(node) => self.ident_to_swc(node).into(),
+            ast::Expression::If(node) => self.if_to_swc_expr(node).into(),
             ast::Expression::NumberLiteral(node) => swc::Lit::Num(swc::Number {
                 span: DUMMY_SP,
                 value: node.value,
@@ -92,10 +93,9 @@ impl CodeGenerator {
     }
 
     fn block_expr_to_swc(&mut self, node: ast::BlockExpression) -> swc::Expr {
-        let clone = ast::Statement::Expression(ast::Expression::Block(node.clone()).into());
         if node.statements.len() == 0 {
             undefined()
-        } else if can_be_inlined(&clone) {
+        } else if node.can_be_inlined() {
             self.block_to_swc_inlined(node).into()
         } else {
             self.block_to_swc_extracted(node).into()
@@ -143,69 +143,12 @@ impl CodeGenerator {
         let len = node.statements.len();
         assert!(len > 0);
 
-        let id = "__".to_string()
-            + &rand::rng()
-                .sample_iter(&Alphanumeric)
-                .take(16)
-                .map(char::from)
-                .collect::<String>();
-
-        self.add_temp_var_to_block(&id);
-
-        // create extracted block with assignment to temp variable at the end...
+        let id = self.add_temp_var_to_current_block();
         self.enter_block();
-        let mut stmts: Vec<swc::Stmt> = node
-            .statements
-            .iter()
-            .take(len - 1)
-            .filter_map(|stmt| self.stmt_to_swc(stmt.clone()))
-            .collect();
-        let last = match node.statements[len - 1] {
-            ast::Statement::Expression(ref expr) => swc::Stmt::Expr(swc::ExprStmt {
-                span: DUMMY_SP,
-                expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
-                    span: DUMMY_SP,
-                    op: swc::AssignOp::Assign,
-                    left: swc::PatOrExpr::Pat(Box::new(swc::Pat::Ident(swc::BindingIdent {
-                        id: create_ident(&id),
-                        type_ann: None,
-                    }))),
-                    right: Box::new(self.expr_to_swc(*expr.expression.clone())),
-                })),
-            }),
-            ref stmt => self.stmt_to_swc(stmt.clone()).unwrap(),
-        };
-        stmts.push(last);
+        let block = self.block_to_swc_stmt(node, Some(&id));
         self.exit_block();
-
-        // ... and push it to current block
-        self.push_to_block(
-            swc::BlockStmt {
-                span: DUMMY_SP,
-                stmts,
-            }
-            .into(),
-        );
-
-        // return temp variable
+        self.push_to_block(block.into());
         create_ident(&id)
-    }
-
-    fn add_temp_var_to_block(&mut self, id: &str) {
-        self.push_to_block(swc::Stmt::Decl(swc::Decl::Var(Box::new(swc::VarDecl {
-            span: DUMMY_SP,
-            kind: swc::VarDeclKind::Let,
-            declare: false,
-            decls: vec![swc::VarDeclarator {
-                span: DUMMY_SP,
-                name: swc::Pat::Ident(swc::BindingIdent {
-                    id: create_ident(id),
-                    type_ann: None,
-                }),
-                init: None,
-                definite: false,
-            }],
-        }))));
     }
 
     fn field_access_to_swc(&mut self, node: ast::FieldAccessExpression) -> swc::MemberExpr {
@@ -270,6 +213,45 @@ impl CodeGenerator {
         }
     }
 
+    fn if_to_swc_expr(&mut self, node: ast::IfExpression) -> swc::Expr {
+        if node.consequent.statements.len() == 0 && node.alternate.is_none() {
+            undefined()
+        } else if node.can_be_inlined() {
+            self.if_to_swc_inlined(node).into()
+        } else {
+            self.if_to_swc_extracted(node).into()
+        }
+    }
+
+    fn if_to_swc_inlined(&mut self, node: ast::IfExpression) -> swc::Expr {
+        let ast::Condition::Expression(condition) = *node.condition else {
+            panic!("expression expected! should've been checked beforehand")
+        };
+        let alt = node
+            .alternate
+            .map(|alt| match *alt {
+                ast::Alternate::Block(b) => self.block_to_swc_inlined(b).into(),
+                ast::Alternate::If(i) => self.if_to_swc_inlined(i).into(),
+            })
+            .map(Box::new)
+            .unwrap_or(Box::new(undefined()));
+        swc::Expr::Cond(swc::CondExpr {
+            span: DUMMY_SP,
+            test: Box::new(self.expr_to_swc(condition)),
+            cons: Box::new(self.block_to_swc_inlined(*node.consequent).into()),
+            alt,
+        })
+    }
+
+    fn if_to_swc_extracted(&mut self, node: ast::IfExpression) -> swc::Expr {
+        let id = self.add_temp_var_to_current_block();
+        self.enter_block();
+        let if_stmt = self.if_to_swc_stmt(node, Some(&id));
+        self.exit_block();
+        self.push_to_block(if_stmt.into());
+        create_ident(&id).into()
+    }
+
     fn tuple_to_swc(&mut self, node: ast::TupleExpression) -> swc::ArrayLit {
         let elems = node
             .elements
@@ -290,6 +272,47 @@ impl CodeGenerator {
                 span: DUMMY_SP,
                 expr: Box::new(self.expr_to_swc(node.index.into())),
             }),
+        }
+    }
+
+    pub fn add_temp_var_to_current_block(&mut self) -> String {
+        let id = "__".to_string()
+            + rand::rng()
+                .sample_iter(&Alphanumeric)
+                .take(16)
+                .map(char::from)
+                .collect::<String>()
+                .as_str();
+
+        self.push_to_block(swc::Stmt::Decl(swc::Decl::Var(Box::new(swc::VarDecl {
+            span: DUMMY_SP,
+            kind: swc::VarDeclKind::Let,
+            declare: false,
+            decls: vec![swc::VarDeclarator {
+                span: DUMMY_SP,
+                name: swc::Pat::Ident(swc::BindingIdent {
+                    id: create_ident(&id),
+                    type_ann: None,
+                }),
+                init: None,
+                definite: false,
+            }],
+        }))));
+        id
+    }
+
+    pub fn assignment_expression(&mut self, to: &str, expr: swc::Expr) -> swc::ExprStmt {
+        swc::ExprStmt {
+            span: DUMMY_SP,
+            expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
+                span: DUMMY_SP,
+                op: swc::AssignOp::Assign,
+                left: swc::PatOrExpr::Pat(Box::new(swc::Pat::Ident(swc::BindingIdent {
+                    id: create_ident(to),
+                    type_ann: None,
+                }))),
+                right: Box::new(expr),
+            })),
         }
     }
 }

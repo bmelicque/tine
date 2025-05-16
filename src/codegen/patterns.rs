@@ -3,7 +3,10 @@ use swc_ecma_ast as swc;
 
 use crate::ast;
 
-use super::{utils::create_ident, CodeGenerator};
+use super::{
+    utils::{create_ident, true_lit},
+    CodeGenerator,
+};
 
 impl CodeGenerator {
     pub fn pat_or_expr_to_swc(&mut self, node: ast::PatternExpression) -> swc::PatOrExpr {
@@ -37,6 +40,7 @@ impl CodeGenerator {
         }
     }
 
+    /// FIXME: handle values (for example, Struct(field: true))
     fn struct_pattern_field_to_swc(&mut self, node: ast::StructPatternField) -> swc::ObjectPatProp {
         match node.pattern {
             Some(pattern) => swc::KeyValuePatProp {
@@ -64,5 +68,101 @@ impl CodeGenerator {
             optional: false,
             type_ann: None,
         }
+    }
+
+    /// Create the JS test expression that will validate if the pattern is matched.
+    /// Also provide needed JS declarations, resulting from said test.
+    ///
+    /// For example: `if (0, value) := tuple { ... }` will:
+    /// - check that `tuple[0] === 0`
+    /// - declare `let value = tuple[0]`
+    /// For a result being: `if (tuple[0] === 0) { let value = tuple[0]; ... }`
+    pub fn pattern_to_swc_test(
+        &mut self,
+        pattern: &ast::Pattern,
+        against: &ast::Expression,
+    ) -> swc::Expr {
+        match pattern {
+            ast::Pattern::Identifier(_) => true_lit(),
+            ast::Pattern::StructPattern(s) => self.struct_pattern_to_swc_test(s, against),
+            ast::Pattern::Tuple(t) => self.tuple_pattern_to_swc_test(t, against),
+        }
+    }
+
+    fn struct_pattern_to_swc_test(
+        &mut self,
+        pattern: &ast::StructPattern,
+        against: &ast::Expression,
+    ) -> swc::Expr {
+        let tests: Vec<swc::Expr> = pattern
+            .fields
+            .iter()
+            .filter(|field| field.pattern.is_some())
+            .map(|field| {
+                let against = ast::FieldAccessExpression {
+                    span: against.as_span(),
+                    object: Box::new(against.clone()),
+                    prop: ast::Identifier {
+                        span: pest::Span::new(
+                            Box::leak(field.identifier.clone().into_boxed_str()),
+                            0,
+                            field.identifier.len(),
+                        )
+                        .unwrap(),
+                    },
+                };
+                self.pattern_to_swc_test(&field.pattern.as_ref().unwrap(), &against.into())
+            })
+            .collect();
+        let Some(test) = tests.first() else {
+            return true_lit();
+        };
+        let mut test = test.clone();
+        for t in tests.into_iter().skip(1) {
+            test = swc::Expr::Bin(swc::BinExpr {
+                span: DUMMY_SP,
+                op: swc::BinaryOp::LogicalAnd,
+                left: Box::new(test),
+                right: Box::new(t),
+            });
+        }
+        test
+    }
+
+    fn tuple_pattern_to_swc_test(
+        &mut self,
+        pattern: &ast::TuplePattern,
+        against: &ast::Expression,
+    ) -> swc::Expr {
+        let tests: Vec<swc::Expr> = pattern
+            .elements
+            .iter()
+            .enumerate()
+            .filter(|(_, el)| !el.is_identifier())
+            .map(|(i, el)| {
+                let against = ast::TupleIndexingExpression {
+                    span: against.as_span(),
+                    tuple: Box::new(against.clone()),
+                    index: ast::NumberLiteral {
+                        span: against.as_span(),
+                        value: i as f64,
+                    },
+                };
+                self.pattern_to_swc_test(el, &against.into())
+            })
+            .collect();
+        let Some(test) = tests.first() else {
+            return true_lit();
+        };
+        let mut test = test.clone();
+        for t in tests.into_iter().skip(1) {
+            test = swc::Expr::Bin(swc::BinExpr {
+                span: DUMMY_SP,
+                op: swc::BinaryOp::LogicalAnd,
+                left: Box::new(test),
+                right: Box::new(t),
+            });
+        }
+        test
     }
 }

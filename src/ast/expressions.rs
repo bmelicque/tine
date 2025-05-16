@@ -2,7 +2,7 @@ use std::fmt;
 
 use pest::Span;
 
-use super::{composite_literals::CompositeLiteral, types::Type, Statement};
+use super::{composite_literals::CompositeLiteral, types::Type, Statement, VariableDeclaration};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
@@ -15,6 +15,7 @@ pub enum Expression {
     FieldAccess(FieldAccessExpression),
     Function(FunctionExpression),
     Identifier(Identifier),
+    If(IfExpression),
     NumberLiteral(NumberLiteral),
     StringLiteral(StringLiteral),
     Tuple(TupleExpression),
@@ -33,6 +34,7 @@ impl Expression {
             Self::FieldAccess(e) => e.span.clone(),
             Self::Function(e) => e.span.clone(),
             Self::Identifier(e) => e.span.clone(),
+            Self::If(e) => e.span.clone(),
             Self::NumberLiteral(e) => e.span.clone(),
             Self::StringLiteral(e) => e.span.clone(),
             Self::Tuple(e) => e.span.clone(),
@@ -83,6 +85,69 @@ impl From<Span<'static>> for Identifier {
 impl Into<Expression> for Identifier {
     fn into(self) -> Expression {
         Expression::Identifier(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IfExpression {
+    pub span: Span<'static>,
+    pub condition: Box<Condition>,
+    pub consequent: Box<BlockExpression>,
+    pub alternate: Option<Box<Alternate>>,
+}
+
+impl Into<Expression> for IfExpression {
+    fn into(self) -> Expression {
+        Expression::If(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Condition {
+    Expression(Expression),
+    Declaration(VariableDeclaration),
+}
+
+impl Condition {
+    pub fn is_decl(&self) -> bool {
+        match self {
+            Condition::Declaration(_) => true,
+            Condition::Expression(_) => false,
+        }
+    }
+}
+impl From<Expression> for Condition {
+    fn from(value: Expression) -> Self {
+        Self::Expression(value)
+    }
+}
+impl From<VariableDeclaration> for Condition {
+    fn from(value: VariableDeclaration) -> Self {
+        Self::Declaration(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Alternate {
+    Block(BlockExpression),
+    If(IfExpression),
+}
+impl Alternate {
+    pub fn as_span(&self) -> pest::Span<'static> {
+        match self {
+            Alternate::Block(b) => b.span,
+            Alternate::If(i) => i.span,
+        }
+    }
+}
+impl From<BlockExpression> for Alternate {
+    fn from(value: BlockExpression) -> Self {
+        Self::Block(value)
+    }
+}
+impl From<IfExpression> for Alternate {
+    fn from(value: IfExpression) -> Self {
+        Self::If(value)
     }
 }
 

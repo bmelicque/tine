@@ -20,6 +20,7 @@ impl TypeChecker {
             ast::Expression::FieldAccess(node) => self.visit_field_access_expression(node),
             ast::Expression::Function(node) => self.visit_function_expression(node),
             ast::Expression::Identifier(node) => self.visit_identifier(node),
+            ast::Expression::If(node) => self.visit_if_expression(node),
             ast::Expression::NumberLiteral(_) => Type::Number,
             ast::Expression::StringLiteral(_) => Type::String,
             ast::Expression::Tuple(node) => self.visit_tuple_expression(node),
@@ -225,6 +226,46 @@ impl TypeChecker {
                 Type::Unknown
             }
         }
+    }
+
+    fn visit_if_expression(&mut self, node: &ast::IfExpression) -> Type {
+        self.symbols.enter_scope();
+        self.visit_condition(&node.condition);
+        let ty = self.visit_block_expression(&node.consequent);
+        self.symbols.exit_scope();
+        if let Some(alternate) = &node.alternate {
+            let alt_ty = match alternate.as_ref() {
+                ast::Alternate::Block(b) => self.visit_block_expression(b),
+                ast::Alternate::If(i) => self.visit_if_expression(i),
+            };
+            if !alt_ty.is_assignable_to(&ty) {
+                self.errors.push(ParseError {
+                    message: format!(
+                        "Branches' types don't match: expected {}, got {}",
+                        ty, alt_ty
+                    ),
+                    span: alternate.as_span(),
+                })
+            }
+        };
+        ty
+    }
+
+    fn visit_condition(&mut self, node: &ast::Condition) {
+        match node {
+            ast::Condition::Declaration(node) => {
+                self.visit_variable_declaration(node);
+            }
+            ast::Condition::Expression(node) => {
+                let ty = self.visit_expression(node);
+                if ty != Type::Boolean {
+                    self.errors.push(ParseError {
+                        message: format!("Condition must evaluate to a boolean, got {}", ty),
+                        span: node.as_span(),
+                    });
+                }
+            }
+        };
     }
 
     fn visit_tuple_expression(&mut self, node: &ast::TupleExpression) -> Type {

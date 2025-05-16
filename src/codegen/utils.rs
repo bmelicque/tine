@@ -124,15 +124,37 @@ pub fn get_option_class() -> swc::ClassDecl {
 pub fn can_be_inlined(node: &ast::Statement) -> bool {
     match node {
         ast::Statement::Expression(e) => match e.expression.as_ref() {
-            ast::Expression::Block(b) => {
-                b.statements.iter().find(|st| !can_be_inlined(st)).is_none()
-            }
-            // TODO: if-else
+            ast::Expression::Block(b) => b.can_be_inlined(),
+            ast::Expression::If(i) => i.can_be_inlined(),
             // TODO: loops
             // TODO: match statements
             _ => true,
         },
         _ => false,
+    }
+}
+
+impl ast::BlockExpression {
+    pub fn can_be_inlined(&self) -> bool {
+        self.statements
+            .iter()
+            .find(|st| !can_be_inlined(st))
+            .is_none()
+    }
+}
+
+impl ast::IfExpression {
+    pub fn can_be_inlined(&self) -> bool {
+        if self.condition.is_decl() || !self.consequent.can_be_inlined() {
+            return false;
+        }
+        let Some(ref alt) = self.alternate else {
+            return true;
+        };
+        match alt.as_ref() {
+            ast::Alternate::Block(b) => b.can_be_inlined(),
+            ast::Alternate::If(i) => i.can_be_inlined(),
+        }
     }
 }
 
@@ -142,4 +164,11 @@ pub fn undefined() -> swc::Expr {
         sym: "undefined".into(),
         optional: false,
     })
+}
+
+pub fn true_lit() -> swc::Expr {
+    swc::Expr::Lit(swc::Lit::Bool(swc::Bool {
+        span: DUMMY_SP,
+        value: true,
+    }))
 }

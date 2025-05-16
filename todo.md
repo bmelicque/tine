@@ -1,5 +1,7 @@
-- match expression (e.g. `match user.role { Role.User: {}, Role.Admin(acl): {} }`)
-- if - else
+- if Enum.Variant() pattern
+- literals in patterns
+- if expression without else is an option (handle type checking & codegen as option)
+- match expression
 - for loops
 - handle return in functions (check nested blocks)
 - function call

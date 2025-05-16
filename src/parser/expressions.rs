@@ -29,6 +29,7 @@ impl ParserEngine {
             }
             Rule::exponentiation => self.parse_exponentiation(pair).into(),
             Rule::value_identifier => self.parse_identifier(pair).into(),
+            Rule::if_expression => self.parse_if_expression(pair).into(),
             Rule::member_expression => self.parse_field_access_expression(pair).into(),
             Rule::tuple_expression => self.parse_tuple_expression(pair).into(),
             Rule::tuple_indexing => self.parse_tuple_indexing(pair).into(),
@@ -206,6 +207,43 @@ impl ParserEngine {
     fn parse_identifier(&mut self, pair: Pair<'static, Rule>) -> ast::Identifier {
         ast::Identifier {
             span: pair.as_span(),
+        }
+    }
+
+    fn parse_if_expression(&mut self, pair: Pair<'static, Rule>) -> ast::IfExpression {
+        assert!(pair.as_rule() == Rule::if_expression);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+        let condition = Box::new(self.parse_condition(inner.next().unwrap()));
+        let consequent = Box::new(self.parse_block(inner.next().unwrap()));
+        let alternate = inner
+            .next()
+            .map(|pair| Box::new(self.parse_alternate(pair)));
+        ast::IfExpression {
+            span,
+            condition,
+            consequent,
+            alternate,
+        }
+    }
+
+    fn parse_condition(&mut self, pair: Pair<'static, Rule>) -> ast::Condition {
+        assert!(pair.as_rule() == Rule::condition);
+        let pair = pair.into_inner().next().unwrap();
+        match pair.as_rule() {
+            Rule::expression => self.parse_expression(pair).into(),
+            Rule::variable_declaration => self.parse_variable_declaration(pair).into(),
+            rule => unreachable!("unexpected rule {:?}", rule),
+        }
+    }
+
+    fn parse_alternate(&mut self, pair: Pair<'static, Rule>) -> ast::Alternate {
+        assert!(pair.as_rule() == Rule::alternate);
+        let pair = pair.into_inner().next().unwrap();
+        match pair.as_rule() {
+            Rule::block => self.parse_block(pair).into(),
+            Rule::if_expression => self.parse_if_expression(pair).into(),
+            rule => unreachable!("unexpected rule {:?}", rule),
         }
     }
 }

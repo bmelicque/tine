@@ -20,7 +20,7 @@ impl ParserEngine {
         }
     }
 
-    fn parse_variable_declaration(
+    pub fn parse_variable_declaration(
         &mut self,
         pair: Pair<'static, Rule>,
     ) -> ast::VariableDeclaration {
