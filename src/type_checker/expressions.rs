@@ -21,6 +21,7 @@ impl TypeChecker {
             ast::Expression::Function(node) => self.visit_function_expression(node),
             ast::Expression::Identifier(node) => self.visit_identifier(node),
             ast::Expression::If(node) => self.visit_if_expression(node),
+            ast::Expression::IfDecl(node) => self.visit_if_decl_expression(node),
             ast::Expression::NumberLiteral(_) => Type::Number,
             ast::Expression::StringLiteral(_) => Type::String,
             ast::Expression::Tuple(node) => self.visit_tuple_expression(node),
@@ -230,42 +231,49 @@ impl TypeChecker {
 
     fn visit_if_expression(&mut self, node: &ast::IfExpression) -> Type {
         self.symbols.enter_scope();
-        self.visit_condition(&node.condition);
+        let condition = self.visit_expression(&node.condition);
+        if condition != Type::Boolean {
+            self.errors.push(ParseError {
+                message: format!("Condition must evaluate to a boolean, got {}", condition),
+                span: node.condition.as_span(),
+            });
+        }
         let ty = self.visit_block_expression(&node.consequent);
         self.symbols.exit_scope();
-        if let Some(alternate) = &node.alternate {
-            let alt_ty = match alternate.as_ref() {
-                ast::Alternate::Block(b) => self.visit_block_expression(b),
-                ast::Alternate::If(i) => self.visit_if_expression(i),
-            };
-            if !alt_ty.is_assignable_to(&ty) {
-                self.errors.push(ParseError {
-                    message: format!(
-                        "Branches' types don't match: expected {}, got {}",
-                        ty, alt_ty
-                    ),
-                    span: alternate.as_span(),
-                })
-            }
-        };
+        self.visit_alternate(&node.alternate, &ty);
         ty
     }
 
-    fn visit_condition(&mut self, node: &ast::Condition) {
-        match node {
-            ast::Condition::Declaration(node) => {
-                self.visit_variable_declaration(node);
-            }
-            ast::Condition::Expression(node) => {
-                let ty = self.visit_expression(node);
-                if ty != Type::Boolean {
-                    self.errors.push(ParseError {
-                        message: format!("Condition must evaluate to a boolean, got {}", ty),
-                        span: node.as_span(),
-                    });
-                }
-            }
+    fn visit_if_decl_expression(&mut self, node: &ast::IfDeclExpression) -> Type {
+        self.symbols.enter_scope();
+        let inferred_type = self.visit_expression(&node.scrutinee);
+        let mut variables = Vec::<(String, Type)>::new();
+        self.match_pattern(&node.pattern, inferred_type, &mut variables);
+        for (name, ty) in variables {
+            self.symbols.define(&name, ty, false);
+        }
+        let ty = self.visit_block_expression(&node.consequent);
+        self.symbols.exit_scope();
+        self.visit_alternate(&node.alternate, &ty);
+        ty
+    }
+
+    fn visit_alternate(&mut self, node: &Option<Box<ast::Alternate>>, expected: &Type) {
+        let Some(alternate) = node else { return };
+        let alt_ty = match alternate.as_ref() {
+            ast::Alternate::Block(b) => self.visit_block_expression(b),
+            ast::Alternate::If(i) => self.visit_if_expression(i),
+            ast::Alternate::IfDecl(i) => self.visit_if_decl_expression(i),
         };
+        if !alt_ty.is_assignable_to(expected) {
+            self.errors.push(ParseError {
+                message: format!(
+                    "Branches' types don't match: expected {}, got {}",
+                    expected, alt_ty
+                ),
+                span: alternate.as_span(),
+            })
+        }
     }
 
     fn visit_tuple_expression(&mut self, node: &ast::TupleExpression) -> Type {

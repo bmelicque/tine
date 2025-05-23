@@ -33,6 +33,7 @@ impl CodeGenerator {
             ast::Expression::Function(node) => self.function_expression_to_swc(node).into(),
             ast::Expression::Identifier(node) => self.ident_to_swc(node).into(),
             ast::Expression::If(node) => self.if_to_swc_expr(node).into(),
+            ast::Expression::IfDecl(node) => self.if_decl_to_swc_expr(node).into(),
             ast::Expression::NumberLiteral(node) => swc::Lit::Num(swc::Number {
                 span: DUMMY_SP,
                 value: node.value,
@@ -224,20 +225,18 @@ impl CodeGenerator {
     }
 
     fn if_to_swc_inlined(&mut self, node: ast::IfExpression) -> swc::Expr {
-        let ast::Condition::Expression(condition) = *node.condition else {
-            panic!("expression expected! should've been checked beforehand")
-        };
         let alt = node
             .alternate
             .map(|alt| match *alt {
                 ast::Alternate::Block(b) => self.block_to_swc_inlined(b).into(),
                 ast::Alternate::If(i) => self.if_to_swc_inlined(i).into(),
+                ast::Alternate::IfDecl(_) => panic!("Shouldn't try to inline IfDeclExpression!"),
             })
             .map(Box::new)
             .unwrap_or(Box::new(undefined()));
         swc::Expr::Cond(swc::CondExpr {
             span: DUMMY_SP,
-            test: Box::new(self.expr_to_swc(condition)),
+            test: Box::new(self.expr_to_swc(*node.condition)),
             cons: Box::new(self.block_to_swc_inlined(*node.consequent).into()),
             alt,
         })
@@ -247,6 +246,15 @@ impl CodeGenerator {
         let id = self.add_temp_var_to_current_block();
         self.enter_block();
         let if_stmt = self.if_to_swc_stmt(node, Some(&id));
+        self.exit_block();
+        self.push_to_block(if_stmt.into());
+        create_ident(&id).into()
+    }
+
+    fn if_decl_to_swc_expr(&mut self, node: ast::IfDeclExpression) -> swc::Expr {
+        let id = self.add_temp_var_to_current_block();
+        self.enter_block();
+        let if_stmt = self.if_decl_to_swc_stmt(node, Some(&id));
         self.exit_block();
         self.push_to_block(if_stmt.into());
         create_ident(&id).into()

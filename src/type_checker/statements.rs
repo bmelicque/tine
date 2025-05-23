@@ -105,6 +105,12 @@ impl TypeChecker {
         let inferred_type = self.visit_expression(&node.value);
         let mutable = node.op == ast::DeclarationOp::Mut;
         let mut variables = Vec::<(String, Type)>::new();
+        if node.pattern.is_refutable() {
+            self.errors.push(ParseError {
+                message: "Irrefutable pattern expected".into(),
+                span: node.pattern.as_span(),
+            });
+        }
         self.match_pattern(&node.pattern, inferred_type, &mut variables);
         for (name, ty) in variables {
             self.symbols.define(&name, ty, mutable);

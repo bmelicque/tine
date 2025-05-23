@@ -214,7 +214,7 @@ impl ParserEngine {
         assert!(pair.as_rule() == Rule::if_expression);
         let span = pair.as_span();
         let mut inner = pair.into_inner();
-        let condition = Box::new(self.parse_condition(inner.next().unwrap()));
+        let condition = Box::new(self.parse_expression(inner.next().unwrap()));
         let consequent = Box::new(self.parse_block(inner.next().unwrap()));
         let alternate = inner
             .next()
@@ -227,13 +227,22 @@ impl ParserEngine {
         }
     }
 
-    fn parse_condition(&mut self, pair: Pair<'static, Rule>) -> ast::Condition {
-        assert!(pair.as_rule() == Rule::condition);
-        let pair = pair.into_inner().next().unwrap();
-        match pair.as_rule() {
-            Rule::expression => self.parse_expression(pair).into(),
-            Rule::variable_declaration => self.parse_variable_declaration(pair).into(),
-            rule => unreachable!("unexpected rule {:?}", rule),
+    fn parse_if_decl_expression(&mut self, pair: Pair<'static, Rule>) -> ast::IfDeclExpression {
+        assert!(pair.as_rule() == Rule::if_decl_expression);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+        let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
+        let scrutinee = Box::new(self.parse_expression(inner.next().unwrap()));
+        let consequent = Box::new(self.parse_block(inner.next().unwrap()));
+        let alternate = inner
+            .next()
+            .map(|pair| Box::new(self.parse_alternate(pair)));
+        ast::IfDeclExpression {
+            span,
+            pattern,
+            scrutinee,
+            consequent,
+            alternate,
         }
     }
 
@@ -243,6 +252,7 @@ impl ParserEngine {
         match pair.as_rule() {
             Rule::block => self.parse_block(pair).into(),
             Rule::if_expression => self.parse_if_expression(pair).into(),
+            Rule::if_decl_expression => self.parse_if_decl_expression(pair).into(),
             rule => unreachable!("unexpected rule {:?}", rule),
         }
     }

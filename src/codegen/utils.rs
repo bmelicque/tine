@@ -126,6 +126,7 @@ pub fn can_be_inlined(node: &ast::Statement) -> bool {
         ast::Statement::Expression(e) => match e.expression.as_ref() {
             ast::Expression::Block(b) => b.can_be_inlined(),
             ast::Expression::If(i) => i.can_be_inlined(),
+            ast::Expression::IfDecl(_) => false,
             // TODO: loops
             // TODO: match statements
             _ => true,
@@ -145,7 +146,7 @@ impl ast::BlockExpression {
 
 impl ast::IfExpression {
     pub fn can_be_inlined(&self) -> bool {
-        if self.condition.is_decl() || !self.consequent.can_be_inlined() {
+        if !self.consequent.can_be_inlined() {
             return false;
         }
         let Some(ref alt) = self.alternate else {
@@ -154,6 +155,7 @@ impl ast::IfExpression {
         match alt.as_ref() {
             ast::Alternate::Block(b) => b.can_be_inlined(),
             ast::Alternate::If(i) => i.can_be_inlined(),
+            ast::Alternate::IfDecl(_) => false,
         }
     }
 }

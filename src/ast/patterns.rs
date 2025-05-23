@@ -34,6 +34,11 @@ impl Pattern {
             _ => false,
         }
     }
+
+    pub fn is_refutable(&self) -> bool {
+        // FIXME:
+        false
+    }
 }
 
 impl Into<PatternExpression> for Pattern {

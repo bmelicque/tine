@@ -92,29 +92,62 @@ impl CodeGenerator {
         node: ast::IfExpression,
         assign_to: Option<&str>,
     ) -> swc::IfStmt {
-        let mut block = self.block_to_swc_stmt(*node.consequent, assign_to);
-        let test = match *node.condition {
-            ast::Condition::Declaration(decl) => {
-                let expr = Box::new(self.pattern_to_swc_test(&decl.pattern, &decl.value));
-                block.stmts.push(self.declaration_to_swc(decl).into());
-                block.stmts.rotate_right(1);
-                expr
-            }
-            ast::Condition::Expression(expr) => Box::new(self.expr_to_swc(expr)),
-        };
+        let block = self.block_to_swc_stmt(*node.consequent, assign_to);
+        let test = Box::new(self.expr_to_swc(*node.condition));
         let cons = Box::new(block.into());
         let alt = node
             .alternate
-            .map(|alt| match alt.as_ref() {
-                ast::Alternate::Block(n) => self.block_to_swc_stmt(n.clone(), assign_to).into(),
-                ast::Alternate::If(n) => self.if_to_swc_stmt(n.clone(), assign_to).into(),
-            })
+            .map(|alt| self.alt_to_swc_stmt(alt.as_ref(), assign_to))
             .map(Box::new);
         swc::IfStmt {
             span: DUMMY_SP,
             test,
             cons,
             alt,
+        }
+    }
+
+    /// assign_to is Some if the last stmt has to be assigned (used for extracted blocks)
+    pub fn if_decl_to_swc_stmt(
+        &mut self,
+        node: ast::IfDeclExpression,
+        assign_to: Option<&str>,
+    ) -> swc::IfStmt {
+        let mut block = self.block_to_swc_stmt(*node.consequent, assign_to);
+        let test = Box::new(self.pattern_to_swc_test(&node.pattern, &node.scrutinee));
+        block.stmts.push(
+            swc::Decl::Var(Box::new(swc::VarDecl {
+                span: DUMMY_SP,
+                kind: swc::VarDeclKind::Const,
+                declare: false,
+                decls: vec![swc::VarDeclarator {
+                    span: DUMMY_SP,
+                    name: self.pattern_to_swc(*node.pattern),
+                    init: Some(Box::new(self.expr_to_swc(*node.scrutinee))),
+                    definite: false,
+                }],
+            }))
+            .into(),
+        );
+        block.stmts.rotate_right(1);
+        let cons = Box::new(block.into());
+        let alt = node
+            .alternate
+            .map(|alt| self.alt_to_swc_stmt(alt.as_ref(), assign_to))
+            .map(Box::new);
+        swc::IfStmt {
+            span: DUMMY_SP,
+            test,
+            cons,
+            alt,
+        }
+    }
+
+    fn alt_to_swc_stmt(&mut self, node: &ast::Alternate, assign_to: Option<&str>) -> swc::Stmt {
+        match node {
+            ast::Alternate::Block(n) => self.block_to_swc_stmt(n.clone(), assign_to).into(),
+            ast::Alternate::If(n) => self.if_to_swc_stmt(n.clone(), assign_to).into(),
+            ast::Alternate::IfDecl(n) => self.if_decl_to_swc_stmt(n.clone(), assign_to).into(),
         }
     }
 
