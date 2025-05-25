@@ -11,10 +11,25 @@ impl TypeChecker {
     ) {
         match pattern {
             ast::Pattern::Identifier(id) => variables.push((id.span.as_str().into(), against)),
+            ast::Pattern::Literal(l) => self.match_literal_pattern(l, against),
             ast::Pattern::StructPattern(pattern) => {
                 self.match_struct_pattern(pattern, against, variables)
             }
             ast::Pattern::Tuple(pattern) => self.match_tuple_pattern(pattern, against, variables),
+        }
+    }
+
+    fn match_literal_pattern(&mut self, pattern: &ast::LiteralPattern, against: Type) {
+        let got = match pattern {
+            ast::LiteralPattern::Boolean(_) => Type::Boolean,
+            ast::LiteralPattern::Number(_) => Type::Number,
+            ast::LiteralPattern::String(_) => Type::String,
+        };
+        if against != Type::Unknown && against != got {
+            self.errors.push(ParseError {
+                message: format!("Cannot match {} literal against {}", got, against),
+                span: pattern.as_span(),
+            });
         }
     }
 

@@ -82,12 +82,13 @@ parameter = { value_identifier ~ type_annotation? }
 // Patterns
 pattern = { tuple_pattern | pattern_element }
 tuple_pattern = { pattern_element ~ ("," ~ pattern_element)+ }
-pattern_element = { struct_pattern | grouped_pattern | identifier_pattern }
+pattern_element = { struct_pattern | grouped_pattern | identifier_pattern | literal_pattern }
 grouped_pattern = { "(" ~ pattern ~ ")" }
 identifier_pattern = { value_identifier }
 struct_pattern = { type_identifier ~ "(" ~ struct_pattern_elements ~ ")" }
 struct_pattern_elements = { (struct_pattern_field ~ ("," ~ struct_pattern_field)*)? }
 struct_pattern_field = { value_identifier ~ (":" ~ pattern)? }
+literal_pattern = { string_literal | number_literal | boolean_literal }
 // TODO: variant pattern `Enum.Variant(..)`
 
 

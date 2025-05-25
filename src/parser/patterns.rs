@@ -11,6 +11,7 @@ impl ParserEngine {
                 self.parse_pattern(pair.into_inner().next().unwrap())
             }
             Rule::identifier_pattern => self.parse_identifier_pattern(pair).into(),
+            Rule::literal_pattern => self.parse_literal_pattern(pair).into(),
             Rule::struct_pattern => self.parse_struct_pattern(pair).into(),
             Rule::tuple_pattern => self.parse_tuple_pattern(pair).into(),
             rule => unreachable!("got unexpected rule {:?}", rule),
@@ -20,6 +21,25 @@ impl ParserEngine {
     fn parse_identifier_pattern(&mut self, pair: Pair<'static, Rule>) -> ast::IdentifierPattern {
         ast::IdentifierPattern {
             span: pair.as_span(),
+        }
+    }
+
+    fn parse_literal_pattern(&mut self, pair: Pair<'static, Rule>) -> ast::LiteralPattern {
+        let span = pair.as_span();
+        let inner = pair.into_inner().next().unwrap();
+        match inner.as_rule() {
+            Rule::boolean_literal => ast::BooleanLiteral {
+                span,
+                value: inner.as_str() == "true",
+            }
+            .into(),
+            Rule::number_literal => ast::NumberLiteral {
+                span,
+                value: inner.as_str().parse().unwrap_or(0.0),
+            }
+            .into(),
+            Rule::string_literal => ast::StringLiteral { span }.into(),
+            rule => unreachable!("unexpected rule {:?}", rule),
         }
     }
 

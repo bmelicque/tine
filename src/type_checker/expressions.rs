@@ -245,6 +245,12 @@ impl TypeChecker {
     }
 
     fn visit_if_decl_expression(&mut self, node: &ast::IfDeclExpression) -> Type {
+        if !node.pattern.is_refutable() {
+            self.errors.push(ParseError {
+                message: "Refutable pattern expected".into(),
+                span: node.pattern.as_span(),
+            });
+        };
         self.symbols.enter_scope();
         let inferred_type = self.visit_expression(&node.scrutinee);
         let mut variables = Vec::<(String, Type)>::new();

@@ -30,6 +30,7 @@ impl ParserEngine {
             Rule::exponentiation => self.parse_exponentiation(pair).into(),
             Rule::value_identifier => self.parse_identifier(pair).into(),
             Rule::if_expression => self.parse_if_expression(pair).into(),
+            Rule::if_decl_expression => self.parse_if_decl_expression(pair).into(),
             Rule::member_expression => self.parse_field_access_expression(pair).into(),
             Rule::tuple_expression => self.parse_tuple_expression(pair).into(),
             Rule::tuple_indexing => self.parse_tuple_indexing(pair).into(),

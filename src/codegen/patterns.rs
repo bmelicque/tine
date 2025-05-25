@@ -22,8 +22,30 @@ impl CodeGenerator {
                 id: create_ident(pattern.span.as_str()),
                 type_ann: None,
             }),
+            ast::Pattern::Literal(pattern) => {
+                swc::Pat::Expr(self.literal_pattern_to_swc(pattern).into())
+            }
             ast::Pattern::StructPattern(pattern) => self.struct_pattern_to_swc(pattern).into(),
             ast::Pattern::Tuple(pattern) => self.tuple_pattern_to_swc(pattern).into(),
+        }
+    }
+
+    fn literal_pattern_to_swc(&mut self, node: ast::LiteralPattern) -> swc::Lit {
+        match node {
+            ast::LiteralPattern::Boolean(b) => swc::Lit::Bool(swc::Bool {
+                span: DUMMY_SP,
+                value: b.value,
+            }),
+            ast::LiteralPattern::Number(n) => swc::Lit::Num(swc::Number {
+                span: DUMMY_SP,
+                value: n.value,
+                raw: None,
+            }),
+            ast::LiteralPattern::String(s) => swc::Lit::Str(swc::Str {
+                span: DUMMY_SP,
+                value: s.as_str().into(),
+                raw: None,
+            }),
         }
     }
 
@@ -33,6 +55,12 @@ impl CodeGenerator {
             props: node
                 .fields
                 .into_iter()
+                .filter(|field| {
+                    let Some(ref pattern) = field.pattern else {
+                        return true;
+                    };
+                    !pattern.is_refutable()
+                })
                 .map(|field| self.struct_pattern_field_to_swc(field))
                 .collect(),
             optional: false,
@@ -63,6 +91,7 @@ impl CodeGenerator {
             elems: node
                 .elements
                 .into_iter()
+                .filter(|element| !element.is_refutable())
                 .map(|element| Some(self.pattern_to_swc(element)))
                 .collect(),
             optional: false,
@@ -84,9 +113,23 @@ impl CodeGenerator {
     ) -> swc::Expr {
         match pattern {
             ast::Pattern::Identifier(_) => true_lit(),
+            ast::Pattern::Literal(l) => self.literal_pattern_to_swc_test(l, against),
             ast::Pattern::StructPattern(s) => self.struct_pattern_to_swc_test(s, against),
             ast::Pattern::Tuple(t) => self.tuple_pattern_to_swc_test(t, against),
         }
+    }
+
+    fn literal_pattern_to_swc_test(
+        &mut self,
+        pattern: &ast::LiteralPattern,
+        against: &ast::Expression,
+    ) -> swc::Expr {
+        swc::Expr::Bin(swc::BinExpr {
+            span: DUMMY_SP,
+            op: swc::BinaryOp::EqEqEq,
+            left: Box::new(self.expr_to_swc(against.clone())),
+            right: Box::new(self.literal_pattern_to_swc(pattern.clone()).into()),
+        })
     }
 
     fn struct_pattern_to_swc_test(

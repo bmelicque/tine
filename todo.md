@@ -1,5 +1,4 @@
 - if Enum.Variant() pattern
-- literals in patterns
 - if expression without else is an option (handle type checking & codegen as option)
 - match expression
 - for loops

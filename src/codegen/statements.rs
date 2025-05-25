@@ -13,6 +13,7 @@ impl CodeGenerator {
             ast::Statement::Expression(node) => match *node.expression {
                 ast::Expression::Block(block) => Some(self.block_to_swc_stmt(block, None).into()),
                 ast::Expression::If(expr) => Some(self.if_to_swc_stmt(expr, None).into()),
+                ast::Expression::IfDecl(expr) => Some(self.if_decl_to_swc_stmt(expr, None).into()),
                 expr => Some(
                     swc::ExprStmt {
                         span: DUMMY_SP,
