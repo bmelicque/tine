@@ -5,6 +5,6 @@ mod patterns;
 mod statements;
 mod type_aliases;
 mod types;
-mod utils;
+pub mod utils;
 
 pub use parser::ParserEngine;

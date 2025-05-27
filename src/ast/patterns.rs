@@ -1,3 +1,5 @@
+use crate::parser::utils::merge_span;
+
 use super::{BooleanLiteral, Expression, NamedType, NumberLiteral, StringLiteral};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -16,8 +18,9 @@ impl From<Expression> for PatternExpression {
 pub enum Pattern {
     Identifier(IdentifierPattern),
     Literal(LiteralPattern),
-    StructPattern(StructPattern),
+    Struct(StructPattern),
     Tuple(TuplePattern),
+    Variant(VariantPattern),
 }
 
 impl Pattern {
@@ -25,8 +28,9 @@ impl Pattern {
         match self {
             Pattern::Identifier(p) => p.span,
             Pattern::Literal(l) => l.as_span(),
-            Pattern::StructPattern(p) => p.span,
+            Pattern::Struct(p) => p.span,
             Pattern::Tuple(p) => p.span,
+            Pattern::Variant(p) => p.span,
         }
     }
 
@@ -41,7 +45,7 @@ impl Pattern {
         match self {
             Pattern::Identifier(_) => false,
             Pattern::Literal(_) => true,
-            Pattern::StructPattern(s) => s
+            Pattern::Struct(s) => s
                 .fields
                 .iter()
                 .find(|field| {
@@ -56,6 +60,7 @@ impl Pattern {
                 .iter()
                 .find(|pattern| pattern.is_refutable())
                 .is_some(),
+            Pattern::Variant(_) => true,
         }
     }
 }
@@ -124,7 +129,7 @@ pub struct StructPattern {
 
 impl Into<Pattern> for StructPattern {
     fn into(self) -> Pattern {
-        Pattern::StructPattern(self)
+        Pattern::Struct(self)
     }
 }
 
@@ -144,5 +149,45 @@ pub struct TuplePattern {
 impl Into<Pattern> for TuplePattern {
     fn into(self) -> Pattern {
         Pattern::Tuple(self)
+    }
+}
+impl From<Vec<Pattern>> for TuplePattern {
+    fn from(elements: Vec<Pattern>) -> Self {
+        let span = merge_span(
+            elements.first().unwrap().as_span(),
+            elements.last().unwrap().as_span(),
+        );
+        Self { span, elements }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VariantPattern {
+    pub span: pest::Span<'static>,
+    pub ty: Box<NamedType>,
+    pub name: String,
+    pub body: Option<VariantPatternBody>,
+}
+
+impl Into<Pattern> for VariantPattern {
+    fn into(self) -> Pattern {
+        Pattern::Variant(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum VariantPatternBody {
+    Struct(Vec<StructPatternField>),
+    Tuple(TuplePattern),
+}
+
+impl From<Vec<StructPatternField>> for VariantPatternBody {
+    fn from(value: Vec<StructPatternField>) -> Self {
+        VariantPatternBody::Struct(value)
+    }
+}
+impl From<TuplePattern> for VariantPatternBody {
+    fn from(value: TuplePattern) -> Self {
+        VariantPatternBody::Tuple(value)
     }
 }

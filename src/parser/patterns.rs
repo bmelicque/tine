@@ -1,4 +1,4 @@
-use pest::iterators::Pair;
+use pest::iterators::{Pair, Pairs};
 
 use crate::ast;
 
@@ -14,6 +14,7 @@ impl ParserEngine {
             Rule::literal_pattern => self.parse_literal_pattern(pair).into(),
             Rule::struct_pattern => self.parse_struct_pattern(pair).into(),
             Rule::tuple_pattern => self.parse_tuple_pattern(pair).into(),
+            Rule::variant_pattern => self.parse_variant_pattern(pair).into(),
             rule => unreachable!("got unexpected rule {:?}", rule),
         }
     }
@@ -82,6 +83,38 @@ impl ParserEngine {
             .collect();
         ast::TuplePattern { span, elements }
     }
+
+    fn parse_variant_pattern(&mut self, pair: Pair<'static, Rule>) -> ast::VariantPattern {
+        let span = pair.as_span();
+        let mut inner = pair.into_inner().next().unwrap().into_inner();
+        let ty = Box::new(self.parse_named_type(inner.next().unwrap()));
+        let name = inner.next().unwrap().as_str().to_string();
+        let body = self.parse_variant_pattern_body(inner);
+
+        ast::VariantPattern {
+            span,
+            ty,
+            name,
+            body,
+        }
+    }
+
+    fn parse_variant_pattern_body(
+        &mut self,
+        mut pairs: Pairs<'static, Rule>,
+    ) -> Option<ast::VariantPatternBody> {
+        let Some(next) = pairs.next() else {
+            return None;
+        };
+        if next.as_rule() == Rule::struct_pattern_elements {
+            return Some(self.parse_struct_pattern_fields(next).into());
+        }
+        let mut elements = vec![self.parse_pattern(next)];
+        while let Some(next) = pairs.next() {
+            elements.push(self.parse_pattern(next));
+        }
+        Some(ast::VariantPatternBody::Tuple(elements.into()))
+    }
 }
 
 #[cfg(test)]
@@ -118,7 +151,7 @@ mod tests {
         let result = parse_pattern_input(input, Rule::struct_pattern);
 
         match result {
-            ast::Pattern::StructPattern(struct_pattern) => {
+            ast::Pattern::Struct(struct_pattern) => {
                 assert_eq!(struct_pattern.ty.name.as_str(), "User");
                 assert_eq!(struct_pattern.fields.len(), 2);
 
@@ -142,7 +175,7 @@ mod tests {
         let result = parse_pattern_input(input, Rule::struct_pattern);
 
         match result {
-            ast::Pattern::StructPattern(struct_pattern) => {
+            ast::Pattern::Struct(struct_pattern) => {
                 assert_eq!(struct_pattern.ty.name.as_str(), "User");
                 assert_eq!(struct_pattern.fields.len(), 2);
 
@@ -154,7 +187,7 @@ mod tests {
                 // Check the second field (nested pattern)
                 let field2 = &struct_pattern.fields[1];
                 assert_eq!(field2.identifier, "address");
-                if let Some(ast::Pattern::StructPattern(nested_struct)) = &field2.pattern {
+                if let Some(ast::Pattern::Struct(nested_struct)) = &field2.pattern {
                     assert_eq!(nested_struct.ty.name.as_str(), "Address");
                     assert_eq!(nested_struct.fields.len(), 2);
 
