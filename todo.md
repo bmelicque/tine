@@ -1,5 +1,5 @@
-- fix empty arrays `[]string()`
 - accept dynamic in some expressions? `if some { [""] } else { [] }`
+
 - if expression without else is an option (handle type checking & codegen as option)
 - match expression
 - for loops

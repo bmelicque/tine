@@ -65,6 +65,7 @@ impl ParserEngine {
     ) -> Vec<ExpressionOrAnonymous> {
         pair.into_inner()
             .map(|el_pair| self.parse_expression_or_anonymous(el_pair))
+            .filter(|expr| !expr.is_empty())
             .collect()
     }
 
@@ -233,6 +234,19 @@ mod tests {
                         ast::NumberLiteral { value, .. }
                     )) if value == 3.0
                 ));
+            }
+            _ => panic!("Expected ArrayLiteral"),
+        }
+    }
+
+    #[test]
+    fn test_parse_empty_array_literal() {
+        let input = r#"[]string()"#;
+        let result = parse_composite_literal_input(input, Rule::composite_literal);
+
+        match result {
+            ast::CompositeLiteral::Array(array) => {
+                assert_eq!(array.elements.len(), 0, "{:?}", array.elements);
             }
             _ => panic!("Expected ArrayLiteral"),
         }

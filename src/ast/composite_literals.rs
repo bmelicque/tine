@@ -151,6 +151,13 @@ impl ExpressionOrAnonymous {
             Self::Struct(s) => s.span.clone(),
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ExpressionOrAnonymous::Expression(Expression::Empty) => true,
+            _ => false,
+        }
+    }
 }
 
 impl From<Expression> for ExpressionOrAnonymous {
