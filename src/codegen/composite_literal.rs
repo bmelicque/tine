@@ -181,4 +181,40 @@ impl CodeGenerator {
             type_args: None,
         }
     }
+
+    pub fn some(&mut self, expr: swc::Expr) -> swc::NewExpr {
+        self.add_flag(TranspilerFlags::OptionType);
+
+        let exprs = vec![create_str("Some"), expr];
+        let args = exprs
+            .into_iter()
+            .map(|expr| swc::ExprOrSpread {
+                spread: None,
+                expr: Box::new(expr),
+            })
+            .collect();
+
+        swc::NewExpr {
+            span: DUMMY_SP,
+            callee: Box::new(create_ident("__Option").into()),
+            args: Some(args),
+            type_args: None,
+        }
+    }
+
+    pub fn none(&mut self) -> swc::NewExpr {
+        self.add_flag(TranspilerFlags::OptionType);
+
+        let args = vec![swc::ExprOrSpread {
+            spread: None,
+            expr: Box::new(create_str("None")),
+        }];
+
+        swc::NewExpr {
+            span: DUMMY_SP,
+            callee: Box::new(create_ident("__Option").into()),
+            args: Some(args),
+            type_args: None,
+        }
+    }
 }

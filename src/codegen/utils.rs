@@ -4,7 +4,10 @@ use swc_ecma_ast as swc;
 
 use crate::ast;
 
-use super::type_declaration::utils::{name_to_swc_param, this_assignment};
+use super::{
+    type_declaration::utils::{name_to_swc_param, this_assignment},
+    CodeGenerator,
+};
 
 fn js_reserved_words() -> HashSet<&'static str> {
     [
@@ -173,4 +176,39 @@ pub fn true_lit() -> swc::Expr {
         span: DUMMY_SP,
         value: true,
     }))
+}
+
+impl CodeGenerator {
+    pub fn into_option(&mut self, identifier: &String) -> swc::Stmt {
+        // identifier !== undefined ? new __Option("Some", identifier) : new __Option("None")
+
+        let test = Box::new(swc::Expr::Bin(swc::BinExpr {
+            span: DUMMY_SP,
+            op: swc::BinaryOp::NotEqEq,
+            left: Box::new(create_ident(&identifier).into()),
+            right: Box::new(undefined()),
+        }));
+
+        let cons = Box::new(self.some(create_ident(&identifier).into()).into());
+        let alt = Box::new(self.none().into());
+        let expr = Box::new(swc::Expr::Cond(swc::CondExpr {
+            span: DUMMY_SP,
+            test,
+            cons,
+            alt,
+        }));
+
+        swc::Stmt::Expr(swc::ExprStmt {
+            span: DUMMY_SP,
+            expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
+                span: DUMMY_SP,
+                op: swc::AssignOp::Assign,
+                left: swc::PatOrExpr::Pat(Box::new(swc::Pat::Ident(swc::BindingIdent {
+                    id: create_ident(&identifier),
+                    type_ann: None,
+                }))),
+                right: expr,
+            })),
+        })
+    }
 }

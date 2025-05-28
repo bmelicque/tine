@@ -225,38 +225,57 @@ impl CodeGenerator {
     }
 
     fn if_to_swc_inlined(&mut self, node: ast::IfExpression) -> swc::Expr {
-        let alt = node
-            .alternate
-            .map(|alt| match *alt {
+        if let Some(alternate) = node.alternate {
+            let alt = match *alternate {
                 ast::Alternate::Block(b) => self.block_to_swc_inlined(b).into(),
                 ast::Alternate::If(i) => self.if_to_swc_inlined(i).into(),
-                ast::Alternate::IfDecl(_) => panic!("Shouldn't try to inline IfDeclExpression!"),
+                ast::Alternate::IfDecl(_) => {
+                    panic!("Shouldn't try to inline IfDeclExpression!")
+                }
+            };
+            let alt = Box::new(alt);
+            swc::Expr::Cond(swc::CondExpr {
+                span: DUMMY_SP,
+                test: Box::new(self.expr_to_swc(*node.condition)),
+                cons: Box::new(self.block_to_swc_inlined(*node.consequent).into()),
+                alt,
             })
-            .map(Box::new)
-            .unwrap_or(Box::new(undefined()));
-        swc::Expr::Cond(swc::CondExpr {
-            span: DUMMY_SP,
-            test: Box::new(self.expr_to_swc(*node.condition)),
-            cons: Box::new(self.block_to_swc_inlined(*node.consequent).into()),
-            alt,
-        })
+        } else {
+            let cons = self.block_to_swc_inlined(*node.consequent).into();
+            swc::Expr::Cond(swc::CondExpr {
+                span: DUMMY_SP,
+                test: Box::new(self.expr_to_swc(*node.condition)),
+                cons: Box::new(self.some(cons).into()),
+                alt: Box::new(self.none().into()),
+            })
+        }
     }
 
     fn if_to_swc_extracted(&mut self, node: ast::IfExpression) -> swc::Expr {
+        let is_option = node.alternate.is_none();
         let id = self.add_temp_var_to_current_block();
         self.enter_block();
         let if_stmt = self.if_to_swc_stmt(node, Some(&id));
         self.exit_block();
         self.push_to_block(if_stmt.into());
+        if is_option {
+            let stmt = self.into_option(&id);
+            self.push_to_block(stmt);
+        }
         create_ident(&id).into()
     }
 
     fn if_decl_to_swc_expr(&mut self, node: ast::IfDeclExpression) -> swc::Expr {
+        let is_option = node.alternate.is_none();
         let id = self.add_temp_var_to_current_block();
         self.enter_block();
         let if_stmt = self.if_decl_to_swc_stmt(node, Some(&id));
         self.exit_block();
         self.push_to_block(if_stmt.into());
+        if is_option {
+            let stmt = self.into_option(&id);
+            self.push_to_block(stmt);
+        }
         create_ident(&id).into()
     }
 
@@ -302,7 +321,7 @@ impl CodeGenerator {
                     id: create_ident(&id),
                     type_ann: None,
                 }),
-                init: None,
+                init: Some(Box::new(undefined())),
                 definite: false,
             }],
         }))));

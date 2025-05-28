@@ -240,8 +240,12 @@ impl TypeChecker {
         }
         let ty = self.visit_block_expression(&node.consequent);
         self.symbols.exit_scope();
-        self.visit_alternate(&node.alternate, &ty);
-        ty
+        if let Some(ref alternate) = node.alternate {
+            self.visit_alternate(alternate, &ty);
+            ty
+        } else {
+            Type::Option(Box::new(ty))
+        }
     }
 
     fn visit_if_decl_expression(&mut self, node: &ast::IfDeclExpression) -> Type {
@@ -260,13 +264,16 @@ impl TypeChecker {
         }
         let ty = self.visit_block_expression(&node.consequent);
         self.symbols.exit_scope();
-        self.visit_alternate(&node.alternate, &ty);
-        ty
+        if let Some(ref alternate) = node.alternate {
+            self.visit_alternate(alternate, &ty);
+            ty
+        } else {
+            Type::Option(Box::new(ty))
+        }
     }
 
-    fn visit_alternate(&mut self, node: &Option<Box<ast::Alternate>>, expected: &Type) {
-        let Some(alternate) = node else { return };
-        let alt_ty = match alternate.as_ref() {
+    fn visit_alternate(&mut self, alternate: &ast::Alternate, expected: &Type) {
+        let alt_ty = match alternate {
             ast::Alternate::Block(b) => self.visit_block_expression(b),
             ast::Alternate::If(i) => self.visit_if_expression(i),
             ast::Alternate::IfDecl(i) => self.visit_if_decl_expression(i),
