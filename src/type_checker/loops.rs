@@ -13,10 +13,9 @@ impl TypeChecker {
     fn visit_for_expression(&mut self, node: &ast::ForExpression) -> Type {
         self.visit_condition(&node.condition);
         self.symbols.enter_scope();
-        self.visit_block_expression(&node.body);
+        let ty = self.visit_loop_body(&node.body);
         self.symbols.exit_scope();
-        // FIXME: break type
-        Type::Unit
+        ty
     }
 
     fn visit_for_in_expression(&mut self, node: &ast::ForInExpression) -> Type {
@@ -36,9 +35,40 @@ impl TypeChecker {
         for (name, ty) in variables {
             self.symbols.define(&name, ty, false);
         }
-        self.visit_block_expression(&node.body);
+        let ty = self.visit_loop_body(&node.body);
         self.symbols.exit_scope();
-        // FIXME: break type
-        Type::Unit
+        ty
+    }
+
+    fn visit_loop_body(&mut self, node: &ast::BlockExpression) -> Type {
+        self.visit_block_expression(node);
+        let mut breaks = Vec::<ast::BreakStatement>::new();
+        node.find_breaks(&mut breaks);
+        if breaks.len() == 0 {
+            return Type::Unit;
+        }
+
+        let first = breaks.first().unwrap();
+        let ty = self.break_type(first);
+
+        for stmt in breaks.iter().skip(1) {
+            let curr = self.break_type(stmt);
+            if !curr.is_assignable_to(&ty) {
+                self.errors.push(ParseError {
+                    message: format!("Type {} doesn't match type {}", curr, ty),
+                    span: stmt.span,
+                });
+            }
+        }
+
+        Type::Option(Box::new(ty))
+    }
+
+    fn break_type(&mut self, stmt: &ast::BreakStatement) -> Type {
+        stmt.value
+            .as_ref()
+            // FIXME: this report possible errors a second time!
+            .map(|expr| self.visit_expression(&expr))
+            .unwrap_or(Type::Unit)
     }
 }

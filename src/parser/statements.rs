@@ -14,6 +14,7 @@ impl ParserEngine {
             Rule::variable_declaration => self.parse_variable_declaration(pair).into(),
             Rule::assignment => self.parse_assignment(pair).into(),
             Rule::type_alias => self.parse_type_alias(pair).into(),
+            Rule::break_statement => self.parse_break_statement(pair).into(),
             Rule::return_statement => self.parse_return_statement(pair).into(),
             Rule::expression_statement => self.parse_expression_statement(pair),
             _ => ast::Statement::Empty,
@@ -61,6 +62,18 @@ impl ParserEngine {
             Rule::member_expression | Rule::tuple_indexing => self.parse_expression(pair).into(),
             rule => unreachable!("Unexpected rule {:?}", rule),
         }
+    }
+
+    fn parse_break_statement(&mut self, pair: Pair<'static, Rule>) -> ast::BreakStatement {
+        assert_eq!(pair.as_rule(), Rule::break_statement);
+        let span = pair.as_span();
+        let value = pair
+            .into_inner()
+            .next()
+            .map(|inner| self.parse_expression(inner))
+            .map(Box::new);
+
+        ast::BreakStatement { span, value }
     }
 
     fn parse_return_statement(&mut self, pair: Pair<'static, Rule>) -> ast::ReturnStatement {

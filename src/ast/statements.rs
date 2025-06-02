@@ -5,11 +5,12 @@ use super::{expressions::Expression, types::Type, Pattern, PatternExpression};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     Empty,
-    VariableDeclaration(VariableDeclaration),
-    TypeAlias(TypeAlias),
     Assignment(Assignment),
-    Return(ReturnStatement),
+    Break(BreakStatement),
     Expression(ExpressionStatement),
+    Return(ReturnStatement),
+    TypeAlias(TypeAlias),
+    VariableDeclaration(VariableDeclaration),
 }
 
 impl Statement {
@@ -234,6 +235,18 @@ pub struct Assignment {
 impl Into<Statement> for Assignment {
     fn into(self) -> Statement {
         Statement::Assignment(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BreakStatement {
+    pub span: Span<'static>,
+    pub value: Option<Box<Expression>>,
+}
+
+impl Into<Statement> for BreakStatement {
+    fn into(self) -> Statement {
+        Statement::Break(self)
     }
 }
 

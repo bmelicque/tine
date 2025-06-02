@@ -1,7 +1,5 @@
 - accept dynamic in some expressions? `if some { [""] } else { [] }`
 
-- `break` statement
-- loop type (inferred from break)
 - if decl: accept ':='
 - match expression
   - need to check if all cases are handled

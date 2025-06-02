@@ -214,12 +214,10 @@ impl CodeGenerator {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct BlockParams<'i> {
-    /// If Some, assign last statement (if expression) to given identifier:
+pub enum AssignTo {
+    None,
     /// `{ value }` becomes `{ identifier = value }`
-    assign_last_to: Option<&'i str>,
-
-    /// If Some, assign each break value to given identifier:
+    Last(String),
     /// `{ break value }` becomes `{ identifier = value; break }`
-    assign_break_to: Option<&'i str>,
+    Break(String),
 }

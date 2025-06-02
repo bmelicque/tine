@@ -7,6 +7,7 @@ impl TypeChecker {
             ast::Statement::Assignment(node) => self.visit_assignment(node),
             ast::Statement::Empty => Type::Void,
             ast::Statement::Expression(node) => self.visit_expression(&node.expression),
+            ast::Statement::Break(node) => self.visit_break_statement(node),
             ast::Statement::Return(node) => self.visit_return_statement(node),
             ast::Statement::TypeAlias(node) => self.visit_type_declaration(node),
             ast::Statement::VariableDeclaration(node) => self.visit_variable_declaration(node),
@@ -92,6 +93,13 @@ impl TypeChecker {
                 span: expr.as_span(),
             });
         }
+    }
+
+    fn visit_break_statement(&mut self, node: &ast::BreakStatement) -> Type {
+        if let Some(ref value) = node.value {
+            self.visit_expression(value);
+        }
+        Type::Void
     }
 
     fn visit_return_statement(&mut self, node: &ast::ReturnStatement) -> Type {

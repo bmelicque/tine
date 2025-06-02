@@ -5,6 +5,7 @@ pub mod patterns;
 pub mod program;
 pub mod statements;
 pub mod types;
+pub mod utils;
 
 pub use self::composite_literals::*;
 pub use self::expressions::*;

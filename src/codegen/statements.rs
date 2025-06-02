@@ -1,7 +1,7 @@
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
-use crate::ast;
+use crate::{ast, codegen::utils::AssignTo};
 
 use super::{utils::create_ident, CodeGenerator};
 
@@ -9,12 +9,17 @@ impl CodeGenerator {
     pub fn stmt_to_swc(&mut self, node: ast::Statement) -> Option<swc::Stmt> {
         match node {
             ast::Statement::Assignment(node) => Some(self.assignment_to_swc(node).into()),
+            ast::Statement::Break(_) => Some(self.break_to_swc_stmt().into()),
             ast::Statement::Empty => None,
             ast::Statement::Expression(node) => match *node.expression {
-                ast::Expression::Block(block) => Some(self.block_to_swc_stmt(block, None).into()),
-                ast::Expression::If(expr) => Some(self.if_to_swc_stmt(expr, None).into()),
-                ast::Expression::IfDecl(expr) => Some(self.if_decl_to_swc_stmt(expr, None).into()),
-                ast::Expression::Loop(expr) => Some(self.loop_to_swc_stmt(expr)),
+                ast::Expression::Block(block) => {
+                    Some(self.block_to_swc_stmt(block, AssignTo::None).into())
+                }
+                ast::Expression::If(expr) => Some(self.if_to_swc_stmt(expr, AssignTo::None).into()),
+                ast::Expression::IfDecl(expr) => {
+                    Some(self.if_decl_to_swc_stmt(expr, AssignTo::None).into())
+                }
+                ast::Expression::Loop(expr) => Some(self.loop_to_swc_stmt(expr, AssignTo::None)),
                 expr => Some(
                     swc::ExprStmt {
                         span: DUMMY_SP,
@@ -44,16 +49,34 @@ impl CodeGenerator {
     pub fn block_to_swc_stmt(
         &mut self,
         node: ast::BlockExpression,
-        assign_to: Option<&str>,
+        assign_to: AssignTo,
     ) -> swc::BlockStmt {
         self.push_scope();
-        let mut stmts: Vec<swc::Stmt> = node
-            .statements
-            .iter()
-            .filter_map(|stmt| self.stmt_to_swc(stmt.clone()))
-            .collect();
+        let mut stmts = Vec::<swc::Stmt>::new();
+        for statement in node.statements.iter() {
+            match statement {
+                ast::Statement::Break(stmt) => {
+                    if let (AssignTo::Break(assignee), Some(expr)) =
+                        (assign_to.clone(), stmt.value.clone())
+                    {
+                        let assigned = self.expr_to_swc(*expr.clone());
+                        stmts.push(self.assignment_expression(&assignee, assigned).into());
+                    }
+                    stmts.push(swc::Stmt::Break(swc::BreakStmt {
+                        span: DUMMY_SP,
+                        label: None,
+                    }));
+                }
+                stmt => {
+                    if let Some(stmt) = self.stmt_to_swc(stmt.clone()) {
+                        stmts.push(stmt);
+                    }
+                }
+            }
+        }
+
         self.drop_scope();
-        if let Some(target) = assign_to {
+        if let AssignTo::Last(ref target) = assign_to {
             if let Some(swc::Stmt::Expr(last)) = stmts.last_mut() {
                 *last = self.assignment_expression(target, *last.expr.clone())
             }
@@ -62,6 +85,13 @@ impl CodeGenerator {
         swc::BlockStmt {
             span: DUMMY_SP,
             stmts,
+        }
+    }
+
+    fn break_to_swc_stmt(&mut self) -> swc::BreakStmt {
+        swc::BreakStmt {
+            span: DUMMY_SP,
+            label: None,
         }
     }
 
@@ -89,12 +119,8 @@ impl CodeGenerator {
     }
 
     /// assign_to is Some if the last stmt has to be assigned (used for extracted blocks)
-    pub fn if_to_swc_stmt(
-        &mut self,
-        node: ast::IfExpression,
-        assign_to: Option<&str>,
-    ) -> swc::IfStmt {
-        let block = self.block_to_swc_stmt(*node.consequent, assign_to);
+    pub fn if_to_swc_stmt(&mut self, node: ast::IfExpression, assign_to: AssignTo) -> swc::IfStmt {
+        let block = self.block_to_swc_stmt(*node.consequent, assign_to.clone());
         let test = Box::new(self.expr_to_swc(*node.condition));
         let cons = Box::new(block.into());
         let alt = node
@@ -113,9 +139,9 @@ impl CodeGenerator {
     pub fn if_decl_to_swc_stmt(
         &mut self,
         node: ast::IfDeclExpression,
-        assign_to: Option<&str>,
+        assign_to: AssignTo,
     ) -> swc::IfStmt {
-        let mut block = self.block_to_swc_stmt(*node.consequent, assign_to);
+        let mut block = self.block_to_swc_stmt(*node.consequent, assign_to.clone());
         let test = Box::new(self.pattern_to_swc_test(&node.pattern, &node.scrutinee));
         block.stmts.push(
             swc::Decl::Var(Box::new(swc::VarDecl {
@@ -145,25 +171,25 @@ impl CodeGenerator {
         }
     }
 
-    fn alt_to_swc_stmt(&mut self, node: &ast::Alternate, assign_to: Option<&str>) -> swc::Stmt {
+    fn alt_to_swc_stmt(&mut self, node: &ast::Alternate, params: AssignTo) -> swc::Stmt {
         match node {
-            ast::Alternate::Block(n) => self.block_to_swc_stmt(n.clone(), assign_to).into(),
-            ast::Alternate::If(n) => self.if_to_swc_stmt(n.clone(), assign_to).into(),
-            ast::Alternate::IfDecl(n) => self.if_decl_to_swc_stmt(n.clone(), assign_to).into(),
+            ast::Alternate::Block(n) => self.block_to_swc_stmt(n.clone(), params).into(),
+            ast::Alternate::If(n) => self.if_to_swc_stmt(n.clone(), params).into(),
+            ast::Alternate::IfDecl(n) => self.if_decl_to_swc_stmt(n.clone(), params).into(),
         }
     }
 
-    pub fn loop_to_swc_stmt(&mut self, node: ast::Loop) -> swc::Stmt {
+    pub fn loop_to_swc_stmt(&mut self, node: ast::Loop, assign_to: AssignTo) -> swc::Stmt {
         match node {
-            ast::Loop::For(node) => self.for_to_swc_stmt(node).into(),
-            ast::Loop::ForIn(node) => self.for_in_to_swc_stmt(node).into(),
+            ast::Loop::For(node) => self.for_to_swc_stmt(node, assign_to).into(),
+            ast::Loop::ForIn(node) => self.for_in_to_swc_stmt(node, assign_to).into(),
         }
     }
 
-    fn for_to_swc_stmt(&mut self, node: ast::ForExpression) -> swc::WhileStmt {
+    fn for_to_swc_stmt(&mut self, node: ast::ForExpression, assign_to: AssignTo) -> swc::WhileStmt {
         let test = Box::new(self.expr_to_swc(*node.condition));
         // FIXME: no assign_to! and breaks should be `assignee = value; break;`
-        let body = Box::new(self.block_to_swc_stmt(node.body, None).into());
+        let body = Box::new(self.block_to_swc_stmt(node.body, assign_to).into());
         swc::WhileStmt {
             span: DUMMY_SP,
             test,
@@ -171,7 +197,11 @@ impl CodeGenerator {
         }
     }
 
-    fn for_in_to_swc_stmt(&mut self, node: ast::ForInExpression) -> swc::ForOfStmt {
+    fn for_in_to_swc_stmt(
+        &mut self,
+        node: ast::ForInExpression,
+        assign_to: AssignTo,
+    ) -> swc::ForOfStmt {
         swc::ForOfStmt {
             span: DUMMY_SP,
             is_await: false,
@@ -187,7 +217,7 @@ impl CodeGenerator {
                 }],
             })),
             right: Box::new(self.expr_to_swc(*node.iterable.clone())),
-            body: Box::new(self.get_for_in_body(&node).into()),
+            body: Box::new(self.get_for_in_body(&node, assign_to).into()),
         }
     }
 
@@ -201,8 +231,12 @@ impl CodeGenerator {
         }
     }
 
-    fn get_for_in_body(&mut self, node: &ast::ForInExpression) -> swc::BlockStmt {
-        let mut body = self.block_to_swc_stmt(node.body.clone(), None);
+    fn get_for_in_body(
+        &mut self,
+        node: &ast::ForInExpression,
+        assign_to: AssignTo,
+    ) -> swc::BlockStmt {
+        let mut body = self.block_to_swc_stmt(node.body.clone(), assign_to);
         if matches!(*node.pattern, ast::Pattern::Identifier(_)) {
             return body;
         }

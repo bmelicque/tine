@@ -2,7 +2,7 @@ use rand::{distr::Alphanumeric, Rng};
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
-use crate::ast;
+use crate::{ast, codegen::utils::AssignTo};
 
 use super::{
     utils::{create_ident, undefined},
@@ -147,7 +147,7 @@ impl CodeGenerator {
 
         let id = self.add_temp_var_to_current_block();
         self.enter_block();
-        let block = self.block_to_swc_stmt(node, Some(&id));
+        let block = self.block_to_swc_stmt(node, AssignTo::Last(id.clone()));
         self.exit_block();
         self.push_to_block(block.into());
         create_ident(&id)
@@ -256,7 +256,7 @@ impl CodeGenerator {
         let is_option = node.alternate.is_none();
         let id = self.add_temp_var_to_current_block();
         self.enter_block();
-        let if_stmt = self.if_to_swc_stmt(node, Some(&id));
+        let if_stmt = self.if_to_swc_stmt(node, AssignTo::Last(id.clone()));
         self.exit_block();
         self.push_to_block(if_stmt.into());
         if is_option {
@@ -270,7 +270,7 @@ impl CodeGenerator {
         let is_option = node.alternate.is_none();
         let id = self.add_temp_var_to_current_block();
         self.enter_block();
-        let if_stmt = self.if_decl_to_swc_stmt(node, Some(&id));
+        let if_stmt = self.if_decl_to_swc_stmt(node, AssignTo::Last(id.clone()));
         self.exit_block();
         self.push_to_block(if_stmt.into());
         if is_option {
@@ -283,7 +283,7 @@ impl CodeGenerator {
     fn loop_to_swc_expr(&mut self, node: ast::Loop) -> swc::Expr {
         let id = self.add_temp_var_to_current_block();
         self.enter_block();
-        let loop_stmt = self.loop_to_swc_stmt(node);
+        let loop_stmt = self.loop_to_swc_stmt(node, AssignTo::Break(id.clone()));
         self.exit_block();
         self.push_to_block(loop_stmt.into());
         let option = self.into_option(&id);
