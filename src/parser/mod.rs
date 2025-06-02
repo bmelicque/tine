@@ -1,5 +1,6 @@
 mod composite_literals;
 mod expressions;
+mod loops;
 pub mod parser;
 mod patterns;
 mod statements;

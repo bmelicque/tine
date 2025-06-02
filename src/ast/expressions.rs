@@ -2,7 +2,7 @@ use std::fmt;
 
 use pest::Span;
 
-use super::{composite_literals::CompositeLiteral, types::Type, Pattern, Statement};
+use super::{composite_literals::CompositeLiteral, types::Type, Loop, Pattern, Statement};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
@@ -17,6 +17,7 @@ pub enum Expression {
     Identifier(Identifier),
     If(IfExpression),
     IfDecl(IfDeclExpression),
+    Loop(Loop),
     NumberLiteral(NumberLiteral),
     StringLiteral(StringLiteral),
     Tuple(TupleExpression),
@@ -37,6 +38,7 @@ impl Expression {
             Self::Identifier(e) => e.span.clone(),
             Self::If(e) => e.span.clone(),
             Self::IfDecl(e) => e.span.clone(),
+            Self::Loop(e) => e.as_span(),
             Self::NumberLiteral(e) => e.span.clone(),
             Self::StringLiteral(e) => e.span.clone(),
             Self::Tuple(e) => e.span.clone(),

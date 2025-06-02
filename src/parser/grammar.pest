@@ -53,7 +53,7 @@ anonymous_expression = { struct_literal_body | expression }
 // Expressions
 tuple_or_expression = { tuple_expression | expression }
 tuple_expression = { expression ~ ("," ~ expression)+ }
-expression = { if_expression | if_decl_expression | block | composite_literal | array_expression | equality }
+expression = { if_expression | if_decl_expression | loop_expression | block | composite_literal | array_expression | equality }
 equality = { relation? ~ (("=="|"!=") ~ relation?)* }
 eq_op = { "==" | "!=" }
 relation = { addition? ~ (rel_op ~ addition?)*}
@@ -66,13 +66,16 @@ exponentiation = { primary? ~ ("**" ~ primary?)* }
 primary = {  member_expression | tuple_indexing | string_literal | number_literal | boolean_literal | value_identifier | function_expression | "(" ~ tuple_or_expression ~ ")" }
 tuple_indexing = { (member_expression|value_identifier|"(" ~ tuple_or_expression ~ ")") ~ "." ~ number_literal }
 member_expression = { value_identifier ~ ("." ~ value_identifier)+ }
-array_expression = { "[" ~ NEWLINE? ~ expression ~ (NEWLINE? ~ "," ~ expression)* ~ "]" }
+array_expression = { "[" ~ NEWLINE? ~ expression ~ ("," ~ NEWLINE? ~ expression)* ~ (","? ~ NEWLINE)? ~ "]" }
 block = { "{" ~ NEWLINE? ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ NEWLINE? ~ "}" }
 
 if_expression = { "if" ~ expression ~ block ~ alternate?}
 if_decl_expression = { "if" ~ pattern ~ "::" ~ expression ~ block ~ alternate? }
-condition = { variable_declaration | expression }
 alternate = { "else" ~ (block | if_expression | if_decl_expression) }
+
+loop_expression = { for_expression | for_in_expression }
+for_expression = { "for" ~ expression ~ block }
+for_in_expression = { "for" ~ pattern ~ "in" ~ expression ~ block }
 
 function_expression = { parameter_list? ~ "=>" ~ (function_body | expression)? }
 function_body = { type_annotation? ~ block }
@@ -93,8 +96,6 @@ unit_variant_pattern = { type_identifier ~ "." ~ type_identifier }
 struct_variant_pattern = { type_identifier ~ "." ~ type_identifier ~ "(" ~ struct_pattern_elements ~ ")" }
 tuple_variant_pattern = { type_identifier ~ "." ~ type_identifier ~ "(" ~ pattern_element ~ ("," ~ pattern_element)* ~ ")" }
 literal_pattern = { string_literal | number_literal | boolean_literal }
-// TODO: variant pattern `Enum.Variant(..)`
-
 
 // Statements
 statement = { type_alias | variable_declaration | assignment | return_statement | expression_statement }

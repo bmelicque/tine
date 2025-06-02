@@ -19,10 +19,7 @@ impl CodeGenerator {
     /// Used to build a destructuring expression, like the `{ name }` part of `const { name } = user;`
     pub fn pattern_to_swc(&mut self, node: ast::Pattern) -> swc::Pat {
         match node {
-            ast::Pattern::Identifier(pattern) => swc::Pat::Ident(swc::BindingIdent {
-                id: create_ident(pattern.span.as_str()),
-                type_ann: None,
-            }),
+            ast::Pattern::Identifier(pattern) => self.identifier_pattern_to_swc(pattern),
             ast::Pattern::Literal(pattern) => {
                 // TODO: this is probably useless (investigate)
                 swc::Pat::Expr(self.literal_pattern_to_swc(pattern).into())
@@ -31,6 +28,13 @@ impl CodeGenerator {
             ast::Pattern::Tuple(pattern) => self.tuple_pattern_to_swc(pattern).into(),
             ast::Pattern::Variant(pattern) => self.variant_pattern_to_swc(pattern),
         }
+    }
+
+    pub fn identifier_pattern_to_swc(&mut self, node: ast::IdentifierPattern) -> swc::Pat {
+        swc::Pat::Ident(swc::BindingIdent {
+            id: create_ident(node.span.as_str()),
+            type_ann: None,
+        })
     }
 
     fn literal_pattern_to_swc(&mut self, node: ast::LiteralPattern) -> swc::Lit {

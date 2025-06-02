@@ -22,6 +22,7 @@ impl TypeChecker {
             ast::Expression::Identifier(node) => self.visit_identifier(node),
             ast::Expression::If(node) => self.visit_if_expression(node),
             ast::Expression::IfDecl(node) => self.visit_if_decl_expression(node),
+            ast::Expression::Loop(node) => self.visit_loop(node),
             ast::Expression::NumberLiteral(_) => Type::Number,
             ast::Expression::StringLiteral(_) => Type::String,
             ast::Expression::Tuple(node) => self.visit_tuple_expression(node),
@@ -135,7 +136,7 @@ impl TypeChecker {
         }
     }
 
-    fn visit_block_expression(&mut self, node: &ast::BlockExpression) -> Type {
+    pub fn visit_block_expression(&mut self, node: &ast::BlockExpression) -> Type {
         // TODO: handle diverging statements (return, break, continue)
         let mut ty = Type::Void;
         for stmt in node.statements.iter() {
@@ -231,13 +232,7 @@ impl TypeChecker {
 
     fn visit_if_expression(&mut self, node: &ast::IfExpression) -> Type {
         self.symbols.enter_scope();
-        let condition = self.visit_expression(&node.condition);
-        if condition != Type::Boolean {
-            self.errors.push(ParseError {
-                message: format!("Condition must evaluate to a boolean, got {}", condition),
-                span: node.condition.as_span(),
-            });
-        }
+        self.visit_condition(&node.condition);
         let ty = self.visit_block_expression(&node.consequent);
         self.symbols.exit_scope();
         if let Some(ref alternate) = node.alternate {
@@ -332,6 +327,16 @@ impl TypeChecker {
             Type::Unknown
         } else {
             tuple[value].clone()
+        }
+    }
+
+    pub fn visit_condition(&mut self, node: &ast::Expression) {
+        let condition = self.visit_expression(node);
+        if condition != Type::Boolean {
+            self.errors.push(ParseError {
+                message: format!("Condition must evaluate to a boolean, got {}", condition),
+                span: node.as_span(),
+            });
         }
     }
 }

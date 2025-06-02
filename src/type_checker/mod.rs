@@ -1,5 +1,6 @@
 mod composite_literals;
 mod expressions;
+mod loops;
 mod patterns;
 mod scopes;
 mod statements;

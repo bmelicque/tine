@@ -130,7 +130,7 @@ pub fn can_be_inlined(node: &ast::Statement) -> bool {
             ast::Expression::Block(b) => b.can_be_inlined(),
             ast::Expression::If(i) => i.can_be_inlined(),
             ast::Expression::IfDecl(_) => false,
-            // TODO: loops
+            ast::Expression::Loop(_) => false,
             // TODO: match statements
             _ => true,
         },
@@ -211,4 +211,15 @@ impl CodeGenerator {
             })),
         })
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BlockParams<'i> {
+    /// If Some, assign last statement (if expression) to given identifier:
+    /// `{ value }` becomes `{ identifier = value }`
+    assign_last_to: Option<&'i str>,
+
+    /// If Some, assign each break value to given identifier:
+    /// `{ break value }` becomes `{ identifier = value; break }`
+    assign_break_to: Option<&'i str>,
 }
