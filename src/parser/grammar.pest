@@ -53,7 +53,7 @@ anonymous_expression = { struct_literal_body | expression }
 // Expressions
 tuple_or_expression = { tuple_expression | expression }
 tuple_expression = { expression ~ ("," ~ expression)+ }
-expression = { if_expression | if_decl_expression | loop_expression | block | composite_literal | array_expression | equality }
+expression = { if_expression | if_decl_expression | match_expression | loop_expression | block | composite_literal | array_expression | equality }
 equality = { relation? ~ (("=="|"!=") ~ relation?)* }
 eq_op = { "==" | "!=" }
 relation = { addition? ~ (rel_op ~ addition?)*}
@@ -72,6 +72,10 @@ block = { "{" ~ NEWLINE? ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | 
 if_expression = { "if" ~ expression ~ block ~ alternate?}
 if_decl_expression = { "if" ~ pattern ~ "::" ~ expression ~ block ~ alternate? }
 alternate = { "else" ~ (block | if_expression | if_decl_expression) }
+
+match_expression = { "match" ~ expression ~ match_body }
+match_body = { "{" ~ NEWLINE? ~ (match_arm ~ (NEWLINE ~ match_arm)*)? ~ NEWLINE? ~ "}" }
+match_arm = { pattern ~ "->" ~ expression }
 
 loop_expression = { for_expression | for_in_expression }
 for_expression = { "for" ~ expression ~ block }

@@ -18,6 +18,7 @@ pub enum Expression {
     If(IfExpression),
     IfDecl(IfDeclExpression),
     Loop(Loop),
+    Match(MatchExpression),
     NumberLiteral(NumberLiteral),
     StringLiteral(StringLiteral),
     Tuple(TupleExpression),
@@ -39,6 +40,7 @@ impl Expression {
             Self::If(e) => e.span.clone(),
             Self::IfDecl(e) => e.span.clone(),
             Self::Loop(e) => e.as_span(),
+            Self::Match(e) => e.span,
             Self::NumberLiteral(e) => e.span.clone(),
             Self::StringLiteral(e) => e.span.clone(),
             Self::Tuple(e) => e.span.clone(),
@@ -150,6 +152,26 @@ impl From<IfDeclExpression> for Alternate {
     fn from(value: IfDeclExpression) -> Self {
         Self::IfDecl(value)
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchExpression {
+    pub span: Span<'static>,
+    pub scrutinee: Box<Expression>,
+    pub arms: Vec<MatchArm>,
+}
+
+impl Into<Expression> for MatchExpression {
+    fn into(self) -> Expression {
+        Expression::Match(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchArm {
+    pub span: Span<'static>,
+    pub pattern: Box<Pattern>,
+    pub expression: Box<Expression>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

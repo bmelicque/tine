@@ -131,7 +131,7 @@ pub fn can_be_inlined(node: &ast::Statement) -> bool {
             ast::Expression::If(i) => i.can_be_inlined(),
             ast::Expression::IfDecl(_) => false,
             ast::Expression::Loop(_) => false,
-            // TODO: match statements
+            ast::Expression::Match(_) => false,
             _ => true,
         },
         _ => false,

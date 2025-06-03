@@ -6,7 +6,8 @@ use crate::{
     types::{StructField, Type},
 };
 
-use super::{scopes::VariableInfo, TypeChecker};
+use super::TypeChecker;
+use crate::type_checker::VariableInfo;
 
 impl TypeChecker {
     pub fn visit_expression(&mut self, node: &ast::Expression) -> Type {
@@ -23,6 +24,7 @@ impl TypeChecker {
             ast::Expression::If(node) => self.visit_if_expression(node),
             ast::Expression::IfDecl(node) => self.visit_if_decl_expression(node),
             ast::Expression::Loop(node) => self.visit_loop(node),
+            ast::Expression::Match(node) => self.visit_match_expression(node),
             ast::Expression::NumberLiteral(_) => Type::Number,
             ast::Expression::StringLiteral(_) => Type::String,
             ast::Expression::Tuple(node) => self.visit_tuple_expression(node),

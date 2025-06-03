@@ -35,6 +35,7 @@ impl CodeGenerator {
             ast::Expression::If(node) => self.if_to_swc_expr(node).into(),
             ast::Expression::IfDecl(node) => self.if_decl_to_swc_expr(node).into(),
             ast::Expression::Loop(node) => self.loop_to_swc_expr(node).into(),
+            ast::Expression::Match(node) => self.match_to_swc_expr(node).into(),
             ast::Expression::NumberLiteral(node) => swc::Lit::Num(swc::Number {
                 span: DUMMY_SP,
                 value: node.value,
@@ -288,6 +289,15 @@ impl CodeGenerator {
         self.push_to_block(loop_stmt.into());
         let option = self.into_option(&id);
         self.push_to_block(option);
+        create_ident(&id).into()
+    }
+
+    fn match_to_swc_expr(&mut self, node: ast::MatchExpression) -> swc::Expr {
+        let id = self.add_temp_var_to_current_block();
+        self.enter_block();
+        let stmt = self.match_to_swc_stmt(node, AssignTo::Last(id.clone()));
+        self.exit_block();
+        self.push_to_block(stmt.into());
         create_ident(&id).into()
     }
 

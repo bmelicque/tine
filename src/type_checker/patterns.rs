@@ -136,7 +136,7 @@ impl TypeChecker {
         } = self.unwrap_named_type(&against)
         else {
             self.errors.push(ParseError {
-                message: "Expected enum".into(),
+                message: format!("Cannot match a variant against type {}", against),
                 span: pattern.span,
             });
             return;

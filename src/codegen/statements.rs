@@ -20,6 +20,9 @@ impl CodeGenerator {
                     Some(self.if_decl_to_swc_stmt(expr, AssignTo::None).into())
                 }
                 ast::Expression::Loop(expr) => Some(self.loop_to_swc_stmt(expr, AssignTo::None)),
+                ast::Expression::Match(expr) => {
+                    Some(self.match_to_swc_stmt(expr, AssignTo::None).into())
+                }
                 expr => Some(
                     swc::ExprStmt {
                         span: DUMMY_SP,
@@ -268,6 +271,45 @@ impl CodeGenerator {
         body.stmts.push(decl);
         body.stmts.rotate_right(2);
         body
+    }
+
+    pub fn match_to_swc_stmt(
+        &mut self,
+        mut node: ast::MatchExpression,
+        assign_to: AssignTo,
+    ) -> swc::IfStmt {
+        // FIXME: extract scrutinee in case expensive or not idempotent
+        let mut stmt =
+            self.arm_to_swc_if_stmt(node.arms.pop().unwrap(), node.scrutinee.clone(), None);
+
+        for arm in node.arms.into_iter().rev() {
+            stmt = self.arm_to_swc_if_stmt(arm, node.scrutinee.clone(), Some(Box::new(stmt)));
+        }
+
+        self.if_decl_to_swc_stmt(stmt, assign_to)
+    }
+
+    fn arm_to_swc_if_stmt(
+        &mut self,
+        node: ast::MatchArm,
+        scrutinee: Box<ast::Expression>,
+        alternate: Option<Box<ast::IfDeclExpression>>,
+    ) -> ast::IfDeclExpression {
+        let consequent = Box::new(ast::BlockExpression {
+            span: node.expression.as_span(),
+            statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
+                expression: node.expression.into(),
+            })],
+        });
+        ast::IfDeclExpression {
+            span: node.span,
+            pattern: node.pattern,
+            scrutinee,
+            consequent,
+            alternate: alternate
+                .map(|alt| ast::Alternate::IfDecl(*alt))
+                .map(Box::new),
+        }
     }
 
     fn return_to_swc(&mut self, node: ast::ReturnStatement) -> swc::ReturnStmt {

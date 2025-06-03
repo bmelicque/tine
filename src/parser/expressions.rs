@@ -32,6 +32,7 @@ impl ParserEngine {
             Rule::if_expression => self.parse_if_expression(pair).into(),
             Rule::if_decl_expression => self.parse_if_decl_expression(pair).into(),
             Rule::loop_expression => self.parse_loop(pair).into(),
+            Rule::match_expression => self.parse_match_expression(pair).into(),
             Rule::member_expression => self.parse_field_access_expression(pair).into(),
             Rule::tuple_expression => self.parse_tuple_expression(pair).into(),
             Rule::tuple_indexing => self.parse_tuple_indexing(pair).into(),
@@ -256,6 +257,37 @@ impl ParserEngine {
             Rule::if_expression => self.parse_if_expression(pair).into(),
             Rule::if_decl_expression => self.parse_if_decl_expression(pair).into(),
             rule => unreachable!("unexpected rule {:?}", rule),
+        }
+    }
+
+    fn parse_match_expression(&mut self, pair: Pair<'static, Rule>) -> ast::MatchExpression {
+        assert!(pair.as_rule() == Rule::match_expression);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+        let scrutinee = Box::new(self.parse_expression(inner.next().unwrap()));
+        let arms = inner
+            .next()
+            .unwrap()
+            .into_inner()
+            .map(|arm| self.parse_match_arm(arm))
+            .collect();
+        ast::MatchExpression {
+            span,
+            scrutinee,
+            arms,
+        }
+    }
+
+    fn parse_match_arm(&mut self, pair: Pair<'static, Rule>) -> ast::MatchArm {
+        assert!(pair.as_rule() == Rule::match_arm);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+        let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
+        let expression = Box::new(self.parse_expression(inner.next().unwrap()));
+        ast::MatchArm {
+            span,
+            pattern,
+            expression,
         }
     }
 }
