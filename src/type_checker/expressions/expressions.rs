@@ -194,7 +194,7 @@ impl TypeChecker {
 
         let mut param_types = Vec::new();
         for param in node.params.iter() {
-            let ty = self.resolve_type(&param.ty);
+            let ty = self.resolve_type(&param.type_annotation);
             self.symbols.define(param.name.as_str(), ty.clone(), false);
             param_types.push(ty);
         }
@@ -214,7 +214,11 @@ impl TypeChecker {
             ast::FunctionBody::TypedBlock(node) => node,
         };
 
-        let ty = self.visit_type(&block.ty);
+        let ty = if let Some(ref type_annotation) = block.type_annotation {
+            self.visit_type(type_annotation)
+        } else {
+            Type::Unit
+        };
         self.visit_block_expression(&block.block);
         ty
     }
@@ -543,7 +547,7 @@ mod tests {
             params: vec![
                 ast::FunctionParam {
                     name: ast::Identifier { span: span("x") },
-                    ty: ast::Type::Named(ast::NamedType {
+                    type_annotation: ast::Type::Named(ast::NamedType {
                         name: "number".to_string(),
                         args: None,
                         span: dummy_span(),
@@ -552,7 +556,7 @@ mod tests {
                 },
                 ast::FunctionParam {
                     name: ast::Identifier { span: span("y") },
-                    ty: ast::Type::Named(ast::NamedType {
+                    type_annotation: ast::Type::Named(ast::NamedType {
                         name: "number".to_string(),
                         args: None,
                         span: dummy_span(),

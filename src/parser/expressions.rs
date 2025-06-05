@@ -28,6 +28,7 @@ impl ParserEngine {
                 self.parse_binary_ltr_expression(pair).into()
             }
             Rule::exponentiation => self.parse_exponentiation(pair).into(),
+            Rule::function_expression => self.parse_function_expression(pair).into(),
             Rule::value_identifier => self.parse_identifier(pair).into(),
             Rule::if_expression => self.parse_if_expression(pair).into(),
             Rule::if_decl_expression => self.parse_if_decl_expression(pair).into(),
@@ -176,6 +177,65 @@ impl ParserEngine {
         match node {
             ast::Expression::FieldAccess(n) => n,
             _ => panic!("Unexpected variant!"),
+        }
+    }
+
+    fn parse_function_expression(&mut self, pair: Pair<'static, Rule>) -> ast::FunctionExpression {
+        assert_eq!(pair.as_rule(), Rule::function_expression);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+        let params = self.parse_function_params(inner.next().unwrap());
+        let body = self.parse_function_body(inner.next().unwrap());
+        ast::FunctionExpression { span, params, body }
+    }
+
+    fn parse_function_params(&mut self, pair: Pair<'static, Rule>) -> Vec<ast::FunctionParam> {
+        assert_eq!(pair.as_rule(), Rule::parameter_list);
+        pair.into_inner()
+            .map(|param_pair| self.parse_function_param(param_pair))
+            .collect()
+    }
+
+    fn parse_function_param(&mut self, pair: Pair<'static, Rule>) -> ast::FunctionParam {
+        assert_eq!(pair.as_rule(), Rule::parameter);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+        let name = self.parse_identifier(inner.next().unwrap());
+        let type_annotation = self.parse_type(inner.next().unwrap());
+        ast::FunctionParam {
+            span,
+            name,
+            type_annotation,
+        }
+    }
+
+    fn parse_function_body(&mut self, pair: Pair<'static, Rule>) -> ast::FunctionBody {
+        match pair.as_rule() {
+            Rule::typed_block => self.parse_typed_block(pair).into(),
+            Rule::expression => self.parse_expression(pair).into(),
+            rule => unreachable!("unexpected rule {:?}", rule),
+        }
+    }
+
+    fn parse_typed_block(&mut self, pair: Pair<'static, Rule>) -> ast::TypedBlock {
+        assert_eq!(pair.as_rule(), Rule::typed_block);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+        let mut type_annotation = None;
+        let mut block = ast::BlockExpression {
+            span,
+            statements: vec![],
+        };
+        while let Some(next) = inner.next() {
+            match next.as_rule() {
+                Rule::type_annotation => type_annotation = Some(self.parse_type(next)),
+                Rule::block => block = self.parse_block(next),
+                rule => unreachable!("unexpected rule {:?}", rule),
+            }
+        }
+        ast::TypedBlock {
+            type_annotation,
+            block,
         }
     }
 

@@ -1,11 +1,19 @@
 - accept dynamic in some expressions? `if some { [""] } else { [] }`
 
+- fix codegen for declaring complex patterns `User(name, role: Role.Admin(acl))`
+- fix codegen for anonymous structs in arrays `[]User((name, role))`
+
 - match numbers
 - match strings
 - match arrays
+
 - function expressions
 - handle return in functions (check nested blocks)
 - function call
+- HOF
+
+  - missing type annotation in predicates (e.g. `map(array, (el, i) => {})`)
+  - infer types
 
 - else after any option?
   - (if expression) else

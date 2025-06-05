@@ -408,7 +408,7 @@ impl Into<Expression> for FunctionExpression {
 pub struct FunctionParam {
     pub span: Span<'static>,
     pub name: Identifier,
-    pub ty: Type,
+    pub type_annotation: Type,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -425,7 +425,7 @@ impl From<Expression> for FunctionBody {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypedBlock {
-    pub ty: Type,
+    pub type_annotation: Option<Type>,
     pub block: BlockExpression,
 }
 

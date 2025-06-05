@@ -81,10 +81,10 @@ loop_expression = { for_expression | for_in_expression }
 for_expression = { "for" ~ expression ~ block }
 for_in_expression = { "for" ~ pattern ~ "in" ~ expression ~ block }
 
-function_expression = { parameter_list? ~ "=>" ~ (function_body | expression)? }
-function_body = { type_annotation? ~ block }
+function_expression = { parameter_list ~ "=>" ~ (typed_block | expression) }
+typed_block = { type_annotation? ~ block }
 parameter_list = { "(" ~ (parameter ~ ("," ~ parameter)*)? ~ ")" }
-parameter = { value_identifier ~ type_annotation? }
+parameter = { value_identifier ~ type_annotation }
 
 // Patterns
 pattern = { tuple_pattern | pattern_element }
