@@ -1,6 +1,6 @@
 use crate::ast::{
     Alternate, BlockExpression, BreakStatement, Expression, IfDeclExpression, IfExpression, Loop,
-    Statement,
+    ReturnStatement, Statement,
 };
 
 fn find_breaks(expr: Expression, stmts: &mut Vec<BreakStatement>) {
@@ -58,6 +58,65 @@ impl Loop {
         match self {
             Loop::For(expr) => expr.body.find_breaks(stmts),
             Loop::ForIn(expr) => expr.body.find_breaks(stmts),
+        }
+    }
+}
+
+pub fn find_returns(expr: Expression, stmts: &mut Vec<ReturnStatement>) {
+    match expr {
+        Expression::Block(expr) => expr.find_returns(stmts),
+        Expression::If(expr) => expr.find_returns(stmts),
+        Expression::IfDecl(expr) => expr.find_returns(stmts),
+        Expression::Loop(expr) => expr.find_returns(stmts),
+        _ => (),
+    }
+}
+
+impl BlockExpression {
+    pub fn find_returns(&self, stmts: &mut Vec<ReturnStatement>) {
+        for statement in self.statements.iter() {
+            match statement {
+                Statement::Return(stmt) => stmts.push(stmt.clone()),
+                Statement::Expression(ref expr) => find_returns(*expr.expression.clone(), stmts),
+                _ => (),
+            }
+        }
+    }
+}
+
+impl IfExpression {
+    pub fn find_returns(&self, stmts: &mut Vec<ReturnStatement>) {
+        self.consequent.find_returns(stmts);
+        if let Some(ref alternate) = self.alternate {
+            alternate.find_returns(stmts);
+        }
+    }
+}
+
+impl IfDeclExpression {
+    pub fn find_returns(&self, stmts: &mut Vec<ReturnStatement>) {
+        self.consequent.find_returns(stmts);
+        if let Some(ref alternate) = self.alternate {
+            alternate.find_returns(stmts);
+        }
+    }
+}
+
+impl Alternate {
+    pub fn find_returns(&self, stmts: &mut Vec<ReturnStatement>) {
+        match self {
+            Alternate::Block(expr) => expr.find_returns(stmts),
+            Alternate::If(expr) => expr.find_returns(stmts),
+            Alternate::IfDecl(expr) => expr.find_returns(stmts),
+        }
+    }
+}
+
+impl Loop {
+    pub fn find_returns(&self, stmts: &mut Vec<ReturnStatement>) {
+        match self {
+            Loop::For(expr) => expr.body.find_returns(stmts),
+            Loop::ForIn(expr) => expr.body.find_returns(stmts),
         }
     }
 }

@@ -6,8 +6,7 @@
 - match strings
 - match arrays
 
-- function expressions
-- handle return in functions (check nested blocks)
+- annotated AST (check FIXMEs)
 - function call
 - HOF
 

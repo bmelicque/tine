@@ -217,10 +217,37 @@ impl TypeChecker {
         let ty = if let Some(ref type_annotation) = block.type_annotation {
             self.visit_type(type_annotation)
         } else {
-            Type::Unit
+            Type::Void
         };
         self.visit_block_expression(&block.block);
+        self.check_returns(block, &ty);
         ty
+    }
+
+    // FIXME: this will re-visit the nodes!
+    fn check_returns(&mut self, body: &ast::TypedBlock, expected: &Type) {
+        let mut returns = Vec::<ast::ReturnStatement>::new();
+        body.block.find_returns(&mut returns);
+
+        if returns.len() == 0 && *expected != Type::Void {
+            self.errors.push(ParseError {
+                message: "A function with return annotation needs a return value".into(),
+                span: body.block.span,
+            });
+        }
+
+        for ret in returns {
+            let ty = match ret.value {
+                Some(value) => self.visit_expression(&value),
+                None => Type::Void,
+            };
+            if !ty.is_assignable_to(expected) {
+                self.errors.push(ParseError {
+                    message: format!("Expected type {}, got {}", expected, ty),
+                    span: ret.span,
+                })
+            }
+        }
     }
 
     fn visit_identifier(&mut self, node: &ast::Identifier) -> Type {
