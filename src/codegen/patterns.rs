@@ -61,11 +61,9 @@ impl CodeGenerator {
             span: DUMMY_SP,
             props: fields
                 .into_iter()
-                .filter(|field| {
-                    let Some(ref pattern) = field.pattern else {
-                        return true;
-                    };
-                    !pattern.is_refutable()
+                .filter(|field| match field.pattern {
+                    Some(ast::Pattern::Literal(_)) => false,
+                    _ => true,
                 })
                 .map(|field| self.struct_pattern_field_to_swc(field))
                 .collect(),

@@ -1,6 +1,5 @@
 - accept dynamic in some expressions? `if some { [""] } else { [] }`
 
-- fix codegen for declaring complex patterns `User(name, role: Role.Admin(acl))`
 - fix codegen for anonymous structs in arrays `[]User((name, role))`
 
 - match numbers
