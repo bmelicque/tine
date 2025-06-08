@@ -1,13 +1,9 @@
-use crate::{
-    ast::{self, StructDefinitionField},
-    parser::parser::ParseError,
-    types::{StructField, SumVariant, TraitMethod, Type},
-};
+use crate::{ast, parser::parser::ParseError, types};
 
 use super::{scopes::TypeMetadata, TypeChecker};
 
 impl TypeChecker {
-    pub fn visit_type_declaration(&mut self, node: &ast::TypeAlias) -> Type {
+    pub fn visit_type_declaration(&mut self, node: &ast::TypeAlias) -> types::Type {
         if let Some(ref type_params) = node.params {
             for type_param in type_params {
                 self.type_registry.define_generic(&type_param);
@@ -30,66 +26,69 @@ impl TypeChecker {
             }
         }
 
-        Type::Void
+        types::Type::Void
     }
 
-    fn visit_type_definition(&mut self, node: &ast::TypeDefinition) -> Type {
+    fn visit_type_definition(&mut self, node: &ast::TypeDefinition) -> types::Type {
         match node {
-            ast::TypeDefinition::Enum(e) => self.visit_enum_definition(e),
-            ast::TypeDefinition::Struct(s) => self.visit_struct_definition(s),
-            ast::TypeDefinition::Trait(t) => self.visit_trait_definition(t),
+            ast::TypeDefinition::Enum(e) => self.visit_enum_definition(e).into(),
+            ast::TypeDefinition::Struct(s) => self.visit_struct_definition(s).into(),
+            ast::TypeDefinition::Trait(t) => self.visit_trait_definition(t).into(),
             ast::TypeDefinition::Type(t) => self.visit_type(t),
         }
     }
 
-    fn visit_enum_definition(&mut self, node: &ast::EnumDefinition) -> Type {
+    fn visit_enum_definition(&mut self, node: &ast::EnumDefinition) -> types::EnumType {
         let variants = node
             .variants
             .iter()
             .map(|variant| self.visit_variant_definition(variant))
             .collect();
 
-        Type::Sum { variants }
+        types::EnumType { variants }
     }
 
-    fn visit_variant_definition(&mut self, node: &ast::VariantDefinition) -> SumVariant {
-        let def = match node {
-            ast::VariantDefinition::Struct(s) => self.visit_struct_definition(&s.def),
+    fn visit_variant_definition(&mut self, node: &ast::VariantDefinition) -> types::Variant {
+        let def: types::Type = match node {
+            ast::VariantDefinition::Struct(s) => self.visit_struct_definition(&s.def).into(),
             ast::VariantDefinition::Tuple(t) => {
                 let elements = t.elements.iter().map(|el| self.visit_type(el)).collect();
-                Type::Tuple(elements)
+                types::TupleType { elements }.into()
             }
-            ast::VariantDefinition::Unit(_) => Type::Unit,
+            ast::VariantDefinition::Unit(_) => types::Type::Unit,
         };
-        SumVariant {
+        types::Variant {
             name: node.as_name(),
             def,
         }
     }
 
-    fn visit_struct_definition(&mut self, node: &ast::StructDefinition) -> Type {
+    fn visit_struct_definition(&mut self, node: &ast::StructDefinition) -> types::StructType {
         let fields = node
             .fields
             .iter()
             .map(|field| self.visit_struct_definition_field(field))
             .collect();
-        Type::Struct { fields }
+        types::StructType { fields }
     }
 
-    fn visit_struct_definition_field(&mut self, field: &ast::StructDefinitionField) -> StructField {
+    fn visit_struct_definition_field(
+        &mut self,
+        field: &ast::StructDefinitionField,
+    ) -> types::StructField {
         let name = field.as_name();
         let def = match field {
             ast::StructDefinitionField::Mandatory(ref field) => self.visit_type(&field.definition),
             ast::StructDefinitionField::Optional(field) => self.visit_expression(&field.default),
         };
-        StructField {
+        types::StructField {
             name,
             def,
             optional: field.is_optional(),
         }
     }
 
-    fn visit_trait_definition(&mut self, node: &ast::TraitDefinition) -> Type {
+    fn visit_trait_definition(&mut self, node: &ast::TraitDefinition) -> types::TraitType {
         self.type_registry.current_self = Some(node.name.clone());
 
         let method_types = node
@@ -101,17 +100,17 @@ impl TypeChecker {
 
         self.type_registry.current_self = None;
 
-        Type::Trait {
+        types::TraitType {
             methods: method_types,
         }
     }
 
     fn visit_trait_method_definition(
         &mut self,
-        node: &StructDefinitionField,
-    ) -> Option<TraitMethod> {
+        node: &ast::StructDefinitionField,
+    ) -> Option<types::TraitMethod> {
         let as_field = self.visit_struct_definition_field(node);
-        if !matches!(as_field.def, Type::Function { .. }) {
+        if !matches!(as_field.def, types::Type::Function { .. }) {
             self.errors.push(ParseError {
                 message: format!(
                     "Only methods are allowed in trait definitions, found {}",
@@ -121,7 +120,7 @@ impl TypeChecker {
             });
             return None;
         }
-        Some(TraitMethod {
+        Some(types::TraitMethod {
             name: as_field.name,
             def: as_field.def,
         })
@@ -132,7 +131,7 @@ impl TypeChecker {
 mod tests {
     use super::*;
     use crate::ast;
-    use crate::types::{StructField, SumVariant, TraitMethod, Type};
+    use crate::types::{StructField, TraitMethod, Type, Variant};
 
     fn create_type_checker() -> TypeChecker {
         TypeChecker::new()
@@ -159,11 +158,11 @@ mod tests {
         };
 
         let result = checker.visit_type_declaration(&type_alias);
-        assert_eq!(result, Type::Void);
+        assert_eq!(result, types::Type::Void);
         assert!(checker.errors.is_empty());
 
         let defined_type = checker.type_registry.lookup("MyType").unwrap();
-        assert_eq!(defined_type, Type::Number);
+        assert_eq!(defined_type, types::Type::Number);
     }
 
     #[test]
@@ -200,21 +199,21 @@ mod tests {
         let result = checker.visit_enum_definition(&enum_definition);
         assert_eq!(
             result,
-            Type::Sum {
+            types::EnumType {
                 variants: vec![
-                    SumVariant {
+                    Variant {
                         name: "Variant1".to_string(),
-                        def: Type::Unit,
+                        def: types::Type::Unit,
                     },
-                    SumVariant {
+                    Variant {
                         name: "Variant2".to_string(),
-                        def: Type::Struct {
-                            fields: vec![StructField {
+                        def: types::Type::Struct(types::StructType {
+                            fields: vec![types::StructField {
                                 name: "field".to_string(),
-                                def: Type::Number,
+                                def: types::Type::Number,
                                 optional: false,
                             }],
-                        },
+                        }),
                     },
                 ],
             }
@@ -251,16 +250,16 @@ mod tests {
         let result = checker.visit_struct_definition(&struct_definition);
         assert_eq!(
             result,
-            Type::Struct {
+            types::StructType {
                 fields: vec![
                     StructField {
                         name: "field1".to_string(),
-                        def: Type::Number,
+                        def: types::Type::Number,
                         optional: false,
                     },
                     StructField {
                         name: "field2".to_string(),
-                        def: Type::Number,
+                        def: types::Type::Number,
                         optional: true,
                     },
                 ],
@@ -302,13 +301,13 @@ mod tests {
         let result = checker.visit_trait_definition(&trait_definition);
         assert_eq!(
             result,
-            Type::Trait {
+            types::TraitType {
                 methods: vec![TraitMethod {
                     name: "method".to_string(),
-                    def: Type::Function {
+                    def: types::Type::Function(types::FunctionType {
                         params: vec![Type::Number],
                         return_type: Box::new(Type::Void),
-                    },
+                    }),
                 }],
             }
         );
@@ -325,7 +324,7 @@ mod tests {
         }));
 
         let result = checker.visit_type_definition(&type_definition);
-        assert_eq!(result, Type::String);
+        assert_eq!(result, types::Type::String);
         assert!(checker.errors.is_empty());
     }
 }

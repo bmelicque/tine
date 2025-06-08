@@ -1,16 +1,16 @@
-use crate::{ast, parser::parser::ParseError, types::Type};
+use crate::{ast, parser::parser::ParseError, types};
 
 use super::TypeChecker;
 
 impl TypeChecker {
-    pub fn visit_loop(&mut self, node: &ast::Loop) -> Type {
+    pub fn visit_loop(&mut self, node: &ast::Loop) -> types::Type {
         match node {
             ast::Loop::For(node) => self.visit_for_expression(node),
             ast::Loop::ForIn(node) => self.visit_for_in_expression(node),
         }
     }
 
-    fn visit_for_expression(&mut self, node: &ast::ForExpression) -> Type {
+    fn visit_for_expression(&mut self, node: &ast::ForExpression) -> types::Type {
         self.visit_condition(&node.condition);
         self.symbols.enter_scope();
         let ty = self.visit_loop_body(&node.body);
@@ -18,19 +18,19 @@ impl TypeChecker {
         ty
     }
 
-    fn visit_for_in_expression(&mut self, node: &ast::ForInExpression) -> Type {
+    fn visit_for_in_expression(&mut self, node: &ast::ForInExpression) -> types::Type {
         let inferred_type = match self.visit_expression(&node.iterable) {
-            Type::Array(ty) => *ty.clone(),
+            types::Type::Array(ty) => *ty.element.clone(),
             ty => {
                 self.errors.push(ParseError {
                     message: format!("Type {} is not iterable", ty),
                     span: node.iterable.as_span(),
                 });
-                Type::Unknown
+                types::Type::Unknown
             }
         };
         self.symbols.enter_scope();
-        let mut variables = Vec::<(String, Type)>::new();
+        let mut variables = Vec::<(String, types::Type)>::new();
         self.match_pattern(&node.pattern, inferred_type, &mut variables);
         for (name, ty) in variables {
             self.symbols.define(&name, ty, false);
@@ -40,12 +40,12 @@ impl TypeChecker {
         ty
     }
 
-    fn visit_loop_body(&mut self, node: &ast::BlockExpression) -> Type {
+    fn visit_loop_body(&mut self, node: &ast::BlockExpression) -> types::Type {
         self.visit_block_expression(node);
         let mut breaks = Vec::<ast::BreakStatement>::new();
         node.find_breaks(&mut breaks);
         if breaks.len() == 0 {
-            return Type::Unit;
+            return types::Type::Unit;
         }
 
         let first = breaks.first().unwrap();
@@ -61,14 +61,14 @@ impl TypeChecker {
             }
         }
 
-        Type::Option(Box::new(ty))
+        types::OptionType { some: Box::new(ty) }.into()
     }
 
-    fn break_type(&mut self, stmt: &ast::BreakStatement) -> Type {
+    fn break_type(&mut self, stmt: &ast::BreakStatement) -> types::Type {
         stmt.value
             .as_ref()
             // FIXME: this report possible errors a second time!
             .map(|expr| self.visit_expression(&expr))
-            .unwrap_or(Type::Unit)
+            .unwrap_or(types::Type::Unit)
     }
 }

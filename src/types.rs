@@ -2,45 +2,146 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
-    String,
-    Number,
+    Array(ArrayType),
     Boolean,
-    Void,
-    Function {
-        params: Vec<Type>,
-        return_type: Box<Type>,
-    },
-    Named {
-        name: String,
-        args: Vec<Type>,
-    },
-    Array(Box<Type>),
-    Struct {
-        fields: Vec<StructField>,
-    },
-    Sum {
-        variants: Vec<SumVariant>,
-    },
-    Trait {
-        methods: Vec<TraitMethod>,
-    },
-    Tuple(Vec<Type>),
-    Map {
-        key: Box<Type>,
-        value: Box<Type>,
-    },
-    Option(Box<Type>),
-    Reference(Box<Type>),
-    Result {
-        error: Option<Box<Type>>,
-        ok: Box<Type>,
-    },
-    Dynamic,         // Represents a type that will have to be inferred later
-    Generic(String), // Represents a generic type parameter
-    SelfType,        // Represents the current type in a method context
+    Dynamic, // Represents a type that will have to be inferred later
+    Enum(EnumType),
+    Function(FunctionType),
+    Generic(GenericType), // Represents a generic type parameter
+    Named(NamedType),
+    Map(MapType),
+    Number,
+    Option(OptionType),
+    Reference(ReferenceType),
+    Result(ResultType),
+    SelfType, // Represents the current type in a method context
+    String,
+    Struct(StructType),
+    Trait(TraitType),
+    Tuple(TupleType),
     Unit,
-
     Unknown,
+    Void,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArrayType {
+    pub element: Box<Type>,
+}
+
+impl Into<Type> for ArrayType {
+    fn into(self) -> Type {
+        Type::Array(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumType {
+    pub variants: Vec<Variant>,
+}
+
+impl Into<Type> for EnumType {
+    fn into(self) -> Type {
+        Type::Enum(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Variant {
+    pub name: String,
+    pub def: Type,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionType {
+    pub params: Vec<Type>,
+    pub return_type: Box<Type>,
+}
+
+impl Into<Type> for FunctionType {
+    fn into(self) -> Type {
+        Type::Function(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GenericType {
+    pub name: String,
+}
+
+impl Into<Type> for GenericType {
+    fn into(self) -> Type {
+        Type::Generic(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapType {
+    pub key: Box<Type>,
+    pub value: Box<Type>,
+}
+
+impl Into<Type> for MapType {
+    fn into(self) -> Type {
+        Type::Map(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct NamedType {
+    pub name: String,
+    pub args: Vec<Type>,
+}
+
+impl Into<Type> for NamedType {
+    fn into(self) -> Type {
+        Type::Named(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OptionType {
+    pub some: Box<Type>,
+}
+
+impl Into<Type> for OptionType {
+    fn into(self) -> Type {
+        Type::Option(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReferenceType {
+    pub target: Box<Type>,
+}
+
+impl Into<Type> for ReferenceType {
+    fn into(self) -> Type {
+        Type::Reference(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ResultType {
+    pub ok: Box<Type>,
+    pub error: Option<Box<Type>>,
+}
+
+impl Into<Type> for ResultType {
+    fn into(self) -> Type {
+        Type::Result(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructType {
+    pub fields: Vec<StructField>,
+}
+
+impl Into<Type> for StructType {
+    fn into(self) -> Type {
+        Type::Struct(self)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -51,15 +152,31 @@ pub struct StructField {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct SumVariant {
-    pub name: String,
-    pub def: Type,
+pub struct TraitType {
+    pub methods: Vec<TraitMethod>,
+}
+
+impl Into<Type> for TraitType {
+    fn into(self) -> Type {
+        Type::Trait(self)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TraitMethod {
     pub name: String,
     pub def: Type,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TupleType {
+    pub elements: Vec<Type>,
+}
+
+impl Into<Type> for TupleType {
+    fn into(self) -> Type {
+        Type::Tuple(self)
+    }
 }
 
 impl Type {
@@ -75,81 +192,84 @@ impl Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Type::String => write!(f, "string"),
-            Type::Number => write!(f, "number"),
+            Type::Array(ty) => write!(f, "[]{}", ty.element),
             Type::Boolean => write!(f, "boolean"),
-            Type::Void => write!(f, "void"),
-            Type::Function {
-                params,
-                return_type,
-            } => {
-                let params_str = params
-                    .iter()
-                    .map(|p| p.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                write!(f, "({}) => {}", params_str, return_type)
-            }
-            Type::Named { name, args } => {
-                if args.len() > 0 {
-                    let args_str = args
-                        .iter()
-                        .map(|a| a.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    write!(f, "{}[{}]", name, args_str)
-                } else {
-                    write!(f, "{}", name)
-                }
-            }
-            Type::Array(inner) => write!(f, "[]{}", inner),
-            Type::Struct { fields } => {
-                let fields_str = fields
-                    .iter()
-                    .map(|field| format!("{}: {}", field.name, field.def))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                write!(f, "{{ {} }}", fields_str)
-            }
-            Type::Sum { variants } => {
-                let variants_str = variants
+            Type::Dynamic => write!(f, "any"),
+            Type::Enum(ty) => {
+                let variants_str = ty
+                    .variants
                     .iter()
                     .map(|variant| format!("{} {{{}}}", variant.name, variant.def))
                     .collect::<Vec<_>>()
                     .join(" | ");
                 write!(f, "{}", variants_str)
             }
-            Type::Trait { methods } => {
-                let methods_str = methods
+            Type::Function(ty) => {
+                let params_str = ty
+                    .params
+                    .iter()
+                    .map(|p| p.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "({}) => {}", params_str, ty.return_type)
+            }
+            Type::Generic(ty) => write!(f, "{}", ty.name),
+            Type::Map(ty) => write!(f, "{}#{}", ty.key, ty.value),
+            Type::Named(ty) => {
+                if ty.args.len() == 0 {
+                    return write!(f, "{}", ty.name);
+                }
+
+                let args_str = ty
+                    .args
+                    .iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "{}[{}]", ty.name, args_str)
+            }
+            Type::Number => write!(f, "number"),
+            Type::Option(ty) => write!(f, "?{}", ty.some),
+            Type::Reference(ty) => write!(f, "&{}", ty.target),
+            Type::Result(ty) => {
+                if let Some(error) = &ty.error {
+                    write!(f, "{}!{}", error, ty.ok)
+                } else {
+                    write!(f, "!{}", ty.ok)
+                }
+            }
+            Type::SelfType => write!(f, "Self"),
+            Type::String => write!(f, "string"),
+            Type::Struct(ty) => {
+                let fields_str = ty
+                    .fields
+                    .iter()
+                    .map(|field| format!("{}: {}", field.name, field.def))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "{{ {} }}", fields_str)
+            }
+            Type::Trait(ty) => {
+                let methods_str = ty
+                    .methods
                     .iter()
                     .map(|method| format!("{}: {}", method.name, method.def))
                     .collect::<Vec<_>>()
                     .join(", ");
                 write!(f, ".{{ {} }}", methods_str)
             }
-            Type::Tuple(types) => {
-                let types_str = types
+            Type::Tuple(ty) => {
+                let types_str = ty
+                    .elements
                     .iter()
                     .map(|t| t.to_string())
                     .collect::<Vec<_>>()
                     .join(", ");
                 write!(f, "({})", types_str)
             }
-            Type::Map { key, value } => write!(f, "{}#{}", key, value),
-            Type::Option(inner) => write!(f, "?{}", inner),
-            Type::Reference(inner) => write!(f, "&{}", inner),
-            Type::Result { error, ok } => {
-                if let Some(error) = error {
-                    write!(f, "{}!{}", error, ok)
-                } else {
-                    write!(f, "!{}", ok)
-                }
-            }
-            Type::Dynamic => write!(f, "any"),
-            Type::Generic(name) => write!(f, "{}", name),
-            Type::SelfType => write!(f, "Self"),
             Type::Unknown => write!(f, "unknown"),
             Type::Unit => write!(f, "()"),
+            Type::Void => write!(f, "void"),
         }
     }
 }

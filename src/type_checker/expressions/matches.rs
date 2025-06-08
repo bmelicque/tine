@@ -4,7 +4,7 @@ use crate::{
     ast,
     parser::parser::ParseError,
     type_checker::TypeChecker,
-    types::{SumVariant, Type},
+    types::{self, Type, Variant},
 };
 
 impl TypeChecker {
@@ -48,7 +48,7 @@ impl TypeChecker {
             return;
         }
         match self.unwrap_named_type(&against) {
-            Type::Sum { variants } => self.check_variants_exhaustiveness(node, &variants),
+            types::Type::Enum(ty) => self.check_variants_exhaustiveness(node, &ty.variants),
             ty => self.errors.push(ParseError {
                 message: format!("Cannot match against type {} (not implemented yet)", ty),
                 span: node.span,
@@ -59,7 +59,7 @@ impl TypeChecker {
     fn check_variants_exhaustiveness(
         &mut self,
         node: &ast::MatchExpression,
-        variants: &Vec<SumVariant>,
+        variants: &Vec<Variant>,
     ) {
         let mut names = HashSet::new();
         for variant in variants {

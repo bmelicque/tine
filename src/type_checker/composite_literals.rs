@@ -1,67 +1,71 @@
 use core::panic;
 use std::collections::HashMap;
 
-use crate::{
-    ast::{self, StructLiteralField, VariantLiteralBody},
-    parser::parser::ParseError,
-    types::{StructField, Type},
-};
+use crate::{ast, parser::parser::ParseError, types};
 
 use super::{scopes::TypeRegistry, TypeChecker};
 
 impl TypeChecker {
-    pub fn visit_composite_literal(&mut self, node: &ast::CompositeLiteral) -> Type {
+    pub fn visit_composite_literal(&mut self, node: &ast::CompositeLiteral) -> types::Type {
         match node {
             ast::CompositeLiteral::AnonymousStruct(node) => {
-                self.visit_anonymous_struct_literal(node)
+                self.visit_anonymous_struct_literal(node).into()
             }
-            ast::CompositeLiteral::Array(node) => self.visit_array_literal(node),
-            ast::CompositeLiteral::Map(node) => self.visit_map_literal(node),
-            ast::CompositeLiteral::Option(node) => self.visit_option_literal(node),
+            ast::CompositeLiteral::Array(node) => self.visit_array_literal(node).into(),
+            ast::CompositeLiteral::Map(node) => self.visit_map_literal(node).into(),
+            ast::CompositeLiteral::Option(node) => self.visit_option_literal(node).into(),
             ast::CompositeLiteral::Struct(node) => self.visit_struct_literal(node),
             ast::CompositeLiteral::Variant(node) => self.visit_variant_literal(node),
         }
     }
 
-    pub fn visit_anonymous_struct_literal(&mut self, node: &ast::AnonymousStructLiteral) -> Type {
+    pub fn visit_anonymous_struct_literal(
+        &mut self,
+        node: &ast::AnonymousStructLiteral,
+    ) -> types::StructType {
         let fields = node
             .fields
             .iter()
             .map(|field| {
                 let name = field.prop.clone();
                 let def = self.visit_expression(&field.value);
-                StructField {
+                types::StructField {
                     name,
                     def,
                     optional: true,
                 }
             })
             .collect();
-        Type::Struct { fields }
+        types::StructType { fields }
     }
 
-    pub fn visit_array_literal(&mut self, node: &ast::ArrayLiteral) -> Type {
+    pub fn visit_array_literal(&mut self, node: &ast::ArrayLiteral) -> types::ArrayType {
         let ty = self.visit_array_type(&node.ty);
-        let Type::Array(mut inner) = ty else {
+        let types::Type::Array(array) = ty else {
             panic!("Expected an array type");
         };
+        let mut element = array.element;
 
         node.elements
             .iter()
-            .for_each(|el| self.visit_array_literal_element(el, &mut inner));
+            .for_each(|el| self.visit_array_literal_element(el, &mut element));
 
-        if matches!(inner.as_ref(), Type::Dynamic) {
+        if matches!(element.as_ref(), types::Type::Dynamic) {
             self.errors.push(ParseError {
                 message: "Cannot infer type".to_string(),
                 span: node.span,
             });
-            inner = Box::new(Type::Unknown);
+            element = Box::new(types::Type::Unknown);
         }
 
-        Type::Array(inner)
+        types::ArrayType { element }
     }
 
-    fn visit_array_literal_element(&mut self, node: &ast::ExpressionOrAnonymous, inner: &mut Type) {
+    fn visit_array_literal_element(
+        &mut self,
+        node: &ast::ExpressionOrAnonymous,
+        inner: &mut types::Type,
+    ) {
         let value_ty = self.visit_expression_or_anonymous(node);
         match self.check_dynamic_type(&value_ty, inner) {
             Ok(ty) => *inner = (*ty).clone(),
@@ -74,11 +78,12 @@ impl TypeChecker {
         }
     }
 
-    pub fn visit_map_literal(&mut self, node: &ast::MapLiteral) -> Type {
+    pub fn visit_map_literal(&mut self, node: &ast::MapLiteral) -> types::MapType {
         let ty = self.visit_map_type(&node.ty);
-        let Type::Map { mut key, mut value } = ty else {
+        let types::Type::Map(map) = ty else {
             panic!("Expected a map type");
         };
+        let types::MapType { mut key, mut value } = map;
 
         for entry in node.entries.iter() {
             let entry_key = self.visit_expression(&entry.key);
@@ -105,19 +110,20 @@ impl TypeChecker {
             }
         }
 
-        Type::Map { key, value }
+        types::MapType { key, value }
     }
 
-    pub fn visit_option_literal(&mut self, node: &ast::OptionLiteral) -> Type {
+    pub fn visit_option_literal(&mut self, node: &ast::OptionLiteral) -> types::OptionType {
         let ty = self.visit_option_type(&node.ty);
-        let Type::Option(mut inner) = ty else {
+        let types::Type::Option(option) = ty else {
             panic!("Expected an option type");
         };
+        let mut some = option.some;
 
         if let Some(ref value) = node.value {
             let value_ty = self.visit_expression_or_anonymous(value);
-            match self.check_dynamic_type(&value_ty, &inner) {
-                Ok(ty) => inner = ty,
+            match self.check_dynamic_type(&value_ty, &some) {
+                Ok(ty) => some = ty,
                 Err(message) => {
                     self.errors.push(ParseError {
                         message,
@@ -127,36 +133,36 @@ impl TypeChecker {
             }
         }
 
-        if matches!(inner.as_ref(), Type::Dynamic) {
+        if matches!(some.as_ref(), types::Type::Dynamic) {
             self.errors.push(ParseError {
                 message: "Cannot infer type".to_string(),
                 span: node.span,
             });
-            inner = Box::new(Type::Unknown);
+            some = Box::new(types::Type::Unknown);
         }
 
-        Type::Option(inner)
+        types::OptionType { some }
     }
 
-    pub fn visit_struct_literal(&mut self, node: &ast::StructLiteral) -> Type {
+    pub fn visit_struct_literal(&mut self, node: &ast::StructLiteral) -> types::Type {
         let ty = self.visit_named_type(&node.ty);
-        let Type::Named { ref name, ref args } = ty else {
+        let types::Type::Named(ref named) = ty else {
             panic!("Expected a named type");
         };
 
-        let Type::Struct { fields } = self.type_registry.lookup(&name).unwrap() else {
+        let types::Type::Struct(st) = self.type_registry.lookup(&named.name).unwrap() else {
             self.errors.push(ParseError {
                 message: format!("Expected a structured type, found {:?}", ty),
                 span: node.span,
             });
-            return Type::Unknown;
+            return types::Type::Unknown;
         };
 
         // setup generics registry
-        let names = self.type_registry.get_type_params(name);
-        let mut generics_registry = TypeRegistry::create(&names, &args);
+        let names = self.type_registry.get_type_params(&named.name);
+        let mut generics_registry = TypeRegistry::create(&names, &named.args);
 
-        self.visit_struct_body(fields, &node.fields, &mut generics_registry);
+        self.visit_struct_body(st.fields, &node.fields, &mut generics_registry);
 
         // TODO: adjust type using inferred generics
         ty
@@ -164,8 +170,8 @@ impl TypeChecker {
 
     fn visit_struct_body(
         &mut self,
-        expected: Vec<StructField>,
-        got: &Vec<StructLiteralField>,
+        expected: Vec<types::StructField>,
+        got: &Vec<ast::StructLiteralField>,
         registry: &mut TypeRegistry,
     ) {
         // set up map of expected field types
@@ -180,8 +186,8 @@ impl TypeChecker {
 
     fn visit_field_assignment(
         &mut self,
-        field: &StructLiteralField,
-        expected_map: &HashMap<&String, Type>,
+        field: &ast::StructLiteralField,
+        expected_map: &HashMap<&String, types::Type>,
         generics_registry: &mut TypeRegistry,
     ) {
         let name = &field.prop;
@@ -195,10 +201,10 @@ impl TypeChecker {
             return;
         };
 
-        if let Type::Generic(ref name) = expected {
+        if let types::Type::Generic(ref ty) = expected {
             // if type is generic there should be something in the registry
-            let current = generics_registry.types.get_mut(name).unwrap();
-            if matches!(current, Type::Dynamic) {
+            let current = generics_registry.types.get_mut(&ty.name).unwrap();
+            if matches!(current, types::Type::Dynamic) {
                 *current = value;
                 return;
             }
@@ -213,22 +219,26 @@ impl TypeChecker {
         }
     }
 
-    fn visit_variant_literal(&mut self, node: &ast::VariantLiteral) -> Type {
+    fn visit_variant_literal(&mut self, node: &ast::VariantLiteral) -> types::Type {
         let ty = self.visit_named_type(&node.ty);
         let unwrapped = self.unwrap_named_type(&ty);
-        let Type::Sum { variants } = unwrapped else {
+        let types::Type::Enum(enum_type) = unwrapped else {
             self.errors.push(ParseError {
                 message: format!("Sum type expected, got {}", unwrapped),
                 span: node.ty.span,
             });
-            return Type::Unknown;
+            return types::Type::Unknown;
         };
-        let Some(variant) = variants.iter().find(|variant| variant.name == node.name) else {
+        let Some(variant) = enum_type
+            .variants
+            .iter()
+            .find(|variant| variant.name == node.name)
+        else {
             self.errors.push(ParseError {
                 message: format!("Variant '{}' does not exist on type {}", node.name, ty),
                 span: node.span,
             });
-            return Type::Unknown;
+            return types::Type::Unknown;
         };
         if let Err(message) = self.visit_variant_body(&node.body, &variant.def) {
             self.errors.push(ParseError {
@@ -242,32 +252,34 @@ impl TypeChecker {
 
     fn visit_variant_body(
         &mut self,
-        body: &Option<VariantLiteralBody>,
-        expected: &Type,
+        body: &Option<ast::VariantLiteralBody>,
+        expected: &types::Type,
     ) -> Result<(), String> {
         let Some(body) = body else {
-            return if *expected != Type::Unit {
+            return if *expected != types::Type::Unit {
                 Err("Arguments expected".into())
             } else {
                 Ok(())
             };
         };
         match body {
-            VariantLiteralBody::Tuple(body) => {
-                let got = Type::Tuple(
-                    body.iter()
+            ast::VariantLiteralBody::Tuple(body) => {
+                let got: types::Type = types::TupleType {
+                    elements: body
+                        .iter()
                         .map(|el| self.visit_expression_or_anonymous(el))
                         .collect(),
-                );
+                }
+                .into();
                 if got != *expected {
                     return Err("Invalid arguments".into());
                 }
             }
-            VariantLiteralBody::Struct(body) => {
-                let Type::Struct { fields } = expected else {
+            ast::VariantLiteralBody::Struct(body) => {
+                let types::Type::Struct(st) = expected else {
                     return Err("Structured body exprected".into());
                 };
-                self.visit_struct_body(fields.clone(), &body, &mut TypeRegistry::new());
+                self.visit_struct_body(st.fields.clone(), &body, &mut TypeRegistry::new());
             }
         }
 
@@ -279,7 +291,7 @@ impl TypeChecker {
 mod tests {
     use super::*;
     use crate::ast;
-    use crate::types::{StructField, SumVariant, Type};
+    use crate::types::{StructField, Type, Variant};
 
     fn create_type_checker() -> TypeChecker {
         TypeChecker {
@@ -320,20 +332,20 @@ mod tests {
         let result = checker.visit_anonymous_struct_literal(&struct_literal);
         assert_eq!(
             result,
-            Type::Struct {
+            types::StructType {
                 fields: vec![
                     StructField {
                         name: "name".to_string(),
-                        def: Type::String,
+                        def: types::Type::String,
                         optional: true,
                     },
                     StructField {
                         name: "age".to_string(),
-                        def: Type::Number,
+                        def: types::Type::Number,
                         optional: true,
                     },
                 ],
-            }
+            },
         );
         assert!(checker.errors.is_empty());
     }
@@ -368,7 +380,12 @@ mod tests {
         };
 
         let result = checker.visit_array_literal(&array_literal);
-        assert_eq!(result, Type::Array(Box::new(Type::Number)));
+        assert_eq!(
+            result,
+            types::ArrayType {
+                element: Box::new(Type::Number)
+            }
+        );
         assert!(checker.errors.is_empty());
     }
 
@@ -421,7 +438,7 @@ mod tests {
         let result = checker.visit_map_literal(&map_literal);
         assert_eq!(
             result,
-            Type::Map {
+            types::MapType {
                 key: Box::new(Type::String),
                 value: Box::new(Type::Number),
             }
@@ -451,7 +468,12 @@ mod tests {
         };
 
         let result = checker.visit_option_literal(&option_literal);
-        assert_eq!(result, Type::Option(Box::new(Type::Number)));
+        assert_eq!(
+            result,
+            types::OptionType {
+                some: Box::new(Type::Number)
+            }
+        );
         assert!(checker.errors.is_empty());
     }
 
@@ -460,20 +482,20 @@ mod tests {
         let mut checker = create_type_checker();
         checker.type_registry.define(
             "User",
-            Type::Struct {
+            types::Type::Struct(types::StructType {
                 fields: vec![
                     StructField {
                         name: "name".to_string(),
-                        def: Type::String,
+                        def: types::Type::String,
                         optional: false,
                     },
                     StructField {
                         name: "age".to_string(),
-                        def: Type::Number,
+                        def: types::Type::Number,
                         optional: false,
                     },
                 ],
-            },
+            }),
             None,
         );
 
@@ -506,10 +528,11 @@ mod tests {
         let result = checker.visit_struct_literal(&struct_literal);
         assert_eq!(
             result,
-            Type::Named {
+            types::NamedType {
                 name: "User".to_string(),
                 args: vec![],
             }
+            .into()
         );
         assert!(checker.errors.is_empty());
     }
@@ -521,37 +544,39 @@ mod tests {
         // Define a sum type with variants
         checker.type_registry.define(
             "Shape",
-            Type::Sum {
+            types::Type::Enum(types::EnumType {
                 variants: vec![
-                    SumVariant {
+                    Variant {
                         name: "Circle".to_string(),
-                        def: Type::Struct {
+                        def: types::StructType {
                             fields: vec![StructField {
                                 name: "radius".to_string(),
-                                def: Type::Number,
+                                def: types::Type::Number,
                                 optional: false,
                             }],
-                        },
+                        }
+                        .into(),
                     },
-                    SumVariant {
+                    Variant {
                         name: "Rectangle".to_string(),
-                        def: Type::Struct {
+                        def: types::StructType {
                             fields: vec![
                                 StructField {
                                     name: "width".to_string(),
-                                    def: Type::Number,
+                                    def: types::Type::Number,
                                     optional: false,
                                 },
                                 StructField {
                                     name: "height".to_string(),
-                                    def: Type::Number,
+                                    def: types::Type::Number,
                                     optional: false,
                                 },
                             ],
-                        },
+                        }
+                        .into(),
                     },
                 ],
-            },
+            }),
             None,
         );
 
@@ -579,10 +604,11 @@ mod tests {
         let result = checker.visit_variant_literal(&variant_literal);
         assert_eq!(
             result,
-            Type::Named {
+            types::NamedType {
                 name: "Shape".to_string(),
                 args: vec![],
             }
+            .into()
         );
         assert!(checker.errors.is_empty());
     }
@@ -594,18 +620,18 @@ mod tests {
         // Define a sum type with variants
         checker.type_registry.define(
             "Shape",
-            Type::Sum {
-                variants: vec![SumVariant {
+            types::Type::Enum(types::EnumType {
+                variants: vec![Variant {
                     name: "Circle".to_string(),
-                    def: Type::Struct {
+                    def: types::Type::Struct(types::StructType {
                         fields: vec![StructField {
                             name: "radius".to_string(),
-                            def: Type::Number,
+                            def: types::Type::Number,
                             optional: false,
                         }],
-                    },
+                    }),
                 }],
-            },
+            }),
             None,
         );
 
@@ -622,7 +648,7 @@ mod tests {
         };
 
         let result = checker.visit_variant_literal(&variant_literal);
-        assert_eq!(result, Type::Unknown);
+        assert_eq!(result, types::Type::Unknown);
         assert_eq!(checker.errors.len(), 1);
         assert!(checker.errors[0]
             .message
@@ -636,18 +662,18 @@ mod tests {
         // Define a sum type with variants
         checker.type_registry.define(
             "Shape",
-            Type::Sum {
-                variants: vec![SumVariant {
+            types::Type::Enum(types::EnumType {
+                variants: vec![Variant {
                     name: "Circle".to_string(),
-                    def: Type::Struct {
+                    def: types::Type::Struct(types::StructType {
                         fields: vec![StructField {
                             name: "radius".to_string(),
-                            def: Type::Number,
+                            def: types::Type::Number,
                             optional: false,
                         }],
-                    },
+                    }),
                 }],
-            },
+            }),
             None,
         );
 
@@ -675,10 +701,11 @@ mod tests {
         let result = checker.visit_variant_literal(&variant_literal);
         assert_eq!(
             result,
-            Type::Named {
+            types::NamedType {
                 name: "Shape".to_string(),
                 args: vec![]
             }
+            .into()
         );
         assert_eq!(checker.errors.len(), 1, "{:?}", checker.errors);
         assert!(checker.errors[0]

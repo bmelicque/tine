@@ -1,31 +1,33 @@
-use crate::{ast, parser::parser::ParseError, types::Type};
+use crate::{ast, parser::parser::ParseError, types};
 
 use super::TypeChecker;
 
 impl TypeChecker {
-    pub fn visit_type(&mut self, node: &ast::Type) -> Type {
+    pub fn visit_type(&mut self, node: &ast::Type) -> types::Type {
         match node {
-            ast::Type::Array(array) => self.visit_array_type(array),
-            ast::Type::Function(function) => self.visit_function_type(function),
+            ast::types::Type::Array(array) => self.visit_array_type(array),
+            ast::Type::Function(function) => self.visit_function_type(function).into(),
             ast::Type::Map(map) => self.visit_map_type(map),
             ast::Type::Named(named) => self.visit_named_type(named),
             ast::Type::Option(option) => self.visit_option_type(option),
             ast::Type::Reference(reference) => self.visit_reference_type(reference),
             ast::Type::Result(result) => self.visit_result_type(result),
-            ast::Type::Tuple(tuple) => self.visit_tuple_type(tuple),
+            ast::Type::Tuple(tuple) => self.visit_tuple_type(tuple).into(),
         }
     }
 
-    pub fn visit_array_type(&mut self, node: &ast::ArrayType) -> Type {
+    pub fn visit_array_type(&mut self, node: &ast::ArrayType) -> types::Type {
         let inner_type = match node.element {
             Some(ref element) => self.visit_type(element),
-            None => Type::Dynamic,
+            None => types::Type::Dynamic,
         };
-        Type::Array(Box::new(inner_type))
+        types::Type::Array(types::ArrayType {
+            element: Box::new(inner_type),
+        })
     }
 
-    pub(super) fn visit_function_type(&mut self, node: &ast::FunctionType) -> Type {
-        let params: Vec<Type> = node
+    pub(super) fn visit_function_type(&mut self, node: &ast::FunctionType) -> types::FunctionType {
+        let params: Vec<types::Type> = node
             .params
             .iter()
             .map(|param| self.visit_type(param))
@@ -33,35 +35,35 @@ impl TypeChecker {
 
         let return_type = Box::new(self.visit_type(&node.returned));
 
-        Type::Function {
+        types::FunctionType {
             params,
             return_type,
         }
     }
 
-    pub fn visit_map_type(&mut self, node: &ast::MapType) -> Type {
+    pub fn visit_map_type(&mut self, node: &ast::MapType) -> types::Type {
         let key_type = match node.key {
             Some(ref key) => self.visit_type(key),
-            None => Type::Dynamic,
+            None => types::Type::Dynamic,
         };
         let value_type = match node.value {
             Some(ref value) => self.visit_type(value),
-            None => Type::Dynamic,
+            None => types::Type::Dynamic,
         };
 
-        Type::Map {
+        types::Type::Map(types::MapType {
             key: Box::new(key_type),
             value: Box::new(value_type),
-        }
+        })
     }
 
-    pub fn visit_named_type(&mut self, node: &ast::NamedType) -> Type {
+    pub fn visit_named_type(&mut self, node: &ast::NamedType) -> types::Type {
         let name = node.name.as_str();
         match name {
-            "string" => return Type::String,
-            "number" => return Type::Number,
-            "boolean" => return Type::Boolean,
-            "void" => return Type::Void,
+            "string" => return types::Type::String,
+            "number" => return types::Type::Number,
+            "boolean" => return types::Type::Boolean,
+            "void" => return types::Type::Void,
             _ => {}
         }
         if self.type_registry.lookup(name).is_none() {
@@ -69,7 +71,7 @@ impl TypeChecker {
                 message: format!("Type '{}' not found", name),
                 span: node.span,
             });
-            return Type::Unknown;
+            return types::Type::Unknown;
         }
 
         let arity = self.type_registry.get_type_params(name).len();
@@ -86,58 +88,63 @@ impl TypeChecker {
             });
         }
 
-        let mut arg_types: Vec<Type> = args
+        let mut arg_types: Vec<types::Type> = args
             .iter()
             .take(arity)
             .map(|arg| self.visit_type(arg))
             .collect();
         while arg_types.len() < arity {
-            arg_types.push(Type::Dynamic);
+            arg_types.push(types::Type::Dynamic);
         }
 
-        Type::Named {
+        types::Type::Named(types::NamedType {
             name: name.into(),
             args: arg_types,
-        }
+        })
     }
 
-    pub fn visit_option_type(&mut self, node: &ast::OptionType) -> Type {
+    pub fn visit_option_type(&mut self, node: &ast::OptionType) -> types::Type {
         let inner_type = match node.base {
             Some(ref base) => self.visit_type(base),
-            None => Type::Dynamic,
+            None => types::Type::Dynamic,
         };
 
-        Type::Option(Box::new(inner_type))
+        types::Type::Option(types::OptionType {
+            some: Box::new(inner_type),
+        })
     }
 
-    pub fn visit_reference_type(&mut self, node: &ast::ReferenceType) -> Type {
+    pub fn visit_reference_type(&mut self, node: &ast::ReferenceType) -> types::Type {
         let inner_type = match node.target {
             Some(ref base) => self.visit_type(base),
-            None => Type::Dynamic,
+            None => types::Type::Dynamic,
         };
 
-        Type::Reference(Box::new(inner_type))
+        types::Type::Reference(types::ReferenceType {
+            target: Box::new(inner_type),
+        })
     }
 
-    pub fn visit_result_type(&mut self, node: &ast::ResultType) -> Type {
+    pub fn visit_result_type(&mut self, node: &ast::ResultType) -> types::Type {
         let ok_type = match node.ok {
             Some(ref ok) => self.visit_type(ok),
-            None => Type::Dynamic,
+            None => types::Type::Dynamic,
         };
         let err_type = match node.error {
             Some(ref err) => self.visit_type(err),
-            None => Type::Dynamic,
+            None => types::Type::Dynamic,
         };
 
-        Type::Result {
+        types::Type::Result(types::ResultType {
             error: Some(Box::new(err_type)),
             ok: Box::new(ok_type),
-        }
+        })
     }
 
-    pub fn visit_tuple_type(&mut self, node: &ast::TupleType) -> Type {
-        let tuple_types: Vec<Type> = node.elements.iter().map(|ty| self.visit_type(ty)).collect();
-        Type::Tuple(tuple_types)
+    pub fn visit_tuple_type(&mut self, node: &ast::TupleType) -> types::TupleType {
+        let elements: Vec<types::Type> =
+            node.elements.iter().map(|ty| self.visit_type(ty)).collect();
+        types::TupleType { elements }
     }
 }
 
@@ -172,7 +179,12 @@ mod tests {
         };
 
         let result = checker.visit_array_type(&array_type);
-        assert_eq!(result, Type::Array(Box::new(Type::Number)));
+        assert_eq!(
+            result,
+            types::Type::Array(types::ArrayType {
+                element: Box::new(Type::Number)
+            })
+        );
     }
 
     #[test]
@@ -202,7 +214,7 @@ mod tests {
         let result = checker.visit_function_type(&function_type);
         assert_eq!(
             result,
-            Type::Function {
+            types::FunctionType {
                 params: vec![Type::Number, Type::String],
                 return_type: Box::new(Type::Boolean),
             }
@@ -229,19 +241,21 @@ mod tests {
         let result = checker.visit_map_type(&map_type);
         assert_eq!(
             result,
-            Type::Map {
+            types::Type::Map(types::MapType {
                 key: Box::new(Type::String),
                 value: Box::new(Type::Number),
-            }
+            })
         );
     }
 
     #[test]
     fn test_visit_named_type() {
         let mut checker = create_type_checker();
-        checker
-            .type_registry
-            .define("Box", Type::Struct { fields: vec![] }, None);
+        checker.type_registry.define(
+            "Box",
+            types::Type::Struct(types::StructType { fields: vec![] }),
+            None,
+        );
 
         let named_type = ast::NamedType {
             name: "Box".to_string(),
@@ -252,10 +266,10 @@ mod tests {
         let result = checker.visit_named_type(&named_type);
         assert_eq!(
             result,
-            Type::Named {
+            types::Type::Named(types::NamedType {
                 name: "Box".to_string(),
                 args: vec![],
-            }
+            })
         );
     }
 
@@ -272,7 +286,12 @@ mod tests {
         };
 
         let result = checker.visit_option_type(&option_type);
-        assert_eq!(result, Type::Option(Box::new(Type::Number)));
+        assert_eq!(
+            result,
+            types::Type::Option(types::OptionType {
+                some: Box::new(Type::Number)
+            })
+        );
     }
 
     #[test]
@@ -288,7 +307,12 @@ mod tests {
         };
 
         let result = checker.visit_reference_type(&reference_type);
-        assert_eq!(result, Type::Reference(Box::new(Type::String)));
+        assert_eq!(
+            result,
+            types::Type::Reference(types::ReferenceType {
+                target: Box::new(Type::String)
+            })
+        );
     }
 
     #[test]
@@ -311,10 +335,10 @@ mod tests {
         let result = checker.visit_result_type(&result_type);
         assert_eq!(
             result,
-            Type::Result {
+            types::Type::Result(types::ResultType {
                 ok: Box::new(Type::Number),
                 error: Some(Box::new(Type::String)),
-            }
+            })
         );
     }
 
@@ -338,6 +362,11 @@ mod tests {
         };
 
         let result = checker.visit_tuple_type(&tuple_type);
-        assert_eq!(result, Type::Tuple(vec![Type::Number, Type::String]));
+        assert_eq!(
+            result,
+            types::TupleType {
+                elements: vec![Type::Number, Type::String]
+            }
+        );
     }
 }

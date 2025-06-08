@@ -1,12 +1,16 @@
 use std::collections::HashMap;
 
-use crate::types::Type;
+use crate::types;
 
 use super::TypeChecker;
 
 impl TypeChecker {
-    pub fn check_dynamic_type(&self, ty: &Type, expected: &Type) -> Result<Box<Type>, String> {
-        if matches!(ty, Type::Dynamic) {
+    pub fn check_dynamic_type(
+        &self,
+        ty: &types::Type,
+        expected: &types::Type,
+    ) -> Result<Box<types::Type>, String> {
+        if matches!(ty, types::Type::Dynamic) {
             return Ok(Box::new(expected.clone()));
         }
 
@@ -15,8 +19,8 @@ impl TypeChecker {
             expected, ty
         ));
 
-        if let Type::Struct { .. } = ty {
-            return if self.check_struct_type(ty, expected) {
+        if let types::Type::Struct(st) = ty {
+            return if self.check_struct_type(st, expected) {
                 Ok(Box::new(expected.clone()))
             } else {
                 e
@@ -29,30 +33,23 @@ impl TypeChecker {
         }
     }
 
-    fn check_struct_type(&self, ty: &Type, expected: &Type) -> bool {
-        let Type::Struct { ref fields } = ty else {
-            panic!();
-        };
-
-        let Type::Named { name, .. } = expected else {
+    fn check_struct_type(&self, ty: &types::StructType, expected: &types::Type) -> bool {
+        let types::Type::Named(named) = expected else {
             return false;
         };
 
-        let Some(found) = self.type_registry.lookup(name) else {
+        let Some(found) = self.type_registry.lookup(&named.name) else {
             panic!("Named type should lead to a registered type!")
         };
-        let Type::Struct {
-            fields: ref expected_fields,
-        } = found
-        else {
+        let types::Type::Struct(expected) = found else {
             return false;
         };
 
         let mut got = HashMap::new();
-        for field in fields {
+        ty.fields.iter().for_each(|field| {
             got.insert(&field.name, &field.def);
-        }
-        for field in expected_fields {
+        });
+        for field in expected.fields {
             let g = got.remove(&field.name);
             match (g, field.optional) {
                 (Some(t), _) => {

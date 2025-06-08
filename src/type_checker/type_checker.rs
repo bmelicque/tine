@@ -2,7 +2,7 @@ use super::scopes::{SymbolTable, TypeRegistry};
 
 use crate::ast;
 use crate::parser::parser::ParseError;
-use crate::types::Type;
+use crate::types;
 
 pub struct TypeChecker {
     pub errors: Vec<ParseError>,
@@ -32,13 +32,13 @@ impl TypeChecker {
         }
     }
 
-    pub(super) fn resolve_type(&mut self, node: &ast::Type) -> Type {
+    pub(super) fn resolve_type(&mut self, node: &ast::Type) -> types::Type {
         match node {
             ast::Type::Named(named) => match named.name.as_str() {
-                "string" => Type::String,
-                "number" => Type::Number,
-                "boolean" => Type::Boolean,
-                "void" => Type::Void,
+                "string" => types::Type::String,
+                "number" => types::Type::Number,
+                "boolean" => types::Type::Boolean,
+                "void" => types::Type::Void,
                 id => match self.type_registry.lookup(id) {
                     Some(ty) => ty.clone(),
                     None => {
@@ -46,7 +46,7 @@ impl TypeChecker {
                             message: format!("Unknown type: {}", id),
                             span: named.span,
                         });
-                        Type::Unknown
+                        types::Type::Unknown
                     }
                 },
             },
@@ -56,14 +56,17 @@ impl TypeChecker {
 
     /// If type is Named, unwraps the underlying type, else returns original type
     /// TODO: it should also resolve type arguments
-    pub fn unwrap_named_type(&self, ty: &Type) -> Type {
+    pub fn unwrap_named_type(&self, ty: &types::Type) -> types::Type {
         match ty {
-            Type::Named { name, .. } => match name.as_str() {
-                "string" => Type::String,
-                "number" => Type::Number,
-                "boolean" => Type::Boolean,
-                "void" => Type::Void,
-                id => self.type_registry.lookup(id).unwrap_or(Type::Unknown),
+            types::Type::Named(named) => match named.name.as_str() {
+                "string" => types::Type::String,
+                "number" => types::Type::Number,
+                "boolean" => types::Type::Boolean,
+                "void" => types::Type::Void,
+                id => self
+                    .type_registry
+                    .lookup(id)
+                    .unwrap_or(types::Type::Unknown),
             },
             _ => ty.clone(),
         }
