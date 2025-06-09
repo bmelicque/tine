@@ -38,7 +38,7 @@ impl CodeGenerator {
             ast::Expression::Match(node) => self.match_to_swc_expr(node).into(),
             ast::Expression::NumberLiteral(node) => swc::Lit::Num(swc::Number {
                 span: DUMMY_SP,
-                value: node.value,
+                value: *node.value,
                 raw: None,
             })
             .into(),

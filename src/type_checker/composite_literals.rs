@@ -293,21 +293,13 @@ mod tests {
     use crate::ast;
     use crate::types::{StructField, Type, Variant};
 
-    fn create_type_checker() -> TypeChecker {
-        TypeChecker {
-            errors: Vec::new(),
-            symbols: Default::default(),
-            type_registry: Default::default(),
-        }
-    }
-
     fn dummy_span() -> pest::Span<'static> {
         pest::Span::new("_", 0, 0).unwrap()
     }
 
     #[test]
     fn test_visit_anonymous_struct_literal() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         let struct_literal = ast::AnonymousStructLiteral {
             fields: vec![
                 ast::StructLiteralField {
@@ -320,7 +312,7 @@ mod tests {
                 ast::StructLiteralField {
                     prop: "age".to_string(),
                     value: ast::Expression::NumberLiteral(ast::NumberLiteral {
-                        value: 30.0,
+                        value: ordered_float::OrderedFloat(30.0),
                         span: dummy_span(),
                     }),
                     span: dummy_span(),
@@ -352,7 +344,7 @@ mod tests {
 
     #[test]
     fn test_visit_array_literal() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         let array_literal = ast::ArrayLiteral {
             ty: ast::ArrayType {
                 element: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -365,13 +357,13 @@ mod tests {
             elements: vec![
                 ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
                     ast::NumberLiteral {
-                        value: 1.0,
+                        value: ordered_float::OrderedFloat(1.0),
                         span: dummy_span(),
                     },
                 )),
                 ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
                     ast::NumberLiteral {
-                        value: 2.0,
+                        value: ordered_float::OrderedFloat(2.0),
                         span: dummy_span(),
                     },
                 )),
@@ -391,7 +383,7 @@ mod tests {
 
     #[test]
     fn test_visit_map_literal() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         let map_literal = ast::MapLiteral {
             ty: ast::MapType {
                 key: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -413,7 +405,7 @@ mod tests {
                     })),
                     value: Box::new(ast::ExpressionOrAnonymous::Expression(
                         ast::Expression::NumberLiteral(ast::NumberLiteral {
-                            value: 42.0,
+                            value: ordered_float::OrderedFloat(42.0),
                             span: dummy_span(),
                         }),
                     )),
@@ -425,7 +417,7 @@ mod tests {
                     })),
                     value: Box::new(ast::ExpressionOrAnonymous::Expression(
                         ast::Expression::NumberLiteral(ast::NumberLiteral {
-                            value: 99.0,
+                            value: ordered_float::OrderedFloat(99.0),
                             span: dummy_span(),
                         }),
                     )),
@@ -448,7 +440,7 @@ mod tests {
 
     #[test]
     fn test_visit_option_literal() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         let option_literal = ast::OptionLiteral {
             ty: ast::OptionType {
                 base: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -460,7 +452,7 @@ mod tests {
             },
             value: Some(Box::new(ast::ExpressionOrAnonymous::Expression(
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: 42.0,
+                    value: ordered_float::OrderedFloat(42.0),
                     span: dummy_span(),
                 }),
             ))),
@@ -479,7 +471,7 @@ mod tests {
 
     #[test]
     fn test_visit_struct_literal() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         checker.type_registry.define(
             "User",
             types::Type::Struct(types::StructType {
@@ -516,7 +508,7 @@ mod tests {
                 ast::StructLiteralField {
                     prop: "age".to_string(),
                     value: ast::Expression::NumberLiteral(ast::NumberLiteral {
-                        value: 30.0,
+                        value: ordered_float::OrderedFloat(30.0),
                         span: dummy_span(),
                     }),
                     span: dummy_span(),
@@ -539,7 +531,7 @@ mod tests {
 
     #[test]
     fn test_visit_variant_literal_valid() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
 
         // Define a sum type with variants
         checker.type_registry.define(
@@ -592,7 +584,7 @@ mod tests {
                 ast::StructLiteralField {
                     prop: "radius".to_string(),
                     value: ast::Expression::NumberLiteral(ast::NumberLiteral {
-                        value: 10.0,
+                        value: ordered_float::OrderedFloat(10.0),
                         span: dummy_span(),
                     }),
                     span: dummy_span(),
@@ -615,7 +607,7 @@ mod tests {
 
     #[test]
     fn test_visit_variant_literal_non_existent_variant() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
 
         // Define a sum type with variants
         checker.type_registry.define(
@@ -657,7 +649,7 @@ mod tests {
 
     #[test]
     fn test_visit_variant_literal_mismatched_body() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
 
         // Define a sum type with variants
         checker.type_registry.define(
@@ -689,7 +681,7 @@ mod tests {
                 ast::StructLiteralField {
                     prop: "diameter".to_string(),
                     value: ast::Expression::NumberLiteral(ast::NumberLiteral {
-                        value: 20.0,
+                        value: ordered_float::OrderedFloat(20.0),
                         span: dummy_span(),
                     }),
                     span: dummy_span(),

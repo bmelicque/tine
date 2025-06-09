@@ -2,7 +2,7 @@ use pest::Span;
 
 use super::{expressions::Expression, types::Type, Pattern, PatternExpression};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Statement {
     Empty,
     Assignment(Assignment),
@@ -19,7 +19,7 @@ impl Statement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariableDeclaration {
     pub span: Span<'static>,
     pub pattern: Box<Pattern>,
@@ -27,7 +27,7 @@ pub struct VariableDeclaration {
     pub value: Box<Expression>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DeclarationOp {
     Mut,
     Const,
@@ -49,7 +49,7 @@ impl Into<Statement> for VariableDeclaration {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeAlias {
     pub span: Span<'static>,
     pub name: String,
@@ -63,7 +63,7 @@ impl Into<Statement> for TypeAlias {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeDefinition {
     Struct(StructDefinition),
     Enum(EnumDefinition),
@@ -77,7 +77,7 @@ impl From<Type> for TypeDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructDefinition {
     pub span: Span<'static>,
     pub fields: Vec<StructDefinitionField>,
@@ -89,7 +89,7 @@ impl Into<TypeDefinition> for StructDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum StructDefinitionField {
     Optional(StructOptionalField),
     Mandatory(StructMandatoryField),
@@ -115,7 +115,7 @@ impl StructDefinitionField {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructMandatoryField {
     pub span: Span<'static>,
     pub name: String,
@@ -128,7 +128,7 @@ impl Into<StructDefinitionField> for StructMandatoryField {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructOptionalField {
     pub span: Span<'static>,
     pub name: String,
@@ -141,7 +141,7 @@ impl Into<StructDefinitionField> for StructOptionalField {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
     pub span: Span<'static>,
     pub variants: Vec<VariantDefinition>,
@@ -153,7 +153,7 @@ impl Into<TypeDefinition> for EnumDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VariantDefinition {
     Unit(UnitVariant),
     Tuple(TupleVariant),
@@ -174,7 +174,7 @@ impl VariantDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnitVariant {
     pub span: Span<'static>,
     pub name: String,
@@ -186,7 +186,7 @@ impl Into<VariantDefinition> for UnitVariant {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TupleVariant {
     pub span: Span<'static>,
     pub name: String,
@@ -199,7 +199,7 @@ impl Into<VariantDefinition> for TupleVariant {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructVariant {
     pub span: Span<'static>,
     pub name: String,
@@ -212,7 +212,7 @@ impl Into<VariantDefinition> for StructVariant {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TraitDefinition {
     pub span: Span<'static>,
     pub name: String,
@@ -225,7 +225,7 @@ impl Into<TypeDefinition> for TraitDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Assignment {
     pub span: Span<'static>,
     pub pattern: PatternExpression,
@@ -238,7 +238,7 @@ impl Into<Statement> for Assignment {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BreakStatement {
     pub span: Span<'static>,
     pub value: Option<Box<Expression>>,
@@ -250,7 +250,7 @@ impl Into<Statement> for BreakStatement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReturnStatement {
     pub span: Span<'static>,
     pub value: Option<Box<Expression>>,
@@ -262,7 +262,7 @@ impl Into<Statement> for ReturnStatement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExpressionStatement {
     pub expression: Box<Expression>,
 }

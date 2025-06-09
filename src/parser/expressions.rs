@@ -263,7 +263,10 @@ impl ParserEngine {
     fn parse_number_literal(&mut self, pair: Pair<'static, Rule>) -> ast::NumberLiteral {
         ast::NumberLiteral {
             span: pair.as_span(),
-            value: pair.as_str().parse().unwrap_or(0.0),
+            value: pair
+                .as_str()
+                .parse()
+                .unwrap_or(ordered_float::OrderedFloat(0.0)),
         }
     }
 

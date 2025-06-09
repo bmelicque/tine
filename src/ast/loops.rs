@@ -2,7 +2,7 @@ use pest::Span;
 
 use super::{BlockExpression, Expression, Pattern};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Loop {
     For(ForExpression),
     ForIn(ForInExpression),
@@ -23,7 +23,7 @@ impl Into<Expression> for Loop {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ForExpression {
     pub span: Span<'static>,
     pub condition: Box<Expression>,
@@ -36,7 +36,7 @@ impl Into<Loop> for ForExpression {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ForInExpression {
     pub span: Span<'static>,
     pub pattern: Box<Pattern>,

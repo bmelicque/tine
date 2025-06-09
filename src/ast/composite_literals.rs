@@ -5,7 +5,7 @@ use super::{
     types::{ArrayType, MapType, NamedType, OptionType},
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CompositeLiteral {
     Array(ArrayLiteral),
     AnonymousStruct(AnonymousStructLiteral),
@@ -28,7 +28,7 @@ impl CompositeLiteral {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MapLiteral {
     pub span: Span<'static>,
     pub ty: MapType,
@@ -41,14 +41,14 @@ impl Into<CompositeLiteral> for MapLiteral {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MapEntry {
     pub span: Span<'static>,
     pub key: Box<Expression>,
     pub value: Box<ExpressionOrAnonymous>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ArrayLiteral {
     pub span: Span<'static>,
     pub ty: ArrayType,
@@ -61,7 +61,7 @@ impl Into<CompositeLiteral> for ArrayLiteral {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OptionLiteral {
     pub span: Span<'static>,
     pub ty: OptionType,
@@ -74,7 +74,7 @@ impl Into<CompositeLiteral> for OptionLiteral {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructLiteral {
     pub span: Span<'static>,
     pub ty: NamedType,
@@ -87,7 +87,7 @@ impl Into<CompositeLiteral> for StructLiteral {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AnonymousStructLiteral {
     pub span: Span<'static>,
     pub fields: Vec<StructLiteralField>,
@@ -99,14 +99,14 @@ impl Into<CompositeLiteral> for AnonymousStructLiteral {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructLiteralField {
     pub span: Span<'static>,
     pub prop: String,
     pub value: Expression,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariantLiteral {
     pub span: Span<'static>,
     pub ty: NamedType,
@@ -120,7 +120,7 @@ impl Into<CompositeLiteral> for VariantLiteral {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VariantLiteralBody {
     Tuple(Vec<ExpressionOrAnonymous>),
     Struct(Vec<StructLiteralField>),
@@ -138,7 +138,7 @@ impl From<Vec<StructLiteralField>> for VariantLiteralBody {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ExpressionOrAnonymous {
     Expression(Expression),
     Struct(AnonymousStructLiteral),

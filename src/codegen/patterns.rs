@@ -1,3 +1,4 @@
+use ordered_float::OrderedFloat;
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
@@ -45,7 +46,7 @@ impl CodeGenerator {
             }),
             ast::LiteralPattern::Number(n) => swc::Lit::Num(swc::Number {
                 span: DUMMY_SP,
-                value: n.value,
+                value: *n.value,
                 raw: None,
             }),
             ast::LiteralPattern::String(s) => swc::Lit::Str(swc::Str {
@@ -200,7 +201,7 @@ impl CodeGenerator {
                 tuple: Box::new(against.clone()),
                 index: ast::NumberLiteral {
                     span: against.as_span(),
-                    value: i as f64,
+                    value: OrderedFloat(i as f64),
                 },
             }
             .into()

@@ -348,7 +348,7 @@ impl TypeChecker {
             });
             return types::Type::Unknown;
         }
-        let value = value as isize;
+        let value = *value as isize;
         if value < 0 {
             self.errors.push(ParseError {
                 message: "Index out of range".into(),
@@ -457,15 +457,15 @@ mod tests {
         let array_expression = ast::ArrayExpression {
             elements: vec![
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: 1.0,
+                    value: ordered_float::OrderedFloat(1.0),
                     span: dummy_span(),
                 }),
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: 2.0,
+                    value: ordered_float::OrderedFloat(2.0),
                     span: dummy_span(),
                 }),
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: 3.0,
+                    value: ordered_float::OrderedFloat(3.0),
                     span: dummy_span(),
                 }),
             ],
@@ -489,7 +489,7 @@ mod tests {
         let array_expression = ast::ArrayExpression {
             elements: vec![
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: 1.0,
+                    value: ordered_float::OrderedFloat(1.0),
                     span: dummy_span(),
                 }),
                 ast::Expression::StringLiteral(ast::StringLiteral {
@@ -518,11 +518,11 @@ mod tests {
         let mut checker = create_type_checker();
         let binary_expression = ast::BinaryExpression {
             left: Box::new(ast::Expression::NumberLiteral(ast::NumberLiteral {
-                value: 1.0,
+                value: ordered_float::OrderedFloat(1.0),
                 span: dummy_span(),
             })),
             right: Box::new(ast::Expression::NumberLiteral(ast::NumberLiteral {
-                value: 2.0,
+                value: ordered_float::OrderedFloat(2.0),
                 span: dummy_span(),
             })),
             operator: ast::BinaryOperator::Add,
@@ -652,7 +652,7 @@ mod tests {
         let mut checker = create_type_checker();
         let expression = ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
             ast::NumberLiteral {
-                value: 42.0,
+                value: ordered_float::OrderedFloat(42.0),
                 span: dummy_span(),
             },
         ));
@@ -681,7 +681,7 @@ mod tests {
         let tuple_expression = ast::TupleExpression {
             elements: vec![
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: 42.0,
+                    value: ordered_float::OrderedFloat(42.0),
                     span: dummy_span(),
                 }),
                 ast::Expression::StringLiteral(ast::StringLiteral { span: dummy_span() }),
@@ -714,7 +714,7 @@ mod tests {
         let tuple_expression = ast::TupleExpression {
             elements: vec![
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: 1.0,
+                    value: ordered_float::OrderedFloat(42.0),
                     span: dummy_span(),
                 }),
                 ast::Expression::Tuple(ast::TupleExpression {
@@ -767,7 +767,7 @@ mod tests {
                 span: span("my_tuple"),
             })),
             index: ast::NumberLiteral {
-                value: 1.0,
+                value: ordered_float::OrderedFloat(1.0),
                 span: dummy_span(),
             },
             span: dummy_span(),
@@ -790,7 +790,7 @@ mod tests {
                 span: span("not_a_tuple"),
             })),
             index: ast::NumberLiteral {
-                value: 0.0,
+                value: ordered_float::OrderedFloat(0.0),
                 span: dummy_span(),
             },
             span: dummy_span(),
@@ -818,7 +818,7 @@ mod tests {
                 span: span("my_tuple"),
             })),
             index: ast::NumberLiteral {
-                value: 1.5,
+                value: ordered_float::OrderedFloat(1.5),
                 span: dummy_span(),
             },
             span: dummy_span(),
@@ -844,7 +844,7 @@ mod tests {
                 span: span("my_tuple"),
             })),
             index: ast::NumberLiteral {
-                value: 2.0,
+                value: ordered_float::OrderedFloat(2.0),
                 span: dummy_span(),
             },
             span: dummy_span(),
@@ -870,7 +870,7 @@ mod tests {
                 span: span("my_tuple"),
             })),
             index: ast::NumberLiteral {
-                value: -1.0,
+                value: ordered_float::OrderedFloat(-1.0),
                 span: dummy_span(),
             },
             span: dummy_span(),

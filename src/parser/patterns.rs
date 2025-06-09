@@ -36,7 +36,10 @@ impl ParserEngine {
             .into(),
             Rule::number_literal => ast::NumberLiteral {
                 span,
-                value: inner.as_str().parse().unwrap_or(0.0),
+                value: inner
+                    .as_str()
+                    .parse()
+                    .unwrap_or(ordered_float::OrderedFloat(0.0)),
             }
             .into(),
             Rule::string_literal => ast::StringLiteral { span }.into(),

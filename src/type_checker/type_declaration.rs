@@ -238,7 +238,7 @@ mod tests {
                 ast::StructDefinitionField::Optional(ast::StructOptionalField {
                     name: "field2".to_string(),
                     default: ast::Expression::NumberLiteral(ast::NumberLiteral {
-                        value: 42.0,
+                        value: ordered_float::OrderedFloat(42.0),
                         span: dummy_span(),
                     }),
                     span: dummy_span(),

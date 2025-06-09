@@ -1,6 +1,6 @@
 use pest::Span;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     Named(NamedType),
     Option(OptionType),
@@ -12,7 +12,7 @@ pub enum Type {
     Function(FunctionType),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NamedType {
     pub span: Span<'static>,
     pub name: String,
@@ -25,7 +25,7 @@ impl Into<Type> for NamedType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OptionType {
     pub span: Span<'static>,
     pub base: Option<Box<Type>>,
@@ -37,7 +37,7 @@ impl Into<Type> for OptionType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ArrayType {
     pub span: Span<'static>,
     pub element: Option<Box<Type>>,
@@ -49,7 +49,7 @@ impl Into<Type> for ArrayType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReferenceType {
     pub span: Span<'static>,
     pub target: Option<Box<Type>>,
@@ -61,7 +61,7 @@ impl Into<Type> for ReferenceType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TupleType {
     pub span: Span<'static>,
     pub elements: Vec<Type>,
@@ -73,7 +73,7 @@ impl Into<Type> for TupleType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MapType {
     pub span: Span<'static>,
     pub key: Option<Box<Type>>,
@@ -86,7 +86,7 @@ impl Into<Type> for MapType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ResultType {
     pub span: Span<'static>,
     pub error: Option<Box<Type>>,
@@ -99,7 +99,7 @@ impl Into<Type> for ResultType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionType {
     pub span: Span<'static>,
     pub params: Vec<Type>,

@@ -6,7 +6,7 @@
 - match strings
 - match arrays
 
-- annotated AST (check FIXMEs)
+- annotated AST (check FIXMEs for break & returns)
 - function call
 - HOF
 

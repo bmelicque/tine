@@ -2,7 +2,7 @@ use crate::parser::utils::merge_span;
 
 use super::{BooleanLiteral, Expression, NamedType, NumberLiteral, StringLiteral};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PatternExpression {
     Pattern(Pattern),
     Expression(Expression),
@@ -14,7 +14,7 @@ impl From<Expression> for PatternExpression {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Pattern {
     Identifier(IdentifierPattern),
     Literal(LiteralPattern),
@@ -71,7 +71,7 @@ impl Into<PatternExpression> for Pattern {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IdentifierPattern {
     pub span: pest::Span<'static>,
 }
@@ -82,7 +82,7 @@ impl Into<Pattern> for IdentifierPattern {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LiteralPattern {
     Boolean(BooleanLiteral),
     Number(NumberLiteral),
@@ -120,7 +120,7 @@ impl Into<Pattern> for LiteralPattern {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructPattern {
     pub span: pest::Span<'static>,
     pub ty: Box<NamedType>,
@@ -133,14 +133,14 @@ impl Into<Pattern> for StructPattern {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructPatternField {
     pub span: pest::Span<'static>,
     pub identifier: String,
     pub pattern: Option<Pattern>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TuplePattern {
     pub span: pest::Span<'static>,
     pub elements: Vec<Pattern>,
@@ -161,7 +161,7 @@ impl From<Vec<Pattern>> for TuplePattern {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariantPattern {
     pub span: pest::Span<'static>,
     pub ty: Box<NamedType>,
@@ -175,7 +175,7 @@ impl Into<Pattern> for VariantPattern {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum VariantPatternBody {
     Struct(Vec<StructPatternField>),
     Tuple(TuplePattern),
