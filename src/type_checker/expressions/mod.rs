@@ -1,3 +1,4 @@
+mod calls;
 mod composite_literals;
 mod expressions;
 mod loops;

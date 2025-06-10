@@ -12,6 +12,7 @@ pub enum Expression {
     Binary(BinaryExpression),
     BooleanLiteral(BooleanLiteral),
     Block(BlockExpression),
+    Call(CallExpression),
     CompositeLiteral(CompositeLiteral),
     FieldAccess(FieldAccessExpression),
     Function(FunctionExpression),
@@ -29,23 +30,24 @@ pub enum Expression {
 impl Expression {
     pub fn as_span(&self) -> Span<'static> {
         match self {
-            Self::Array(e) => e.span.clone(),
-            Self::Binary(e) => e.span.clone(),
-            Self::BooleanLiteral(e) => e.span.clone(),
-            Self::Block(e) => e.span.clone(),
+            Self::Array(e) => e.span,
+            Self::Binary(e) => e.span,
+            Self::BooleanLiteral(e) => e.span,
+            Self::Block(e) => e.span,
+            Self::Call(e) => e.span,
             Self::CompositeLiteral(e) => e.as_span(),
             Self::Empty => Span::new("", 0, 0).unwrap(),
-            Self::FieldAccess(e) => e.span.clone(),
-            Self::Function(e) => e.span.clone(),
-            Self::Identifier(e) => e.span.clone(),
-            Self::If(e) => e.span.clone(),
-            Self::IfDecl(e) => e.span.clone(),
+            Self::FieldAccess(e) => e.span,
+            Self::Function(e) => e.span,
+            Self::Identifier(e) => e.span,
+            Self::If(e) => e.span,
+            Self::IfDecl(e) => e.span,
             Self::Loop(e) => e.as_span(),
             Self::Match(e) => e.span,
-            Self::NumberLiteral(e) => e.span.clone(),
-            Self::StringLiteral(e) => e.span.clone(),
-            Self::Tuple(e) => e.span.clone(),
-            Self::TupleIndexing(e) => e.span.clone(),
+            Self::NumberLiteral(e) => e.span,
+            Self::StringLiteral(e) => e.span,
+            Self::Tuple(e) => e.span,
+            Self::TupleIndexing(e) => e.span,
         }
     }
 
@@ -313,6 +315,19 @@ pub struct BlockExpression {
 impl Into<Expression> for BlockExpression {
     fn into(self) -> Expression {
         Expression::Block(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CallExpression {
+    pub span: Span<'static>,
+    pub callee: Box<Expression>,
+    pub args: Vec<Expression>,
+}
+
+impl Into<Expression> for CallExpression {
+    fn into(self) -> Expression {
+        Expression::Call(self)
     }
 }
 

@@ -12,6 +12,7 @@ impl TypeChecker {
             ast::Expression::Binary(node) => self.visit_binary_expression(node),
             ast::Expression::BooleanLiteral(_) => types::Type::Boolean,
             ast::Expression::Block(node) => self.visit_block_expression(node),
+            ast::Expression::Call(node) => self.visit_call_expression(node),
             ast::Expression::CompositeLiteral(node) => self.visit_composite_literal(node),
             ast::Expression::Empty => types::Type::Void,
             ast::Expression::FieldAccess(node) => self.visit_field_access_expression(node),

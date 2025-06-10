@@ -27,6 +27,7 @@ impl CodeGenerator {
             })
             .into(),
             ast::Expression::Block(node) => self.block_expr_to_swc(node).into(),
+            ast::Expression::Call(node) => self.call_expr_to_swc(node).into(),
             ast::Expression::CompositeLiteral(node) => self.composite_literal_to_swc_expr(node),
             ast::Expression::Empty => panic!("shouldn't have empty expressions at codegen step"),
             ast::Expression::FieldAccess(node) => self.field_access_to_swc(node).into(),
@@ -152,6 +153,21 @@ impl CodeGenerator {
         self.exit_block();
         self.push_to_block(block.into());
         create_ident(&id)
+    }
+
+    fn call_expr_to_swc(&mut self, node: ast::CallExpression) -> swc::CallExpr {
+        let callee = swc::Callee::Expr(Box::new(self.expr_to_swc(*node.callee)));
+        let args = node
+            .args
+            .into_iter()
+            .map(|arg| self.expr_to_swc(arg).into())
+            .collect();
+        swc::CallExpr {
+            span: DUMMY_SP,
+            callee,
+            args,
+            type_args: None,
+        }
     }
 
     fn field_access_to_swc(&mut self, node: ast::FieldAccessExpression) -> swc::MemberExpr {

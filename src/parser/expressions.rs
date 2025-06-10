@@ -23,6 +23,7 @@ impl ParserEngine {
             }
             Rule::array_expression => self.parse_array_expression(pair).into(),
             Rule::block => self.parse_block(pair).into(),
+            Rule::call_expression => self.parse_call_expression(pair).into(),
             Rule::composite_literal => self.parse_composite_literal(pair).into(),
             Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
                 self.parse_binary_ltr_expression(pair).into()
@@ -130,6 +131,28 @@ impl ParserEngine {
             .collect();
 
         ast::BlockExpression { span, statements }
+    }
+
+    fn parse_call_expression(&mut self, pair: Pair<'static, Rule>) -> ast::CallExpression {
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+        let callee = Box::new(self.parse_callee(inner.next().unwrap()));
+        let mut params = Vec::new();
+        while let Some(pair) = inner.next() {
+            params.push(self.parse_expression(pair));
+        }
+
+        ast::CallExpression {
+            span,
+            callee,
+            args: params,
+        }
+    }
+
+    fn parse_callee(&mut self, pair: Pair<'static, Rule>) -> ast::Expression {
+        assert_eq!(pair.as_rule(), Rule::callee);
+        let pair = pair.into_inner().next().unwrap();
+        self.parse_expression(pair)
     }
 
     fn parse_exponentiation(&mut self, pair: Pair<'static, Rule>) -> ast::Expression {
