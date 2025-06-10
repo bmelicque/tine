@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use crate::{ast, parser::parser::ParseError, types};
 
-use super::{scopes::TypeRegistry, TypeChecker};
+use super::super::{scopes::TypeRegistry, TypeChecker};
 
 impl TypeChecker {
     pub fn visit_composite_literal(&mut self, node: &ast::CompositeLiteral) -> types::Type {
@@ -36,7 +36,7 @@ impl TypeChecker {
                 }
             })
             .collect();
-        types::StructType { fields }
+        self.set_type_at(node.span, types::StructType { fields })
     }
 
     pub fn visit_array_literal(&mut self, node: &ast::ArrayLiteral) -> types::ArrayType {
@@ -58,7 +58,7 @@ impl TypeChecker {
             element = Box::new(types::Type::Unknown);
         }
 
-        types::ArrayType { element }
+        self.set_type_at(node.span, types::ArrayType { element })
     }
 
     fn visit_array_literal_element(
@@ -110,7 +110,7 @@ impl TypeChecker {
             }
         }
 
-        types::MapType { key, value }
+        self.set_type_at(node.span, types::MapType { key, value })
     }
 
     pub fn visit_option_literal(&mut self, node: &ast::OptionLiteral) -> types::OptionType {
@@ -141,7 +141,7 @@ impl TypeChecker {
             some = Box::new(types::Type::Unknown);
         }
 
-        types::OptionType { some }
+        self.set_type_at(node.span, types::OptionType { some })
     }
 
     pub fn visit_struct_literal(&mut self, node: &ast::StructLiteral) -> types::Type {
@@ -155,7 +155,7 @@ impl TypeChecker {
                 message: format!("Expected a structured type, found {:?}", ty),
                 span: node.span,
             });
-            return types::Type::Unknown;
+            return self.set_type_at(node.span, types::Type::Unknown);
         };
 
         // setup generics registry
@@ -165,7 +165,7 @@ impl TypeChecker {
         self.visit_struct_body(st.fields, &node.fields, &mut generics_registry);
 
         // TODO: adjust type using inferred generics
-        ty
+        self.set_type_at(node.span, ty)
     }
 
     fn visit_struct_body(
@@ -227,7 +227,7 @@ impl TypeChecker {
                 message: format!("Sum type expected, got {}", unwrapped),
                 span: node.ty.span,
             });
-            return types::Type::Unknown;
+            return self.set_type_at(node.span, types::Type::Unknown);
         };
         let Some(variant) = enum_type
             .variants
@@ -238,7 +238,7 @@ impl TypeChecker {
                 message: format!("Variant '{}' does not exist on type {}", node.name, ty),
                 span: node.span,
             });
-            return types::Type::Unknown;
+            return self.set_type_at(node.span, types::Type::Unknown);
         };
         if let Err(message) = self.visit_variant_body(&node.body, &variant.def) {
             self.errors.push(ParseError {
@@ -247,7 +247,7 @@ impl TypeChecker {
             })
         }
 
-        ty
+        self.set_type_at(node.span, ty)
     }
 
     fn visit_variant_body(

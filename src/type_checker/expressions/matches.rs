@@ -23,7 +23,7 @@ impl TypeChecker {
             }
         }
         self.check_exhaustiveness(node, &ty);
-        expected
+        self.set_type_at(node.span, expected)
     }
 
     fn visit_match_arm(&mut self, arm: &ast::MatchArm, against: Type) -> Type {

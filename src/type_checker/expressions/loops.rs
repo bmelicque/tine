@@ -15,7 +15,7 @@ impl TypeChecker {
         self.symbols.enter_scope();
         let ty = self.visit_loop_body(&node.body);
         self.symbols.exit_scope();
-        ty
+        self.set_type_at(node.span, ty)
     }
 
     fn visit_for_in_expression(&mut self, node: &ast::ForInExpression) -> types::Type {
@@ -37,7 +37,7 @@ impl TypeChecker {
         }
         let ty = self.visit_loop_body(&node.body);
         self.symbols.exit_scope();
-        ty
+        self.set_type_at(node.span, ty)
     }
 
     fn visit_loop_body(&mut self, node: &ast::BlockExpression) -> types::Type {
@@ -67,8 +67,7 @@ impl TypeChecker {
     fn break_type(&mut self, stmt: &ast::BreakStatement) -> types::Type {
         stmt.value
             .as_ref()
-            // FIXME: this report possible errors a second time!
-            .map(|expr| self.visit_expression(&expr))
+            .map(|expr| self.get_type_at(expr.as_span()).unwrap())
             .unwrap_or(types::Type::Unit)
     }
 }

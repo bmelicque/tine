@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+
+use pest::Span;
+
 use super::scopes::{SymbolTable, TypeRegistry};
 
 use crate::ast;
@@ -8,6 +12,7 @@ pub struct TypeChecker {
     pub errors: Vec<ParseError>,
     pub symbols: SymbolTable,
     pub type_registry: TypeRegistry,
+    metadata: HashMap<Span<'static>, types::Type>,
 }
 
 impl TypeChecker {
@@ -18,6 +23,7 @@ impl TypeChecker {
             errors: Vec::new(),
             symbols,
             type_registry: TypeRegistry::new(),
+            metadata: HashMap::new(),
         }
     }
 
@@ -70,5 +76,18 @@ impl TypeChecker {
             },
             _ => ty.clone(),
         }
+    }
+
+    pub(super) fn set_type_at<T: Clone + Into<types::Type>>(
+        &mut self,
+        span: Span<'static>,
+        ty: T,
+    ) -> T {
+        self.metadata.insert(span, ty.clone().into());
+        ty
+    }
+
+    pub fn get_type_at(&mut self, span: Span<'static>) -> Option<types::Type> {
+        self.metadata.get(&span).map(|ty| ty.clone())
     }
 }

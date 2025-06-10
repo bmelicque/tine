@@ -42,7 +42,7 @@ impl TypeChecker {
 
     fn visit_array_expression(&mut self, node: &ast::ArrayExpression) -> types::Type {
         if node.elements.len() == 0 {
-            return types::Type::Dynamic;
+            return self.set_type_at(node.span, types::Type::Dynamic);
         }
 
         let mut ty = types::Type::Dynamic;
@@ -61,10 +61,13 @@ impl TypeChecker {
             }
         }
 
-        types::ArrayType {
-            element: Box::new(ty),
-        }
-        .into()
+        self.set_type_at(
+            node.span,
+            types::ArrayType {
+                element: Box::new(ty),
+            }
+            .into(),
+        )
     }
 
     fn visit_binary_expression(&mut self, node: &ast::BinaryExpression) -> types::Type {
@@ -124,22 +127,25 @@ impl TypeChecker {
             }
         };
 
-        match node.operator {
-            ast::BinaryOperator::Add
-            | ast::BinaryOperator::Sub
-            | ast::BinaryOperator::Mul
-            | ast::BinaryOperator::Div
-            | ast::BinaryOperator::Mod
-            | ast::BinaryOperator::Pow => types::Type::Number,
-            ast::BinaryOperator::Eq
-            | ast::BinaryOperator::Geq
-            | ast::BinaryOperator::Grt
-            | ast::BinaryOperator::LAnd
-            | ast::BinaryOperator::Leq
-            | ast::BinaryOperator::Less
-            | ast::BinaryOperator::LOr
-            | ast::BinaryOperator::Neq => types::Type::Boolean,
-        }
+        self.set_type_at(
+            node.span,
+            match node.operator {
+                ast::BinaryOperator::Add
+                | ast::BinaryOperator::Sub
+                | ast::BinaryOperator::Mul
+                | ast::BinaryOperator::Div
+                | ast::BinaryOperator::Mod
+                | ast::BinaryOperator::Pow => types::Type::Number,
+                ast::BinaryOperator::Eq
+                | ast::BinaryOperator::Geq
+                | ast::BinaryOperator::Grt
+                | ast::BinaryOperator::LAnd
+                | ast::BinaryOperator::Leq
+                | ast::BinaryOperator::Less
+                | ast::BinaryOperator::LOr
+                | ast::BinaryOperator::Neq => types::Type::Boolean,
+            },
+        )
     }
 
     pub fn visit_block_expression(&mut self, node: &ast::BlockExpression) -> types::Type {
@@ -148,7 +154,7 @@ impl TypeChecker {
         for stmt in node.statements.iter() {
             ty = self.visit_statement(&stmt);
         }
-        ty
+        self.set_type_at(node.span, ty)
     }
 
     fn visit_field_access_expression(&mut self, node: &ast::FieldAccessExpression) -> types::Type {
@@ -169,26 +175,21 @@ impl TypeChecker {
         }
 
         let prop = node.prop.as_str();
-        match ty {
-            types::Type::Struct(ty) => match ty.fields.iter().find(|field| field.name == prop) {
-                Some(field) => field.def.clone(),
-                None => {
-                    self.errors.push(ParseError {
-                        message: format!(
-                            "Property '{}' does not exist on type '{}'",
-                            prop, type_str
-                        ),
-                        span: node.span,
-                    });
-                    types::Type::Unknown
-                }
-            },
-            _ => {
+        let types::Type::Struct(ty) = ty else {
+            self.errors.push(ParseError {
+                message: format!("Property '{}' does not exist on type '{}'", prop, type_str),
+                span: node.span,
+            });
+            return self.set_type_at(node.span, types::Type::Unknown);
+        };
+        match ty.fields.iter().find(|field| field.name == prop) {
+            Some(field) => self.set_type_at(node.span, field.def.clone()),
+            None => {
                 self.errors.push(ParseError {
                     message: format!("Property '{}' does not exist on type '{}'", prop, type_str),
                     span: node.span,
                 });
-                types::Type::Unknown
+                self.set_type_at(node.span, types::Type::Unknown)
             }
         }
     }
@@ -206,10 +207,13 @@ impl TypeChecker {
 
         self.symbols.exit_scope();
 
-        types::FunctionType {
-            params: param_types,
-            return_type: Box::new(body_type),
-        }
+        self.set_type_at(
+            node.span,
+            types::FunctionType {
+                params: param_types,
+                return_type: Box::new(body_type),
+            },
+        )
     }
 
     fn visit_function_body(&mut self, node: &ast::FunctionBody) -> types::Type {
@@ -228,7 +232,6 @@ impl TypeChecker {
         ty
     }
 
-    // FIXME: this will re-visit the nodes!
     fn check_returns(&mut self, body: &ast::TypedBlock, expected: &types::Type) {
         let mut returns = Vec::<ast::ReturnStatement>::new();
         body.block.find_returns(&mut returns);
@@ -242,7 +245,7 @@ impl TypeChecker {
 
         for ret in returns {
             let ty = match ret.value {
-                Some(value) => self.visit_expression(&value),
+                Some(value) => self.get_type_at(value.as_span()).unwrap(),
                 None => types::Type::Void,
             };
             if !ty.is_assignable_to(expected) {
@@ -255,7 +258,7 @@ impl TypeChecker {
     }
 
     fn visit_identifier(&mut self, node: &ast::Identifier) -> types::Type {
-        match self.symbols.lookup(node.as_str()) {
+        let ty = match self.symbols.lookup(node.as_str()) {
             Some(VariableInfo { ty, .. }) => ty.clone(),
             None => {
                 self.errors.push(ParseError {
@@ -264,7 +267,8 @@ impl TypeChecker {
                 });
                 types::Type::Unknown
             }
-        }
+        };
+        self.set_type_at(node.span, ty)
     }
 
     fn visit_if_expression(&mut self, node: &ast::IfExpression) -> types::Type {
@@ -272,12 +276,13 @@ impl TypeChecker {
         self.visit_condition(&node.condition);
         let ty = self.visit_block_expression(&node.consequent);
         self.symbols.exit_scope();
-        if let Some(ref alternate) = node.alternate {
+        let ty = if let Some(ref alternate) = node.alternate {
             self.visit_alternate(alternate, &ty);
             ty
         } else {
             types::OptionType { some: Box::new(ty) }.into()
-        }
+        };
+        self.set_type_at(node.span, ty)
     }
 
     fn visit_if_decl_expression(&mut self, node: &ast::IfDeclExpression) -> types::Type {
@@ -296,12 +301,13 @@ impl TypeChecker {
         }
         let ty = self.visit_block_expression(&node.consequent);
         self.symbols.exit_scope();
-        if let Some(ref alternate) = node.alternate {
+        let ty = if let Some(ref alternate) = node.alternate {
             self.visit_alternate(alternate, &ty);
             ty
         } else {
             types::OptionType { some: Box::new(ty) }.into()
-        }
+        };
+        self.set_type_at(node.span, ty)
     }
 
     fn visit_alternate(&mut self, alternate: &ast::Alternate, expected: &types::Type) {
@@ -322,13 +328,14 @@ impl TypeChecker {
     }
 
     fn visit_tuple_expression(&mut self, node: &ast::TupleExpression) -> types::TupleType {
-        types::TupleType {
+        let ty = types::TupleType {
             elements: node
                 .elements
                 .iter()
                 .map(|el| self.visit_expression(el))
                 .collect(),
-        }
+        };
+        self.set_type_at(node.span, ty)
     }
 
     pub fn visit_tuple_indexing(&mut self, node: &ast::TupleIndexingExpression) -> types::Type {
@@ -338,7 +345,7 @@ impl TypeChecker {
                 message: format!("Expected tuple type, got {}", left_type),
                 span: node.tuple.as_span(),
             });
-            return types::Type::Unknown;
+            return self.set_type_at(node.span, types::Type::Unknown);
         };
         let value = node.index.value;
         if value != value.round() {
@@ -346,7 +353,7 @@ impl TypeChecker {
                 message: "Integer expected".into(),
                 span: node.index.span,
             });
-            return types::Type::Unknown;
+            return self.set_type_at(node.span, types::Type::Unknown);
         }
         let value = *value as isize;
         if value < 0 {
@@ -354,7 +361,7 @@ impl TypeChecker {
                 message: "Index out of range".into(),
                 span: node.index.span,
             });
-            return types::Type::Unknown;
+            return self.set_type_at(node.span, types::Type::Unknown);
         }
         let value = value as usize;
         if value >= tuple.elements.len() {
@@ -362,9 +369,9 @@ impl TypeChecker {
                 message: "Index out of range".into(),
                 span: node.index.span,
             });
-            types::Type::Unknown
+            self.set_type_at(node.span, types::Type::Unknown)
         } else {
-            tuple.elements[value].clone()
+            self.set_type_at(node.span, tuple.elements[value].clone())
         }
     }
 
