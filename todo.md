@@ -6,4 +6,4 @@
 - match strings
 - match arrays
 
-- function type nodes
+- methods

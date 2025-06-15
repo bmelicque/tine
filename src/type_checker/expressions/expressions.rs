@@ -200,7 +200,7 @@ impl TypeChecker {
 
         let mut param_types = Vec::new();
         for param in node.params.iter() {
-            let ty = self.resolve_type(&param.type_annotation);
+            let ty = self.visit_type(&param.type_annotation);
             self.symbols.define(param.name.as_str(), ty.clone(), false);
             param_types.push(ty);
         }
