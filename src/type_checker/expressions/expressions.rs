@@ -217,7 +217,7 @@ impl TypeChecker {
         )
     }
 
-    fn visit_function_body(&mut self, node: &ast::FunctionBody) -> types::Type {
+    pub fn visit_function_body(&mut self, node: &ast::FunctionBody) -> types::Type {
         let block = match node {
             ast::FunctionBody::Expression(node) => return self.visit_expression(node),
             ast::FunctionBody::TypedBlock(node) => node,

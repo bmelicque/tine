@@ -322,12 +322,53 @@ impl Into<Expression> for BlockExpression {
 pub struct CallExpression {
     pub span: Span<'static>,
     pub callee: Box<Expression>,
-    pub args: Vec<Expression>,
+    pub args: Vec<CallArgument>,
 }
 
 impl Into<Expression> for CallExpression {
     fn into(self) -> Expression {
         Expression::Call(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum CallArgument {
+    Expression(Expression),
+    Predicate(Predicate),
+}
+
+impl From<Expression> for CallArgument {
+    fn from(value: Expression) -> Self {
+        Self::Expression(value)
+    }
+}
+impl From<Predicate> for CallArgument {
+    fn from(value: Predicate) -> Self {
+        Self::Predicate(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Predicate {
+    pub span: Span<'static>,
+    pub params: Vec<PredicateParam>,
+    pub body: FunctionBody,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PredicateParam {
+    Identifier(Identifier),
+    Param(FunctionParam),
+}
+
+impl From<Identifier> for PredicateParam {
+    fn from(value: Identifier) -> Self {
+        Self::Identifier(value)
+    }
+}
+impl From<FunctionParam> for PredicateParam {
+    fn from(value: FunctionParam) -> Self {
+        Self::Param(value)
     }
 }
 

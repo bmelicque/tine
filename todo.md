@@ -6,7 +6,4 @@
 - match strings
 - match arrays
 
-- HOF
-
-  - missing type annotation in predicates (e.g. `map(array, (el, i) => {})`)
-  - infer types
+- function type nodes

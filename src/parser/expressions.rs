@@ -137,22 +137,58 @@ impl ParserEngine {
         let span = pair.as_span();
         let mut inner = pair.into_inner();
         let callee = Box::new(self.parse_callee(inner.next().unwrap()));
-        let mut params = Vec::new();
-        while let Some(pair) = inner.next() {
-            params.push(self.parse_expression(pair));
-        }
+        let args = self.parse_call_arguments(inner.next().unwrap());
 
-        ast::CallExpression {
-            span,
-            callee,
-            args: params,
-        }
+        ast::CallExpression { span, callee, args }
     }
 
     fn parse_callee(&mut self, pair: Pair<'static, Rule>) -> ast::Expression {
         assert_eq!(pair.as_rule(), Rule::callee);
         let pair = pair.into_inner().next().unwrap();
         self.parse_expression(pair)
+    }
+
+    fn parse_call_arguments(&mut self, pair: Pair<'static, Rule>) -> Vec<ast::CallArgument> {
+        assert_eq!(pair.as_rule(), Rule::call_arguments);
+        pair.into_inner()
+            .map(|sub_pair| self.parse_call_argument(sub_pair))
+            .collect()
+    }
+
+    fn parse_call_argument(&mut self, pair: Pair<'static, Rule>) -> ast::CallArgument {
+        assert_eq!(pair.as_rule(), Rule::call_argument);
+        let pair = pair.into_inner().next().unwrap();
+        match pair.as_rule() {
+            Rule::expression => self.parse_expression(pair).into(),
+            Rule::predicate => self.parse_predicate(pair).into(),
+            rule => unreachable!("Unexpected rule {:?}", rule),
+        }
+    }
+
+    fn parse_predicate(&mut self, pair: Pair<'static, Rule>) -> ast::Predicate {
+        assert_eq!(pair.as_rule(), Rule::predicate);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+        let params = self.parse_predicate_params(inner.next().unwrap());
+        let body = self.parse_function_body(inner.next().unwrap());
+        ast::Predicate { span, params, body }
+    }
+
+    fn parse_predicate_params(&mut self, pair: Pair<'static, Rule>) -> Vec<ast::PredicateParam> {
+        assert_eq!(pair.as_rule(), Rule::predicate_parameters);
+        pair.into_inner()
+            .map(|param_pair| self.parse_predicate_param(param_pair))
+            .collect()
+    }
+
+    fn parse_predicate_param(&mut self, pair: Pair<'static, Rule>) -> ast::PredicateParam {
+        assert_eq!(pair.as_rule(), Rule::predicate_param);
+        let pair = pair.into_inner().next().unwrap();
+        match pair.as_rule() {
+            Rule::parameter => self.parse_function_param(pair).into(),
+            Rule::value_identifier => self.parse_identifier(pair).into(),
+            rule => unreachable!("unexpected rule {:?}", rule),
+        }
     }
 
     fn parse_exponentiation(&mut self, pair: Pair<'static, Rule>) -> ast::Expression {

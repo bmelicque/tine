@@ -64,8 +64,10 @@ multiplication = { exponentiation? ~ (mul_op ~ exponentiation?)* }
 mul_op = { "*" | "/" | "%" }
 exponentiation = { primary? ~ ("**" ~ primary?)* }
 primary = { call_expression | member_expression | tuple_indexing | string_literal | number_literal | boolean_literal | value_identifier | function_expression | "(" ~ tuple_or_expression ~ ")" }
-call_expression = { callee ~ "(" ~ (expression ~ ("," ~ expression)*)? ~ ")" }
+call_expression = { callee ~ call_arguments }
 callee = { member_expression | value_identifier | "(" ~ expression ~ ")" }
+call_arguments = { "(" ~ (call_argument ~ ("," ~ call_argument)*)? ~ ")" }
+call_argument = { predicate | expression }
 tuple_indexing = { (member_expression|value_identifier|"(" ~ tuple_or_expression ~ ")") ~ "." ~ number_literal }
 member_expression = { value_identifier ~ ("." ~ value_identifier)+ }
 array_expression = { "[" ~ NEWLINE? ~ expression ~ ("," ~ NEWLINE? ~ expression)* ~ (","? ~ NEWLINE)? ~ "]" }
@@ -87,6 +89,9 @@ function_expression = { parameter_list ~ "=>" ~ (typed_block | expression) }
 typed_block = { type_annotation? ~ block }
 parameter_list = { "(" ~ (parameter ~ ("," ~ parameter)*)? ~ ")" }
 parameter = { value_identifier ~ type_annotation }
+predicate = { predicate_parameters ~ "=>" ~ (typed_block | expression) }
+predicate_parameters = { "(" ~ (predicate_param ~ ("," ~ predicate_param)*)? ~ ")" }
+predicate_param = { parameter | value_identifier }
 
 // Patterns
 pattern = { tuple_pattern | pattern_element }

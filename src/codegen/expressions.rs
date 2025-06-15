@@ -160,7 +160,7 @@ impl CodeGenerator {
         let args = node
             .args
             .into_iter()
-            .map(|arg| self.expr_to_swc(arg).into())
+            .map(|arg| self.call_arg_to_swc(arg).into())
             .collect();
         swc::CallExpr {
             span: DUMMY_SP,
@@ -168,6 +168,45 @@ impl CodeGenerator {
             args,
             type_args: None,
         }
+    }
+
+    fn call_arg_to_swc(&mut self, node: ast::CallArgument) -> swc::Expr {
+        match node {
+            ast::CallArgument::Expression(expr) => self.expr_to_swc(expr),
+            ast::CallArgument::Predicate(pred) => self.predicate_to_swc(pred).into(),
+        }
+    }
+
+    fn predicate_to_swc(&mut self, node: ast::Predicate) -> swc::ArrowExpr {
+        let params = node
+            .params
+            .into_iter()
+            .map(|param| self.predicate_param_to_swc(&param))
+            .collect();
+        swc::ArrowExpr {
+            span: DUMMY_SP,
+            params,
+            body: Box::new(self.function_body_to_swc(node.body)),
+            is_async: false,
+            is_generator: false,
+            type_params: None,
+            return_type: None,
+        }
+    }
+
+    fn predicate_param_to_swc(&mut self, node: &ast::PredicateParam) -> swc::Pat {
+        let name = match node {
+            ast::PredicateParam::Identifier(id) => id.as_str(),
+            ast::PredicateParam::Param(param) => param.name.as_str(),
+        };
+        swc::Pat::Ident(swc::BindingIdent {
+            id: swc::Ident {
+                span: DUMMY_SP,
+                sym: name.into(),
+                optional: false,
+            },
+            type_ann: None,
+        })
     }
 
     fn field_access_to_swc(&mut self, node: ast::FieldAccessExpression) -> swc::MemberExpr {
@@ -194,7 +233,21 @@ impl CodeGenerator {
             })
             .collect();
 
-        let swc_body = match &node.body {
+        let swc_body = self.function_body_to_swc(node.body);
+
+        swc::ArrowExpr {
+            span: DUMMY_SP,
+            params: swc_params,
+            body: Box::new(swc_body),
+            is_async: false,
+            is_generator: false,
+            type_params: None,
+            return_type: None,
+        }
+    }
+
+    fn function_body_to_swc(&mut self, node: ast::FunctionBody) -> swc::BlockStmtOrExpr {
+        match node {
             ast::FunctionBody::TypedBlock(typed_block) => {
                 let stmts = typed_block
                     .block
@@ -211,16 +264,6 @@ impl CodeGenerator {
             ast::FunctionBody::Expression(expr) => {
                 swc::BlockStmtOrExpr::Expr(Box::new(self.expr_to_swc(*expr.clone())))
             }
-        };
-
-        swc::ArrowExpr {
-            span: DUMMY_SP,
-            params: swc_params,
-            body: Box::new(swc_body),
-            is_async: false,
-            is_generator: false,
-            type_params: None,
-            return_type: None,
         }
     }
 
