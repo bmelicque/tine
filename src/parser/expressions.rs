@@ -239,7 +239,10 @@ impl ParserEngine {
         }
     }
 
-    fn parse_function_expression(&mut self, pair: Pair<'static, Rule>) -> ast::FunctionExpression {
+    pub fn parse_function_expression(
+        &mut self,
+        pair: Pair<'static, Rule>,
+    ) -> ast::FunctionExpression {
         assert_eq!(pair.as_rule(), Rule::function_expression);
         let span = pair.as_span();
         let mut inner = pair.into_inner();

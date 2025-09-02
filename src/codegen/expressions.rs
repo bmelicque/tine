@@ -218,21 +218,7 @@ impl CodeGenerator {
     }
 
     fn function_expression_to_swc(&mut self, node: ast::FunctionExpression) -> swc::ArrowExpr {
-        let swc_params = node
-            .params
-            .into_iter()
-            .map(|param| {
-                swc::Pat::Ident(swc::BindingIdent {
-                    id: swc::Ident {
-                        span: DUMMY_SP,
-                        sym: param.name.as_str().into(),
-                        optional: false,
-                    },
-                    type_ann: None,
-                })
-            })
-            .collect();
-
+        let swc_params = self.function_params_to_swc(node.params);
         let swc_body = self.function_body_to_swc(node.body);
 
         swc::ArrowExpr {
@@ -246,7 +232,23 @@ impl CodeGenerator {
         }
     }
 
-    fn function_body_to_swc(&mut self, node: ast::FunctionBody) -> swc::BlockStmtOrExpr {
+    pub fn function_params_to_swc(&mut self, params: Vec<ast::FunctionParam>) -> Vec<swc::Pat> {
+        params
+            .into_iter()
+            .map(|param| {
+                swc::Pat::Ident(swc::BindingIdent {
+                    id: swc::Ident {
+                        span: DUMMY_SP,
+                        sym: param.name.as_str().into(),
+                        optional: false,
+                    },
+                    type_ann: None,
+                })
+            })
+            .collect()
+    }
+
+    pub fn function_body_to_swc(&mut self, node: ast::FunctionBody) -> swc::BlockStmtOrExpr {
         match node {
             ast::FunctionBody::TypedBlock(typed_block) => {
                 let stmts = typed_block

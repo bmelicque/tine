@@ -1,6 +1,10 @@
 use pest::Span;
 
-use super::{expressions::Expression, types::Type, Pattern, PatternExpression};
+use super::{
+    expressions::{Expression, FunctionExpression, Identifier},
+    types::{NamedType, Type},
+    Pattern, PatternExpression,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Statement {
@@ -8,6 +12,7 @@ pub enum Statement {
     Assignment(Assignment),
     Break(BreakStatement),
     Expression(ExpressionStatement),
+    MethodDefinition(MethodDefinition),
     Return(ReturnStatement),
     TypeAlias(TypeAlias),
     VariableDeclaration(VariableDeclaration),
@@ -47,6 +52,27 @@ impl Into<Statement> for VariableDeclaration {
     fn into(self) -> Statement {
         Statement::VariableDeclaration(self)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MethodDefinition {
+    pub span: Span<'static>,
+    pub receiver: MethodReceiver,
+    pub name: Identifier,
+    pub definition: FunctionExpression,
+}
+
+impl Into<Statement> for MethodDefinition {
+    fn into(self) -> Statement {
+        Statement::MethodDefinition(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MethodReceiver {
+    pub span: Span<'static>,
+    pub name: Identifier,
+    pub ty: NamedType,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

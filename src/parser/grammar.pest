@@ -109,7 +109,9 @@ tuple_variant_pattern = { type_identifier ~ "." ~ type_identifier ~ "(" ~ patter
 literal_pattern = { string_literal | number_literal | boolean_literal }
 
 // Statements
-statement = { type_alias | variable_declaration | assignment | break_statement | return_statement | expression_statement }
+statement = { type_alias | method_definition | variable_declaration | assignment | break_statement | return_statement | expression_statement }
+method_definition = { "(" ~ method_receiver ~ ")" ~ value_identifier ~ "::" ~ function_expression }
+method_receiver = { value_identifier ~ type_identifier } // TODO: type_identifier -> include reference_type
 variable_declaration = { pattern ~ decl_op ~ expression }
 decl_op = { ":=" | "::" }
 assignment = { assignee ~ "=" ~ expression }

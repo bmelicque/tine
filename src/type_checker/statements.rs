@@ -8,6 +8,7 @@ impl TypeChecker {
             ast::Statement::Empty => Type::Void,
             ast::Statement::Expression(node) => self.visit_expression(&node.expression),
             ast::Statement::Break(node) => self.visit_break_statement(node),
+            ast::Statement::MethodDefinition(node) => self.visit_method_definition(node),
             ast::Statement::Return(node) => self.visit_return_statement(node),
             ast::Statement::TypeAlias(node) => self.visit_type_declaration(node),
             ast::Statement::VariableDeclaration(node) => self.visit_variable_declaration(node),
@@ -99,6 +100,41 @@ impl TypeChecker {
         if let Some(ref value) = node.value {
             self.visit_expression(value);
         }
+        Type::Void
+    }
+
+    fn visit_method_definition(&mut self, node: &ast::MethodDefinition) -> Type {
+        self.symbols.enter_scope();
+        let receiver = self.visit_named_type(&node.receiver.ty);
+        self.symbols
+            .define(node.receiver.name.as_str(), receiver.clone(), false);
+        let function = self.visit_function_expression(&node.definition);
+        self.symbols.exit_scope();
+        let type_name = node.receiver.ty.name.as_str();
+        let method_name = node.name.as_str();
+
+        let Type::Named(receiver) = receiver else {
+            self.errors.push(ParseError {
+                message: format!("Cannot define method on type '{}'", type_name),
+                span: node.span,
+            });
+            return Type::Void;
+        };
+
+        if self.type_registry.type_has(type_name, method_name) {
+            self.errors.push(ParseError {
+                message: format!(
+                    "Name '{}' already exists on type {}",
+                    method_name, type_name
+                ),
+                span: node.span,
+            });
+            return Type::Void;
+        }
+
+        self.type_registry
+            .define_method(receiver, method_name.into(), function);
+
         Type::Void
     }
 

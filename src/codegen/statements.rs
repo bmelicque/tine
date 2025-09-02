@@ -31,6 +31,13 @@ impl CodeGenerator {
                     .into(),
                 ),
             },
+            ast::Statement::MethodDefinition(node) => Some(
+                swc::ExprStmt {
+                    span: DUMMY_SP,
+                    expr: Box::new(self.method_definition_to_swc(node).into()),
+                }
+                .into(),
+            ),
             ast::Statement::Return(node) => Some(self.return_to_swc(node).into()),
             ast::Statement::TypeAlias(node) => self.alias_to_swc(node).into(),
             ast::Statement::VariableDeclaration(node) => Some(self.declaration_to_swc(node).into()),
@@ -309,6 +316,53 @@ impl CodeGenerator {
             alternate: alternate
                 .map(|alt| ast::Alternate::IfDecl(*alt))
                 .map(Box::new),
+        }
+    }
+
+    fn function_to_swc_function(&mut self, node: ast::FunctionExpression) -> swc::Function {
+        let params = node
+            .params
+            .into_iter()
+            .map(|param| swc::Param {
+                span: DUMMY_SP,
+                decorators: vec![],
+                pat: swc::Pat::Ident(create_ident(param.name.as_str()).into()),
+            })
+            .collect();
+
+        let body = match self.function_body_to_swc(node.body) {
+            swc::BlockStmtOrExpr::BlockStmt(block) => block,
+            swc::BlockStmtOrExpr::Expr(expr) => swc::BlockStmt {
+                span: DUMMY_SP,
+                stmts: vec![swc::Stmt::Return(swc::ReturnStmt {
+                    span: DUMMY_SP,
+                    arg: Some(expr),
+                })],
+            },
+        };
+
+        swc::Function {
+            span: DUMMY_SP,
+            params,
+            decorators: vec![],
+            body: Some(body),
+            is_generator: false,
+            is_async: false,
+            type_params: None,
+            return_type: None,
+        }
+    }
+
+    fn method_definition_to_swc(&mut self, node: ast::MethodDefinition) -> swc::AssignExpr {
+        swc::AssignExpr {
+            span: DUMMY_SP,
+            op: swc::AssignOp::Assign,
+            left: swc::PatOrExpr::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(create_ident(&node.receiver.ty.name).into()),
+                prop: swc::MemberProp::Ident(create_ident(node.name.as_str())),
+            }))),
+            right: Box::new(self.function_to_swc_function(node.definition).into()),
         }
     }
 

@@ -40,6 +40,23 @@ impl SymbolTable {
 
 pub struct TypeMetadata {
     pub type_params: Vec<String>,
+    pub methods: HashMap<String, types::FunctionType>,
+}
+
+impl TypeMetadata {
+    pub fn new() -> Self {
+        Self {
+            type_params: vec![],
+            methods: HashMap::new(),
+        }
+    }
+
+    pub fn from_type_params(type_params: Vec<String>) -> Self {
+        Self {
+            type_params,
+            methods: HashMap::new(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -103,5 +120,32 @@ impl TypeRegistry {
 
     pub fn clear_generics(&mut self) {
         self.generics.clear();
+    }
+
+    pub fn define_method(&mut self, on: types::NamedType, name: String, ty: types::FunctionType) {
+        match self.metadata.get_mut(on.name.as_str()) {
+            Some(data) => {
+                data.methods.insert(name, ty);
+            }
+            None => {
+                let mut data = TypeMetadata::new();
+                data.methods.insert(name, ty);
+            }
+        };
+    }
+
+    pub fn type_has(&self, type_name: &str, name: &str) -> bool {
+        let metadata = match self.metadata.get(type_name) {
+            Some(data) => data,
+            None => &TypeMetadata::new(),
+        };
+        if metadata.methods.get(name).is_some() {
+            return true;
+        }
+        let ty = self.types.get(type_name).unwrap();
+        let types::Type::Struct(ty) = ty else {
+            return false;
+        };
+        ty.fields.iter().find(|field| field.name == name).is_some()
     }
 }

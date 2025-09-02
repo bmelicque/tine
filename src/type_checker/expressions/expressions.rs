@@ -195,7 +195,10 @@ impl TypeChecker {
         }
     }
 
-    fn visit_function_expression(&mut self, node: &ast::FunctionExpression) -> types::FunctionType {
+    pub fn visit_function_expression(
+        &mut self,
+        node: &ast::FunctionExpression,
+    ) -> types::FunctionType {
         self.symbols.enter_scope();
 
         let mut param_types = Vec::new();

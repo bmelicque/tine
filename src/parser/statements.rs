@@ -15,6 +15,7 @@ impl ParserEngine {
             Rule::assignment => self.parse_assignment(pair).into(),
             Rule::type_alias => self.parse_type_alias(pair).into(),
             Rule::break_statement => self.parse_break_statement(pair).into(),
+            Rule::method_definition => self.parse_method_definition(pair).into(),
             Rule::return_statement => self.parse_return_statement(pair).into(),
             Rule::expression_statement => self.parse_expression_statement(pair),
             _ => ast::Statement::Empty,
@@ -74,6 +75,30 @@ impl ParserEngine {
             .map(Box::new);
 
         ast::BreakStatement { span, value }
+    }
+
+    fn parse_method_definition(&mut self, pair: Pair<'static, Rule>) -> ast::MethodDefinition {
+        assert_eq!(pair.as_rule(), Rule::method_definition);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+        let receiver = self.parse_method_receiver(inner.next().unwrap());
+        let name = inner.next().unwrap().as_span().into();
+        let definition = self.parse_function_expression(inner.next().unwrap());
+        ast::MethodDefinition {
+            span,
+            receiver,
+            name,
+            definition,
+        }
+    }
+
+    fn parse_method_receiver(&mut self, pair: Pair<'static, Rule>) -> ast::MethodReceiver {
+        assert_eq!(pair.as_rule(), Rule::method_receiver);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+        let name = inner.next().unwrap().as_span().into();
+        let ty = self.parse_named_type(inner.next().unwrap());
+        ast::MethodReceiver { span, name, ty }
     }
 
     fn parse_return_statement(&mut self, pair: Pair<'static, Rule>) -> ast::ReturnStatement {

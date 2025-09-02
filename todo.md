@@ -6,4 +6,7 @@
 - match strings
 - match arrays
 
-- methods
+- allow methods only at top-level
+- disallow methods in other files (when multiples files)
+
+- "Type 'unknown' is not callable"

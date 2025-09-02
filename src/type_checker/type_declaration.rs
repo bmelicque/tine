@@ -19,9 +19,10 @@ impl TypeChecker {
                 span: node.span,
             }),
             None => {
-                let metadata = node.params.clone().map(|params| TypeMetadata {
-                    type_params: params,
-                });
+                let metadata = node
+                    .params
+                    .clone()
+                    .map(|params| TypeMetadata::from_type_params(params));
                 self.type_registry.define(&name, ty, metadata);
             }
         }
