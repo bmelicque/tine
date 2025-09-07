@@ -21,10 +21,11 @@ map_type_value = { unary_type | primary_type }
 result_type = { result_error_type? ~ "!" ~ result_ok_type? }
 result_error_type = { unary_type | primary_type }
 result_ok_type = { unary_type | primary_type }
-unary_type = { reference_type | option_type | array_type }
+unary_type = { reference_type | option_type | array_type | duck_type }
 reference_type = { "&" ~ (unary_type | primary_type)? }
 option_type = { "?" ~ (unary_type | primary_type)? }
 array_type = { "[]" ~ (unary_type | primary_type) }
+duck_type = { "~" ~ primary_type }
 primary_type = { generic_type | type_name | grouped_type }
 grouped_type = { "(" ~ type_annotation ~ ")" }
 // uses binary_type in generic_type to avoid unwrapping tuples

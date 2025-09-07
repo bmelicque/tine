@@ -21,6 +21,7 @@ impl ParserEngine {
             Rule::reference_type => self.parse_reference_type(pair).into(),
             Rule::option_type => self.parse_option_type(pair).into(),
             Rule::array_type => self.parse_array_type(pair).into(),
+            Rule::duck_type => self.parse_duck_type(pair).into(),
             Rule::generic_type => self.parse_named_type_with_args(pair).into(),
             Rule::type_identifier | Rule::primitive_type => self.parse_named_type(pair).into(),
             _ => unreachable!("Unexpected rule '{:?}'", pair.as_rule()),
@@ -118,6 +119,18 @@ impl ParserEngine {
             .map(|pair| Box::new(self.parse_type(pair)));
 
         ast::ArrayType { span, element }
+    }
+
+    pub fn parse_duck_type(&mut self, pair: Pair<'static, Rule>) -> ast::DuckType {
+        assert!(pair.as_rule() == Rule::duck_type);
+        let span = pair.as_span();
+        let like = pair
+            .into_inner()
+            .next()
+            .map(|pair| Box::new(self.parse_type(pair)))
+            .unwrap();
+
+        ast::DuckType { span, like }
     }
 
     pub fn parse_named_type_with_args(&mut self, pair: Pair<'static, Rule>) -> ast::NamedType {

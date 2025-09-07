@@ -5,7 +5,8 @@ use super::TypeChecker;
 impl TypeChecker {
     pub fn visit_type(&mut self, node: &ast::Type) -> types::Type {
         match node {
-            ast::types::Type::Array(array) => self.visit_array_type(array),
+            ast::Type::Array(array) => self.visit_array_type(array),
+            ast::Type::Duck(duck) => self.visit_duck_type(duck),
             ast::Type::Function(function) => self.visit_function_type(function).into(),
             ast::Type::Map(map) => self.visit_map_type(map),
             ast::Type::Named(named) => self.visit_named_type(named),
@@ -122,6 +123,14 @@ impl TypeChecker {
 
         types::Type::Reference(types::ReferenceType {
             target: Box::new(inner_type),
+        })
+    }
+
+    pub fn visit_duck_type(&mut self, node: &ast::DuckType) -> types::Type {
+        let inner_type = self.visit_type(&node.like);
+
+        types::Type::Duck(types::DuckType {
+            like: Box::new(inner_type),
         })
     }
 

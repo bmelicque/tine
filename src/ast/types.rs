@@ -6,6 +6,7 @@ pub enum Type {
     Option(OptionType),
     Array(ArrayType),
     Reference(ReferenceType),
+    Duck(DuckType),
     Tuple(TupleType),
     Map(MapType),
     Result(ResultType),
@@ -58,6 +59,18 @@ pub struct ReferenceType {
 impl Into<Type> for ReferenceType {
     fn into(self) -> Type {
         Type::Reference(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DuckType {
+    pub span: Span<'static>,
+    pub like: Box<Type>,
+}
+
+impl Into<Type> for DuckType {
+    fn into(self) -> Type {
+        Type::Duck(self)
     }
 }
 

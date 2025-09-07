@@ -4,6 +4,7 @@ use std::fmt;
 pub enum Type {
     Array(ArrayType),
     Boolean,
+    Duck(DuckType),
     Dynamic, // Represents a type that will have to be inferred later
     Enum(EnumType),
     Function(FunctionType),
@@ -32,6 +33,17 @@ pub struct ArrayType {
 impl Into<Type> for ArrayType {
     fn into(self) -> Type {
         Type::Array(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DuckType {
+    pub like: Box<Type>,
+}
+
+impl Into<Type> for DuckType {
+    fn into(self) -> Type {
+        Type::Duck(self)
     }
 }
 
@@ -194,6 +206,7 @@ impl fmt::Display for Type {
         match self {
             Type::Array(ty) => write!(f, "[]{}", ty.element),
             Type::Boolean => write!(f, "boolean"),
+            Type::Duck(ty) => write!(f, "~{}", ty.like),
             Type::Dynamic => write!(f, "any"),
             Type::Enum(ty) => {
                 let variants_str = ty
