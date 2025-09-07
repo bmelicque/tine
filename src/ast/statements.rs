@@ -80,6 +80,7 @@ pub struct TypeAlias {
     pub span: Span<'static>,
     pub name: String,
     pub params: Option<Vec<String>>,
+    pub op: DefinitionOp,
     pub definition: Box<TypeDefinition>,
 }
 
@@ -90,10 +91,25 @@ impl Into<Statement> for TypeAlias {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum DefinitionOp {
+    Strict,
+    Like,
+}
+
+impl From<String> for DefinitionOp {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "::" => Self::Strict,
+            ":~" => Self::Like,
+            _ => panic!(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeDefinition {
     Struct(StructDefinition),
     Enum(EnumDefinition),
-    Trait(TraitDefinition),
     Type(Type),
 }
 
@@ -235,19 +251,6 @@ pub struct StructVariant {
 impl Into<VariantDefinition> for StructVariant {
     fn into(self) -> VariantDefinition {
         VariantDefinition::Struct(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TraitDefinition {
-    pub span: Span<'static>,
-    pub name: String,
-    pub body: Box<StructDefinition>,
-}
-
-impl Into<TypeDefinition> for TraitDefinition {
-    fn into(self) -> TypeDefinition {
-        TypeDefinition::Trait(self)
     }
 }
 

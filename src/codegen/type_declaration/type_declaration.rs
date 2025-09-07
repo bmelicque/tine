@@ -26,7 +26,6 @@ impl CodeGenerator {
                 self.register_struct(&node.name, &def.fields);
                 vec![self.struct_to_swc_constructor(def).into()]
             }
-            ast::TypeDefinition::Trait(_) => return None,
             ast::TypeDefinition::Type(t) => {
                 let ast::Type::Named(named) = t else {
                     panic!("Not implemented yet!")

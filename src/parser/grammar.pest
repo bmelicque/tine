@@ -120,9 +120,10 @@ break_statement = { "break" ~ expression? }
 return_statement = { "return" ~ expression? }
 expression_statement = { expression }
 
-type_alias = { type_identifier ~ type_params? ~ "::" ~ type_def }
+type_alias = { type_identifier ~ type_params? ~ type_def_op ~ type_def }
+type_def_op = { "::" | ":~" }
 type_params = { "[" ~ type_identifier ~ ("," ~ type_identifier)* ~ "]" }
-type_def = { "("~NEWLINE?~sum_type~NEWLINE?~")" | struct_body | sum_type | trait_type }
+type_def = { "("~NEWLINE?~sum_type~NEWLINE?~")" | struct_body | sum_type }
 struct_body = { "(" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ ")" }
 field_declaration = { mandatory_field | optional_field  }
 embedded_field = { type_identifier }
@@ -131,7 +132,6 @@ optional_field = { value_identifier ~ ":" ~ expression }
 sum_type = { (NEWLINE? ~ "|")? ~ sum_constructor ~ (NEWLINE? ~ "|" ~ sum_constructor)+ }
 sum_constructor = { type_identifier ~ (struct_body | sum_param)? }
 sum_param = { "(" ~ type_annotation ~ ")" }
-trait_type = { "(" ~ type_identifier ~ ")" ~ "." ~ struct_body }
 
 // Program
 blank_line = _{ NEWLINE }

@@ -158,6 +158,14 @@ impl TypeChecker {
             return self.set_type_at(node.span, types::Type::Unknown);
         };
 
+        if !self.type_registry.can_be_strict(&named.name) {
+            self.errors.push(ParseError {
+                message: format!("Cannot instantiate type '{:?}'", named.name),
+                span: node.span,
+            });
+            return types::Type::Unknown;
+        }
+
         // setup generics registry
         let names = self.type_registry.get_type_params(&named.name);
         let mut generics_registry = TypeRegistry::create(&names, &named.args);

@@ -17,12 +17,14 @@ impl ParserEngine {
         let name = inner.next().unwrap().as_str().to_string();
 
         let mut params = None;
+        let mut op = None;
         let mut definition = None;
         while let Some(pair) = inner.next() {
             match pair.as_rule() {
                 Rule::type_params => {
                     params = Some(self.parse_type_params(pair));
                 }
+                Rule::type_def_op => op = Some(pair.as_str().to_string().into()),
                 Rule::type_def => {
                     definition = Some(self.parse_type_definition(pair));
                 }
@@ -34,6 +36,7 @@ impl ParserEngine {
             span,
             name,
             params,
+            op: op.unwrap(),
             definition: Box::new(definition.unwrap()),
         }
     }
@@ -72,7 +75,6 @@ impl ParserEngine {
         match pair.as_rule() {
             Rule::struct_body => self.parse_struct_body(pair).into(),
             Rule::sum_type => self.parse_enum_definition(pair).into(),
-            Rule::trait_type => self.parse_trait_definition(pair).into(),
             _ => unreachable!(),
         }
     }
@@ -181,26 +183,6 @@ impl ParserEngine {
             rule => unreachable!("Unexpected rule '{:?}' as variant body", rule),
         }
     }
-
-    fn parse_trait_definition(&mut self, pair: Pair<'static, Rule>) -> ast::TraitDefinition {
-        let span = pair.as_span();
-        let mut inner = pair.into_inner();
-
-        let name_pair = inner.next().unwrap(); // Should be the identifier inside `()`
-        let name = name_pair.as_str().to_string();
-
-        if !is_pascal_case(&name) {
-            self.errors.push(ParseError {
-                message: format!("Trait name '{}' should be in PascalCase", name),
-                span: name_pair.as_span(),
-            });
-        }
-
-        let body_pair = inner.next().unwrap(); // Should be the struct_body after the dot
-        let body = Box::new(self.parse_struct_body(body_pair));
-
-        ast::TraitDefinition { span, name, body }
-    }
 }
 
 #[cfg(test)]
@@ -279,26 +261,6 @@ mod tests {
                 assert_eq!(variant2.as_name(), "Rectangle");
             }
             _ => panic!("Expected SumType"),
-        }
-    }
-
-    #[test]
-    fn test_parse_trait_type_alias() {
-        let input = "MyTrait :: (Self).(method() -> Self)";
-        let (result, _) = parse_type_alias_input(input, Rule::type_alias);
-
-        assert_eq!(result.name, "MyTrait");
-        assert!(result.params.is_none());
-
-        match *result.definition {
-            ast::TypeDefinition::Trait(trait_def) => {
-                assert_eq!(trait_def.name, "Self");
-                assert_eq!(trait_def.body.fields.len(), 1);
-
-                let field = &trait_def.body.fields[0];
-                assert_eq!(field.as_name(), "method");
-            }
-            _ => panic!("Expected TraitDefinition"),
         }
     }
 

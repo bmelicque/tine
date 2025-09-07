@@ -34,7 +34,6 @@ impl TypeChecker {
         match node {
             ast::TypeDefinition::Enum(e) => self.visit_enum_definition(e).into(),
             ast::TypeDefinition::Struct(s) => self.visit_struct_definition(s).into(),
-            ast::TypeDefinition::Trait(t) => self.visit_trait_definition(t).into(),
             ast::TypeDefinition::Type(t) => self.visit_type(t),
         }
     }
@@ -88,51 +87,13 @@ impl TypeChecker {
             optional: field.is_optional(),
         }
     }
-
-    fn visit_trait_definition(&mut self, node: &ast::TraitDefinition) -> types::TraitType {
-        self.type_registry.current_self = Some(node.name.clone());
-
-        let method_types = node
-            .body
-            .fields
-            .iter()
-            .filter_map(|field| self.visit_trait_method_definition(field))
-            .collect();
-
-        self.type_registry.current_self = None;
-
-        types::TraitType {
-            methods: method_types,
-        }
-    }
-
-    fn visit_trait_method_definition(
-        &mut self,
-        node: &ast::StructDefinitionField,
-    ) -> Option<types::TraitMethod> {
-        let as_field = self.visit_struct_definition_field(node);
-        if !matches!(as_field.def, types::Type::Function { .. }) {
-            self.errors.push(ParseError {
-                message: format!(
-                    "Only methods are allowed in trait definitions, found {}",
-                    as_field.def
-                ),
-                span: node.as_span(),
-            });
-            return None;
-        }
-        Some(types::TraitMethod {
-            name: as_field.name,
-            def: as_field.def,
-        })
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::ast;
-    use crate::types::{StructField, TraitMethod, Type, Variant};
+    use crate::types::{StructField, Variant};
 
     fn create_type_checker() -> TypeChecker {
         TypeChecker::new()
@@ -148,6 +109,7 @@ mod tests {
         let type_alias = ast::TypeAlias {
             name: "MyType".to_string(),
             params: None,
+            op: ast::DefinitionOp::Strict,
             definition: Box::new(ast::TypeDefinition::Type(ast::Type::Named(
                 ast::NamedType {
                     name: "number".to_string(),
@@ -264,52 +226,6 @@ mod tests {
                         optional: true,
                     },
                 ],
-            }
-        );
-        assert!(checker.errors.is_empty());
-    }
-
-    #[test]
-    fn test_visit_trait_definition() {
-        let mut checker = create_type_checker();
-        let trait_definition = ast::TraitDefinition {
-            name: "MyTrait".to_string(),
-            body: Box::new(ast::StructDefinition {
-                fields: vec![ast::StructDefinitionField::Mandatory(
-                    ast::StructMandatoryField {
-                        name: "method".to_string(),
-                        definition: ast::Type::Function(ast::FunctionType {
-                            params: vec![ast::Type::Named(ast::NamedType {
-                                name: "number".to_string(),
-                                args: None,
-                                span: dummy_span(),
-                            })],
-                            returned: Box::new(ast::Type::Named(ast::NamedType {
-                                name: "void".to_string(),
-                                args: None,
-                                span: dummy_span(),
-                            })),
-                            span: dummy_span(),
-                        }),
-                        span: dummy_span(),
-                    },
-                )],
-                span: dummy_span(),
-            }),
-            span: dummy_span(),
-        };
-
-        let result = checker.visit_trait_definition(&trait_definition);
-        assert_eq!(
-            result,
-            types::TraitType {
-                methods: vec![TraitMethod {
-                    name: "method".to_string(),
-                    def: types::Type::Function(types::FunctionType {
-                        params: vec![Type::Number],
-                        return_type: Box::new(Type::Void),
-                    }),
-                }],
             }
         );
         assert!(checker.errors.is_empty());

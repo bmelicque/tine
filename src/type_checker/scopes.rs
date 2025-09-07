@@ -41,6 +41,7 @@ impl SymbolTable {
 pub struct TypeMetadata {
     pub type_params: Vec<String>,
     pub methods: HashMap<String, types::FunctionType>,
+    pub loose_only: bool,
 }
 
 impl TypeMetadata {
@@ -48,6 +49,7 @@ impl TypeMetadata {
         Self {
             type_params: vec![],
             methods: HashMap::new(),
+            loose_only: false,
         }
     }
 
@@ -55,6 +57,7 @@ impl TypeMetadata {
         Self {
             type_params,
             methods: HashMap::new(),
+            loose_only: false,
         }
     }
 }
@@ -147,5 +150,12 @@ impl TypeRegistry {
             return false;
         };
         ty.fields.iter().find(|field| field.name == name).is_some()
+    }
+
+    pub fn can_be_strict(&self, type_name: &str) -> bool {
+        match self.metadata.get(type_name) {
+            Some(data) => !data.loose_only,
+            None => false,
+        }
     }
 }
