@@ -219,7 +219,7 @@ impl TypeChecker {
             expected = current.clone();
         }
 
-        if !value.is_assignable_to(&expected) {
+        if !self.can_be_assigned_to(&value, &expected) {
             self.errors.push(ParseError {
                 message: format!("Key type mismatch: expected {}, found {}", expected, value),
                 span: field.span,

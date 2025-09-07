@@ -26,7 +26,7 @@ impl TypeChecker {
                 e
             };
         }
-        if ty.is_assignable_to(expected) {
+        if self.can_be_assigned_to(&ty, expected) {
             Ok(Box::new(expected.clone()))
         } else {
             e
@@ -53,7 +53,7 @@ impl TypeChecker {
             let g = got.remove(&field.name);
             match (g, field.optional) {
                 (Some(t), _) => {
-                    if !t.is_assignable_to(&field.def) {
+                    if !self.can_be_assigned_to(&t, &field.def) {
                         return false;
                     }
                 }

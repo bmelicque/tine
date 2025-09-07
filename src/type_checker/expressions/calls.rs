@@ -42,7 +42,7 @@ impl TypeChecker {
 
     fn check_expression_argument(&mut self, node: &ast::Expression, expected: types::Type) {
         let got = self.visit_expression(node);
-        if !got.is_assignable_to(&expected) {
+        if !self.can_be_assigned_to(&got, &expected) {
             self.errors.push(ParseError {
                 message: format!("Expected type {}, got {}", expected, got),
                 span: node.as_span(),
@@ -73,7 +73,7 @@ impl TypeChecker {
         }
         self.define_params(&node.params, &expected.params);
         let body_type = self.visit_function_body(&node.body);
-        if !body_type.is_assignable_to(&expected.return_type) {
+        if !self.can_be_assigned_to(&body_type, &expected.return_type) {
             self.errors.push(ParseError {
                 message: format!("Expected type {}, got {}", expected.return_type, body_type),
                 span: node.span,

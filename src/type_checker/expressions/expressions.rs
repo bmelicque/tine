@@ -53,7 +53,7 @@ impl TypeChecker {
                 ty = value_ty;
                 continue;
             }
-            if !value_ty.is_assignable_to(&ty) {
+            if !self.can_be_assigned_to(&value_ty, &ty) {
                 self.errors.push(ParseError {
                     message: format!("Type mismatch: expected {}, found {}", ty, value_ty),
                     span: value.as_span(),
@@ -252,7 +252,7 @@ impl TypeChecker {
                 Some(value) => self.get_type_at(value.as_span()).unwrap(),
                 None => types::Type::Void,
             };
-            if !ty.is_assignable_to(expected) {
+            if !self.can_be_assigned_to(&ty, expected) {
                 self.errors.push(ParseError {
                     message: format!("Expected type {}, got {}", expected, ty),
                     span: ret.span,
@@ -320,7 +320,7 @@ impl TypeChecker {
             ast::Alternate::If(i) => self.visit_if_expression(i),
             ast::Alternate::IfDecl(i) => self.visit_if_decl_expression(i),
         };
-        if !alt_ty.is_assignable_to(expected) {
+        if !self.can_be_assigned_to(&alt_ty, expected) {
             self.errors.push(ParseError {
                 message: format!(
                     "Branches' types don't match: expected {}, got {}",

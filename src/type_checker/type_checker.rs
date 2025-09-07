@@ -90,4 +90,27 @@ impl TypeChecker {
     pub fn get_type_at(&mut self, span: Span<'static>) -> Option<types::Type> {
         self.metadata.get(&span).map(|ty| ty.clone())
     }
+
+    pub fn can_be_assigned_to(&self, test: &types::Type, against: &types::Type) -> bool {
+        match (test, against) {
+            (types::Type::Unknown, _) => true,
+            (_, types::Type::Unknown) => true,
+            (_, types::Type::Duck(duck)) => self.implements(test, duck),
+            (_, _) => test == against,
+        }
+    }
+    fn implements(&self, test: &types::Type, duck: &types::DuckType) -> bool {
+        let types::Type::Struct(ref st) = *duck.like else {
+            return false;
+        };
+
+        let types::Type::Named(name) = test else {
+            return false;
+        };
+
+        st.fields
+            .iter()
+            .find(|field| !self.type_registry.type_has(&name.name, &field.name))
+            .is_none()
+    }
 }

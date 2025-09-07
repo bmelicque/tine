@@ -191,16 +191,6 @@ impl Into<Type> for TupleType {
     }
 }
 
-impl Type {
-    pub fn is_assignable_to(&self, other: &Type) -> bool {
-        match (self, other) {
-            (Type::Unknown, _) => true,
-            (_, Type::Unknown) => true,
-            (_, _) => self == other,
-        }
-    }
-}
-
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

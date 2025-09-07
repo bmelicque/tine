@@ -15,7 +15,7 @@ impl TypeChecker {
             let arm_ty = self.visit_match_arm(arm, ty.clone());
             if expected == Type::Dynamic {
                 expected = arm_ty;
-            } else if !arm_ty.is_assignable_to(&expected) {
+            } else if !self.can_be_assigned_to(&arm_ty, &expected) {
                 self.errors.push(ParseError {
                     message: format!("Arm type mismatch: expected {}, got {}", expected, arm_ty),
                     span: node.span,

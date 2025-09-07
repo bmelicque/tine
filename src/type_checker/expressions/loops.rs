@@ -53,7 +53,7 @@ impl TypeChecker {
 
         for stmt in breaks.iter().skip(1) {
             let curr = self.break_type(stmt);
-            if !curr.is_assignable_to(&ty) {
+            if !self.can_be_assigned_to(&curr, &ty) {
                 self.errors.push(ParseError {
                     message: format!("Type {} doesn't match type {}", curr, ty),
                     span: stmt.span,
