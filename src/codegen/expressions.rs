@@ -30,6 +30,7 @@ impl CodeGenerator {
             ast::Expression::Call(node) => self.call_expr_to_swc(node).into(),
             ast::Expression::CompositeLiteral(node) => self.composite_literal_to_swc_expr(node),
             ast::Expression::Empty => panic!("shouldn't have empty expressions at codegen step"),
+            ast::Expression::Element(node) => self.element_expression_to_swc(node),
             ast::Expression::FieldAccess(node) => self.field_access_to_swc(node).into(),
             ast::Expression::Function(node) => self.function_expression_to_swc(node).into(),
             ast::Expression::Identifier(node) => self.ident_to_swc(node).into(),

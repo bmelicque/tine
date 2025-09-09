@@ -25,6 +25,7 @@ impl ParserEngine {
             Rule::block => self.parse_block(pair).into(),
             Rule::call_expression => self.parse_call_expression(pair).into(),
             Rule::composite_literal => self.parse_composite_literal(pair).into(),
+            Rule::element_expression => self.parse_element_expression(pair).into(),
             Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
                 self.parse_binary_ltr_expression(pair).into()
             }

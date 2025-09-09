@@ -54,7 +54,7 @@ anonymous_expression = { struct_literal_body | expression }
 // Expressions
 tuple_or_expression = { tuple_expression | expression }
 tuple_expression = { expression ~ ("," ~ expression)+ }
-expression = { if_expression | if_decl_expression | match_expression | loop_expression | block | composite_literal | array_expression | equality }
+expression = { if_expression | if_decl_expression | match_expression | loop_expression | block | element_expression | composite_literal | array_expression | equality }
 equality = { relation? ~ (("=="|"!=") ~ relation?)* }
 eq_op = { "==" | "!=" }
 relation = { addition? ~ (rel_op ~ addition?)*}
@@ -93,6 +93,21 @@ parameter = { value_identifier ~ type_annotation }
 predicate = { predicate_parameters ~ "=>" ~ (typed_block | expression) }
 predicate_parameters = { "(" ~ (predicate_param ~ ("," ~ predicate_param)*)? ~ ")" }
 predicate_param = { parameter | value_identifier }
+
+// DOM
+element_expression = { dom_element | void_element }
+dom_element  = { start_tag ~ child* ~ end_tag }
+child        = { dom_element | void_element | code | text }
+void_element = { "<" ~ tag_name ~ attribute* ~ "/" ~ ">" }
+start_tag    = { "<" ~ tag_name ~ attribute* ~ ">" }
+end_tag      = { "<" ~ "/" ~ tag_name ~ ">" }
+tag_name     = @{ ASCII_ALPHANUMERIC+ }
+attribute    = { attr_name ~ "=" ~ attr_value }
+attr_name    = @{ (ASCII_ALPHANUMERIC | "-" | ":")+ }
+attr_value   = { string_literal | "{" ~ expression ~ "}" }
+text         = @{ (!("<" | "{") ~ ANY)+ }
+code         = { "{" ~ expression ~ "}" }
+
 
 // Patterns
 pattern = { tuple_pattern | pattern_element }

@@ -155,7 +155,7 @@ impl TypeRegistry {
     pub fn can_be_strict(&self, type_name: &str) -> bool {
         match self.metadata.get(type_name) {
             Some(data) => !data.loose_only,
-            None => false,
+            None => true,
         }
     }
 }

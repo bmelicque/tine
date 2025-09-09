@@ -3,6 +3,8 @@ use std::fmt;
 use ordered_float::OrderedFloat;
 use pest::Span;
 
+use crate::ast::ElementExpression;
+
 use super::{composite_literals::CompositeLiteral, types::Type, Loop, Pattern, Statement};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -14,6 +16,7 @@ pub enum Expression {
     Block(BlockExpression),
     Call(CallExpression),
     CompositeLiteral(CompositeLiteral),
+    Element(ElementExpression),
     FieldAccess(FieldAccessExpression),
     Function(FunctionExpression),
     Identifier(Identifier),
@@ -36,6 +39,7 @@ impl Expression {
             Self::Block(e) => e.span,
             Self::Call(e) => e.span,
             Self::CompositeLiteral(e) => e.as_span(),
+            Self::Element(e) => e.as_span(),
             Self::Empty => Span::new("", 0, 0).unwrap(),
             Self::FieldAccess(e) => e.span,
             Self::Function(e) => e.span,

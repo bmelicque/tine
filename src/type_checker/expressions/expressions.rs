@@ -14,6 +14,12 @@ impl TypeChecker {
             ast::Expression::Block(node) => self.visit_block_expression(node),
             ast::Expression::Call(node) => self.visit_call_expression(node),
             ast::Expression::CompositeLiteral(node) => self.visit_composite_literal(node),
+            ast::Expression::Element(_) => types::Type::Duck(types::DuckType {
+                like: Box::new(types::Type::Named(types::NamedType {
+                    name: "Node".to_string(),
+                    args: vec![],
+                })),
+            }),
             ast::Expression::Empty => types::Type::Void,
             ast::Expression::FieldAccess(node) => self.visit_field_access_expression(node),
             ast::Expression::Function(node) => self.visit_function_expression(node).into(),

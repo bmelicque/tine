@@ -1,5 +1,7 @@
+mod builtin;
 pub mod codegen;
 mod composite_literal;
+mod dom;
 pub mod expressions;
 mod patterns;
 mod sort;
