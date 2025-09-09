@@ -6,6 +6,7 @@ use super::scopes::{SymbolTable, TypeRegistry};
 
 use crate::ast;
 use crate::parser::parser::ParseError;
+use crate::type_checker::std::dom::node::node;
 use crate::types;
 
 pub struct TypeChecker {
@@ -19,10 +20,13 @@ impl TypeChecker {
     pub fn new() -> Self {
         let mut symbols = SymbolTable::default();
         symbols.enter_scope();
+        let mut type_registry = TypeRegistry::new();
+        type_registry.define("Node", node(), None);
+
         Self {
             errors: Vec::new(),
             symbols,
-            type_registry: TypeRegistry::new(),
+            type_registry,
             metadata: HashMap::new(),
         }
     }

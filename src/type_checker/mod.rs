@@ -2,6 +2,7 @@ mod expressions;
 mod patterns;
 mod scopes;
 mod statements;
+mod std;
 mod type_checker;
 mod type_declaration;
 mod types;
