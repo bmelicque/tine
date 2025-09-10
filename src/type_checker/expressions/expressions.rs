@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{ast, parser::parser::ParseError, types};
+use crate::{ast, parser::parser::ParseError, type_checker::analysis_context::Symbol, types};
 
 use super::TypeChecker;
-use crate::type_checker::VariableInfo;
 
 impl TypeChecker {
     pub fn visit_expression(&mut self, node: &ast::Expression) -> types::Type {
@@ -205,17 +204,22 @@ impl TypeChecker {
         &mut self,
         node: &ast::FunctionExpression,
     ) -> types::FunctionType {
-        self.symbols.enter_scope();
+        self.analysis_context.enter_scope();
 
         let mut param_types = Vec::new();
         for param in node.params.iter() {
             let ty = self.visit_type(&param.type_annotation);
-            self.symbols.define(param.name.as_str(), ty.clone(), false);
+            self.analysis_context.register_symbol(Symbol::new(
+                param.name.as_str().into(),
+                ty.clone(),
+                false,
+                param.name.span,
+            ));
             param_types.push(ty);
         }
         let body_type = self.visit_function_body(&node.body);
 
-        self.symbols.exit_scope();
+        self.analysis_context.exit_scope();
 
         self.set_type_at(
             node.span,
@@ -268,8 +272,11 @@ impl TypeChecker {
     }
 
     fn visit_identifier(&mut self, node: &ast::Identifier) -> types::Type {
-        let ty = match self.symbols.lookup(node.as_str()) {
-            Some(VariableInfo { ty, .. }) => ty.clone(),
+        let ty = match self.analysis_context.lookup_mut(node.as_str()) {
+            Some(symbol) => {
+                symbol.reads += 1;
+                symbol.ty.clone()
+            }
             None => {
                 self.errors.push(ParseError {
                     message: format!("Undefined variable: {}", node.as_str()),
@@ -282,10 +289,10 @@ impl TypeChecker {
     }
 
     fn visit_if_expression(&mut self, node: &ast::IfExpression) -> types::Type {
-        self.symbols.enter_scope();
+        self.analysis_context.enter_scope();
         self.visit_condition(&node.condition);
         let ty = self.visit_block_expression(&node.consequent);
-        self.symbols.exit_scope();
+        self.analysis_context.exit_scope();
         let ty = if let Some(ref alternate) = node.alternate {
             self.visit_alternate(alternate, &ty);
             ty
@@ -302,15 +309,20 @@ impl TypeChecker {
                 span: node.pattern.as_span(),
             });
         };
-        self.symbols.enter_scope();
+        self.analysis_context.enter_scope();
         let inferred_type = self.visit_expression(&node.scrutinee);
         let mut variables = Vec::<(String, types::Type)>::new();
         self.match_pattern(&node.pattern, inferred_type, &mut variables);
         for (name, ty) in variables {
-            self.symbols.define(&name, ty, false);
+            self.analysis_context.register_symbol(Symbol::new(
+                name.clone(),
+                ty.clone(),
+                false,
+                node.pattern.as_span(),
+            ));
         }
         let ty = self.visit_block_expression(&node.consequent);
-        self.symbols.exit_scope();
+        self.analysis_context.exit_scope();
         let ty = if let Some(ref alternate) = node.alternate {
             self.visit_alternate(alternate, &ty);
             ty
@@ -582,15 +594,16 @@ mod tests {
             span: dummy_span(),
         };
 
-        checker.symbols.define(
-            "user",
+        checker.analysis_context.register_symbol(Symbol::new(
+            "user".into(),
             types::NamedType {
                 name: "User".to_string(),
                 args: vec![],
             }
             .into(),
             false,
-        );
+            dummy_span(),
+        ));
 
         let result = checker.visit_field_access_expression(&field_access_expression);
         assert!(
@@ -655,7 +668,12 @@ mod tests {
     #[test]
     fn test_visit_identifier() {
         let mut checker = create_type_checker();
-        checker.symbols.define("x", types::Type::Number, false);
+        checker.analysis_context.register_symbol(Symbol::new(
+            "x".into(),
+            types::Type::Number,
+            false,
+            span("x"),
+        ));
 
         let identifier = ast::Identifier { span: span("x") };
 
@@ -775,9 +793,12 @@ mod tests {
             ],
         });
 
-        checker
-            .symbols
-            .define("my_tuple", tuple_type.clone(), false);
+        checker.analysis_context.register_symbol(Symbol::new(
+            "my_tuple".into(),
+            tuple_type.clone(),
+            false,
+            span("my_tuple"),
+        ));
 
         let tuple_indexing = ast::TupleIndexingExpression {
             tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
@@ -798,9 +819,12 @@ mod tests {
     #[test]
     fn test_visit_tuple_indexing_invalid_type() {
         let mut checker = create_type_checker();
-        checker
-            .symbols
-            .define("not_a_tuple", types::Type::Number, false);
+        checker.analysis_context.register_symbol(Symbol::new(
+            "not_a_tuple".into(),
+            types::Type::Number,
+            false,
+            span("not_a_tuple"),
+        ));
 
         let tuple_indexing = ast::TupleIndexingExpression {
             tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
@@ -828,7 +852,12 @@ mod tests {
             elements: vec![Type::Number, types::Type::String],
         });
 
-        checker.symbols.define("my_tuple", tuple_type, false);
+        checker.analysis_context.register_symbol(Symbol::new(
+            "my_tuple".into(),
+            tuple_type.clone(),
+            false,
+            span("my_tuple"),
+        ));
 
         let tuple_indexing = ast::TupleIndexingExpression {
             tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
@@ -854,7 +883,12 @@ mod tests {
             elements: vec![Type::Number, types::Type::String],
         });
 
-        checker.symbols.define("my_tuple", tuple_type, false);
+        checker.analysis_context.register_symbol(Symbol::new(
+            "my_tuple".into(),
+            tuple_type.clone(),
+            false,
+            span("my_tuple"),
+        ));
 
         let tuple_indexing = ast::TupleIndexingExpression {
             tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
@@ -880,7 +914,12 @@ mod tests {
             elements: vec![Type::Number, types::Type::String],
         });
 
-        checker.symbols.define("my_tuple", tuple_type, false);
+        checker.analysis_context.register_symbol(Symbol::new(
+            "my_tuple".into(),
+            tuple_type.clone(),
+            false,
+            span("my_tuple"),
+        ));
 
         let tuple_indexing = ast::TupleIndexingExpression {
             tuple: Box::new(ast::Expression::Identifier(ast::Identifier {

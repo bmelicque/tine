@@ -1,3 +1,4 @@
+mod analysis_context;
 mod expressions;
 mod patterns;
 mod scopes;
@@ -8,5 +9,4 @@ mod type_declaration;
 mod types;
 mod utils;
 
-pub use scopes::VariableInfo;
 pub use type_checker::TypeChecker;

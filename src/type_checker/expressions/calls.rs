@@ -1,4 +1,9 @@
-use crate::{ast, parser::parser::ParseError, type_checker::TypeChecker, types};
+use crate::{
+    ast,
+    parser::parser::ParseError,
+    type_checker::{analysis_context::Symbol, TypeChecker},
+    types,
+};
 
 impl TypeChecker {
     pub fn visit_call_expression(&mut self, node: &ast::CallExpression) -> types::Type {
@@ -59,7 +64,7 @@ impl TypeChecker {
             return;
         };
 
-        self.symbols.enter_scope();
+        self.analysis_context.enter_scope();
 
         if expected.params.len() != node.params.len() {
             self.errors.push(ParseError {
@@ -80,19 +85,28 @@ impl TypeChecker {
             })
         }
 
-        self.symbols.exit_scope();
+        self.analysis_context.exit_scope();
     }
 
     fn define_params(&mut self, got: &Vec<ast::PredicateParam>, expected: &Vec<types::Type>) {
         for (i, param) in got.iter().take(expected.len()).enumerate() {
             match param {
                 ast::PredicateParam::Identifier(id) => {
-                    let ty = expected[i].clone();
-                    self.symbols.define(id.as_str(), ty.clone(), false);
+                    self.analysis_context.register_symbol(Symbol::new(
+                        id.as_str().into(),
+                        expected[i].clone(),
+                        false,
+                        id.span,
+                    ));
                 }
                 ast::PredicateParam::Param(param) => {
                     let ty = self.resolve_type(&param.type_annotation);
-                    self.symbols.define(param.name.as_str(), ty.clone(), false);
+                    self.analysis_context.register_symbol(Symbol::new(
+                        param.name.as_str().into(),
+                        ty,
+                        false,
+                        param.name.span,
+                    ));
                 }
             }
         }

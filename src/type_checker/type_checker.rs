@@ -1,33 +1,30 @@
-use std::collections::HashMap;
-
 use pest::Span;
 
-use super::scopes::{SymbolTable, TypeRegistry};
+use super::scopes::TypeRegistry;
 
 use crate::ast;
 use crate::parser::parser::ParseError;
+use crate::type_checker::analysis_context::AnalysisContext;
 use crate::type_checker::std::dom::node::node;
 use crate::types;
 
 pub struct TypeChecker {
     pub errors: Vec<ParseError>,
-    pub symbols: SymbolTable,
     pub type_registry: TypeRegistry,
-    metadata: HashMap<Span<'static>, types::Type>,
+    pub analysis_context: AnalysisContext,
 }
 
 impl TypeChecker {
     pub fn new() -> Self {
-        let mut symbols = SymbolTable::default();
-        symbols.enter_scope();
+        let mut analysis_context = AnalysisContext::new();
+        analysis_context.enter_scope();
         let mut type_registry = TypeRegistry::new();
         type_registry.define("Node", node(), None);
 
         Self {
             errors: Vec::new(),
-            symbols,
             type_registry,
-            metadata: HashMap::new(),
+            analysis_context,
         }
     }
 
@@ -87,12 +84,12 @@ impl TypeChecker {
         span: Span<'static>,
         ty: T,
     ) -> T {
-        self.metadata.insert(span, ty.clone().into());
+        self.analysis_context.types.insert(span, ty.clone().into());
         ty
     }
 
     pub fn get_type_at(&mut self, span: Span<'static>) -> Option<types::Type> {
-        self.metadata.get(&span).map(|ty| ty.clone())
+        self.analysis_context.types.get(&span).map(|ty| ty.clone())
     }
 
     pub fn can_be_assigned_to(&self, test: &types::Type, against: &types::Type) -> bool {

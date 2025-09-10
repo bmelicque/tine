@@ -1,5 +1,5 @@
 use super::TypeChecker;
-use crate::{ast, parser::parser::ParseError, types::Type};
+use crate::{ast, parser::parser::ParseError, type_checker::analysis_context::Symbol, types::Type};
 
 impl TypeChecker {
     pub fn visit_statement(&mut self, node: &ast::Statement) -> Type {
@@ -43,13 +43,14 @@ impl TypeChecker {
         let mut variables = Vec::new();
         self.match_pattern(pattern, against, &mut variables);
         for (name, ty) in variables {
-            let Some(info) = self.symbols.lookup(&name) else {
+            let Some(info) = self.analysis_context.lookup_mut(&name) else {
                 self.errors.push(ParseError {
                     message: format!("Cannot find name '{}'", name),
                     span: pattern.as_span(),
                 });
                 continue;
             };
+            info.writes += 1;
             if info.ty != ty {
                 self.errors.push(ParseError {
                     message: format!("Cannot assign type {:?} to {:?}", ty, info.ty),
@@ -81,13 +82,17 @@ impl TypeChecker {
             });
             return;
         };
-        let Some(info) = self.symbols.lookup(root.as_str()) else {
+        let Some(info) = self.analysis_context.lookup_mut(root.as_str()) else {
             self.errors.push(ParseError {
                 message: format!("Cannot find name '{}'", root.as_str()),
                 span: root.span,
             });
             return;
         };
+        info.writes += 1;
+        // visit expression at the beginning of the current scope adds a read
+        // so we need to remove it here
+        info.reads -= 1;
         if !info.mutable {
             self.errors.push(ParseError {
                 message: "Cannot assign to immutable variable".to_string(),
@@ -104,12 +109,16 @@ impl TypeChecker {
     }
 
     fn visit_method_definition(&mut self, node: &ast::MethodDefinition) -> Type {
-        self.symbols.enter_scope();
+        self.analysis_context.enter_scope();
         let receiver = self.visit_named_type(&node.receiver.ty);
-        self.symbols
-            .define(node.receiver.name.as_str(), receiver.clone(), false);
+        self.analysis_context.register_symbol(Symbol::new(
+            node.receiver.name.as_str().into(),
+            receiver.clone(),
+            false,
+            node.receiver.span,
+        ));
         let function = self.visit_function_expression(&node.definition);
-        self.symbols.exit_scope();
+        self.analysis_context.exit_scope();
         let type_name = node.receiver.ty.name.as_str();
         let method_name = node.name.as_str();
 
@@ -157,7 +166,12 @@ impl TypeChecker {
         }
         self.match_pattern(&node.pattern, inferred_type, &mut variables);
         for (name, ty) in variables {
-            self.symbols.define(&name, ty, mutable);
+            self.analysis_context.register_symbol(Symbol::new(
+                name.clone(),
+                ty.clone(),
+                mutable,
+                node.pattern.as_span(),
+            ));
         }
         Type::Void
     }

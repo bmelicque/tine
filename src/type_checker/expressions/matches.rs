@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crate::{
     ast,
     parser::parser::ParseError,
-    type_checker::TypeChecker,
+    type_checker::{analysis_context::Symbol, TypeChecker},
     types::{self, Type, Variant},
 };
 
@@ -29,12 +29,17 @@ impl TypeChecker {
     fn visit_match_arm(&mut self, arm: &ast::MatchArm, against: Type) -> Type {
         let mut variables = Vec::new();
         self.match_pattern(&arm.pattern, against, &mut variables);
-        self.symbols.enter_scope();
+        self.analysis_context.enter_scope();
         for (name, ty) in variables {
-            self.symbols.define(&name, ty, false);
+            self.analysis_context.register_symbol(Symbol::new(
+                name.clone(),
+                ty.clone(),
+                false,
+                arm.pattern.as_span(),
+            ));
         }
         let arm_ty = self.visit_expression(&arm.expression);
-        self.symbols.exit_scope();
+        self.analysis_context.exit_scope();
         arm_ty
     }
 

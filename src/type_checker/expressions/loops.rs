@@ -1,4 +1,4 @@
-use crate::{ast, parser::parser::ParseError, types};
+use crate::{ast, parser::parser::ParseError, type_checker::analysis_context::Symbol, types};
 
 use super::TypeChecker;
 
@@ -12,9 +12,9 @@ impl TypeChecker {
 
     fn visit_for_expression(&mut self, node: &ast::ForExpression) -> types::Type {
         self.visit_condition(&node.condition);
-        self.symbols.enter_scope();
+        self.analysis_context.enter_scope();
         let ty = self.visit_loop_body(&node.body);
-        self.symbols.exit_scope();
+        self.analysis_context.exit_scope();
         self.set_type_at(node.span, ty)
     }
 
@@ -29,14 +29,19 @@ impl TypeChecker {
                 types::Type::Unknown
             }
         };
-        self.symbols.enter_scope();
+        self.analysis_context.enter_scope();
         let mut variables = Vec::<(String, types::Type)>::new();
         self.match_pattern(&node.pattern, inferred_type, &mut variables);
         for (name, ty) in variables {
-            self.symbols.define(&name, ty, false);
+            self.analysis_context.register_symbol(Symbol::new(
+                name.clone(),
+                ty.clone(),
+                false,
+                node.pattern.as_span(),
+            ));
         }
         let ty = self.visit_loop_body(&node.body);
-        self.symbols.exit_scope();
+        self.analysis_context.exit_scope();
         self.set_type_at(node.span, ty)
     }
 

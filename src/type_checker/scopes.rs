@@ -2,42 +2,6 @@ use std::collections::HashMap;
 
 use crate::types;
 
-#[derive(Debug)]
-pub struct VariableInfo {
-    pub ty: types::Type,
-    pub mutable: bool,
-}
-
-#[derive(Default)]
-pub struct SymbolTable {
-    scopes: Vec<HashMap<String, VariableInfo>>,
-}
-
-impl SymbolTable {
-    pub fn enter_scope(&mut self) {
-        self.scopes.push(HashMap::new());
-    }
-
-    pub fn exit_scope(&mut self) {
-        self.scopes.pop().expect("Cannot pop the global scope");
-    }
-
-    pub fn define(&mut self, name: &str, type_: types::Type, mutable: bool) {
-        if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name.to_string(), VariableInfo { ty: type_, mutable });
-        }
-    }
-
-    pub fn lookup(&self, name: &str) -> Option<&VariableInfo> {
-        for scope in self.scopes.iter().rev() {
-            if let Some(info) = scope.get(name) {
-                return Some(info);
-            }
-        }
-        None
-    }
-}
-
 pub struct TypeMetadata {
     pub type_params: Vec<String>,
     pub methods: HashMap<String, types::FunctionType>,

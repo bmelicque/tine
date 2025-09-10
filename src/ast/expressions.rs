@@ -394,10 +394,10 @@ impl PathExpression for FieldAccessExpression {
         self.span
     }
     fn root_expression(&self) -> Expression {
-        match *self.object.clone() {
+        match self.object.as_ref() {
             Expression::FieldAccess(expr) => expr.root_expression(),
             Expression::TupleIndexing(expr) => expr.root_expression(),
-            expr => expr,
+            expr => expr.clone(),
         }
     }
     fn base_expression(&self) -> &Expression {
