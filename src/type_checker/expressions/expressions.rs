@@ -31,6 +31,7 @@ impl TypeChecker {
             ast::Expression::StringLiteral(_) => types::Type::String,
             ast::Expression::Tuple(node) => self.visit_tuple_expression(node).into(),
             ast::Expression::TupleIndexing(node) => self.visit_tuple_indexing(node),
+            ast::Expression::Unary(node) => self.visit_unary_expression(&node),
         }
     }
 

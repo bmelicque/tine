@@ -44,6 +44,7 @@ impl CodeGenerator {
                 raw: None,
             })
             .into(),
+            ast::Expression::Unary(node) => self.unary_expression_to_swc_expr(node),
             ast::Expression::StringLiteral(node) => swc::Lit::Str(swc::Str {
                 span: DUMMY_SP,
                 value: node.as_str().into(),
@@ -361,6 +362,18 @@ impl CodeGenerator {
         self.exit_block();
         self.push_to_block(stmt.into());
         create_ident(&id).into()
+    }
+
+    fn unary_expression_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
+        // TODO:
+        // match node.operator {
+        //     ast::UnaryOperator::Deref => self.dereference_to_swc_expr(node),
+        //     ast::UnaryOperator::ImmutableRef => self.immutable_ref_to_swc_expr(node),
+        //     ast::UnaryOperator::MutableRef => self.mutable_ref_to_swc_expr(node),
+        //     ast::UnaryOperator::Negate => self.negate_expression_to_swc_expr(node),
+        //     ast::UnaryOperator::Not => self.logical_not_expression_to_swc_expr(node),
+        // }
+        swc::Expr::This(swc::ThisExpr { span: DUMMY_SP })
     }
 
     fn tuple_to_swc(&mut self, node: ast::TupleExpression) -> swc::ArrayLit {

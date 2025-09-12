@@ -53,7 +53,14 @@ impl Into<Type> for ArrayType {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReferenceType {
     pub span: Span<'static>,
+    pub operator: ReferenceOperator,
     pub target: Option<Box<Type>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ReferenceOperator {
+    Mutable,   // &
+    Immutable, // @
 }
 
 impl Into<Type> for ReferenceType {

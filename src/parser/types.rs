@@ -91,12 +91,19 @@ impl ParserEngine {
     fn parse_reference_type(&mut self, pair: Pair<'static, Rule>) -> ast::ReferenceType {
         assert!(pair.as_rule() == Rule::reference_type);
         let span = pair.as_span();
-        let target = pair
-            .into_inner()
-            .next()
-            .map(|pair| Box::new(self.parse_type(pair)));
+        let mut inner = pair.into_inner();
+        let operator = match inner.next().unwrap().as_str() {
+            "&" => ast::ReferenceOperator::Mutable,
+            "@" => ast::ReferenceOperator::Immutable,
+            _ => unreachable!("Unexpected reference operator"),
+        };
+        let target = inner.next().map(|pair| Box::new(self.parse_type(pair)));
 
-        ast::ReferenceType { span, target }
+        ast::ReferenceType {
+            span,
+            operator,
+            target,
+        }
     }
 
     pub fn parse_option_type(&mut self, pair: Pair<'static, Rule>) -> ast::OptionType {

@@ -39,6 +39,7 @@ impl ParserEngine {
             Rule::member_expression => self.parse_field_access_expression(pair).into(),
             Rule::tuple_expression => self.parse_tuple_expression(pair).into(),
             Rule::tuple_indexing => self.parse_tuple_indexing(pair).into(),
+            Rule::unary => self.parse_unary_expression(pair).into(),
             Rule::string_literal => ast::StringLiteral {
                 span: pair.as_span(),
             }
@@ -321,6 +322,35 @@ impl ParserEngine {
         let index = self.parse_number_literal(inner.next().unwrap());
 
         ast::TupleIndexingExpression { span, tuple, index }
+    }
+
+    fn parse_unary_expression(&mut self, pair: Pair<'static, Rule>) -> ast::UnaryExpression {
+        assert!(pair.as_rule() == Rule::unary);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+        let operator = self.parse_unary_operator(inner.next().unwrap());
+        let operand = Box::new(self.parse_expression(inner.next().unwrap()));
+        ast::UnaryExpression {
+            span,
+            operator,
+            operand,
+        }
+    }
+
+    fn parse_unary_operator(&mut self, pair: Pair<'static, Rule>) -> ast::UnaryOperator {
+        assert!(pair.as_rule() == Rule::unary_op);
+        match pair.as_str() {
+            "*" => ast::UnaryOperator::Deref,
+            "&" => ast::UnaryOperator::MutableRef,
+            "@" => ast::UnaryOperator::ImmutableRef,
+            op => {
+                self.errors.push(ParseError {
+                    message: format!("Unknown unary operator: {}", op),
+                    span: pair.as_span(),
+                });
+                ast::UnaryOperator::Deref
+            }
+        }
     }
 
     fn parse_number_literal(&mut self, pair: Pair<'static, Rule>) -> ast::NumberLiteral {

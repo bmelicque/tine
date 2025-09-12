@@ -123,6 +123,7 @@ impl TypeChecker {
 
         types::Type::Reference(types::ReferenceType {
             target: Box::new(inner_type),
+            mutable: matches!(node.operator, ast::ReferenceOperator::Mutable),
         })
     }
 
@@ -304,6 +305,7 @@ mod tests {
                 args: None,
                 span: dummy_span(),
             }))),
+            operator: ast::ReferenceOperator::Immutable,
             span: dummy_span(),
         };
 
@@ -311,7 +313,8 @@ mod tests {
         assert_eq!(
             result,
             types::Type::Reference(types::ReferenceType {
-                target: Box::new(Type::String)
+                target: Box::new(Type::String),
+                mutable: false,
             })
         );
     }

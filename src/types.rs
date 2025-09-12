@@ -125,6 +125,7 @@ impl Into<Type> for OptionType {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReferenceType {
     pub target: Box<Type>,
+    pub mutable: bool,
 }
 
 impl Into<Type> for ReferenceType {

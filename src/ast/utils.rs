@@ -1,6 +1,6 @@
 use crate::ast::{
-    Alternate, BlockExpression, BreakStatement, Expression, IfDeclExpression, IfExpression, Loop,
-    ReturnStatement, Statement,
+    Alternate, BlockExpression, BreakStatement, Expression, Identifier, IfDeclExpression,
+    IfExpression, Loop, PathExpression, ReturnStatement, Statement,
 };
 
 fn find_breaks(expr: Expression, stmts: &mut Vec<BreakStatement>) {
@@ -118,5 +118,23 @@ impl Loop {
             Loop::For(expr) => expr.body.find_returns(stmts),
             Loop::ForIn(expr) => expr.body.find_returns(stmts),
         }
+    }
+}
+
+/**
+ * Returns the root identifier in an expression, if any.
+ * For example, in the expression `a.b.c`, it will return `a`.
+ * If expression is just an identifier, it will return that identifier.
+ * */
+pub fn root_identifier(expr: &Expression) -> Option<Identifier> {
+    let root = match expr {
+        Expression::FieldAccess(expr) => expr.root_expression(),
+        Expression::TupleIndexing(expr) => expr.root_expression(),
+        Expression::Identifier(expr) => return Some(expr.clone()),
+        _ => return None,
+    };
+    match root {
+        Expression::Identifier(expr) => Some(expr.clone()),
+        _ => None,
     }
 }

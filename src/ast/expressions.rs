@@ -28,6 +28,7 @@ pub enum Expression {
     StringLiteral(StringLiteral),
     Tuple(TupleExpression),
     TupleIndexing(TupleIndexingExpression),
+    Unary(UnaryExpression),
 }
 
 impl Expression {
@@ -52,6 +53,7 @@ impl Expression {
             Self::StringLiteral(e) => e.span,
             Self::Tuple(e) => e.span,
             Self::TupleIndexing(e) => e.span,
+            Self::Unary(e) => e.span,
         }
     }
 
@@ -450,6 +452,28 @@ impl Into<Expression> for TupleIndexingExpression {
     fn into(self) -> Expression {
         Expression::TupleIndexing(self)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UnaryExpression {
+    pub span: Span<'static>,
+    pub operator: UnaryOperator,
+    pub operand: Box<Expression>,
+}
+
+impl Into<Expression> for UnaryExpression {
+    fn into(self) -> Expression {
+        Expression::Unary(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum UnaryOperator {
+    Deref,        // *
+    MutableRef,   // &
+    ImmutableRef, // @
+    Negate,       // -
+    Not,          // !
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
