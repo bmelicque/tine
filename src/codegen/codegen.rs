@@ -4,7 +4,7 @@ use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
 use swc_ecma_codegen::{text_writer::JsWriter, Config, Emitter};
 
-use crate::{ast, codegen::builtin::create_element::create_element};
+use crate::{ast, codegen::builtin::create_element::create_element, type_checker};
 
 use super::{sort::Scope, utils::get_option_class};
 
@@ -35,15 +35,17 @@ pub struct CodeGenerator {
     pub source_map: Lrc<SourceMap>,
     flags: TranspilerFlags,
     current_block: Vec<Vec<swc::Stmt>>,
+    analysis_context: type_checker::AnalysisContext,
 }
 
 impl CodeGenerator {
-    pub fn new() -> Self {
+    pub fn new(context: type_checker::AnalysisContext) -> Self {
         Self {
             scope: Scope::new(),
             source_map: Lrc::new(SourceMap::new(Default::default())),
             flags: TranspilerFlags::None,
             current_block: vec![],
+            analysis_context: context,
         }
     }
 

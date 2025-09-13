@@ -55,7 +55,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    let mut code_generator = CodeGenerator::new();
+    let mut code_generator = CodeGenerator::new(checker.analysis_context);
     match code_generator.generate_js(ast) {
         Ok(js_code) => {
             write_output(&args[2], &js_code);

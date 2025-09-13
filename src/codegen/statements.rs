@@ -108,12 +108,16 @@ impl CodeGenerator {
     fn declaration_to_swc(&mut self, node: ast::VariableDeclaration) -> swc::Decl {
         let init = Some(Box::new(self.expr_to_swc(*node.value)));
 
+        let _identifiers = node.pattern.list_identifiers();
+        let pattern = self.pattern_to_swc(*node.pattern);
         let decl = swc::VarDeclarator {
             span: DUMMY_SP,
-            name: self.pattern_to_swc(*node.pattern),
+            name: pattern,
             init,
             definite: false,
         };
+
+        // TODO: wrap bindings to build pointers if needed
 
         let kind = match node.op {
             ast::DeclarationOp::Mut => swc::VarDeclKind::Let,

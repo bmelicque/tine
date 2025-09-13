@@ -63,6 +63,53 @@ impl Pattern {
             Pattern::Variant(_) => true,
         }
     }
+
+    pub fn list_identifiers(&self) -> Vec<&IdentifierPattern> {
+        match self {
+            Pattern::Identifier(p) => vec![p],
+            Pattern::Literal(_) => vec![],
+            Pattern::Struct(s) => s
+                .fields
+                .iter()
+                .filter_map(|field| {
+                    if let Some(pattern) = &field.pattern {
+                        Some(pattern.list_identifiers())
+                    } else {
+                        None
+                    }
+                })
+                .flatten()
+                .collect(),
+            Pattern::Tuple(t) => t
+                .elements
+                .iter()
+                .map(|pattern| pattern.list_identifiers())
+                .flatten()
+                .collect(),
+            Pattern::Variant(v) => {
+                let Some(body) = &v.body else { return vec![] };
+                match body {
+                    VariantPatternBody::Struct(fields) => fields
+                        .iter()
+                        .filter_map(|field| {
+                            if let Some(pattern) = &field.pattern {
+                                Some(pattern.list_identifiers())
+                            } else {
+                                None
+                            }
+                        })
+                        .flatten()
+                        .collect(),
+                    VariantPatternBody::Tuple(t) => t
+                        .elements
+                        .iter()
+                        .map(|pattern| pattern.list_identifiers())
+                        .flatten()
+                        .collect(),
+                }
+            }
+        }
+    }
 }
 
 impl Into<PatternExpression> for Pattern {
