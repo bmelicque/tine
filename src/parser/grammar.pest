@@ -4,7 +4,7 @@ WHITESPACE = _{ " " | "\t" }
 COMMENT = _{ "//" ~ (!"\n" ~ ANY)* ~ "\n" | "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 
 // Identifiers and literals
-value_identifier = @{ ASCII_ALPHA_LOWER ~ (ASCII_ALPHANUMERIC | "_")* }
+value_identifier = @{ "_"? ~ ASCII_ALPHA_LOWER ~ (ASCII_ALPHANUMERIC | "_")* }
 string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
 number_literal = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 boolean_literal = @{ "true" | "false" }
@@ -64,7 +64,7 @@ addition = { multiplication? ~ (add_op ~ multiplication?)* }
 add_op = { "+" | "-" }
 multiplication = { exponentiation ~ (mul_op ~ exponentiation?)* }
 mul_op = { "*" | "/" | "%" }
-exponentiation = { unary ~ ("**" ~ unary)* }
+exponentiation = { (unary|primary) ~ ("**" ~ (unary|primary))* }
 unary = { unary_op ~ primary }
 unary_op = { "*" | "&" | "@" }
 primary = { call_expression | member_expression | tuple_indexing | string_literal | number_literal | boolean_literal | value_identifier | function_expression | "(" ~ tuple_or_expression ~ ")" }
