@@ -1,3 +1,5 @@
+mod unary;
+
 use rand::{distr::Alphanumeric, Rng};
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
@@ -362,18 +364,6 @@ impl CodeGenerator {
         self.exit_block();
         self.push_to_block(stmt.into());
         create_ident(&id).into()
-    }
-
-    fn unary_expression_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
-        // TODO:
-        // match node.operator {
-        //     ast::UnaryOperator::Deref => self.dereference_to_swc_expr(node),
-        //     ast::UnaryOperator::ImmutableRef => self.immutable_ref_to_swc_expr(node),
-        //     ast::UnaryOperator::MutableRef => self.mutable_ref_to_swc_expr(node),
-        //     ast::UnaryOperator::Negate => self.negate_expression_to_swc_expr(node),
-        //     ast::UnaryOperator::Not => self.logical_not_expression_to_swc_expr(node),
-        // }
-        swc::Expr::This(swc::ThisExpr { span: DUMMY_SP })
     }
 
     fn tuple_to_swc(&mut self, node: ast::TupleExpression) -> swc::ArrayLit {

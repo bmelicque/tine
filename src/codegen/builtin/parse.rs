@@ -2,9 +2,7 @@ use swc_common::{sync::Lrc, FileName, SourceMap};
 use swc_ecma_ast::Stmt;
 use swc_ecma_parser::{lexer::Lexer, EsConfig, Parser, StringInput, Syntax};
 
-pub fn create_element() -> Vec<Stmt> {
-    let js_code = include_str!("create-element.js");
-
+pub fn parse(js_code: &str) -> Vec<Stmt> {
     let cm: Lrc<SourceMap> = Default::default();
     let fm = cm.new_source_file(FileName::Custom("input.js".into()), js_code.into());
 

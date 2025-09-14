@@ -95,6 +95,14 @@ pub fn create_str(text: &str) -> swc::Expr {
     }))
 }
 
+pub fn create_number(value: f64) -> swc::Expr {
+    swc::Expr::Lit(swc::Lit::Num(swc::Number {
+        span: DUMMY_SP,
+        value: value,
+        raw: None,
+    }))
+}
+
 pub fn get_option_class() -> swc::ClassDecl {
     let constructor = swc::Constructor {
         span: DUMMY_SP,

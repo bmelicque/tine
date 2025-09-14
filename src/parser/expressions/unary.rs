@@ -69,4 +69,36 @@ mod tests {
             _ => panic!("Expected operand to be 'ref'"),
         }
     }
+
+    #[test]
+    fn test_parse_immutable_reference() {
+        let input = "@value";
+        let result = parse_expression_input(input);
+
+        let ast::Expression::Unary(unary) = result else {
+            panic!("Expected UnaryExpression");
+        };
+        assert_eq!(unary.operator, ast::UnaryOperator::ImmutableRef);
+
+        match *unary.operand {
+            ast::Expression::Identifier(id) if id.as_str() == "value" => {}
+            _ => panic!("Expected operand to be 'value'"),
+        }
+    }
+
+    #[test]
+    fn test_parse_mutable_reference() {
+        let input = "@value";
+        let result = parse_expression_input(input);
+
+        let ast::Expression::Unary(unary) = result else {
+            panic!("Expected UnaryExpression");
+        };
+        assert_eq!(unary.operator, ast::UnaryOperator::ImmutableRef);
+
+        match *unary.operand {
+            ast::Expression::Identifier(id) if id.as_str() == "value" => {}
+            _ => panic!("Expected operand to be 'value'"),
+        }
+    }
 }

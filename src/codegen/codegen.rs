@@ -4,7 +4,11 @@ use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
 use swc_ecma_codegen::{text_writer::JsWriter, Config, Emitter};
 
-use crate::{ast, codegen::builtin::create_element::create_element, type_checker};
+use crate::{
+    ast,
+    codegen::builtin::{create_element, reference},
+    type_checker,
+};
 
 use super::{sort::Scope, utils::get_option_class};
 
@@ -27,6 +31,7 @@ bitflags! {
         const None = 0;
         const OptionType = 1;
         const CreateElement = 2;
+        const Reference = 4;
     }
 }
 
@@ -82,6 +87,7 @@ impl CodeGenerator {
             match flag {
                 TranspilerFlags::OptionType => swc_stmts.push(get_option_class().into()),
                 TranspilerFlags::CreateElement => swc_stmts.append(create_element().as_mut()),
+                TranspilerFlags::Reference => swc_stmts.append(reference().as_mut()),
                 _ => {}
             }
         }
