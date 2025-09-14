@@ -8,41 +8,37 @@ use crate::{ast, codegen::utils::AssignTo};
 use super::{utils::create_ident, CodeGenerator};
 
 impl CodeGenerator {
-    pub fn stmt_to_swc(&mut self, node: ast::Statement) -> Option<swc::Stmt> {
+    pub fn stmt_to_swc(&mut self, node: ast::Statement) -> Vec<swc::Stmt> {
         match node {
-            ast::Statement::Assignment(node) => Some(self.assignment_to_swc(node).into()),
-            ast::Statement::Break(_) => Some(self.break_to_swc_stmt().into()),
-            ast::Statement::Empty => None,
+            ast::Statement::Assignment(node) => vec![self.assignment_to_swc(node).into()],
+            ast::Statement::Break(_) => vec![self.break_to_swc_stmt().into()],
+            ast::Statement::Empty => vec![],
             ast::Statement::Expression(node) => match *node.expression {
                 ast::Expression::Block(block) => {
-                    Some(self.block_to_swc_stmt(block, AssignTo::None).into())
+                    vec![self.block_to_swc_stmt(block, AssignTo::None).into()]
                 }
-                ast::Expression::If(expr) => Some(self.if_to_swc_stmt(expr, AssignTo::None).into()),
+                ast::Expression::If(expr) => vec![self.if_to_swc_stmt(expr, AssignTo::None).into()],
                 ast::Expression::IfDecl(expr) => {
-                    Some(self.if_decl_to_swc_stmt(expr, AssignTo::None).into())
+                    vec![self.if_decl_to_swc_stmt(expr, AssignTo::None).into()]
                 }
-                ast::Expression::Loop(expr) => Some(self.loop_to_swc_stmt(expr, AssignTo::None)),
+                ast::Expression::Loop(expr) => vec![self.loop_to_swc_stmt(expr, AssignTo::None)],
                 ast::Expression::Match(expr) => {
-                    Some(self.match_to_swc_stmt(expr, AssignTo::None).into())
+                    vec![self.match_to_swc_stmt(expr, AssignTo::None).into()]
                 }
-                expr => Some(
-                    swc::ExprStmt {
-                        span: DUMMY_SP,
-                        expr: Box::new(self.expr_to_swc(expr)),
-                    }
-                    .into(),
-                ),
-            },
-            ast::Statement::MethodDefinition(node) => Some(
-                swc::ExprStmt {
+                expr => vec![swc::ExprStmt {
                     span: DUMMY_SP,
-                    expr: Box::new(self.method_definition_to_swc(node).into()),
+                    expr: Box::new(self.expr_to_swc(expr)),
                 }
-                .into(),
-            ),
-            ast::Statement::Return(node) => Some(self.return_to_swc(node).into()),
+                .into()],
+            },
+            ast::Statement::MethodDefinition(node) => vec![swc::ExprStmt {
+                span: DUMMY_SP,
+                expr: Box::new(self.method_definition_to_swc(node).into()),
+            }
+            .into()],
+            ast::Statement::Return(node) => vec![self.return_to_swc(node).into()],
             ast::Statement::TypeAlias(node) => self.alias_to_swc(node).into(),
-            ast::Statement::VariableDeclaration(node) => Some(self.declaration_to_swc(node).into()),
+            ast::Statement::VariableDeclaration(node) => vec![self.declaration_to_swc(node).into()],
         }
     }
 
@@ -68,9 +64,7 @@ impl CodeGenerator {
                     }));
                 }
                 stmt => {
-                    if let Some(stmt) = self.stmt_to_swc(stmt.clone()) {
-                        stmts.push(stmt);
-                    }
+                    stmts.extend(self.stmt_to_swc(stmt.clone()));
                 }
             }
         }

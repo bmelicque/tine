@@ -8,7 +8,7 @@ use swc_ecma_ast as swc;
 use super::{enums::enum_def_to_swc_constructor, literal_alias::literal_alias_to_swc_constructor};
 
 impl CodeGenerator {
-    pub fn alias_to_swc(&mut self, node: ast::TypeAlias) -> Option<swc::Stmt> {
+    pub fn alias_to_swc(&mut self, node: ast::TypeAlias) -> Vec<swc::Stmt> {
         let mut super_class = None;
         let body: Vec<swc::ClassMember> = match *node.definition {
             ast::TypeDefinition::Enum(def) => {
@@ -59,7 +59,7 @@ impl CodeGenerator {
                 implements: vec![],
             }),
         };
-        Some(declaration.into())
+        vec![declaration.into()]
     }
 }
 

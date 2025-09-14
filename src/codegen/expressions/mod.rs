@@ -259,7 +259,7 @@ impl CodeGenerator {
                     .block
                     .statements
                     .iter()
-                    .filter_map(|stmt| self.stmt_to_swc(stmt.clone()))
+                    .flat_map(|stmt| self.stmt_to_swc(stmt.clone()))
                     .collect();
 
                 swc::BlockStmtOrExpr::BlockStmt(swc::BlockStmt {

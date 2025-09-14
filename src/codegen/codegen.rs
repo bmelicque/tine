@@ -76,8 +76,8 @@ impl CodeGenerator {
     fn node_to_swc_module(&mut self, node: ast::Program) -> swc::Module {
         self.enter_block();
         for stmt in node.statements {
-            let stmt = self.stmt_to_swc(stmt);
-            if let Some(stmt) = stmt {
+            let stmts = self.stmt_to_swc(stmt);
+            for stmt in stmts {
                 self.push_to_block(stmt);
             }
         }
