@@ -6,6 +6,7 @@ mod exponentiation;
 mod field_access;
 mod function;
 mod identifier;
+mod ifs;
 mod tuple;
 mod unary;
 
@@ -41,7 +42,7 @@ impl ParserEngine {
             Rule::function_expression => self.parse_function_expression(pair).into(),
             Rule::value_identifier => self.parse_identifier(pair).into(),
             Rule::if_expression => self.parse_if_expression(pair).into(),
-            Rule::if_decl_expression => self.parse_if_decl_expression(pair).into(),
+            Rule::if_decl_expression => self.parse_if_pat_expression(pair).into(),
             Rule::loop_expression => self.parse_loop(pair).into(),
             Rule::match_expression => self.parse_match_expression(pair).into(),
             Rule::member_expression => self.parse_field_access_expression(pair).into(),
@@ -95,53 +96,6 @@ impl ParserEngine {
                 .as_str()
                 .parse()
                 .unwrap_or(ordered_float::OrderedFloat(0.0)),
-        }
-    }
-
-    fn parse_if_expression(&mut self, pair: Pair<'static, Rule>) -> ast::IfExpression {
-        assert!(pair.as_rule() == Rule::if_expression);
-        let span = pair.as_span();
-        let mut inner = pair.into_inner();
-        let condition = Box::new(self.parse_expression(inner.next().unwrap()));
-        let consequent = Box::new(self.parse_block(inner.next().unwrap()));
-        let alternate = inner
-            .next()
-            .map(|pair| Box::new(self.parse_alternate(pair)));
-        ast::IfExpression {
-            span,
-            condition,
-            consequent,
-            alternate,
-        }
-    }
-
-    fn parse_if_decl_expression(&mut self, pair: Pair<'static, Rule>) -> ast::IfDeclExpression {
-        assert!(pair.as_rule() == Rule::if_decl_expression);
-        let span = pair.as_span();
-        let mut inner = pair.into_inner();
-        let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
-        let scrutinee = Box::new(self.parse_expression(inner.next().unwrap()));
-        let consequent = Box::new(self.parse_block(inner.next().unwrap()));
-        let alternate = inner
-            .next()
-            .map(|pair| Box::new(self.parse_alternate(pair)));
-        ast::IfDeclExpression {
-            span,
-            pattern,
-            scrutinee,
-            consequent,
-            alternate,
-        }
-    }
-
-    fn parse_alternate(&mut self, pair: Pair<'static, Rule>) -> ast::Alternate {
-        assert!(pair.as_rule() == Rule::alternate);
-        let pair = pair.into_inner().next().unwrap();
-        match pair.as_rule() {
-            Rule::block => self.parse_block(pair).into(),
-            Rule::if_expression => self.parse_if_expression(pair).into(),
-            Rule::if_decl_expression => self.parse_if_decl_expression(pair).into(),
-            rule => unreachable!("unexpected rule {:?}", rule),
         }
     }
 

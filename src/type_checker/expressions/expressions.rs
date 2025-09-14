@@ -303,7 +303,7 @@ impl TypeChecker {
         self.set_type_at(node.span, ty)
     }
 
-    fn visit_if_decl_expression(&mut self, node: &ast::IfDeclExpression) -> types::Type {
+    fn visit_if_decl_expression(&mut self, node: &ast::IfPatExpression) -> types::Type {
         if !node.pattern.is_refutable() {
             self.errors.push(ParseError {
                 message: "Refutable pattern expected".into(),

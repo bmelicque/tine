@@ -1,6 +1,6 @@
 use crate::ast::{
-    Alternate, BlockExpression, BreakStatement, Expression, Identifier, IfDeclExpression,
-    IfExpression, Loop, PathExpression, ReturnStatement, Statement,
+    Alternate, BlockExpression, BreakStatement, Expression, Identifier, IfExpression,
+    IfPatExpression, Loop, PathExpression, ReturnStatement, Statement,
 };
 
 fn find_breaks(expr: Expression, stmts: &mut Vec<BreakStatement>) {
@@ -34,7 +34,7 @@ impl IfExpression {
     }
 }
 
-impl IfDeclExpression {
+impl IfPatExpression {
     pub fn find_breaks(&self, stmts: &mut Vec<BreakStatement>) {
         self.consequent.find_breaks(stmts);
         if let Some(ref alternate) = self.alternate {
@@ -93,7 +93,7 @@ impl IfExpression {
     }
 }
 
-impl IfDeclExpression {
+impl IfPatExpression {
     pub fn find_returns(&self, stmts: &mut Vec<ReturnStatement>) {
         self.consequent.find_returns(stmts);
         if let Some(ref alternate) = self.alternate {

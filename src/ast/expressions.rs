@@ -21,7 +21,7 @@ pub enum Expression {
     Function(FunctionExpression),
     Identifier(Identifier),
     If(IfExpression),
-    IfDecl(IfDeclExpression),
+    IfDecl(IfPatExpression),
     Loop(Loop),
     Match(MatchExpression),
     NumberLiteral(NumberLiteral),
@@ -104,7 +104,7 @@ impl Into<Expression> for Identifier {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct IfDeclExpression {
+pub struct IfPatExpression {
     pub span: Span<'static>,
     pub pattern: Box<Pattern>,
     pub scrutinee: Box<Expression>,
@@ -112,7 +112,7 @@ pub struct IfDeclExpression {
     pub alternate: Option<Box<Alternate>>,
 }
 
-impl Into<Expression> for IfDeclExpression {
+impl Into<Expression> for IfPatExpression {
     fn into(self) -> Expression {
         Expression::IfDecl(self)
     }
@@ -136,7 +136,7 @@ impl Into<Expression> for IfExpression {
 pub enum Alternate {
     Block(BlockExpression),
     If(IfExpression),
-    IfDecl(IfDeclExpression),
+    IfDecl(IfPatExpression),
 }
 impl Alternate {
     pub fn as_span(&self) -> pest::Span<'static> {
@@ -157,8 +157,8 @@ impl From<IfExpression> for Alternate {
         Self::If(value)
     }
 }
-impl From<IfDeclExpression> for Alternate {
-    fn from(value: IfDeclExpression) -> Self {
+impl From<IfPatExpression> for Alternate {
+    fn from(value: IfPatExpression) -> Self {
         Self::IfDecl(value)
     }
 }

@@ -350,7 +350,7 @@ impl CodeGenerator {
         create_ident(&id).into()
     }
 
-    fn if_decl_to_swc_expr(&mut self, node: ast::IfDeclExpression) -> swc::Expr {
+    fn if_decl_to_swc_expr(&mut self, node: ast::IfPatExpression) -> swc::Expr {
         let is_option = node.alternate.is_none();
         let id = self.add_temp_var_to_current_block();
         self.enter_block();

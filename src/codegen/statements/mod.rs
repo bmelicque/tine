@@ -110,7 +110,7 @@ impl CodeGenerator {
     /// assign_to is Some if the last stmt has to be assigned (used for extracted blocks)
     pub fn if_decl_to_swc_stmt(
         &mut self,
-        node: ast::IfDeclExpression,
+        node: ast::IfPatExpression,
         assign_to: AssignTo,
     ) -> swc::IfStmt {
         let mut block = self.block_to_swc_stmt(*node.consequent, assign_to.clone());
@@ -262,15 +262,15 @@ impl CodeGenerator {
         &mut self,
         node: ast::MatchArm,
         scrutinee: Box<ast::Expression>,
-        alternate: Option<Box<ast::IfDeclExpression>>,
-    ) -> ast::IfDeclExpression {
+        alternate: Option<Box<ast::IfPatExpression>>,
+    ) -> ast::IfPatExpression {
         let consequent = Box::new(ast::BlockExpression {
             span: node.expression.as_span(),
             statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
                 expression: node.expression.into(),
             })],
         });
-        ast::IfDeclExpression {
+        ast::IfPatExpression {
             span: node.span,
             pattern: node.pattern,
             scrutinee,
