@@ -9,5 +9,5 @@ mod type_declaration;
 mod types;
 mod utils;
 
-pub use analysis_context::AnalysisContext;
+pub use analysis_context::{AnalysisContext, Symbol};
 pub use type_checker::TypeChecker;

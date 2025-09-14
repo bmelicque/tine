@@ -1,4 +1,5 @@
 mod assignments;
+mod declarations;
 
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
@@ -38,7 +39,7 @@ impl CodeGenerator {
             .into()],
             ast::Statement::Return(node) => vec![self.return_to_swc(node).into()],
             ast::Statement::TypeAlias(node) => self.alias_to_swc(node).into(),
-            ast::Statement::VariableDeclaration(node) => vec![self.declaration_to_swc(node).into()],
+            ast::Statement::VariableDeclaration(node) => self.declaration_to_swc(node),
         }
     }
 
@@ -87,33 +88,6 @@ impl CodeGenerator {
             span: DUMMY_SP,
             label: None,
         }
-    }
-
-    fn declaration_to_swc(&mut self, node: ast::VariableDeclaration) -> swc::Decl {
-        let init = Some(Box::new(self.expr_to_swc(*node.value)));
-
-        let _identifiers = node.pattern.list_identifiers();
-        let pattern = self.pattern_to_swc(*node.pattern);
-        let decl = swc::VarDeclarator {
-            span: DUMMY_SP,
-            name: pattern,
-            init,
-            definite: false,
-        };
-
-        // TODO: wrap bindings to build pointers if needed
-
-        let kind = match node.op {
-            ast::DeclarationOp::Mut => swc::VarDeclKind::Let,
-            ast::DeclarationOp::Const => swc::VarDeclKind::Const,
-        };
-
-        swc::Decl::Var(Box::new(swc::VarDecl {
-            span: DUMMY_SP,
-            kind,
-            declare: false,
-            decls: vec![decl],
-        }))
     }
 
     /// assign_to is Some if the last stmt has to be assigned (used for extracted blocks)

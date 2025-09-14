@@ -7,7 +7,7 @@ use swc_ecma_codegen::{text_writer::JsWriter, Config, Emitter};
 use crate::{
     ast,
     codegen::builtin::{create_element, reference},
-    type_checker,
+    type_checker::{self, Symbol},
 };
 
 use super::{sort::Scope, utils::get_option_class};
@@ -126,5 +126,9 @@ impl CodeGenerator {
     }
     pub fn find(&self, name: &String) -> Option<&Vec<String>> {
         self.scope.find(name)
+    }
+
+    pub fn get_info(&self, name: &str) -> Option<&Symbol> {
+        self.analysis_context.lookup(name)
     }
 }

@@ -31,6 +31,10 @@ impl Symbol {
             ro_refs: 0,
         }
     }
+
+    pub fn has_ref(&self) -> bool {
+        self.mut_refs + self.ro_refs > 0
+    }
 }
 
 pub struct AnalysisContext {

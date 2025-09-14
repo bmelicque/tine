@@ -4,7 +4,10 @@ use rand::{distr::Alphanumeric, Rng};
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
-use crate::{ast, codegen::utils::AssignTo};
+use crate::{
+    ast,
+    codegen::utils::{create_number, AssignTo},
+};
 
 use super::{
     utils::{create_ident, undefined},
@@ -217,7 +220,7 @@ impl CodeGenerator {
         swc::MemberExpr {
             span: DUMMY_SP,
             obj: Box::new(self.expr_to_swc(*node.object)),
-            prop: swc::MemberProp::Ident(self.ident_to_swc(node.prop)),
+            prop: swc::MemberProp::Ident(create_ident(node.prop.as_str())),
         }
     }
 
@@ -273,11 +276,26 @@ impl CodeGenerator {
         }
     }
 
-    pub fn ident_to_swc(&mut self, node: ast::Identifier) -> swc::Ident {
-        swc::Ident {
-            span: DUMMY_SP,
-            sym: node.as_str().into(),
-            optional: false,
+    /// Create code for identifiers.
+    /// Identifiers that have references are declared wrapped in an array (like `let identifier = [value]`), so their reads are generated like `identifier[0]`
+    pub fn ident_to_swc(&mut self, node: ast::Identifier) -> swc::Expr {
+        let info = self.get_info(node.as_str()).unwrap();
+
+        if info.has_ref() {
+            swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(create_ident(node.as_str()).into()),
+                prop: swc::MemberProp::Computed(swc::ComputedPropName {
+                    span: DUMMY_SP,
+                    expr: Box::new(create_number(0.0)),
+                }),
+            })
+        } else {
+            swc::Expr::Ident(swc::Ident {
+                span: DUMMY_SP,
+                sym: node.as_str().into(),
+                optional: false,
+            })
         }
     }
 
