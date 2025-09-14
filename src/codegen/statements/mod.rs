@@ -1,3 +1,5 @@
+mod assignments;
+
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
@@ -41,18 +43,6 @@ impl CodeGenerator {
             ast::Statement::Return(node) => Some(self.return_to_swc(node).into()),
             ast::Statement::TypeAlias(node) => self.alias_to_swc(node).into(),
             ast::Statement::VariableDeclaration(node) => Some(self.declaration_to_swc(node).into()),
-        }
-    }
-
-    fn assignment_to_swc(&mut self, node: ast::Assignment) -> swc::ExprStmt {
-        swc::ExprStmt {
-            span: DUMMY_SP,
-            expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
-                span: DUMMY_SP,
-                op: swc::AssignOp::Assign,
-                left: self.pat_or_expr_to_swc(node.pattern),
-                right: Box::new(self.expr_to_swc(node.value)),
-            })),
         }
     }
 
