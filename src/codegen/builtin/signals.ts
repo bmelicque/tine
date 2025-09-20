@@ -17,9 +17,6 @@
  */
 
 //
-interface Settable<T> {
-	set(value: T): void;
-}
 type Getter<T> = () => T;
 type Setter<T> = (value: T) => void;
 
@@ -54,12 +51,12 @@ const scheduler = {
 
 	schedule() {
 		if (this.hasScheduled) return;
-		this.hasOne = true;
+		this.hasScheduled = true;
 		queueMicrotask(() => this.updateTree());
 	},
 
 	updateTree() {
-		this.hasOne = false;
+		this.hasScheduled = false;
 		if (!dirty.layers[1]) return;
 		stale.layers[1] = dirty.layers[1];
 		for (const depth of stale.layers) {

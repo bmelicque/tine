@@ -64,28 +64,26 @@ impl TypeChecker {
             return;
         };
 
-        self.analysis_context.enter_scope();
-
-        if expected.params.len() != node.params.len() {
-            self.errors.push(ParseError {
-                message: format!(
-                    "expected {} param(s), got {}",
-                    expected.params.len(),
-                    node.params.len()
-                ),
-                span: node.span,
-            });
-        }
-        self.define_params(&node.params, &expected.params);
-        let body_type = self.visit_function_body(&node.body);
-        if !self.can_be_assigned_to(&body_type, &expected.return_type) {
-            self.errors.push(ParseError {
-                message: format!("Expected type {}, got {}", expected.return_type, body_type),
-                span: node.span,
-            })
-        }
-
-        self.analysis_context.exit_scope();
+        self.with_scope(node.span, |s| {
+            if expected.params.len() != node.params.len() {
+                s.errors.push(ParseError {
+                    message: format!(
+                        "expected {} param(s), got {}",
+                        expected.params.len(),
+                        node.params.len()
+                    ),
+                    span: node.span,
+                });
+            }
+            s.define_params(&node.params, &expected.params);
+            let body_type = s.visit_function_body(&node.body);
+            if !s.can_be_assigned_to(&body_type, &expected.return_type) {
+                s.errors.push(ParseError {
+                    message: format!("Expected type {}, got {}", expected.return_type, body_type),
+                    span: node.span,
+                })
+            }
+        });
     }
 
     fn define_params(&mut self, got: &Vec<ast::PredicateParam>, expected: &Vec<types::Type>) {
@@ -97,6 +95,7 @@ impl TypeChecker {
                         expected[i].clone(),
                         false,
                         id.span,
+                        vec![],
                     ));
                 }
                 ast::PredicateParam::Param(param) => {
@@ -106,6 +105,7 @@ impl TypeChecker {
                         ty,
                         false,
                         param.name.span,
+                        vec![],
                     ));
                 }
             }

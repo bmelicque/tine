@@ -1,5 +1,10 @@
 use super::TypeChecker;
-use crate::{ast, parser::parser::ParseError, type_checker::analysis_context::Symbol, types::Type};
+use crate::{
+    ast,
+    parser::parser::ParseError,
+    type_checker::analysis_context::Symbol,
+    types::{FunctionType, Type},
+};
 
 impl TypeChecker {
     pub fn visit_statement(&mut self, node: &ast::Statement) -> Type {
@@ -109,16 +114,7 @@ impl TypeChecker {
     }
 
     fn visit_method_definition(&mut self, node: &ast::MethodDefinition) -> Type {
-        self.analysis_context.enter_scope();
-        let receiver = self.visit_named_type(&node.receiver.ty);
-        self.analysis_context.register_symbol(Symbol::new(
-            node.receiver.name.as_str().into(),
-            receiver.clone(),
-            false,
-            node.receiver.span,
-        ));
-        let function = self.visit_function_expression(&node.definition);
-        self.analysis_context.exit_scope();
+        let ((receiver, function), _) = self.with_dependencies(|s| s.visit_method_expression(node));
         let type_name = node.receiver.ty.name.as_str();
         let method_name = node.name.as_str();
 
@@ -147,6 +143,19 @@ impl TypeChecker {
         Type::Void
     }
 
+    fn visit_method_expression(&mut self, node: &ast::MethodDefinition) -> (Type, FunctionType) {
+        self.with_scope(node.span, |checker| {
+            let receiver = checker.visit_named_type(&node.receiver.ty);
+            checker.analysis_context.register_symbol(Symbol::pure(
+                node.receiver.name.as_str().into(),
+                receiver.clone(),
+                node.receiver.span,
+            ));
+            let function = checker.visit_function_expression(&node.definition);
+            (receiver, function)
+        })
+    }
+
     fn visit_return_statement(&mut self, node: &ast::ReturnStatement) -> Type {
         if let Some(ref value) = node.value {
             self.visit_expression(value);
@@ -155,7 +164,9 @@ impl TypeChecker {
     }
 
     pub fn visit_variable_declaration(&mut self, node: &ast::VariableDeclaration) -> Type {
-        let inferred_type = self.visit_expression(&node.value);
+        let (inferred_type, dependencies) =
+            self.with_dependencies(|s| s.visit_expression(&node.value));
+
         let mutable = node.op == ast::DeclarationOp::Mut;
         let mut variables = Vec::<(String, Type)>::new();
         if node.pattern.is_refutable() {
@@ -171,6 +182,7 @@ impl TypeChecker {
                 ty.clone(),
                 mutable,
                 node.pattern.as_span(),
+                dependencies.clone(),
             ));
         }
         Type::Void

@@ -157,10 +157,13 @@ impl TypeChecker {
 
     pub fn visit_block_expression(&mut self, node: &ast::BlockExpression) -> types::Type {
         // TODO: handle diverging statements (return, break, continue)
-        let mut ty = types::Type::Void;
-        for stmt in node.statements.iter() {
-            ty = self.visit_statement(&stmt);
-        }
+        let ty = self.with_scope(node.span, |checker| {
+            let mut ty = types::Type::Void;
+            for stmt in node.statements.iter() {
+                ty = checker.visit_statement(&stmt);
+            }
+            ty
+        });
         self.set_type_at(node.span, ty)
     }
 
@@ -205,22 +208,20 @@ impl TypeChecker {
         &mut self,
         node: &ast::FunctionExpression,
     ) -> types::FunctionType {
-        self.analysis_context.enter_scope();
-
-        let mut param_types = Vec::new();
-        for param in node.params.iter() {
-            let ty = self.visit_type(&param.type_annotation);
-            self.analysis_context.register_symbol(Symbol::new(
-                param.name.as_str().into(),
-                ty.clone(),
-                false,
-                param.name.span,
-            ));
-            param_types.push(ty);
-        }
-        let body_type = self.visit_function_body(&node.body);
-
-        self.analysis_context.exit_scope();
+        let (param_types, body_type) = self.with_scope(node.span, |s| {
+            let mut param_types = Vec::new();
+            for param in node.params.iter() {
+                let ty = s.visit_type(&param.type_annotation);
+                s.analysis_context.register_symbol(Symbol::pure(
+                    param.name.as_str().into(),
+                    ty.clone(),
+                    param.name.span,
+                ));
+                param_types.push(ty);
+            }
+            let body_type = s.visit_function_body(&node.body);
+            (param_types, body_type)
+        });
 
         self.set_type_at(
             node.span,
@@ -290,10 +291,8 @@ impl TypeChecker {
     }
 
     fn visit_if_expression(&mut self, node: &ast::IfExpression) -> types::Type {
-        self.analysis_context.enter_scope();
         self.visit_condition(&node.condition);
-        let ty = self.visit_block_expression(&node.consequent);
-        self.analysis_context.exit_scope();
+        let ty = self.with_scope(node.span, |s| s.visit_block_expression(&node.consequent));
         let ty = if let Some(ref alternate) = node.alternate {
             self.visit_alternate(alternate, &ty);
             ty
@@ -305,25 +304,26 @@ impl TypeChecker {
 
     fn visit_if_decl_expression(&mut self, node: &ast::IfPatExpression) -> types::Type {
         if !node.pattern.is_refutable() {
-            self.errors.push(ParseError {
-                message: "Refutable pattern expected".into(),
-                span: node.pattern.as_span(),
-            });
+            self.error("Refutable pattern expected".into(), node.pattern.as_span());
         };
-        self.analysis_context.enter_scope();
-        let inferred_type = self.visit_expression(&node.scrutinee);
-        let mut variables = Vec::<(String, types::Type)>::new();
-        self.match_pattern(&node.pattern, inferred_type, &mut variables);
-        for (name, ty) in variables {
-            self.analysis_context.register_symbol(Symbol::new(
-                name.clone(),
-                ty.clone(),
-                false,
-                node.pattern.as_span(),
-            ));
-        }
-        let ty = self.visit_block_expression(&node.consequent);
-        self.analysis_context.exit_scope();
+
+        let ty = self.with_scope(node.span, |s| {
+            let (inferred_type, dependencies) =
+                s.with_dependencies(|s| s.visit_expression(&node.scrutinee));
+            let mut variables = Vec::<(String, types::Type)>::new();
+            s.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
+            for (name, ty) in variables {
+                s.analysis_context.register_symbol(Symbol::new(
+                    name.clone(),
+                    ty.clone(),
+                    false,
+                    node.pattern.as_span(),
+                    dependencies.clone(),
+                ));
+            }
+            s.visit_block_expression(&node.consequent)
+        });
+
         let ty = if let Some(ref alternate) = node.alternate {
             self.visit_alternate(alternate, &ty);
             ty
@@ -595,14 +595,13 @@ mod tests {
             span: dummy_span(),
         };
 
-        checker.analysis_context.register_symbol(Symbol::new(
+        checker.analysis_context.register_symbol(Symbol::pure(
             "user".into(),
             types::NamedType {
                 name: "User".to_string(),
                 args: vec![],
             }
             .into(),
-            false,
             dummy_span(),
         ));
 
@@ -669,10 +668,9 @@ mod tests {
     #[test]
     fn test_visit_identifier() {
         let mut checker = create_type_checker();
-        checker.analysis_context.register_symbol(Symbol::new(
+        checker.analysis_context.register_symbol(Symbol::pure(
             "x".into(),
             types::Type::Number,
-            false,
             span("x"),
         ));
 
@@ -794,10 +792,9 @@ mod tests {
             ],
         });
 
-        checker.analysis_context.register_symbol(Symbol::new(
+        checker.analysis_context.register_symbol(Symbol::pure(
             "my_tuple".into(),
             tuple_type.clone(),
-            false,
             span("my_tuple"),
         ));
 
@@ -820,10 +817,9 @@ mod tests {
     #[test]
     fn test_visit_tuple_indexing_invalid_type() {
         let mut checker = create_type_checker();
-        checker.analysis_context.register_symbol(Symbol::new(
+        checker.analysis_context.register_symbol(Symbol::pure(
             "not_a_tuple".into(),
             types::Type::Number,
-            false,
             span("not_a_tuple"),
         ));
 
@@ -853,10 +849,9 @@ mod tests {
             elements: vec![Type::Number, types::Type::String],
         });
 
-        checker.analysis_context.register_symbol(Symbol::new(
+        checker.analysis_context.register_symbol(Symbol::pure(
             "my_tuple".into(),
             tuple_type.clone(),
-            false,
             span("my_tuple"),
         ));
 
@@ -884,10 +879,9 @@ mod tests {
             elements: vec![Type::Number, types::Type::String],
         });
 
-        checker.analysis_context.register_symbol(Symbol::new(
+        checker.analysis_context.register_symbol(Symbol::pure(
             "my_tuple".into(),
             tuple_type.clone(),
-            false,
             span("my_tuple"),
         ));
 
@@ -915,10 +909,9 @@ mod tests {
             elements: vec![Type::Number, types::Type::String],
         });
 
-        checker.analysis_context.register_symbol(Symbol::new(
+        checker.analysis_context.register_symbol(Symbol::pure(
             "my_tuple".into(),
             tuple_type.clone(),
-            false,
             span("my_tuple"),
         ));
 

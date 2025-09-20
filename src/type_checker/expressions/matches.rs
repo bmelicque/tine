@@ -3,7 +3,10 @@ use std::collections::HashSet;
 use crate::{
     ast,
     parser::parser::ParseError,
-    type_checker::{analysis_context::Symbol, TypeChecker},
+    type_checker::{
+        analysis_context::{Symbol, SymbolId},
+        TypeChecker,
+    },
     types::{self, Type, Variant},
 };
 
@@ -12,7 +15,7 @@ impl TypeChecker {
         let ty = self.visit_expression(&node.scrutinee);
         let mut expected = Type::Dynamic;
         for arm in &node.arms {
-            let arm_ty = self.visit_match_arm(arm, ty.clone());
+            let arm_ty = self.visit_match_arm(arm, ty.clone(), Vec::new());
             if expected == Type::Dynamic {
                 expected = arm_ty;
             } else if !self.can_be_assigned_to(&arm_ty, &expected) {
@@ -26,20 +29,21 @@ impl TypeChecker {
         self.set_type_at(node.span, expected)
     }
 
-    fn visit_match_arm(&mut self, arm: &ast::MatchArm, against: Type) -> Type {
-        let mut variables = Vec::new();
-        self.match_pattern(&arm.pattern, against, &mut variables);
-        self.analysis_context.enter_scope();
-        for (name, ty) in variables {
-            self.analysis_context.register_symbol(Symbol::new(
-                name.clone(),
-                ty.clone(),
-                false,
-                arm.pattern.as_span(),
-            ));
-        }
-        let arm_ty = self.visit_expression(&arm.expression);
-        self.analysis_context.exit_scope();
+    fn visit_match_arm(&mut self, arm: &ast::MatchArm, against: Type, deps: Vec<SymbolId>) -> Type {
+        let arm_ty = self.with_scope(arm.span, |s| {
+            let mut variables = Vec::new();
+            s.match_pattern(&arm.pattern, against.clone(), &mut variables);
+            for (name, ty) in variables {
+                s.analysis_context.register_symbol(Symbol::new(
+                    name.clone(),
+                    ty.clone(),
+                    false,
+                    arm.pattern.as_span(),
+                    deps.clone(),
+                ));
+            }
+            s.visit_expression(&arm.expression)
+        });
         arm_ty
     }
 

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use pest::Span;
+
 use crate::types;
 
 use super::TypeChecker;
@@ -64,4 +66,8 @@ impl TypeChecker {
 
         got.len() == 0
     }
+}
+
+pub fn within(outer: Span<'static>, inner: Span<'static>) -> bool {
+    inner.start() >= outer.start() && inner.end() <= outer.end()
 }

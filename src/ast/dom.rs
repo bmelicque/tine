@@ -15,6 +15,20 @@ impl ElementExpression {
             ElementExpression::Void(v) => v.span,
         }
     }
+
+    pub fn attributes(&self) -> &Vec<Attribute> {
+        match self {
+            ElementExpression::Element(e) => &e.attributes,
+            ElementExpression::Void(v) => &v.attributes,
+        }
+    }
+
+    pub fn children(&self) -> Option<&Vec<ElementChild>> {
+        match self {
+            ElementExpression::Element(e) => Some(&e.children),
+            ElementExpression::Void(_) => None,
+        }
+    }
 }
 
 impl Into<Expression> for ElementExpression {

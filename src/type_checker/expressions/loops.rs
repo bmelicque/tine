@@ -12,37 +12,41 @@ impl TypeChecker {
 
     fn visit_for_expression(&mut self, node: &ast::ForExpression) -> types::Type {
         self.visit_condition(&node.condition);
-        self.analysis_context.enter_scope();
-        let ty = self.visit_loop_body(&node.body);
-        self.analysis_context.exit_scope();
+        let ty = self.with_scope(node.span, |checker| checker.visit_loop_body(&node.body));
         self.set_type_at(node.span, ty)
     }
 
     fn visit_for_in_expression(&mut self, node: &ast::ForInExpression) -> types::Type {
-        let inferred_type = match self.visit_expression(&node.iterable) {
+        let (inferred_type, dependencies) = self.visit_for_in_iteratable(&node.iterable);
+        let ty = self.with_scope(node.span, |checker| {
+            let mut variables = Vec::<(String, types::Type)>::new();
+            checker.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
+            for (name, ty) in variables {
+                checker.analysis_context.register_symbol(Symbol::new(
+                    name.clone(),
+                    ty.clone(),
+                    false,
+                    node.pattern.as_span(),
+                    dependencies.clone(),
+                ));
+            }
+            checker.visit_loop_body(&node.body)
+        });
+
+        self.set_type_at(node.span, ty)
+    }
+
+    fn visit_for_in_iteratable(&mut self, iterable: &ast::Expression) -> (types::Type, Vec<usize>) {
+        self.with_dependencies(|checker| match checker.visit_expression(iterable) {
             types::Type::Array(ty) => *ty.element.clone(),
             ty => {
-                self.errors.push(ParseError {
+                checker.errors.push(ParseError {
                     message: format!("Type {} is not iterable", ty),
-                    span: node.iterable.as_span(),
+                    span: iterable.as_span(),
                 });
                 types::Type::Unknown
             }
-        };
-        self.analysis_context.enter_scope();
-        let mut variables = Vec::<(String, types::Type)>::new();
-        self.match_pattern(&node.pattern, inferred_type, &mut variables);
-        for (name, ty) in variables {
-            self.analysis_context.register_symbol(Symbol::new(
-                name.clone(),
-                ty.clone(),
-                false,
-                node.pattern.as_span(),
-            ));
-        }
-        let ty = self.visit_loop_body(&node.body);
-        self.analysis_context.exit_scope();
-        self.set_type_at(node.span, ty)
+        })
     }
 
     fn visit_loop_body(&mut self, node: &ast::BlockExpression) -> types::Type {

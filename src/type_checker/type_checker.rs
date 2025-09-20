@@ -4,7 +4,7 @@ use super::scopes::TypeRegistry;
 
 use crate::ast;
 use crate::parser::parser::ParseError;
-use crate::type_checker::analysis_context::AnalysisContext;
+use crate::type_checker::analysis_context::{AnalysisContext, SymbolId};
 use crate::type_checker::std::dom::node::node;
 use crate::types;
 
@@ -17,7 +17,7 @@ pub struct TypeChecker {
 impl TypeChecker {
     pub fn new() -> Self {
         let mut analysis_context = AnalysisContext::new();
-        analysis_context.enter_scope();
+        analysis_context.enter_scope(pest::Span::new("", 0, 0).unwrap());
         let mut type_registry = TypeRegistry::new();
         type_registry.define("Node", node(), None);
 
@@ -113,5 +113,40 @@ impl TypeChecker {
             .iter()
             .find(|field| !self.type_registry.type_has(&name.name, &field.name))
             .is_none()
+    }
+
+    pub fn with_scope<F, T>(&mut self, scope_span: Span<'static>, mut predicate: F) -> T
+    where
+        F: FnMut(&mut Self) -> T,
+    {
+        self.analysis_context.enter_scope(scope_span);
+        let res = predicate(self);
+        let scope = self.analysis_context.exit_scope();
+        let captured = scope.captured().into_iter().collect();
+        self.analysis_context.add_dependencies(captured);
+        res
+    }
+
+    pub fn with_dependencies<F, T>(&mut self, mut predicate: F) -> (T, Vec<SymbolId>)
+    where
+        F: FnMut(&mut Self) -> T,
+    {
+        let memo = self
+            .analysis_context
+            .current_declaration_dependencies
+            .clone();
+        self.analysis_context.current_declaration_dependencies = Some(vec![]);
+        let res = predicate(self);
+        let dependencies = self
+            .analysis_context
+            .current_declaration_dependencies
+            .clone()
+            .unwrap();
+        self.analysis_context.current_declaration_dependencies = memo;
+        (res, dependencies)
+    }
+
+    pub fn error(&mut self, message: String, span: Span<'static>) {
+        self.errors.push(ParseError { message, span });
     }
 }
