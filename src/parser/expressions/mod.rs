@@ -2,11 +2,14 @@ mod array;
 mod binary;
 mod block;
 mod call;
+mod composite_literals;
+mod dom;
 mod exponentiation;
 mod field_access;
 mod function;
 mod identifier;
 mod ifs;
+mod loops;
 mod tuple;
 mod unary;
 

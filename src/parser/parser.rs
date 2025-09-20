@@ -1,5 +1,5 @@
 use pest::iterators::Pairs;
-use pest::Parser;
+use pest::{Parser, Span};
 use pest_derive::Parser;
 
 use crate::ast;
@@ -53,5 +53,9 @@ impl ParserEngine {
             node: ast::Program { statements },
             errors: self.errors.drain(..).collect(),
         }
+    }
+
+    pub fn error(&mut self, message: String, span: Span<'static>) {
+        self.errors.push(ParseError { message, span });
     }
 }

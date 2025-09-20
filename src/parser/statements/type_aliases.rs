@@ -1,12 +1,11 @@
 use pest::iterators::Pair;
 
-use crate::ast::{self, EnumDefinition};
-
-use super::{
-    parser::{ParseError, Rule},
-    utils::{is_camel_case, is_pascal_case},
-    ParserEngine,
+use crate::{
+    ast::{self, EnumDefinition},
+    parser::{parser::Rule, utils::is_pascal_case},
 };
+
+use super::ParserEngine;
 
 impl ParserEngine {
     pub fn parse_type_alias(&mut self, pair: Pair<'static, Rule>) -> ast::TypeAlias {
@@ -19,7 +18,7 @@ impl ParserEngine {
         let mut params = None;
         let mut op = None;
         let mut definition = None;
-        while let Some(pair) = inner.next() {
+        for pair in inner {
             match pair.as_rule() {
                 Rule::type_params => {
                     params = Some(self.parse_type_params(pair));
@@ -47,26 +46,29 @@ impl ParserEngine {
         let mut type_param_names = std::collections::HashSet::new();
         let inner = pair.into_inner();
         for param_pair in inner {
-            assert_eq!(param_pair.as_rule(), Rule::type_identifier);
-            let param_name = param_pair.as_str().to_string();
-            if !is_pascal_case(&param_name) {
-                self.errors.push(ParseError {
-                    message: format!(
-                        "Type parameter name '{}' should be in Pascal case",
-                        param_name
-                    ),
-                    span: param_pair.as_span(),
-                });
-            }
+            let param_name = self.parse_type_param(&param_pair);
             if !type_param_names.insert(param_name.clone()) {
-                self.errors.push(ParseError {
-                    message: format!("Duplicate type parameter name '{}'", param_name),
-                    span: param_pair.as_span(),
-                });
+                self.error(
+                    format!("Duplicate type parameter name '{}'", param_name),
+                    param_pair.as_span(),
+                );
             }
             type_params.push(param_name);
         }
         type_params
+    }
+
+    fn parse_type_param(&mut self, pair: &Pair<'static, Rule>) -> String {
+        assert_eq!(pair.as_rule(), Rule::type_identifier);
+        let param_name = pair.as_str().to_string();
+        if !is_pascal_case(&param_name) {
+            let message = format!(
+                "Type parameter name '{}' should be in Pascal case",
+                param_name
+            );
+            self.error(message, pair.as_span());
+        }
+        param_name
     }
 
     fn parse_type_definition(&mut self, pair: Pair<'static, Rule>) -> ast::TypeDefinition {
@@ -80,58 +82,65 @@ impl ParserEngine {
     }
 
     fn parse_struct_body(&mut self, pair: Pair<'static, Rule>) -> ast::StructDefinition {
+        assert_eq!(pair.as_rule(), Rule::struct_body);
         let span = pair.as_span();
-        let mut fields = Vec::new();
+
+        let fields: Vec<ast::StructDefinitionField> = pair
+            .into_inner()
+            .map(|pair| self.parse_struct_field(pair))
+            .collect();
+
         let mut field_names = std::collections::HashSet::new();
-
-        for field_pair in pair.into_inner() {
-            let field = self.parse_struct_field(field_pair.into_inner().next().unwrap());
-
-            // Check for duplicate field names
+        fields.iter().for_each(|field| {
             if !field_names.insert(field.as_name()) {
-                self.errors.push(ParseError {
-                    message: format!("Duplicate field name '{}'", field.as_name()),
-                    span: field.as_span(),
-                });
+                self.error(
+                    format!("Duplicate field name '{}'", field.as_name()),
+                    field.as_span(),
+                );
             }
-
-            fields.push(field);
-        }
+        });
 
         ast::StructDefinition { span, fields }
     }
 
     fn parse_struct_field(&mut self, pair: Pair<'static, Rule>) -> ast::StructDefinitionField {
-        let span = pair.as_span();
-        let mut field_inner = pair.clone().into_inner();
+        assert_eq!(pair.as_rule(), Rule::field_declaration);
+        let inner = pair.into_inner().next().unwrap();
 
-        let name = field_inner.next().unwrap().as_str().to_string();
-        if !is_camel_case(&name) {
-            self.errors.push(ParseError {
-                message: format!("Field name '{}' should be in camelCase", name),
-                span: pair.as_span(),
-            });
-        }
-
-        let next = field_inner.next().unwrap();
-
-        match pair.as_rule() {
-            Rule::mandatory_field => {
-                assert!(next.as_rule() == Rule::type_element);
-                ast::StructMandatoryField {
-                    span,
-                    name,
-                    definition: self.parse_type(next.into_inner().next().unwrap()),
-                }
-                .into()
-            }
-            Rule::optional_field => ast::StructOptionalField {
-                span,
-                name,
-                default: self.parse_expression(next),
-            }
-            .into(),
+        match inner.as_rule() {
+            Rule::mandatory_field => self.parse_mandatory_field(inner).into(),
+            Rule::optional_field => self.parse_optionnal_field(inner).into(),
             _ => unreachable!(),
+        }
+    }
+
+    fn parse_mandatory_field(&mut self, pair: Pair<'static, Rule>) -> ast::StructMandatoryField {
+        assert_eq!(pair.as_rule(), Rule::mandatory_field);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+
+        let name = inner.next().unwrap().as_str().to_string();
+        let definition = self.parse_type(inner.next().unwrap());
+
+        ast::StructMandatoryField {
+            span,
+            name,
+            definition,
+        }
+    }
+
+    fn parse_optionnal_field(&mut self, pair: Pair<'static, Rule>) -> ast::StructOptionalField {
+        assert_eq!(pair.as_rule(), Rule::mandatory_field);
+        let span = pair.as_span();
+        let mut inner = pair.into_inner();
+
+        let name = inner.next().unwrap().as_str().to_string();
+        let default = self.parse_expression(inner.next().unwrap());
+
+        ast::StructOptionalField {
+            span,
+            name,
+            default,
         }
     }
 
@@ -146,10 +155,10 @@ impl ParserEngine {
         let mut variant_names = std::collections::HashSet::new();
         for variant in variants.iter() {
             if !variant_names.insert(variant.as_name()) {
-                self.errors.push(ParseError {
-                    message: format!("Duplicate constructor name '{}'", variant.as_name()),
+                self.error(
+                    format!("Duplicate constructor name '{}'", variant.as_name()),
                     span,
-                });
+                );
             }
         }
 
@@ -188,7 +197,7 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{MyLanguageParser, Rule};
+    use crate::parser::parser::{MyLanguageParser, ParseError, Rule};
     use pest::Parser;
 
     fn parse_type_alias_input(

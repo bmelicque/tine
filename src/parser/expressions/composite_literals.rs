@@ -1,8 +1,9 @@
 use pest::iterators::Pair;
 
-use crate::ast::{self, ExpressionOrAnonymous};
-
-use super::{parser::Rule, ParserEngine};
+use crate::{
+    ast::{self, ExpressionOrAnonymous},
+    parser::{parser::Rule, ParserEngine},
+};
 
 impl ParserEngine {
     pub fn parse_composite_literal(&mut self, pair: Pair<'static, Rule>) -> ast::CompositeLiteral {

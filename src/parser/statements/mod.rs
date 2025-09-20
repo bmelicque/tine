@@ -1,3 +1,5 @@
+mod type_aliases;
+
 use pest::iterators::Pair;
 
 use crate::ast;

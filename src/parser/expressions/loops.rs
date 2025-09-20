@@ -1,8 +1,9 @@
 use pest::iterators::Pair;
 
-use crate::ast;
-
-use super::{parser::Rule, ParserEngine};
+use crate::{
+    ast,
+    parser::{parser::Rule, ParserEngine},
+};
 
 impl ParserEngine {
     pub fn parse_loop(&mut self, pair: Pair<'static, Rule>) -> ast::Loop {
