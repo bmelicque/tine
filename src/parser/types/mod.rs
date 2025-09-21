@@ -94,7 +94,7 @@ impl ParserEngine {
         let name = inner.next().unwrap().as_str().into();
 
         let mut args = Vec::new();
-        while let Some(element_pair) = inner.next() {
+        for element_pair in inner {
             args.push(self.parse_type(element_pair));
         }
         let args = if args.len() > 0 { Some(args) } else { None };

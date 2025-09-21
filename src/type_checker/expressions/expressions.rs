@@ -209,7 +209,7 @@ impl TypeChecker {
         node: &ast::FunctionExpression,
     ) -> types::FunctionType {
         let (param_types, body_type) = self.with_scope(node.span, |s| {
-            let mut param_types = Vec::new();
+            let mut param_types = Vec::with_capacity(node.params.len());
             for param in node.params.iter() {
                 let ty = s.visit_type(&param.type_annotation);
                 s.analysis_context.register_symbol(Symbol::pure(

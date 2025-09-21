@@ -113,7 +113,7 @@ impl ParserEngine {
             return Some(self.parse_struct_pattern_fields(next).into());
         }
         let mut elements = vec![self.parse_pattern(next)];
-        while let Some(next) = pairs.next() {
+        for next in pairs {
             elements.push(self.parse_pattern(next));
         }
         Some(ast::VariantPatternBody::Tuple(elements.into()))
