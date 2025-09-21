@@ -1,3 +1,5 @@
+mod unary_type;
+
 use pest::iterators::Pair;
 
 use crate::ast;
@@ -10,7 +12,6 @@ impl ParserEngine {
             Rule::type_annotation
             | Rule::type_element
             | Rule::binary_type
-            | Rule::unary_type
             | Rule::primary_type
             | Rule::grouped_type
             | Rule::type_name => self.parse_type(pair.into_inner().next().unwrap()),
@@ -18,12 +19,9 @@ impl ParserEngine {
             Rule::tuple_type => self.parse_tuple_type(pair).into(),
             Rule::map_type => self.parse_map_type(pair).into(),
             Rule::result_type => self.parse_result_type(pair).into(),
-            Rule::reference_type => self.parse_reference_type(pair).into(),
-            Rule::option_type => self.parse_option_type(pair).into(),
-            Rule::array_type => self.parse_array_type(pair).into(),
-            Rule::duck_type => self.parse_duck_type(pair).into(),
             Rule::generic_type => self.parse_named_type_with_args(pair).into(),
             Rule::type_identifier | Rule::primitive_type => self.parse_named_type(pair).into(),
+            Rule::unary_type => self.parse_unary_type(pair),
             _ => unreachable!("Unexpected rule '{:?}'", pair.as_rule()),
         }
     }
@@ -86,58 +84,6 @@ impl ParserEngine {
         }
 
         ast::ResultType { span, error, ok }
-    }
-
-    fn parse_reference_type(&mut self, pair: Pair<'static, Rule>) -> ast::ReferenceType {
-        assert!(pair.as_rule() == Rule::reference_type);
-        let span = pair.as_span();
-        let mut inner = pair.into_inner();
-        let operator = match inner.next().unwrap().as_str() {
-            "&" => ast::ReferenceOperator::Mutable,
-            "@" => ast::ReferenceOperator::Immutable,
-            _ => unreachable!("Unexpected reference operator"),
-        };
-        let target = inner.next().map(|pair| Box::new(self.parse_type(pair)));
-
-        ast::ReferenceType {
-            span,
-            operator,
-            target,
-        }
-    }
-
-    pub fn parse_option_type(&mut self, pair: Pair<'static, Rule>) -> ast::OptionType {
-        assert!(pair.as_rule() == Rule::option_type);
-        let span = pair.as_span();
-        let base = pair
-            .into_inner()
-            .next()
-            .map(|pair| Box::new(self.parse_type(pair)));
-
-        ast::OptionType { span, base }
-    }
-
-    pub fn parse_array_type(&mut self, pair: Pair<'static, Rule>) -> ast::ArrayType {
-        assert!(pair.as_rule() == Rule::array_type);
-        let span = pair.as_span();
-        let element = pair
-            .into_inner()
-            .next()
-            .map(|pair| Box::new(self.parse_type(pair)));
-
-        ast::ArrayType { span, element }
-    }
-
-    pub fn parse_duck_type(&mut self, pair: Pair<'static, Rule>) -> ast::DuckType {
-        assert!(pair.as_rule() == Rule::duck_type);
-        let span = pair.as_span();
-        let like = pair
-            .into_inner()
-            .next()
-            .map(|pair| Box::new(self.parse_type(pair)))
-            .unwrap();
-
-        ast::DuckType { span, like }
     }
 
     pub fn parse_named_type_with_args(&mut self, pair: Pair<'static, Rule>) -> ast::NamedType {
@@ -232,34 +178,6 @@ mod tests {
                 }
             }
             _ => panic!("Expected NamedType"),
-        }
-    }
-
-    #[test]
-    fn test_parse_array_type() {
-        let input = "[]number";
-        let result = parse_type_input(input, Rule::array_type);
-
-        match result {
-            ast::Type::Array(array) => match *array.element.unwrap() {
-                ast::Type::Named(named) => assert_eq!(named.name, "number"),
-                _ => panic!("Expected NamedType as array element"),
-            },
-            _ => panic!("Expected ArrayType"),
-        }
-    }
-
-    #[test]
-    fn test_parse_option_type() {
-        let input = "?number";
-        let result = parse_type_input(input, Rule::option_type);
-
-        match result {
-            ast::Type::Option(option) => match *option.base.unwrap() {
-                ast::Type::Named(named) => assert_eq!(named.name, "number"),
-                _ => panic!("Expected NamedType as option base"),
-            },
-            _ => panic!("Expected OptionType"),
         }
     }
 

@@ -8,11 +8,13 @@ impl TypeChecker {
             ast::Type::Array(array) => self.visit_array_type(array),
             ast::Type::Duck(duck) => self.visit_duck_type(duck),
             ast::Type::Function(function) => self.visit_function_type(function).into(),
+            ast::Type::Listener(listener) => self.visit_listener_type(listener).into(),
             ast::Type::Map(map) => self.visit_map_type(map),
             ast::Type::Named(named) => self.visit_named_type(named),
             ast::Type::Option(option) => self.visit_option_type(option),
-            ast::Type::Reference(reference) => self.visit_reference_type(reference),
+            ast::Type::Reference(reference) => self.visit_reference_type(reference).into(),
             ast::Type::Result(result) => self.visit_result_type(result),
+            ast::Type::Signal(signal) => self.visit_signal_type(signal).into(),
             ast::Type::Tuple(tuple) => self.visit_tuple_type(tuple).into(),
         }
     }
@@ -40,6 +42,11 @@ impl TypeChecker {
             params,
             return_type,
         }
+    }
+
+    fn visit_listener_type(&mut self, node: &ast::ListenerType) -> types::ListenerType {
+        let inner = Box::new(self.visit_type(&node.inner));
+        types::ListenerType { inner }
     }
 
     pub fn visit_map_type(&mut self, node: &ast::MapType) -> types::Type {
@@ -115,16 +122,14 @@ impl TypeChecker {
         })
     }
 
-    pub fn visit_reference_type(&mut self, node: &ast::ReferenceType) -> types::Type {
-        let inner_type = match node.target {
-            Some(ref base) => self.visit_type(base),
-            None => types::Type::Dynamic,
-        };
+    fn visit_signal_type(&mut self, node: &ast::SignalType) -> types::SignalType {
+        let inner = Box::new(self.visit_type(&node.inner));
+        types::SignalType { inner }
+    }
 
-        types::Type::Reference(types::ReferenceType {
-            target: Box::new(inner_type),
-            mutable: matches!(node.operator, ast::ReferenceOperator::Mutable),
-        })
+    pub fn visit_reference_type(&mut self, node: &ast::ReferenceType) -> types::ReferenceType {
+        let target = Box::new(self.visit_type(&node.target));
+        types::ReferenceType { target }
     }
 
     pub fn visit_duck_type(&mut self, node: &ast::DuckType) -> types::Type {
@@ -300,22 +305,20 @@ mod tests {
     fn test_visit_reference_type() {
         let mut checker = TypeChecker::new();
         let reference_type = ast::ReferenceType {
-            target: Some(Box::new(ast::Type::Named(ast::NamedType {
+            target: Box::new(ast::Type::Named(ast::NamedType {
                 name: "string".to_string(),
                 args: None,
                 span: dummy_span(),
-            }))),
-            operator: ast::ReferenceOperator::Immutable,
+            })),
             span: dummy_span(),
         };
 
         let result = checker.visit_reference_type(&reference_type);
         assert_eq!(
             result,
-            types::Type::Reference(types::ReferenceType {
+            types::ReferenceType {
                 target: Box::new(Type::String),
-                mutable: false,
-            })
+            }
         );
     }
 

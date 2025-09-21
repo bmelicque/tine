@@ -40,13 +40,8 @@ impl TypeChecker {
             };
         }
 
-        self.set_type_at(
-            node.span,
-            types::Type::Reference(types::ReferenceType {
-                target: Box::new(expr_type),
-                mutable: false,
-            }),
-        )
+        let target = Box::new(expr_type);
+        self.set_type_at(node.span, types::ReferenceType { target }.into())
     }
 
     fn visit_mutable_ref(&mut self, node: &ast::UnaryExpression) -> types::Type {
@@ -80,13 +75,8 @@ impl TypeChecker {
             };
         };
 
-        self.set_type_at(
-            node.span,
-            types::Type::Reference(types::ReferenceType {
-                target: Box::new(expr_type),
-                mutable: true,
-            }),
-        )
+        let target = Box::new(expr_type);
+        self.set_type_at(node.span, types::ReferenceType { target }.into())
     }
 
     fn visit_negate_expresion(&mut self, node: &ast::UnaryExpression) -> types::Type {

@@ -5,6 +5,8 @@ pub enum Type {
     Named(NamedType),
     Option(OptionType),
     Array(ArrayType),
+    Signal(SignalType),
+    Listener(ListenerType),
     Reference(ReferenceType),
     Duck(DuckType),
     Tuple(TupleType),
@@ -51,16 +53,33 @@ impl Into<Type> for ArrayType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ReferenceType {
+pub struct SignalType {
     pub span: Span<'static>,
-    pub operator: ReferenceOperator,
-    pub target: Option<Box<Type>>,
+    pub inner: Box<Type>,
+}
+
+impl Into<Type> for SignalType {
+    fn into(self) -> Type {
+        Type::Signal(self)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ReferenceOperator {
-    Mutable,   // &
-    Immutable, // @
+pub struct ListenerType {
+    pub span: Span<'static>,
+    pub inner: Box<Type>,
+}
+
+impl Into<Type> for ListenerType {
+    fn into(self) -> Type {
+        Type::Listener(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReferenceType {
+    pub span: Span<'static>,
+    pub target: Box<Type>,
 }
 
 impl Into<Type> for ReferenceType {

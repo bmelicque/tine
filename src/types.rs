@@ -9,13 +9,15 @@ pub enum Type {
     Enum(EnumType),
     Function(FunctionType),
     Generic(GenericType), // Represents a generic type parameter
-    Named(NamedType),
+    Listener(ListenerType),
     Map(MapType),
+    Named(NamedType),
     Number,
     Option(OptionType),
     Reference(ReferenceType),
     Result(ResultType),
     SelfType, // Represents the current type in a method context
+    Signal(SignalType),
     String,
     Struct(StructType),
     Trait(TraitType),
@@ -123,9 +125,30 @@ impl Into<Type> for OptionType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct SignalType {
+    pub inner: Box<Type>,
+}
+
+impl Into<Type> for SignalType {
+    fn into(self) -> Type {
+        Type::Signal(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ListenerType {
+    pub inner: Box<Type>,
+}
+
+impl Into<Type> for ListenerType {
+    fn into(self) -> Type {
+        Type::Listener(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReferenceType {
     pub target: Box<Type>,
-    pub mutable: bool,
 }
 
 impl Into<Type> for ReferenceType {
@@ -218,6 +241,7 @@ impl fmt::Display for Type {
                 write!(f, "({}) => {}", params_str, ty.return_type)
             }
             Type::Generic(ty) => write!(f, "{}", ty.name),
+            Type::Listener(ty) => write!(f, "@{}", ty.inner),
             Type::Map(ty) => write!(f, "{}#{}", ty.key, ty.value),
             Type::Named(ty) => {
                 if ty.args.len() == 0 {
@@ -243,6 +267,7 @@ impl fmt::Display for Type {
                 }
             }
             Type::SelfType => write!(f, "Self"),
+            Type::Signal(ty) => write!(f, "${}", ty.inner),
             Type::String => write!(f, "string"),
             Type::Struct(ty) => {
                 let fields_str = ty
