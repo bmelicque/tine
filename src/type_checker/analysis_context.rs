@@ -99,6 +99,7 @@ pub struct AnalysisContext {
     pub types: HashMap<Span<'static>, types::Type>,
 
     pub current_declaration_dependencies: Option<Vec<SymbolId>>,
+    pub other_dependencies: HashMap<Span<'static>, Vec<SymbolId>>,
 }
 
 impl AnalysisContext {
@@ -110,6 +111,7 @@ impl AnalysisContext {
             current_scope: None,
             types: HashMap::new(),
             current_declaration_dependencies: None,
+            other_dependencies: HashMap::new(),
         }
     }
 

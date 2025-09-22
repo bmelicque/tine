@@ -9,7 +9,7 @@ use crate::{
 impl CodeGenerator {
     pub fn assignment_to_swc(&mut self, node: ast::Assignment) -> swc::ExprStmt {
         if let ast::PatternExpression::Expression(ast::Expression::Unary(ast::UnaryExpression {
-            operator: ast::UnaryOperator::Deref,
+            operator: ast::UnaryOperator::Star,
             ..
         })) = node.pattern
         {
@@ -39,7 +39,7 @@ impl CodeGenerator {
     */
     fn indirected_assignment_to_swc(&mut self, node: ast::Assignment) -> swc::Expr {
         let ast::PatternExpression::Expression(ast::Expression::Unary(ast::UnaryExpression {
-            operator: ast::UnaryOperator::Deref,
+            operator: ast::UnaryOperator::Star,
             operand: assignee,
             ..
         })) = node.pattern

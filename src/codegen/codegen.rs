@@ -1,4 +1,5 @@
 use bitflags::bitflags;
+use pest::Span;
 use std::error::Error;
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
@@ -6,7 +7,7 @@ use swc_ecma_codegen::{text_writer::JsWriter, Config, Emitter};
 
 use crate::{
     ast,
-    codegen::builtin::{create_element, reference},
+    codegen::builtin::{create_element, reactive, reference},
     type_checker::{self, Symbol},
 };
 
@@ -32,6 +33,7 @@ bitflags! {
         const OptionType = 1;
         const CreateElement = 2;
         const Reference = 4;
+        const Reactive = 8;
     }
 }
 
@@ -88,6 +90,10 @@ impl CodeGenerator {
                 TranspilerFlags::OptionType => swc_stmts.push(get_option_class().into()),
                 TranspilerFlags::CreateElement => swc_stmts.append(create_element().as_mut()),
                 TranspilerFlags::Reference => swc_stmts.append(reference().as_mut()),
+                TranspilerFlags::Reactive => {
+                    let _ = reactive();
+                    todo!()
+                }
                 _ => {}
             }
         }
@@ -130,5 +136,14 @@ impl CodeGenerator {
 
     pub fn get_info(&self, name: &str) -> Option<&Symbol> {
         self.analysis_context.lookup(name)
+    }
+
+    pub fn get_expression_dependencies(&self, span: Span<'static>) -> Vec<&Symbol> {
+        let Some(list) = self.analysis_context.other_dependencies.get(&span) else {
+            return Vec::new();
+        };
+        list.into_iter()
+            .map(|id| &self.analysis_context.symbols[*id])
+            .collect()
     }
 }

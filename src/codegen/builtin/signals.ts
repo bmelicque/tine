@@ -43,8 +43,8 @@ class LayeredGraph<T extends Reactive> {
 	}
 }
 
-const stale = new LayeredGraph<__Computed<any>>();
-const dirty = new LayeredGraph<__Computed<any>>();
+const stale = new LayeredGraph<__Listener<any>>();
+const dirty = new LayeredGraph<__Listener<any>>();
 
 const scheduler = {
 	hasScheduled: false,
@@ -74,10 +74,10 @@ const scheduler = {
  */
 abstract class Reactive {
 	depth: number;
-	children = new Set<WeakRef<__Computed<any>>>();
-	registry = new FinalizationRegistry<WeakRef<__Computed<any>>>((ref) => this.children.delete(ref));
+	children = new Set<WeakRef<__Listener<any>>>();
+	registry = new FinalizationRegistry<WeakRef<__Listener<any>>>((ref) => this.children.delete(ref));
 
-	addChild(computed: __Computed<any>) {
+	addChild(computed: __Listener<any>) {
 		const ref = new WeakRef(computed);
 		this.children.add(ref);
 		this.registry.register(computed, ref);
@@ -94,7 +94,7 @@ abstract class Reactive {
 /**
  * Root reactive states, that are writable and do not depend on anything
  */
-export class __State<T> extends Reactive {
+export class __Signal<T> extends Reactive {
 	depth = 0;
 	value: T;
 
@@ -121,7 +121,7 @@ export class __State<T> extends Reactive {
 /**
  * Derived signals and effects
  */
-export class __Computed<T> extends Reactive {
+export class __Listener<T> extends Reactive {
 	getter: Getter<T>;
 	deps: Reactive[];
 	value: T;
@@ -173,7 +173,7 @@ export class __Computed<T> extends Reactive {
  * Writable derived states, which should only be sub-values (like obj.value, or tuple[index]).
  * They depend on a single state and can write into it.
  */
-export class __WritableComputed<T> extends __Computed<T> {
+export class __WritableComputed<T> extends __Listener<T> {
 	/**
 	 * Example setter for `&obj.value`:
 	 * ```
@@ -181,7 +181,7 @@ export class __WritableComputed<T> extends __Computed<T> {
 	 * ```
 	 */
 	setter: Setter<T>;
-	declare deps: [__State<any>];
+	declare deps: [__Signal<any>];
 
 	constructor(deps: Reactive[], getter: Getter<T>, setter: Setter<T>) {
 		super(deps, getter);
@@ -199,7 +199,7 @@ export class __WritableComputed<T> extends __Computed<T> {
 /**
  * Reactive DOM node
  */
-export class __ReactiveNode<T> extends __Computed<T> {
+export class __ReactiveNode<T> extends __Listener<T> {
 	node: Node;
 
 	constructor(deps: Reactive[], getter: Getter<T>) {

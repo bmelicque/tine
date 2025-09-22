@@ -25,15 +25,18 @@ impl ParserEngine {
     fn parse_unary_operator(&mut self, pair: Pair<'static, Rule>) -> ast::UnaryOperator {
         assert!(pair.as_rule() == Rule::unary_op);
         match pair.as_str() {
-            "*" => ast::UnaryOperator::Deref,
-            "&" => ast::UnaryOperator::MutableRef,
-            "@" => ast::UnaryOperator::ImmutableRef,
+            "&" => ast::UnaryOperator::Ampersand,
+            "@" => ast::UnaryOperator::At,
+            "!" => ast::UnaryOperator::Bang,
+            "$" => ast::UnaryOperator::Dollar,
+            "-" => ast::UnaryOperator::Minus,
+            "*" => ast::UnaryOperator::Star,
             op => {
                 self.errors.push(ParseError {
                     message: format!("Unknown unary operator: {}", op),
                     span: pair.as_span(),
                 });
-                ast::UnaryOperator::Deref
+                ast::UnaryOperator::Star
             }
         }
     }
@@ -62,7 +65,7 @@ mod tests {
         let ast::Expression::Unary(unary) = result else {
             panic!("Expected UnaryExpression");
         };
-        assert_eq!(unary.operator, ast::UnaryOperator::Deref);
+        assert_eq!(unary.operator, ast::UnaryOperator::Star);
 
         match *unary.operand {
             ast::Expression::Identifier(id) if id.as_str() == "ref" => {}
@@ -78,7 +81,7 @@ mod tests {
         let ast::Expression::Unary(unary) = result else {
             panic!("Expected UnaryExpression");
         };
-        assert_eq!(unary.operator, ast::UnaryOperator::ImmutableRef);
+        assert_eq!(unary.operator, ast::UnaryOperator::At);
 
         match *unary.operand {
             ast::Expression::Identifier(id) if id.as_str() == "value" => {}
@@ -94,7 +97,7 @@ mod tests {
         let ast::Expression::Unary(unary) = result else {
             panic!("Expected UnaryExpression");
         };
-        assert_eq!(unary.operator, ast::UnaryOperator::ImmutableRef);
+        assert_eq!(unary.operator, ast::UnaryOperator::At);
 
         match *unary.operand {
             ast::Expression::Identifier(id) if id.as_str() == "value" => {}

@@ -6,25 +6,26 @@ use crate::{
         CodeGenerator,
     },
 };
+use pest::Span;
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
 impl CodeGenerator {
     pub fn unary_expression_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
         match node.operator {
-            ast::UnaryOperator::Deref => self.dereference_to_swc_expr(node),
-            ast::UnaryOperator::ImmutableRef | ast::UnaryOperator::MutableRef => {
-                self.ref_to_swc_expr(node)
-            }
-            ast::UnaryOperator::Negate => self.negation_to_swc_expr(node),
-            ast::UnaryOperator::Not => self.logical_not_to_swc_expr(node),
+            ast::UnaryOperator::Ampersand => self.ref_to_swc_expr(node),
+            ast::UnaryOperator::At => self.listener_to_swc_expr(node),
+            ast::UnaryOperator::Bang => self.logical_not_to_swc_expr(node),
+            ast::UnaryOperator::Dollar => self.signal_to_swc_expr(node),
+            ast::UnaryOperator::Minus => self.negation_to_swc_expr(node),
+            ast::UnaryOperator::Star => self.indirection_to_swc_expr(node),
         }
     }
 
     /**
      * `*expr` => `expr.get()`
      */
-    fn dereference_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
+    fn indirection_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
         swc::Expr::Call(swc::CallExpr {
             span: DUMMY_SP,
             callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
@@ -62,6 +63,55 @@ impl CodeGenerator {
             args: Some(vec![ctx.into(), value.into()]),
             type_args: None,
         })
+    }
+
+    fn signal_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
+        self.add_flag(TranspilerFlags::Reactive);
+        let init = self.expr_to_swc(*node.operand);
+        swc::Expr::New(swc::NewExpr {
+            span: DUMMY_SP,
+            callee: Box::new(swc::Expr::Ident(create_ident("__Signal"))),
+            args: Some(vec![init.into()]),
+            type_args: None,
+        })
+    }
+
+    fn listener_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
+        self.add_flag(TranspilerFlags::Reactive);
+        let getter_expr = self.expr_to_swc(*node.operand);
+        let getter = swc::ArrowExpr {
+            span: DUMMY_SP,
+            params: Vec::new(),
+            body: Box::new(getter_expr.into()),
+            is_async: false,
+            is_generator: false,
+            type_params: None,
+            return_type: None,
+        };
+        let dependencies = swc::Expr::Array(self.listener_deps_to_swc_array(node.span));
+
+        swc::Expr::New(swc::NewExpr {
+            span: DUMMY_SP,
+            callee: Box::new(swc::Expr::Ident(create_ident("__Listener"))),
+            args: Some(vec![dependencies.into(), swc::Expr::Arrow(getter).into()]),
+            type_args: None,
+        })
+    }
+
+    fn listener_deps_to_swc_array(&mut self, listener_span: Span<'static>) -> swc::ArrayLit {
+        let reactive_dependencies: Vec<swc::Ident> = self
+            .get_expression_dependencies(listener_span)
+            .into_iter()
+            .filter(|dep| dep.ty.is_reactive())
+            .map(|dep| create_ident(&dep.name))
+            .collect();
+        swc::ArrayLit {
+            span: DUMMY_SP,
+            elems: reactive_dependencies
+                .into_iter()
+                .map(|dep| Some(swc::Expr::Ident(dep).into()))
+                .collect(),
+        }
     }
 
     fn negation_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {

@@ -469,11 +469,12 @@ impl Into<Expression> for UnaryExpression {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UnaryOperator {
-    Deref,        // *
-    MutableRef,   // &
-    ImmutableRef, // @
-    Negate,       // -
-    Not,          // !
+    Star,      // *
+    Ampersand, // &
+    Dollar,    // $
+    At,        // @
+    Minus,     // -
+    Bang,      // !
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

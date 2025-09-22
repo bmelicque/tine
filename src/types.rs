@@ -27,6 +27,15 @@ pub enum Type {
     Void,
 }
 
+impl Type {
+    pub fn is_reactive(&self) -> bool {
+        match self {
+            Self::Listener(_) | Self::Signal(_) => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArrayType {
     pub element: Box<Type>,

@@ -1,3 +1,5 @@
+use pest::Span;
+
 use crate::{
     ast::{self, utils::root_identifier},
     parser::parser::ParseError,
@@ -8,15 +10,16 @@ use crate::{
 impl TypeChecker {
     pub fn visit_unary_expression(&mut self, node: &ast::UnaryExpression) -> types::Type {
         match node.operator {
-            ast::UnaryOperator::Deref => self.visit_dereference(node),
-            ast::UnaryOperator::ImmutableRef => self.visit_immutable_ref(node),
-            ast::UnaryOperator::MutableRef => self.visit_mutable_ref(node),
-            ast::UnaryOperator::Negate => self.visit_negate_expresion(node),
-            ast::UnaryOperator::Not => self.visit_logical_not_expresion(node),
+            ast::UnaryOperator::Ampersand => self.visit_reference(node),
+            ast::UnaryOperator::At => self.visit_listener(node).into(),
+            ast::UnaryOperator::Bang => self.visit_logical_not_expresion(node),
+            ast::UnaryOperator::Dollar => self.visit_signal_expression(node),
+            ast::UnaryOperator::Minus => self.visit_negate_expresion(node),
+            ast::UnaryOperator::Star => self.visit_indirection(node),
         }
     }
 
-    fn visit_dereference(&mut self, node: &ast::UnaryExpression) -> types::Type {
+    fn visit_indirection(&mut self, node: &ast::UnaryExpression) -> types::Type {
         let expr_type = self.visit_expression(&node.operand);
         match expr_type {
             types::Type::Reference(inner) => self.set_type_at(node.span, *inner.target.clone()),
@@ -31,8 +34,21 @@ impl TypeChecker {
         }
     }
 
-    fn visit_immutable_ref(&mut self, node: &ast::UnaryExpression) -> types::Type {
+    fn visit_signal_expression(&mut self, node: &ast::UnaryExpression) -> types::Type {
         let expr_type = self.visit_expression(&node.operand);
+        let ty = types::SignalType {
+            inner: Box::new(expr_type),
+        };
+        self.set_type_at(node.span, ty.into())
+    }
+
+    fn visit_listener(&mut self, node: &ast::UnaryExpression) -> types::ListenerType {
+        let (expr_type, deps) = self.with_dependencies(|s| s.visit_expression(&node.operand));
+        self.check_reactivity(&deps, node.operand.as_span());
+        self.analysis_context
+            .other_dependencies
+            .insert(node.span, deps.clone());
+        self.analysis_context.add_dependencies(deps);
         if let ast::Expression::Identifier(id) = node.operand.as_ref() {
             if let Some(info) = self.analysis_context.lookup_mut(&id.as_str()) {
                 info.ro_refs += 1;
@@ -40,11 +56,25 @@ impl TypeChecker {
             };
         }
 
-        let target = Box::new(expr_type);
-        self.set_type_at(node.span, types::ReferenceType { target }.into())
+        let inner = Box::new(expr_type);
+        self.set_type_at(node.span, types::ListenerType { inner })
     }
 
-    fn visit_mutable_ref(&mut self, node: &ast::UnaryExpression) -> types::Type {
+    fn check_reactivity(&mut self, dependencies: &Vec<usize>, span: Span<'static>) {
+        let has_reactive_dependencies = dependencies
+            .iter()
+            .map(|dep| &self.analysis_context.symbols[*dep])
+            .find(|symbol| symbol.ty.is_reactive())
+            .is_some();
+        if !has_reactive_dependencies {
+            self.error(
+                "Expected reactive values in listened expression".to_string(),
+                span,
+            );
+        }
+    }
+
+    fn visit_reference(&mut self, node: &ast::UnaryExpression) -> types::Type {
         let expr_type = self.visit_expression(&node.operand);
         if let ast::Expression::Identifier(id) = node.operand.as_ref() {
             if let Some(info) = self.analysis_context.lookup_mut(&id.as_str()) {
