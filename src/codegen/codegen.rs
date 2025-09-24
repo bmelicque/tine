@@ -3,10 +3,10 @@ use pest::Span;
 use std::error::Error;
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
-use swc_ecma_codegen::{text_writer::JsWriter, Config, Emitter};
 
 use crate::{
     ast,
+    codegen::utils::create_ident,
     type_checker::{self, Symbol},
 };
 
@@ -38,7 +38,7 @@ bitflags! {
 
 pub struct CodeGenerator {
     scope: Scope,
-    pub source_map: Lrc<SourceMap>,
+    _source_map: Lrc<SourceMap>,
     flags: TranspilerFlags,
     current_block: Vec<Vec<swc::Stmt>>,
     analysis_context: type_checker::AnalysisContext,
@@ -48,33 +48,14 @@ impl CodeGenerator {
     pub fn new(context: type_checker::AnalysisContext) -> Self {
         Self {
             scope: Scope::new(),
-            source_map: Lrc::new(SourceMap::new(Default::default())),
+            _source_map: Lrc::new(SourceMap::new(Default::default())),
             flags: TranspilerFlags::None,
             current_block: vec![],
             analysis_context: context,
         }
     }
 
-    pub fn generate_js(&mut self, node: ast::Program) -> Result<String, Box<dyn Error>> {
-        let program = self.node_to_swc_module(node);
-
-        let mut buf = Vec::new();
-        {
-            let writer = JsWriter::new(self.source_map.clone(), "\n", &mut buf, None);
-            let mut emitter = Emitter {
-                cfg: Config::default(),
-                cm: self.source_map.clone(),
-                comments: None,
-                wr: writer,
-            };
-
-            emitter.emit_module(&program)?;
-        }
-
-        Ok(String::from_utf8(buf)?)
-    }
-
-    fn node_to_swc_module(&mut self, node: ast::Program) -> swc::Module {
+    pub fn program_to_swc_module(&mut self, node: ast::Program) -> swc::Module {
         self.enter_block();
         for stmt in node.statements {
             let stmts = self.stmt_to_swc(stmt);
@@ -84,9 +65,36 @@ impl CodeGenerator {
         }
         let swc_stmts = self.exit_block();
 
+        let internals_import =
+            swc::ModuleItem::ModuleDecl(swc::ModuleDecl::Import(swc::ImportDecl {
+                span: DUMMY_SP,
+                specifiers: vec![swc::ImportSpecifier::Namespace(
+                    swc_ecma_ast::ImportStarAsSpecifier {
+                        span: DUMMY_SP,
+                        local: create_ident("__"),
+                    },
+                )],
+                src: Box::new(swc::Str {
+                    span: DUMMY_SP,
+                    value: "internals".into(),
+                    raw: None,
+                }),
+                type_only: false,
+                with: None,
+                phase: swc::ImportPhase::Source,
+            }));
+
+        let mut body: Vec<swc::ModuleItem> = Vec::new();
+        body.push(internals_import);
+        body.extend(
+            swc_stmts
+                .into_iter()
+                .map(|stmt| swc::ModuleItem::Stmt(stmt)),
+        );
+
         swc::Module {
             span: DUMMY_SP,
-            body: swc_stmts.into_iter().map(|stmt| stmt.into()).collect(),
+            body,
             shebang: None,
         }
     }

@@ -56,10 +56,6 @@ impl Symbol {
     pub fn has_ref(&self) -> bool {
         self.mut_refs + self.ro_refs > 0
     }
-
-    pub fn can_be_reactive(&self) -> bool {
-        self.mutable || self.dependencies.len() > 0
-    }
 }
 
 #[derive(Clone)]
@@ -90,9 +86,6 @@ pub struct AnalysisContext {
     /** Map of existing symbols */
     pub symbols: Vec<Symbol>,
 
-    /** Map of Identifier nodes to their symbol's id */
-    pub bindings: HashMap<Span<'static>, SymbolId>,
-
     pub scopes: HashMap<Span<'static>, Scope>,
     current_scope: Option<Span<'static>>,
 
@@ -106,7 +99,6 @@ impl AnalysisContext {
     pub fn new() -> Self {
         Self {
             symbols: Vec::<Symbol>::new(),
-            bindings: HashMap::new(),
             scopes: HashMap::new(),
             current_scope: None,
             types: HashMap::new(),

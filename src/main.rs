@@ -1,5 +1,5 @@
 mod ast;
-// mod bundler;
+mod bundler;
 mod codegen;
 mod parser;
 mod type_checker;
@@ -7,13 +7,8 @@ mod types;
 mod utils;
 
 use std::env;
-use std::fs;
-use std::fs::File;
-use std::io::Write;
 
-use codegen::CodeGenerator;
-use parser::ParserEngine;
-use type_checker::TypeChecker;
+use bundler::Bundler;
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
@@ -24,62 +19,6 @@ fn main() {
         std::process::exit(1);
     }
 
-    let filename = &args[1];
-    let input = match fs::read_to_string(filename) {
-        Ok(content) => content,
-        Err(err) => {
-            eprintln!("Error reading file {}: {}", filename, err);
-            std::process::exit(1);
-        }
-    };
-
-    let mut parser = ParserEngine::new();
-    let static_input: &'static str = Box::leak(input.to_string().into_boxed_str());
-    let result = parser.parse(&static_input);
-    let ast = result.node;
-    let has_parse_errors = !result.errors.is_empty();
-    for error in result.errors {
-        utils::pretty_print_error(&input, &error);
-    }
-
-    let mut checker = TypeChecker::new();
-    match checker.check(&ast) {
-        Err(errors) => {
-            for error in errors {
-                utils::pretty_print_error(&input, &error);
-            }
-            std::process::exit(1);
-        }
-        _ => (),
-    };
-    if has_parse_errors {
-        std::process::exit(1);
-    }
-
-    // Resolver {};
-
-    let mut code_generator = CodeGenerator::new(checker.analysis_context);
-    match code_generator.generate_js(ast) {
-        Ok(js_code) => {
-            write_output(&args[2], &js_code);
-        }
-        Err(err) => {
-            eprintln!("Code generation error: {}", err);
-            std::process::exit(1);
-        }
-    }
-}
-
-fn write_output(path: &str, content: &str) {
-    let Ok(mut file) = File::create(path) else {
-        eprintln!("Could not create file {}", path);
-        std::process::exit(1);
-    };
-    match file.write_all(content.as_bytes()) {
-        Err(err) => {
-            eprintln!("Could not write file {}: {}", path, err);
-            std::process::exit(1);
-        }
-        Ok(_) => {}
-    }
+    let bundler = Bundler::new();
+    let _ = bundler.bundle_entry(&args[1], &args[2]);
 }

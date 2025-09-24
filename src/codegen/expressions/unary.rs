@@ -73,7 +73,11 @@ impl CodeGenerator {
         swc::Expr::New(swc::NewExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
-            callee: Box::new(swc::Expr::Ident(create_ident("__Signal"))),
+            callee: Box::new(swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(swc::Expr::Ident(create_ident("__"))),
+                prop: swc::MemberProp::Ident(create_ident("Signal").into()),
+            })),
             args: Some(vec![init.into()]),
             type_args: None,
         })
@@ -97,7 +101,11 @@ impl CodeGenerator {
         swc::Expr::New(swc::NewExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
-            callee: Box::new(swc::Expr::Ident(create_ident("__Listener"))),
+            callee: Box::new(swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(swc::Expr::Ident(create_ident("__"))),
+                prop: swc::MemberProp::Ident(create_ident("Signal").into()),
+            })),
             args: Some(vec![dependencies.into(), swc::Expr::Arrow(getter).into()]),
             type_args: None,
         })

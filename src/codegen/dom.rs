@@ -19,7 +19,11 @@ impl CodeGenerator {
         swc::Expr::Call(swc::CallExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
-            callee: swc::Callee::Expr(Box::new(swc::Expr::Ident(create_ident("__createElement")))),
+            callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(swc::Expr::Ident(create_ident("__"))),
+                prop: swc::MemberProp::Ident(create_ident("createElement").into()),
+            }))),
             args: vec![
                 Box::new(swc::Expr::Lit(swc::Lit::Str(swc::Str {
                     span: DUMMY_SP,

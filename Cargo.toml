@@ -5,6 +5,7 @@ edition = "2021"
 build = "build.rs"
 
 [dependencies]
+anyhow = "1.0.100"
 bitflags = "2.9.0"
 ordered-float = "5.0.0"
 pest = "2.7"
@@ -14,7 +15,12 @@ swc_bundler = "31.0.0"
 swc_common = "14.0.4"
 swc_ecma_ast = "15.0.0"
 swc_ecma_codegen = "17.0.2"
-swc_ecma_parser = "24.0.1"
+swc_ecma_loader = "14.0.0"
+swc_ecma_minifier = "32.0.6"
+swc_ecma_parser = { version = "24.0.1", features = ["typescript"] }
+swc_ecma_transforms = "33.0.0"
+swc_ecma_transforms_typescript = "29.0.0"
+swc_ecma_visit = "15.0.0"
 
 [build-dependencies]
 pest_generator = "2.7"

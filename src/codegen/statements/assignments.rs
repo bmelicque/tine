@@ -33,20 +33,20 @@ impl CodeGenerator {
     fn assign_target_to_swc(&mut self, node: ast::PatternExpression) -> swc::AssignTarget {
         match node {
             ast::PatternExpression::Expression(e) => match e {
-                ast::Expression::Array(a) => todo!(),
+                ast::Expression::Array(_) => todo!(),
                 ast::Expression::FieldAccess(f) => {
                     swc::SimpleAssignTarget::Member(self.field_access_to_swc(f)).into()
                 }
                 ast::Expression::Identifier(i) => self.ident_to_swc_assign_target(i).into(),
-                ast::Expression::Tuple(t) => todo!(),
+                ast::Expression::Tuple(_) => todo!(),
                 ast::Expression::TupleIndexing(t) => {
                     swc::SimpleAssignTarget::Member(self.tuple_indexing_to_swc(t)).into()
                 }
                 _ => unreachable!(),
             },
             ast::PatternExpression::Pattern(p) => match p {
-                ast::Pattern::Literal(l) => todo!(),
-                ast::Pattern::Identifier(i) => swc::SimpleAssignTarget::Ident(swc::BindingIdent {
+                ast::Pattern::Literal(_) => todo!(),
+                ast::Pattern::Identifier(_) => swc::SimpleAssignTarget::Ident(swc::BindingIdent {
                     id: todo!(),
                     type_ann: None,
                 })

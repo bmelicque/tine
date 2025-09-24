@@ -1,4 +1,3 @@
-mod builtin;
 pub mod codegen;
 mod composite_literal;
 mod dom;
