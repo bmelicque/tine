@@ -4,6 +4,8 @@ use swc_bundler::{Config, Hook, ModuleType};
 use swc_common::{sync::Lrc, FileName, Globals, Mark, SourceMap, GLOBALS};
 use swc_ecma_codegen::Node;
 use swc_ecma_minifier::{optimize, option::MinifyOptions};
+use swc_ecma_transforms::resolver;
+use swc_ecma_visit::VisitMutWith;
 
 use crate::bundler::{loader::Loader, Resolver};
 
@@ -41,8 +43,13 @@ impl Bundler {
             let unresolved_mark = top_level_mark;
 
             for bundle in bundles {
+                let top_level_mark = Mark::fresh(Mark::root());
+
+                let mut module = bundle.module;
+                module.visit_mut_with(&mut resolver(unresolved_mark, top_level_mark, false));
+
                 let minified = optimize(
-                    bundle.module.into(),
+                    module.into(),
                     cm.clone(),
                     None, // comments
                     None,
