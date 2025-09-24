@@ -22,7 +22,9 @@ impl TypeChecker {
     fn visit_indirection(&mut self, node: &ast::UnaryExpression) -> types::Type {
         let expr_type = self.visit_expression(&node.operand);
         match expr_type {
-            types::Type::Reference(inner) => self.set_type_at(node.span, *inner.target.clone()),
+            types::Type::Listener(l) => self.set_type_at(node.span, *l.inner.clone()),
+            types::Type::Reference(r) => self.set_type_at(node.span, *r.target.clone()),
+            types::Type::Signal(s) => self.set_type_at(node.span, *s.inner.clone()),
             types::Type::Unknown => self.set_type_at(node.span, types::Type::Unknown),
             _ => {
                 self.errors.push(ParseError {

@@ -8,11 +8,7 @@ use crate::{
 
 impl CodeGenerator {
     pub fn assignment_to_swc(&mut self, node: ast::Assignment) -> swc::ExprStmt {
-        if let ast::PatternExpression::Expression(ast::Expression::Unary(ast::UnaryExpression {
-            operator: ast::UnaryOperator::Star,
-            ..
-        })) = node.pattern
-        {
+        if let ast::Assignee::Indirection(_) = node.pattern {
             return swc::ExprStmt {
                 span: DUMMY_SP,
                 expr: Box::new(self.indirected_assignment_to_swc(node)),
@@ -30,40 +26,37 @@ impl CodeGenerator {
         }
     }
 
-    fn assign_target_to_swc(&mut self, node: ast::PatternExpression) -> swc::AssignTarget {
+    fn assign_target_to_swc(&mut self, node: ast::Assignee) -> swc::AssignTarget {
         match node {
-            ast::PatternExpression::Expression(e) => match e {
-                ast::Expression::Array(_) => todo!(),
-                ast::Expression::FieldAccess(f) => {
-                    swc::SimpleAssignTarget::Member(self.field_access_to_swc(f)).into()
-                }
-                ast::Expression::Identifier(i) => self.ident_to_swc_assign_target(i).into(),
-                ast::Expression::Tuple(_) => todo!(),
-                ast::Expression::TupleIndexing(t) => {
-                    swc::SimpleAssignTarget::Member(self.tuple_indexing_to_swc(t)).into()
-                }
-                _ => unreachable!(),
-            },
-            ast::PatternExpression::Pattern(p) => match p {
-                ast::Pattern::Literal(_) => todo!(),
-                ast::Pattern::Identifier(_) => swc::SimpleAssignTarget::Ident(swc::BindingIdent {
-                    id: todo!(),
-                    type_ann: None,
-                })
-                .into(),
-                ast::Pattern::Struct(s) => {
-                    swc::AssignTargetPat::Object(self.struct_pattern_to_swc(s.fields)).into()
-                }
-                _ => todo!(),
-            },
-        }
-    }
+            ast::Assignee::FieldAccess(expr) => {
+                swc::SimpleAssignTarget::Member(self.field_access_to_swc(expr)).into()
+            }
+            ast::Assignee::Indirection(_) => unreachable!(),
+            ast::Assignee::TupleIndexing(expr) => {
+                swc::SimpleAssignTarget::Member(self.tuple_indexing_to_swc(expr)).into()
+            }
 
-    fn ident_to_swc_assign_target(&mut self, ident: ast::Identifier) -> swc::SimpleAssignTarget {
-        let ident = self.ident_to_swc(ident);
-        match ident {
-            swc::Expr::Ident(i) => swc::SimpleAssignTarget::Ident(i.into()),
-            _ => unreachable!(),
+            ast::Assignee::Pattern(pat) => match pat {
+                ast::Pattern::Identifier(id) => {
+                    swc::SimpleAssignTarget::Ident(create_ident(id.span.as_str()).into()).into()
+                }
+                ast::Pattern::Literal(_) => unreachable!(),
+                ast::Pattern::Struct(pat) => {
+                    swc::AssignTargetPat::Object(self.struct_pattern_to_swc(pat.fields)).into()
+                }
+                ast::Pattern::Tuple(pat) => {
+                    swc::AssignTargetPat::Array(self.tuple_pattern_to_swc(pat)).into()
+                }
+                ast::Pattern::Variant(pat) => match pat.body {
+                    Some(ast::VariantPatternBody::Struct(ref fields)) => {
+                        self.struct_pattern_to_swc(fields.to_vec()).into()
+                    }
+                    Some(ast::VariantPatternBody::Tuple(ref body)) => {
+                        self.tuple_pattern_to_swc(body.clone()).into()
+                    }
+                    None => swc::SimpleAssignTarget::Ident(create_ident("__").into()).into(),
+                },
+            },
         }
     }
 
@@ -75,12 +68,7 @@ impl CodeGenerator {
     ```ref.set(value)```
     */
     fn indirected_assignment_to_swc(&mut self, node: ast::Assignment) -> swc::Expr {
-        let ast::PatternExpression::Expression(ast::Expression::Unary(ast::UnaryExpression {
-            operator: ast::UnaryOperator::Star,
-            operand: assignee,
-            ..
-        })) = node.pattern
-        else {
+        let ast::Assignee::Indirection(assignee) = node.pattern else {
             panic!("Expected assignment to indirection")
         };
 
@@ -89,7 +77,7 @@ impl CodeGenerator {
             ctxt: SyntaxContext::empty(),
             callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
-                obj: Box::new(self.expr_to_swc(*assignee)),
+                obj: Box::new(self.ident_to_swc(assignee.identifier)),
                 prop: swc::MemberProp::Ident(create_ident("set").into()),
             }))),
             args: vec![self.expr_to_swc(node.value).into()],

@@ -69,8 +69,7 @@ mod tests {
             panic!("Expected Assignment")
         };
         match &assignment.pattern {
-            ast::PatternExpression::Pattern(ast::Pattern::Identifier(id))
-                if id.span.as_str() == "x" => {}
+            ast::Assignee::Pattern(ast::Pattern::Identifier(id)) if id.span.as_str() == "x" => {}
             _ => panic!("Expected 'x'"),
         }
         match &assignment.value {

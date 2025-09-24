@@ -85,7 +85,7 @@ impl CodeGenerator {
         }
     }
 
-    fn tuple_pattern_to_swc(&mut self, node: ast::TuplePattern) -> swc::ArrayPat {
+    pub fn tuple_pattern_to_swc(&mut self, node: ast::TuplePattern) -> swc::ArrayPat {
         swc::ArrayPat {
             span: DUMMY_SP,
             elems: node

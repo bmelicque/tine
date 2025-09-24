@@ -135,7 +135,8 @@ method_receiver = { value_identifier ~ type_identifier } // TODO: type_identifie
 variable_declaration = { pattern ~ decl_op ~ expression }
 decl_op = { ":=" | "::" }
 assignment = { assignee ~ "=" ~ expression }
-assignee = { member_expression | tuple_indexing | pattern }
+assignee = { indirection | member_expression | tuple_indexing | pattern }
+indirection = { "*" ~ value_identifier }
 break_statement = { "break" ~ expression? }
 return_statement = { "return" ~ expression? }
 expression_statement = { expression }

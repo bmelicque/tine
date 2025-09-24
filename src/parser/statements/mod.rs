@@ -57,14 +57,26 @@ impl ParserEngine {
         }
     }
 
-    fn parse_assignee(&mut self, pair: Pair<'static, Rule>) -> ast::PatternExpression {
+    fn parse_assignee(&mut self, pair: Pair<'static, Rule>) -> ast::Assignee {
         assert!(pair.as_rule() == Rule::assignee);
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {
+            Rule::indirection => self.parse_indirection_assignee(pair).into(),
+            Rule::member_expression => self.parse_field_access_expression(pair).into(),
+            Rule::tuple_indexing => self.parse_tuple_indexing(pair).into(),
             Rule::pattern => self.parse_pattern(pair).into(),
-            Rule::member_expression | Rule::tuple_indexing => self.parse_expression(pair).into(),
             rule => unreachable!("Unexpected rule {:?}", rule),
         }
+    }
+
+    fn parse_indirection_assignee(
+        &mut self,
+        pair: Pair<'static, Rule>,
+    ) -> ast::IndirectionAssignee {
+        assert_eq!(pair.as_rule(), Rule::indirection);
+        let span = pair.as_span();
+        let identifier = self.parse_identifier(pair.into_inner().next().unwrap());
+        ast::IndirectionAssignee { span, identifier }
     }
 
     fn parse_break_statement(&mut self, pair: Pair<'static, Rule>) -> ast::BreakStatement {
@@ -174,7 +186,7 @@ mod tests {
             ast::Statement::Assignment(assignment) => {
                 // Check the pattern
                 match assignment.pattern {
-                    ast::PatternExpression::Pattern(ast::Pattern::Identifier(id))
+                    ast::Assignee::Pattern(ast::Pattern::Identifier(id))
                         if id.span.as_str() == "x" => {}
                     _ => panic!("Expected 'x' as the assignee"),
                 }
@@ -198,9 +210,7 @@ mod tests {
             ast::Statement::Assignment(assignment) => {
                 // Check the pattern
                 match assignment.pattern {
-                    ast::PatternExpression::Expression(ast::Expression::FieldAccess(
-                        field_access,
-                    )) => {
+                    ast::Assignee::FieldAccess(field_access) => {
                         assert_eq!(field_access.object.as_span().as_str(), "user");
                         assert_eq!(field_access.prop.span.as_str(), "name");
                     }
@@ -225,9 +235,7 @@ mod tests {
         match result {
             ast::Statement::Assignment(assignment) => {
                 match assignment.pattern {
-                    ast::PatternExpression::Expression(ast::Expression::TupleIndexing(
-                        indexing,
-                    )) => {
+                    ast::Assignee::TupleIndexing(indexing) => {
                         assert_eq!(indexing.tuple.as_span().as_str(), "tuple");
                         assert_eq!(indexing.index.value, 0.0);
                     }
@@ -252,9 +260,7 @@ mod tests {
             ast::Statement::Assignment(assignment) => {
                 // Check the pattern
                 match assignment.pattern {
-                    ast::PatternExpression::Expression(ast::Expression::FieldAccess(
-                        field_access,
-                    )) => {
+                    ast::Assignee::FieldAccess(field_access) => {
                         assert_eq!(field_access.object.as_span().as_str(), "user.address");
                         assert_eq!(field_access.prop.span.as_str(), "city");
                     }

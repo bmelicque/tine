@@ -80,7 +80,10 @@ impl ParserEngine {
         }
     }
 
-    fn parse_tuple_indexing(&mut self, pair: Pair<'static, Rule>) -> ast::TupleIndexingExpression {
+    pub fn parse_tuple_indexing(
+        &mut self,
+        pair: Pair<'static, Rule>,
+    ) -> ast::TupleIndexingExpression {
         assert!(pair.as_rule() == Rule::tuple_indexing);
         let span = pair.as_span();
         let mut inner = pair.into_inner();

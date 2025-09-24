@@ -1,18 +1,6 @@
 use crate::parser::utils::merge_span;
 
-use super::{BooleanLiteral, Expression, NamedType, NumberLiteral, StringLiteral};
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PatternExpression {
-    Pattern(Pattern),
-    Expression(Expression),
-}
-
-impl From<Expression> for PatternExpression {
-    fn from(value: Expression) -> Self {
-        Self::Expression(value)
-    }
-}
+use super::{BooleanLiteral, NamedType, NumberLiteral, StringLiteral};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Pattern {
@@ -109,12 +97,6 @@ impl Pattern {
                 }
             }
         }
-    }
-}
-
-impl Into<PatternExpression> for Pattern {
-    fn into(self) -> PatternExpression {
-        PatternExpression::Pattern(self)
     }
 }
 

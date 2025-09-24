@@ -27,21 +27,13 @@ impl TypeChecker {
         Type::Void
     }
 
-    fn visit_assignee(&mut self, pattern: &ast::PatternExpression, against: Type) {
-        match pattern {
-            ast::PatternExpression::Pattern(ref pattern) => {
-                self.visit_pattern_assignee(pattern, against)
-            }
-            ast::PatternExpression::Expression(expr) => match expr {
-                ast::Expression::FieldAccess(expr) => {
-                    self.visit_expr_assignee(expr, against);
-                }
-                ast::Expression::TupleIndexing(expr) => {
-                    self.visit_expr_assignee(expr, against);
-                }
-                expr => unreachable!("unexpected expression: {:?}", expr),
-            },
-        };
+    fn visit_assignee(&mut self, assignee: &ast::Assignee, against: Type) {
+        match assignee {
+            ast::Assignee::FieldAccess(expr) => self.visit_expr_assignee(expr, against),
+            ast::Assignee::Indirection(expr) => self.visit_indirect_assignee(expr, against),
+            ast::Assignee::TupleIndexing(expr) => self.visit_expr_assignee(expr, against),
+            ast::Assignee::Pattern(pat) => self.visit_pattern_assignee(pat, against),
+        }
     }
 
     fn visit_pattern_assignee(&mut self, pattern: &ast::Pattern, against: Type) {
@@ -103,6 +95,39 @@ impl TypeChecker {
                 message: "Cannot assign to immutable variable".to_string(),
                 span: expr.as_span(),
             });
+        }
+    }
+
+    fn visit_indirect_assignee(&mut self, node: &ast::IndirectionAssignee, against: Type) {
+        let name = node.identifier.as_str();
+        let Some(info) = self.analysis_context.lookup_mut(&name) else {
+            self.error(format!("Cannot find name '{}'", name), node.identifier.span);
+            return;
+        };
+        info.writes += 1;
+        match info.ty.clone() {
+            Type::Signal(ty) => {
+                if *ty.inner != against {
+                    self.error(
+                        format!("Cannot assign type {:?} to {:?}", against, ty),
+                        node.span,
+                    )
+                }
+            }
+            Type::Listener(ty) => {
+                if *ty.inner != against {
+                    self.error(
+                        format!("Cannot assign type {:?} to {:?}", against, ty),
+                        node.span,
+                    )
+                }
+            }
+            ty => {
+                self.error(
+                    format!("Cannot dereference variable '{}' of type {}", name, ty),
+                    node.span,
+                );
+            }
         }
     }
 

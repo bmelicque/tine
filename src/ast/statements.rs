@@ -1,9 +1,11 @@
 use pest::Span;
 
+use crate::ast::{FieldAccessExpression, TupleIndexingExpression};
+
 use super::{
     expressions::{Expression, FunctionExpression, Identifier},
     types::{NamedType, Type},
-    Pattern, PatternExpression,
+    Pattern,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -257,13 +259,52 @@ impl Into<VariantDefinition> for StructVariant {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Assignment {
     pub span: Span<'static>,
-    pub pattern: PatternExpression,
+    pub pattern: Assignee,
     pub value: Expression,
 }
 
 impl Into<Statement> for Assignment {
     fn into(self) -> Statement {
         Statement::Assignment(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Assignee {
+    FieldAccess(FieldAccessExpression),
+    Indirection(IndirectionAssignee),
+    TupleIndexing(TupleIndexingExpression),
+
+    Pattern(Pattern),
+}
+
+impl From<FieldAccessExpression> for Assignee {
+    fn from(value: FieldAccessExpression) -> Self {
+        Self::FieldAccess(value)
+    }
+}
+
+impl From<TupleIndexingExpression> for Assignee {
+    fn from(value: TupleIndexingExpression) -> Self {
+        Self::TupleIndexing(value)
+    }
+}
+
+impl From<Pattern> for Assignee {
+    fn from(value: Pattern) -> Self {
+        Self::Pattern(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct IndirectionAssignee {
+    pub span: Span<'static>,
+    pub identifier: Identifier,
+}
+
+impl Into<Assignee> for IndirectionAssignee {
+    fn into(self) -> Assignee {
+        Assignee::Indirection(self)
     }
 }
 
