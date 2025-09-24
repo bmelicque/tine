@@ -6,7 +6,7 @@ use crate::{
     codegen::{utils::create_str, CodeGenerator},
 };
 
-use super::{codegen::TranspilerFlags, utils::create_ident};
+use super::utils::create_ident;
 
 impl CodeGenerator {
     pub fn composite_literal_to_swc_expr(&mut self, node: ast::CompositeLiteral) -> swc::Expr {
@@ -83,8 +83,6 @@ impl CodeGenerator {
     }
 
     pub fn option_literal_to_swc_new_option(&mut self, node: ast::OptionLiteral) -> swc::NewExpr {
-        self.add_flag(TranspilerFlags::OptionType);
-
         let exprs = match node.value {
             Some(value) => {
                 vec![create_str("Some"), self.expr_or_an_to_swc(*value)]
@@ -102,7 +100,11 @@ impl CodeGenerator {
         swc::NewExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
-            callee: Box::new(create_ident("__Option").into()),
+            callee: Box::new(swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(swc::Expr::Ident(create_ident("__"))),
+                prop: swc::MemberProp::Ident(create_ident("Option").into()),
+            })),
             args: Some(args),
             type_args: None,
         }
@@ -184,8 +186,6 @@ impl CodeGenerator {
     }
 
     pub fn some(&mut self, expr: swc::Expr) -> swc::NewExpr {
-        self.add_flag(TranspilerFlags::OptionType);
-
         let exprs = vec![create_str("Some"), expr];
         let args = exprs
             .into_iter()
@@ -198,15 +198,17 @@ impl CodeGenerator {
         swc::NewExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
-            callee: Box::new(create_ident("__Option").into()),
+            callee: Box::new(swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(swc::Expr::Ident(create_ident("__"))),
+                prop: swc::MemberProp::Ident(create_ident("Option").into()),
+            })),
             args: Some(args),
             type_args: None,
         }
     }
 
     pub fn none(&mut self) -> swc::NewExpr {
-        self.add_flag(TranspilerFlags::OptionType);
-
         let args = vec![swc::ExprOrSpread {
             spread: None,
             expr: Box::new(create_str("None")),
@@ -215,7 +217,11 @@ impl CodeGenerator {
         swc::NewExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
-            callee: Box::new(create_ident("__Option").into()),
+            callee: Box::new(swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(swc::Expr::Ident(create_ident("__"))),
+                prop: swc::MemberProp::Ident(create_ident("Option").into()),
+            })),
             args: Some(args),
             type_args: None,
         }

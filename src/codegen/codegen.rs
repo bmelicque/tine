@@ -1,4 +1,3 @@
-use bitflags::bitflags;
 use pest::Span;
 use std::error::Error;
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
@@ -25,21 +24,9 @@ impl std::fmt::Display for TranspilerError {
 
 impl Error for TranspilerError {}
 
-bitflags! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct TranspilerFlags: u32 {
-        const None = 0;
-        const OptionType = 1;
-        const CreateElement = 2;
-        const Reference = 4;
-        const Reactive = 8;
-    }
-}
-
 pub struct CodeGenerator {
     scope: Scope,
     _source_map: Lrc<SourceMap>,
-    flags: TranspilerFlags,
     current_block: Vec<Vec<swc::Stmt>>,
     analysis_context: type_checker::AnalysisContext,
 }
@@ -49,7 +36,6 @@ impl CodeGenerator {
         Self {
             scope: Scope::new(),
             _source_map: Lrc::new(SourceMap::new(Default::default())),
-            flags: TranspilerFlags::None,
             current_block: vec![],
             analysis_context: context,
         }
@@ -109,10 +95,6 @@ impl CodeGenerator {
     }
     pub fn push_to_block(&mut self, stmt: swc::Stmt) {
         self.current_block.last_mut().unwrap().push(stmt);
-    }
-
-    pub fn add_flag(&mut self, flag: TranspilerFlags) {
-        self.flags = self.flags | flag;
     }
 
     pub fn add_to_scope(&mut self, name: String, fields: Vec<String>) {

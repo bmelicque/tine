@@ -1,3 +1,10 @@
+export class Option {
+	constructor(__, some) {
+		this.__ = __;
+		if (arguments.length > 1) this.some = some;
+	}
+}
+
 /**
  * GENERAL STRATEGY FOR REACTIVE VALUES
  *

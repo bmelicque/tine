@@ -4,10 +4,7 @@ use swc_ecma_ast as swc;
 
 use crate::ast;
 
-use super::{
-    type_declaration::utils::{name_to_swc_param, this_assignment},
-    CodeGenerator,
-};
+use super::CodeGenerator;
 
 fn js_reserved_words() -> HashSet<&'static str> {
     [
@@ -109,38 +106,6 @@ pub fn create_block_stmt(stmts: Vec<swc::Stmt>) -> swc::BlockStmt {
         span: DUMMY_SP,
         ctxt: SyntaxContext::empty(),
         stmts,
-    }
-}
-
-pub fn get_option_class() -> swc::ClassDecl {
-    let constructor = swc::Constructor {
-        span: DUMMY_SP,
-        ctxt: SyntaxContext::empty(),
-        key: create_ident("constructor").into(),
-        is_optional: false,
-        params: vec![name_to_swc_param("__"), name_to_swc_param("some")],
-        body: Some(swc::BlockStmt {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
-            stmts: vec![this_assignment("__"), this_assignment("some")],
-        }),
-        accessibility: None,
-    };
-    let class = swc::Class {
-        span: DUMMY_SP,
-        ctxt: SyntaxContext::empty(),
-        body: vec![constructor.into()],
-        super_class: None,
-        super_type_params: None,
-        decorators: vec![],
-        type_params: None,
-        is_abstract: false,
-        implements: vec![],
-    };
-    swc::ClassDecl {
-        declare: false,
-        ident: create_ident("__Option"),
-        class: Box::new(class),
     }
 }
 

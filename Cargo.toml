@@ -6,7 +6,6 @@ build = "build.rs"
 
 [dependencies]
 anyhow = "1.0.100"
-bitflags = "2.9.0"
 ordered-float = "5.0.0"
 pest = "2.7"
 pest_derive = "2.7"

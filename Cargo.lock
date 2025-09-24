@@ -615,7 +615,6 @@ name = "mylang-transpiler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bitflags",
  "ordered-float",
  "pest",
  "pest_derive",

@@ -1,7 +1,6 @@
 use crate::{
     ast,
     codegen::{
-        codegen::TranspilerFlags,
         utils::{create_ident, create_number, create_str},
         CodeGenerator,
     },
@@ -40,7 +39,6 @@ impl CodeGenerator {
     }
 
     fn ref_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
-        self.add_flag(TranspilerFlags::Reference);
         let (ctx, value) = match *node.operand {
             ast::Expression::Identifier(expr) => {
                 (self.ident_to_swc(expr).into(), create_number(0.0))
@@ -68,7 +66,6 @@ impl CodeGenerator {
     }
 
     fn signal_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
-        self.add_flag(TranspilerFlags::Reactive);
         let init = self.expr_to_swc(*node.operand);
         swc::Expr::New(swc::NewExpr {
             span: DUMMY_SP,
@@ -84,7 +81,6 @@ impl CodeGenerator {
     }
 
     fn listener_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
-        self.add_flag(TranspilerFlags::Reactive);
         let getter_expr = self.expr_to_swc(*node.operand);
         let getter = swc::ArrowExpr {
             span: DUMMY_SP,

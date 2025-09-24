@@ -3,12 +3,11 @@ use swc_ecma_ast as swc;
 
 use crate::{
     ast,
-    codegen::{codegen::TranspilerFlags, utils::create_ident, CodeGenerator},
+    codegen::{utils::create_ident, CodeGenerator},
 };
 
 impl CodeGenerator {
     pub fn element_expression_to_swc(&mut self, node: ast::ElementExpression) -> swc::Expr {
-        self.add_flag(TranspilerFlags::CreateElement);
         match node {
             ast::ElementExpression::Element(el) => self.element_to_swc(el),
             ast::ElementExpression::Void(el) => self.void_element_to_swc(el),
