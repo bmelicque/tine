@@ -2,7 +2,7 @@ use crate::{
     ast::{self, VariantDefinition},
     codegen::{utils::create_ident, CodeGenerator},
 };
-use swc_common::DUMMY_SP;
+use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
 use super::{enums::enum_def_to_swc_constructor, literal_alias::literal_alias_to_swc_constructor};
@@ -33,14 +33,7 @@ impl CodeGenerator {
                 if is_literal_type(&named.name) {
                     vec![literal_alias_to_swc_constructor().into()]
                 } else {
-                    super_class = Some(Box::new(
-                        swc::Ident {
-                            span: DUMMY_SP,
-                            sym: named.name.into(),
-                            optional: false,
-                        }
-                        .into(),
-                    ));
+                    super_class = Some(Box::new(create_ident(&named.name).into()));
                     Vec::new()
                 }
             }
@@ -50,6 +43,7 @@ impl CodeGenerator {
             ident: create_ident(&node.name),
             class: Box::new(swc::Class {
                 span: DUMMY_SP,
+                ctxt: SyntaxContext::empty(),
                 body,
                 super_class,
                 super_type_params: None,

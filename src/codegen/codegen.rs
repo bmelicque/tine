@@ -7,11 +7,10 @@ use swc_ecma_codegen::{text_writer::JsWriter, Config, Emitter};
 
 use crate::{
     ast,
-    codegen::builtin::{create_element, reactive, reference},
     type_checker::{self, Symbol},
 };
 
-use super::{sort::Scope, utils::get_option_class};
+use super::sort::Scope;
 
 #[derive(Debug, Clone)]
 pub struct TranspilerError {
@@ -83,20 +82,7 @@ impl CodeGenerator {
                 self.push_to_block(stmt);
             }
         }
-        let mut swc_stmts = self.exit_block();
-
-        for flag in self.flags {
-            match flag {
-                TranspilerFlags::OptionType => swc_stmts.push(get_option_class().into()),
-                TranspilerFlags::CreateElement => swc_stmts.append(create_element().as_mut()),
-                TranspilerFlags::Reference => swc_stmts.append(reference().as_mut()),
-                TranspilerFlags::Reactive => {
-                    let _ = reactive();
-                    todo!()
-                }
-                _ => {}
-            }
-        }
+        let swc_stmts = self.exit_block();
 
         swc::Module {
             span: DUMMY_SP,

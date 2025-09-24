@@ -1,12 +1,12 @@
 mod unary;
 
 use rand::{distr::Alphanumeric, Rng};
-use swc_common::DUMMY_SP;
+use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
 use crate::{
     ast,
-    codegen::utils::{create_number, AssignTo},
+    codegen::utils::{create_block_stmt, create_number, AssignTo},
 };
 
 use super::{
@@ -171,6 +171,7 @@ impl CodeGenerator {
             .collect();
         swc::CallExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             callee,
             args,
             type_args: None,
@@ -192,6 +193,7 @@ impl CodeGenerator {
             .collect();
         swc::ArrowExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             params,
             body: Box::new(self.function_body_to_swc(node.body)),
             is_async: false,
@@ -207,20 +209,16 @@ impl CodeGenerator {
             ast::PredicateParam::Param(param) => param.name.as_str(),
         };
         swc::Pat::Ident(swc::BindingIdent {
-            id: swc::Ident {
-                span: DUMMY_SP,
-                sym: name.into(),
-                optional: false,
-            },
+            id: create_ident(name),
             type_ann: None,
         })
     }
 
-    fn field_access_to_swc(&mut self, node: ast::FieldAccessExpression) -> swc::MemberExpr {
+    pub fn field_access_to_swc(&mut self, node: ast::FieldAccessExpression) -> swc::MemberExpr {
         swc::MemberExpr {
             span: DUMMY_SP,
             obj: Box::new(self.expr_to_swc(*node.object)),
-            prop: swc::MemberProp::Ident(create_ident(node.prop.as_str())),
+            prop: swc::MemberProp::Ident(create_ident(node.prop.as_str()).into()),
         }
     }
 
@@ -230,6 +228,7 @@ impl CodeGenerator {
 
         swc::ArrowExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             params: swc_params,
             body: Box::new(swc_body),
             is_async: false,
@@ -244,11 +243,7 @@ impl CodeGenerator {
             .into_iter()
             .map(|param| {
                 swc::Pat::Ident(swc::BindingIdent {
-                    id: swc::Ident {
-                        span: DUMMY_SP,
-                        sym: param.name.as_str().into(),
-                        optional: false,
-                    },
+                    id: create_ident(param.name.as_str()),
                     type_ann: None,
                 })
             })
@@ -265,10 +260,7 @@ impl CodeGenerator {
                     .flat_map(|stmt| self.stmt_to_swc(stmt.clone()))
                     .collect();
 
-                swc::BlockStmtOrExpr::BlockStmt(swc::BlockStmt {
-                    span: DUMMY_SP,
-                    stmts,
-                })
+                swc::BlockStmtOrExpr::BlockStmt(create_block_stmt(stmts))
             }
             ast::FunctionBody::Expression(expr) => {
                 swc::BlockStmtOrExpr::Expr(Box::new(self.expr_to_swc(*expr.clone())))
@@ -291,11 +283,7 @@ impl CodeGenerator {
                 }),
             })
         } else {
-            swc::Expr::Ident(swc::Ident {
-                span: DUMMY_SP,
-                sym: node.as_str().into(),
-                optional: false,
-            })
+            swc::Expr::Ident(create_ident(node.as_str()))
         }
     }
 
@@ -396,7 +384,7 @@ impl CodeGenerator {
         }
     }
 
-    fn tuple_indexing_to_swc(&mut self, node: ast::TupleIndexingExpression) -> swc::MemberExpr {
+    pub fn tuple_indexing_to_swc(&mut self, node: ast::TupleIndexingExpression) -> swc::MemberExpr {
         swc::MemberExpr {
             span: DUMMY_SP,
             obj: Box::new(self.expr_to_swc(*node.tuple)),
@@ -418,6 +406,7 @@ impl CodeGenerator {
 
         self.push_to_block(swc::Stmt::Decl(swc::Decl::Var(Box::new(swc::VarDecl {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             kind: swc::VarDeclKind::Let,
             declare: false,
             decls: vec![swc::VarDeclarator {
@@ -439,10 +428,12 @@ impl CodeGenerator {
             expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
                 span: DUMMY_SP,
                 op: swc::AssignOp::Assign,
-                left: swc::PatOrExpr::Pat(Box::new(swc::Pat::Ident(swc::BindingIdent {
-                    id: create_ident(to),
-                    type_ann: None,
-                }))),
+                left: swc::AssignTarget::Simple(swc::SimpleAssignTarget::Ident(
+                    swc::BindingIdent {
+                        id: create_ident(to),
+                        type_ann: None,
+                    },
+                )),
                 right: Box::new(expr),
             })),
         }

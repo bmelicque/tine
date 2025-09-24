@@ -1,4 +1,5 @@
 mod ast;
+// mod bundler;
 mod codegen;
 mod parser;
 mod type_checker;
@@ -54,6 +55,8 @@ fn main() {
     if has_parse_errors {
         std::process::exit(1);
     }
+
+    // Resolver {};
 
     let mut code_generator = CodeGenerator::new(checker.analysis_context);
     match code_generator.generate_js(ast) {

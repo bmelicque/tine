@@ -1,5 +1,5 @@
 use swc_common::DUMMY_SP;
-use swc_ecma_ast as swc;
+use swc_ecma_ast::{self as swc};
 
 use crate::codegen::utils::create_ident;
 
@@ -21,11 +21,11 @@ pub fn this_assignment(field_name: &str) -> swc::Stmt {
         expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
             span: DUMMY_SP,
             op: swc::AssignOp::Assign,
-            left: swc::PatOrExpr::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+            left: swc::AssignTarget::Simple(swc::SimpleAssignTarget::Member(swc::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(swc::Expr::This(swc::ThisExpr { span: DUMMY_SP })),
-                prop: create_ident(field_name).into(),
-            }))),
+                prop: swc::MemberProp::Ident(create_ident(field_name).into()),
+            })),
             right: Box::new(create_ident(field_name).into()),
         })),
     })

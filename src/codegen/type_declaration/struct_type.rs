@@ -1,8 +1,11 @@
 use crate::{
     ast::{self, StructDefinitionField},
-    codegen::{utils::create_ident, CodeGenerator},
+    codegen::{
+        utils::{create_block_stmt, create_ident},
+        CodeGenerator,
+    },
 };
-use swc_common::DUMMY_SP;
+use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
 use super::utils::this_assignment;
@@ -27,13 +30,13 @@ impl CodeGenerator {
 
         swc::Constructor {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             key: create_ident("constructor").into(),
             is_optional: false,
             params,
-            body: Some(swc::BlockStmt {
-                span: DUMMY_SP,
-                stmts: struct_to_swc_constructor_stmts(&node.fields),
-            }),
+            body: Some(create_block_stmt(struct_to_swc_constructor_stmts(
+                &node.fields,
+            ))),
             accessibility: None,
         }
     }

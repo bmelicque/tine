@@ -1,8 +1,8 @@
 use crate::{
     ast::{self, StructDefinitionField, VariantDefinition},
-    codegen::utils::create_ident,
+    codegen::utils::{create_block_stmt, create_ident},
 };
-use swc_common::DUMMY_SP;
+use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
 use super::utils::{name_to_swc_param, this_assignment};
@@ -14,13 +14,11 @@ pub fn enum_def_to_swc_constructor(node: ast::EnumDefinition) -> swc::Constructo
     };
     swc::Constructor {
         span: DUMMY_SP,
+        ctxt: SyntaxContext::empty(),
         key: create_ident("constructor").into(),
         is_optional: false,
         params: vec![name_to_swc_param("__"), get_sum_values_param()],
-        body: Some(swc::BlockStmt {
-            span: DUMMY_SP,
-            stmts,
-        }),
+        body: Some(create_block_stmt(stmts)),
         accessibility: None,
     }
 }
@@ -110,11 +108,11 @@ fn this_assignement_from_values(name: &str, index: f64) -> swc::Stmt {
     let expr = Box::new(swc::Expr::Assign(swc::AssignExpr {
         span: DUMMY_SP,
         op: swc::AssignOp::Assign,
-        left: swc::PatOrExpr::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+        left: swc::AssignTarget::Simple(swc::SimpleAssignTarget::Member(swc::MemberExpr {
             span: DUMMY_SP,
             obj: Box::new(swc::ThisExpr { span: DUMMY_SP }.into()),
-            prop: create_ident(name).into(),
-        }))),
+            prop: swc::MemberProp::Ident(create_ident(name).into()),
+        })),
         right: Box::new(swc::Expr::Member(swc::MemberExpr {
             span: DUMMY_SP,
             obj: Box::new(create_ident("values").into()),

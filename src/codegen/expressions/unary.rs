@@ -7,7 +7,7 @@ use crate::{
     },
 };
 use pest::Span;
-use swc_common::DUMMY_SP;
+use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
 impl CodeGenerator {
@@ -28,10 +28,11 @@ impl CodeGenerator {
     fn indirection_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
         swc::Expr::Call(swc::CallExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(self.expr_to_swc(*node.operand)),
-                prop: swc::MemberProp::Ident(create_ident("get")),
+                prop: swc::MemberProp::Ident(create_ident("get").into()),
             }))),
             args: vec![],
             type_args: None,
@@ -59,6 +60,7 @@ impl CodeGenerator {
         };
         swc::Expr::New(swc::NewExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             callee: Box::new(swc::Expr::Ident(create_ident("__Reference"))),
             args: Some(vec![ctx.into(), value.into()]),
             type_args: None,
@@ -70,6 +72,7 @@ impl CodeGenerator {
         let init = self.expr_to_swc(*node.operand);
         swc::Expr::New(swc::NewExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             callee: Box::new(swc::Expr::Ident(create_ident("__Signal"))),
             args: Some(vec![init.into()]),
             type_args: None,
@@ -81,6 +84,7 @@ impl CodeGenerator {
         let getter_expr = self.expr_to_swc(*node.operand);
         let getter = swc::ArrowExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             params: Vec::new(),
             body: Box::new(getter_expr.into()),
             is_async: false,
@@ -92,6 +96,7 @@ impl CodeGenerator {
 
         swc::Expr::New(swc::NewExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             callee: Box::new(swc::Expr::Ident(create_ident("__Listener"))),
             args: Some(vec![dependencies.into(), swc::Expr::Arrow(getter).into()]),
             type_args: None,

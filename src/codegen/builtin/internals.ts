@@ -1,5 +1,5 @@
 /**
- * GENERAL STRATEGY
+ * GENERAL STRATEGY FOR REACTIVE VALUES
  *
  * When a Signal is set:
  * 1. Mark all its descendants as being dirty
@@ -21,30 +21,50 @@ type Getter<T> = () => T;
 type Setter<T> = (value: T) => void;
 
 /**
- * Stores reactive graph nodes, sorted by depth
+ * Stores reactive graph nodes, organized in layers.
+ *
+ * Each layer corresponds to a depth within the graph.
+ * This way, nodes can be inserted in any order, but still be iterated layer by layer (breadth first)
  */
 class LayeredGraph<T extends Reactive> {
 	layers: Set<T>[] = [];
 
-	has(node: T) {
+	/**
+	 * Check if a node exists within the graph
+	 */
+	has(node: T): boolean {
 		return this.layers[node.depth]?.has(node);
 	}
 
+	/**
+	 * Add a node to the graph.
+	 *
+	 * The node is automatically inserted in the layer corresponding the node's `depth`
+	 */
 	add(node: T) {
 		(this.layers[node.depth] ??= new Set()).add(node);
 	}
 
+	/**
+	 * Remove a node from the `LayeredGraph`
+	 */
 	remove(node: T) {
 		this.layers[node.depth]?.delete(node);
 	}
 
+	/**
+	 * Empties the `LayeredGraph`
+	 */
 	clear() {
 		this.layers.length = 0;
 	}
 }
 
-const stale = new LayeredGraph<__Listener<any>>();
-const dirty = new LayeredGraph<__Listener<any>>();
+const stale = new LayeredGraph<Listener<any>>();
+/**
+ * Graph of all the reactive values for which at least one ancestor's value has changed since last global update.
+ */
+const dirty = new LayeredGraph<Listener<any>>();
 
 const scheduler = {
 	hasScheduled: false,
@@ -70,14 +90,14 @@ const scheduler = {
 };
 
 /**
- * The basic reactive class, which provides graph utilities
+ * The basic reactive class, which provides graph utilities.
  */
 abstract class Reactive {
 	depth: number;
-	children = new Set<WeakRef<__Listener<any>>>();
-	registry = new FinalizationRegistry<WeakRef<__Listener<any>>>((ref) => this.children.delete(ref));
+	children = new Set<WeakRef<Listener<any>>>();
+	registry = new FinalizationRegistry<WeakRef<Listener<any>>>((ref) => this.children.delete(ref));
 
-	addChild(computed: __Listener<any>) {
+	addChild(computed: Listener<any>) {
 		const ref = new WeakRef(computed);
 		this.children.add(ref);
 		this.registry.register(computed, ref);
@@ -94,7 +114,7 @@ abstract class Reactive {
 /**
  * Root reactive states, that are writable and do not depend on anything
  */
-export class __Signal<T> extends Reactive {
+export class Signal<T> extends Reactive {
 	depth = 0;
 	value: T;
 
@@ -121,7 +141,7 @@ export class __Signal<T> extends Reactive {
 /**
  * Derived signals and effects
  */
-export class __Listener<T> extends Reactive {
+export class Listener<T> extends Reactive {
 	getter: Getter<T>;
 	deps: Reactive[];
 	value: T;
@@ -173,7 +193,7 @@ export class __Listener<T> extends Reactive {
  * Writable derived states, which should only be sub-values (like obj.value, or tuple[index]).
  * They depend on a single state and can write into it.
  */
-export class __WritableComputed<T> extends __Listener<T> {
+export class WritableComputed<T> extends Listener<T> {
 	/**
 	 * Example setter for `&obj.value`:
 	 * ```
@@ -181,7 +201,7 @@ export class __WritableComputed<T> extends __Listener<T> {
 	 * ```
 	 */
 	setter: Setter<T>;
-	declare deps: [__Signal<any>];
+	declare deps: [Signal<any>];
 
 	constructor(deps: Reactive[], getter: Getter<T>, setter: Setter<T>) {
 		super(deps, getter);
@@ -199,7 +219,7 @@ export class __WritableComputed<T> extends __Listener<T> {
 /**
  * Reactive DOM node
  */
-export class __ReactiveNode<T> extends __Listener<T> {
+export class ReactiveNode<T> extends Listener<T> {
 	node: Node;
 
 	constructor(deps: Reactive[], getter: Getter<T>) {
@@ -216,4 +236,37 @@ export class __ReactiveNode<T> extends __Listener<T> {
 		for (const child of this.iterateChildren()) stale.add(child);
 		this.node.parentNode!.replaceChild(this.node, (this.node = this.toNode()));
 	}
+}
+
+/**
+ *  DOM ELEMENT CREATION
+ */
+// TODO:
+type Attributes = Record<string, any>;
+type Child = string | number | Node | ReactiveNode<any>;
+
+/**
+ * Create a DOM Element, possibly reactive depending on the params used at creation.
+ *
+ * Children (inner nodes) can be created from:
+ * - primitive values (`string`, `number`, etc.), that will be converted to Text nodes
+ * - regular DOM nodes or elements
+ * - reactive values (Signals or Listeners), that will be converted to reactive nodes
+ * - any kind of expression evaluates to one of the above
+ */
+export function createElement(tag: string, attributes: Attributes, children: Child[]): Element {
+	const element = document.createElement(tag);
+	for (const [key, value] of Object.entries(attributes)) {
+		// TODO: reactive attributes
+		element.setAttribute(key, value ?? "");
+	}
+	if (children) {
+		for (const child of children) {
+			if (typeof child === "number") element.append(String(child));
+			else if (child instanceof ReactiveNode) element.append(child.node);
+			else element.append(child);
+		}
+	}
+
+	return element;
 }

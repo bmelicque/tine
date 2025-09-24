@@ -1,10 +1,13 @@
 mod assignments;
 mod declarations;
 
-use swc_common::DUMMY_SP;
+use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-use crate::{ast, codegen::utils::AssignTo};
+use crate::{
+    ast,
+    codegen::utils::{create_block_stmt, AssignTo},
+};
 
 use super::{utils::create_ident, CodeGenerator};
 
@@ -77,10 +80,7 @@ impl CodeGenerator {
             }
         }
 
-        swc::BlockStmt {
-            span: DUMMY_SP,
-            stmts,
-        }
+        create_block_stmt(stmts)
     }
 
     fn break_to_swc_stmt(&mut self) -> swc::BreakStmt {
@@ -118,6 +118,7 @@ impl CodeGenerator {
         block.stmts.push(
             swc::Decl::Var(Box::new(swc::VarDecl {
                 span: DUMMY_SP,
+                ctxt: SyntaxContext::empty(),
                 kind: swc::VarDeclKind::Const,
                 declare: false,
                 decls: vec![swc::VarDeclarator {
@@ -179,6 +180,7 @@ impl CodeGenerator {
             is_await: false,
             left: swc::ForHead::VarDecl(Box::new(swc::VarDecl {
                 span: DUMMY_SP,
+                ctxt: SyntaxContext::empty(),
                 kind: swc::VarDeclKind::Const,
                 declare: false,
                 decls: vec![swc::VarDeclarator {
@@ -227,6 +229,7 @@ impl CodeGenerator {
         });
         let decl = swc::Stmt::Decl(swc::Decl::Var(Box::new(swc::VarDecl {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             kind: swc::VarDeclKind::Const,
             declare: false,
             decls: vec![swc::VarDeclarator {
@@ -294,17 +297,17 @@ impl CodeGenerator {
 
         let body = match self.function_body_to_swc(node.body) {
             swc::BlockStmtOrExpr::BlockStmt(block) => block,
-            swc::BlockStmtOrExpr::Expr(expr) => swc::BlockStmt {
-                span: DUMMY_SP,
-                stmts: vec![swc::Stmt::Return(swc::ReturnStmt {
+            swc::BlockStmtOrExpr::Expr(expr) => {
+                create_block_stmt(vec![swc::Stmt::Return(swc::ReturnStmt {
                     span: DUMMY_SP,
                     arg: Some(expr),
-                })],
-            },
+                })])
+            }
         };
 
         swc::Function {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             params,
             decorators: vec![],
             body: Some(body),
@@ -319,11 +322,11 @@ impl CodeGenerator {
         swc::AssignExpr {
             span: DUMMY_SP,
             op: swc::AssignOp::Assign,
-            left: swc::PatOrExpr::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+            left: swc::AssignTarget::Simple(swc::SimpleAssignTarget::Member(swc::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(create_ident(&node.receiver.ty.name).into()),
-                prop: swc::MemberProp::Ident(create_ident(node.name.as_str())),
-            }))),
+                prop: swc::MemberProp::Ident(create_ident(node.name.as_str()).into()),
+            })),
             right: Box::new(self.function_to_swc_function(node.definition).into()),
         }
     }

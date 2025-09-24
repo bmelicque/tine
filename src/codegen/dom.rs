@@ -1,9 +1,9 @@
-use swc_common::DUMMY_SP;
+use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
 use crate::{
     ast,
-    codegen::{codegen::TranspilerFlags, CodeGenerator},
+    codegen::{codegen::TranspilerFlags, utils::create_ident, CodeGenerator},
 };
 
 impl CodeGenerator {
@@ -18,11 +18,8 @@ impl CodeGenerator {
     fn element_to_swc(&mut self, node: ast::Element) -> swc::Expr {
         swc::Expr::Call(swc::CallExpr {
             span: DUMMY_SP,
-            callee: swc::Callee::Expr(Box::new(swc::Expr::Ident(swc::Ident {
-                span: DUMMY_SP,
-                sym: "__createElement".into(),
-                optional: false,
-            }))),
+            ctxt: SyntaxContext::empty(),
+            callee: swc::Callee::Expr(Box::new(swc::Expr::Ident(create_ident("__createElement")))),
             args: vec![
                 Box::new(swc::Expr::Lit(swc::Lit::Str(swc::Str {
                     span: DUMMY_SP,
@@ -40,11 +37,8 @@ impl CodeGenerator {
     fn void_element_to_swc(&mut self, node: ast::VoidElement) -> swc::Expr {
         swc::Expr::Call(swc::CallExpr {
             span: DUMMY_SP,
-            callee: swc::Callee::Expr(Box::new(swc::Expr::Ident(swc::Ident {
-                span: DUMMY_SP,
-                sym: "__createElement".into(),
-                optional: false,
-            }))),
+            ctxt: SyntaxContext::empty(),
+            callee: swc::Callee::Expr(Box::new(swc::Expr::Ident(create_ident("__createElement")))),
             args: vec![
                 Box::new(swc::Expr::Lit(swc::Lit::Str(swc::Str {
                     span: DUMMY_SP,

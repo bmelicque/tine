@@ -10,13 +10,6 @@ use super::{
 };
 
 impl CodeGenerator {
-    pub fn pat_or_expr_to_swc(&mut self, node: ast::PatternExpression) -> swc::PatOrExpr {
-        match node {
-            ast::PatternExpression::Expression(e) => Box::new(self.expr_to_swc(e)).into(),
-            ast::PatternExpression::Pattern(p) => Box::new(self.pattern_to_swc(p)).into(),
-        }
-    }
-
     /// Used to build a destructuring expression, like the `{ name }` part of `const { name } = user;`
     pub fn pattern_to_swc(&mut self, node: ast::Pattern) -> swc::Pat {
         match node {
@@ -57,7 +50,10 @@ impl CodeGenerator {
         }
     }
 
-    fn struct_pattern_to_swc(&mut self, fields: Vec<ast::StructPatternField>) -> swc::ObjectPat {
+    pub fn struct_pattern_to_swc(
+        &mut self,
+        fields: Vec<ast::StructPatternField>,
+    ) -> swc::ObjectPat {
         swc::ObjectPat {
             span: DUMMY_SP,
             props: fields
@@ -220,7 +216,7 @@ impl CodeGenerator {
             left: Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(self.expr_to_swc(against.clone())),
-                prop: swc::MemberProp::Ident(create_ident("__")),
+                prop: swc::MemberProp::Ident(create_ident("__").into()),
             })),
             right: Box::new(swc::Expr::Lit(swc::Lit::Str(swc::Str {
                 span: DUMMY_SP,

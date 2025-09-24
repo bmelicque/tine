@@ -1,4 +1,4 @@
-use swc_common::DUMMY_SP;
+use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
 use crate::{
@@ -32,6 +32,7 @@ impl CodeGenerator {
             .collect();
         swc::NewExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             callee: Box::new("FIXME:".into()),
             args: Some(swc_args),
             type_args: None,
@@ -68,6 +69,7 @@ impl CodeGenerator {
             .collect::<Vec<_>>();
         swc::NewExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             callee: Box::new(create_ident("Map").into()),
             args: Some(vec![swc::ExprOrSpread {
                 spread: None,
@@ -99,6 +101,7 @@ impl CodeGenerator {
 
         swc::NewExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             callee: Box::new(create_ident("__Option").into()),
             args: Some(args),
             type_args: None,
@@ -110,6 +113,7 @@ impl CodeGenerator {
         let swc_args = self.get_sorted_args(&name, node.fields);
         swc::NewExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             callee: Box::new(create_ident(&name).into()),
             args: Some(swc_args),
             type_args: None,
@@ -131,11 +135,7 @@ impl CodeGenerator {
                     remaining -= 1;
                     self.expr_to_swc(field.value.clone())
                 }
-                None => swc::Expr::Ident(swc::Ident {
-                    span: DUMMY_SP,
-                    sym: "undefined".into(),
-                    optional: false,
-                }),
+                None => swc::Expr::Ident(create_ident("undefined")),
             };
             sorted_args.push(swc::ExprOrSpread {
                 spread: None,
@@ -176,6 +176,7 @@ impl CodeGenerator {
 
         swc::NewExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             callee: Box::new(create_ident(&name).into()),
             args: Some(args),
             type_args: None,
@@ -196,6 +197,7 @@ impl CodeGenerator {
 
         swc::NewExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             callee: Box::new(create_ident("__Option").into()),
             args: Some(args),
             type_args: None,
@@ -212,6 +214,7 @@ impl CodeGenerator {
 
         swc::NewExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             callee: Box::new(create_ident("__Option").into()),
             args: Some(args),
             type_args: None,

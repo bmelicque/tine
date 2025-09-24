@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use swc_common::DUMMY_SP;
+use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
 use crate::ast;
@@ -83,6 +83,7 @@ pub fn create_ident(name: &str) -> swc::Ident {
     swc::Ident {
         sym: safe_identifier(name).into(),
         span: DUMMY_SP,
+        ctxt: SyntaxContext::empty(),
         optional: false,
     }
 }
@@ -103,20 +104,31 @@ pub fn create_number(value: f64) -> swc::Expr {
     }))
 }
 
+pub fn create_block_stmt(stmts: Vec<swc::Stmt>) -> swc::BlockStmt {
+    swc::BlockStmt {
+        span: DUMMY_SP,
+        ctxt: SyntaxContext::empty(),
+        stmts,
+    }
+}
+
 pub fn get_option_class() -> swc::ClassDecl {
     let constructor = swc::Constructor {
         span: DUMMY_SP,
+        ctxt: SyntaxContext::empty(),
         key: create_ident("constructor").into(),
         is_optional: false,
         params: vec![name_to_swc_param("__"), name_to_swc_param("some")],
         body: Some(swc::BlockStmt {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             stmts: vec![this_assignment("__"), this_assignment("some")],
         }),
         accessibility: None,
     };
     let class = swc::Class {
         span: DUMMY_SP,
+        ctxt: SyntaxContext::empty(),
         body: vec![constructor.into()],
         super_class: None,
         super_type_params: None,
@@ -174,6 +186,7 @@ impl ast::IfExpression {
 pub fn undefined() -> swc::Expr {
     swc::Expr::Ident(swc::Ident {
         span: DUMMY_SP,
+        ctxt: SyntaxContext::empty(),
         sym: "undefined".into(),
         optional: false,
     })
@@ -211,10 +224,12 @@ impl CodeGenerator {
             expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
                 span: DUMMY_SP,
                 op: swc::AssignOp::Assign,
-                left: swc::PatOrExpr::Pat(Box::new(swc::Pat::Ident(swc::BindingIdent {
-                    id: create_ident(&identifier),
-                    type_ann: None,
-                }))),
+                left: swc::AssignTarget::Simple(swc::SimpleAssignTarget::Ident(
+                    swc::BindingIdent {
+                        id: create_ident(&identifier),
+                        type_ann: None,
+                    },
+                )),
                 right: expr,
             })),
         })

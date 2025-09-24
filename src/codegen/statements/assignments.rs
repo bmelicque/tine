@@ -1,4 +1,4 @@
-use swc_common::DUMMY_SP;
+use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
 use crate::{
@@ -24,9 +24,46 @@ impl CodeGenerator {
             expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
                 span: DUMMY_SP,
                 op: swc::AssignOp::Assign,
-                left: self.pat_or_expr_to_swc(node.pattern),
+                left: self.assign_target_to_swc(node.pattern),
                 right: Box::new(self.expr_to_swc(node.value)),
             })),
+        }
+    }
+
+    fn assign_target_to_swc(&mut self, node: ast::PatternExpression) -> swc::AssignTarget {
+        match node {
+            ast::PatternExpression::Expression(e) => match e {
+                ast::Expression::Array(a) => todo!(),
+                ast::Expression::FieldAccess(f) => {
+                    swc::SimpleAssignTarget::Member(self.field_access_to_swc(f)).into()
+                }
+                ast::Expression::Identifier(i) => self.ident_to_swc_assign_target(i).into(),
+                ast::Expression::Tuple(t) => todo!(),
+                ast::Expression::TupleIndexing(t) => {
+                    swc::SimpleAssignTarget::Member(self.tuple_indexing_to_swc(t)).into()
+                }
+                _ => unreachable!(),
+            },
+            ast::PatternExpression::Pattern(p) => match p {
+                ast::Pattern::Literal(l) => todo!(),
+                ast::Pattern::Identifier(i) => swc::SimpleAssignTarget::Ident(swc::BindingIdent {
+                    id: todo!(),
+                    type_ann: None,
+                })
+                .into(),
+                ast::Pattern::Struct(s) => {
+                    swc::AssignTargetPat::Object(self.struct_pattern_to_swc(s.fields)).into()
+                }
+                _ => todo!(),
+            },
+        }
+    }
+
+    fn ident_to_swc_assign_target(&mut self, ident: ast::Identifier) -> swc::SimpleAssignTarget {
+        let ident = self.ident_to_swc(ident);
+        match ident {
+            swc::Expr::Ident(i) => swc::SimpleAssignTarget::Ident(i.into()),
+            _ => unreachable!(),
         }
     }
 
@@ -49,10 +86,11 @@ impl CodeGenerator {
 
         swc::Expr::Call(swc::CallExpr {
             span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
             callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(self.expr_to_swc(*assignee)),
-                prop: swc::MemberProp::Ident(create_ident("set")),
+                prop: swc::MemberProp::Ident(create_ident("set").into()),
             }))),
             args: vec![self.expr_to_swc(node.value).into()],
             type_args: None,

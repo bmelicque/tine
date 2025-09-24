@@ -1,4 +1,4 @@
-use swc_common::DUMMY_SP;
+use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
 use crate::{
@@ -59,6 +59,7 @@ impl CodeGenerator {
 fn create_declaration(kind: swc::VarDeclKind, name: swc::Pat, init: swc::Expr) -> swc::VarDecl {
     swc::VarDecl {
         span: DUMMY_SP,
+        ctxt: SyntaxContext::empty(),
         kind,
         declare: false,
         decls: vec![swc::VarDeclarator {
@@ -78,10 +79,10 @@ fn wrap_identifier(name: &str) -> swc::ExprStmt {
         expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
             span: DUMMY_SP,
             op: swc::AssignOp::Assign,
-            left: swc::PatOrExpr::Pat(Box::new(swc::Pat::Ident(swc::BindingIdent {
+            left: swc::AssignTarget::Simple(swc::SimpleAssignTarget::Ident(swc::BindingIdent {
                 id: create_ident(name),
                 type_ann: None,
-            }))),
+            })),
             right: Box::new(swc::Expr::Array(swc::ArrayLit {
                 span: DUMMY_SP,
                 elems: vec![Some(swc::Expr::Ident(create_ident(name)).into())],
