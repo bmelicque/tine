@@ -81,17 +81,7 @@ impl CodeGenerator {
     }
 
     fn listener_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
-        let getter_expr = self.expr_to_swc(*node.operand);
-        let getter = swc::ArrowExpr {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
-            params: Vec::new(),
-            body: Box::new(getter_expr.into()),
-            is_async: false,
-            is_generator: false,
-            type_params: None,
-            return_type: None,
-        };
+        let getter = self.reactive_to_swc_getter(*node.operand);
         let dependencies = swc::Expr::Array(self.listener_deps_to_swc_array(node.span));
 
         swc::Expr::New(swc::NewExpr {
@@ -100,14 +90,27 @@ impl CodeGenerator {
             callee: Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(swc::Expr::Ident(create_ident("__"))),
-                prop: swc::MemberProp::Ident(create_ident("Signal").into()),
+                prop: swc::MemberProp::Ident(create_ident("Listener").into()),
             })),
             args: Some(vec![dependencies.into(), swc::Expr::Arrow(getter).into()]),
             type_args: None,
         })
     }
 
-    fn listener_deps_to_swc_array(&mut self, listener_span: Span<'static>) -> swc::ArrayLit {
+    pub fn reactive_to_swc_getter(&mut self, getter: ast::Expression) -> swc::ArrowExpr {
+        swc::ArrowExpr {
+            span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
+            params: Vec::new(),
+            body: Box::new(self.expr_to_swc(getter).into()),
+            is_async: false,
+            is_generator: false,
+            type_params: None,
+            return_type: None,
+        }
+    }
+
+    pub fn listener_deps_to_swc_array(&mut self, listener_span: Span<'static>) -> swc::ArrayLit {
         let reactive_dependencies: Vec<swc::Ident> = self
             .get_expression_dependencies(listener_span)
             .into_iter()

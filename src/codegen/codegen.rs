@@ -7,6 +7,7 @@ use crate::{
     ast,
     codegen::utils::create_ident,
     type_checker::{self, Symbol},
+    types,
 };
 
 use super::sort::Scope;
@@ -121,5 +122,9 @@ impl CodeGenerator {
         list.into_iter()
             .map(|id| &self.analysis_context.symbols[*id])
             .collect()
+    }
+
+    pub fn get_expr_type(&self, node: &ast::Expression) -> Option<&types::Type> {
+        self.analysis_context.types.get(&node.as_span())
     }
 }

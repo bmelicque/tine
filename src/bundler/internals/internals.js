@@ -85,6 +85,7 @@ const scheduler = {
 		if (!dirty.layers[1]) return;
 		stale.layers[1] = dirty.layers[1];
 		for (const depth of stale.layers) {
+			if (!depth) continue;
 			for (const node of depth.values()) {
 				node.update();
 			}
@@ -228,7 +229,9 @@ export class ReactiveNode extends Listener {
 	update() {
 		if (!dirty.has(this) || !this.compute()) return;
 		for (const child of this.iterateChildren()) stale.add(child);
-		this.node.parentNode.replaceChild(this.node, (this.node = this.toNode()));
+		const newNode = this.toNode();
+		this.node.parentNode.replaceChild(newNode, this.node);
+		this.node = newNode;
 	}
 }
 
@@ -247,8 +250,9 @@ export class ReactiveNode extends Listener {
 export function createElement(tag, attributes, children) {
 	const element = document.createElement(tag);
 	for (const [key, value] of Object.entries(attributes)) {
+		if (key.startsWith("on")) element.addEventListener(key.slice(2), value);
 		// TODO: reactive attributes
-		element.setAttribute(key, value ?? "");
+		else element.setAttribute(key, value ?? "");
 	}
 	if (children) {
 		for (const child of children) {

@@ -93,25 +93,48 @@ impl CodeGenerator {
     fn children_to_swc_array(&mut self, children: Vec<ast::ElementChild>) -> swc::Expr {
         let elems = children
             .into_iter()
-            .map(|child| match child {
-                ast::ElementChild::Element(el) => Some(Box::new(self.element_to_swc(el)).into()),
-                ast::ElementChild::VoidElement(el) => {
-                    Some(Box::new(self.void_element_to_swc(el)).into())
-                }
-                ast::ElementChild::Text(t) => Some(
-                    Box::new(swc::Expr::Lit(swc::Lit::Str(swc::Str {
-                        span: DUMMY_SP,
-                        value: t.span.as_str().into(),
-                        raw: None,
-                    })))
-                    .into(),
-                ),
-                ast::ElementChild::Expression(e) => Some(Box::new(self.expr_to_swc(e)).into()),
-            })
+            .map(|child| Some(self.child_to_swc(child).into()))
             .collect();
         swc::Expr::Array(swc::ArrayLit {
             span: DUMMY_SP,
             elems,
+        })
+    }
+
+    fn child_to_swc(&mut self, child: ast::ElementChild) -> swc::Expr {
+        match child {
+            ast::ElementChild::Element(el) => self.element_to_swc(el),
+            ast::ElementChild::VoidElement(el) => self.void_element_to_swc(el),
+            ast::ElementChild::Text(t) => swc::Expr::Lit(swc::Lit::Str(swc::Str {
+                span: DUMMY_SP,
+                value: t.span.as_str().into(),
+                raw: None,
+            })),
+            ast::ElementChild::Expression(e) => self.expression_child_to_swc(e),
+        }
+    }
+
+    fn expression_child_to_swc(&mut self, child: ast::Expression) -> swc::Expr {
+        let Some(ty) = self.get_expr_type(&child) else {
+            panic!("expression should have a type!")
+        };
+        if !ty.is_reactive() {
+            return self.expr_to_swc(child);
+        }
+
+        let dependencies = swc::Expr::Array(self.listener_deps_to_swc_array(child.as_span()));
+        let getter = self.reactive_to_swc_getter(child);
+
+        swc::Expr::New(swc::NewExpr {
+            span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
+            callee: Box::new(swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(swc::Expr::Ident(create_ident("__"))),
+                prop: swc::MemberProp::Ident(create_ident("ReactiveNode").into()),
+            })),
+            args: Some(vec![dependencies.into(), swc::Expr::Arrow(getter).into()]),
+            type_args: None,
         })
     }
 }

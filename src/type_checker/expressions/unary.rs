@@ -1,5 +1,3 @@
-use pest::Span;
-
 use crate::{
     ast::{self, utils::root_identifier},
     parser::parser::ParseError,
@@ -46,10 +44,7 @@ impl TypeChecker {
 
     fn visit_listener(&mut self, node: &ast::UnaryExpression) -> types::ListenerType {
         let (expr_type, deps) = self.with_dependencies(|s| s.visit_expression(&node.operand));
-        self.check_reactivity(&deps, node.operand.as_span());
-        self.analysis_context
-            .other_dependencies
-            .insert(node.span, deps.clone());
+        self.save_reactive_dependencies(&deps, node.span);
         self.analysis_context.add_dependencies(deps);
         if let ast::Expression::Identifier(id) = node.operand.as_ref() {
             if let Some(info) = self.analysis_context.lookup_mut(&id.as_str()) {
@@ -60,20 +55,6 @@ impl TypeChecker {
 
         let inner = Box::new(expr_type);
         self.set_type_at(node.span, types::ListenerType { inner })
-    }
-
-    fn check_reactivity(&mut self, dependencies: &Vec<usize>, span: Span<'static>) {
-        let has_reactive_dependencies = dependencies
-            .iter()
-            .map(|dep| &self.analysis_context.symbols[*dep])
-            .find(|symbol| symbol.ty.is_reactive())
-            .is_some();
-        if !has_reactive_dependencies {
-            self.error(
-                "Expected reactive values in listened expression".to_string(),
-                span,
-            );
-        }
     }
 
     fn visit_reference(&mut self, node: &ast::UnaryExpression) -> types::Type {

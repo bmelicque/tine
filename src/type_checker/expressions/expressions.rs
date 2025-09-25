@@ -13,12 +13,7 @@ impl TypeChecker {
             ast::Expression::Block(node) => self.visit_block_expression(node),
             ast::Expression::Call(node) => self.visit_call_expression(node),
             ast::Expression::CompositeLiteral(node) => self.visit_composite_literal(node),
-            ast::Expression::Element(_) => types::Type::Duck(types::DuckType {
-                like: Box::new(types::Type::Named(types::NamedType {
-                    name: "Node".to_string(),
-                    args: vec![],
-                })),
-            }),
+            ast::Expression::Element(node) => self.visit_element_expression(node),
             ast::Expression::Empty => types::Type::Void,
             ast::Expression::FieldAccess(node) => self.visit_field_access_expression(node),
             ast::Expression::Function(node) => self.visit_function_expression(node).into(),
@@ -274,8 +269,11 @@ impl TypeChecker {
     }
 
     fn visit_identifier(&mut self, node: &ast::Identifier) -> types::Type {
-        let ty = match self.analysis_context.lookup_mut(node.as_str()) {
-            Some(symbol) => {
+        let symbol_id = self.analysis_context.get_id(node.as_str());
+        let ty = match symbol_id {
+            Some(id) => {
+                self.analysis_context.add_dependencies(vec![id]);
+                let symbol = self.analysis_context.symbols.get_mut(id).unwrap();
                 symbol.reads += 1;
                 symbol.ty.clone()
             }
