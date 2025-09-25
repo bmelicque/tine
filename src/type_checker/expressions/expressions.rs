@@ -104,7 +104,7 @@ impl TypeChecker {
                     push_error(right_type);
                 };
             }
-            ast::BinaryOperator::Eq | ast::BinaryOperator::Neq => {
+            ast::BinaryOperator::EqEq | ast::BinaryOperator::Neq => {
                 if left_type != right_type
                     && left_type != types::Type::Unknown
                     && right_type != types::Type::Unknown
@@ -138,7 +138,7 @@ impl TypeChecker {
                 | ast::BinaryOperator::Div
                 | ast::BinaryOperator::Mod
                 | ast::BinaryOperator::Pow => types::Type::Number,
-                ast::BinaryOperator::Eq
+                ast::BinaryOperator::EqEq
                 | ast::BinaryOperator::Geq
                 | ast::BinaryOperator::Grt
                 | ast::BinaryOperator::LAnd

@@ -223,7 +223,7 @@ export class ReactiveNode extends Listener {
 	}
 
 	toNode() {
-		return this.value instanceof Node ? this.value : new Text(String(this.value || ""));
+		return this.value instanceof Node ? this.value : new Text(String(this.value ?? ""));
 	}
 
 	update() {

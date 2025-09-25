@@ -80,7 +80,7 @@ impl CodeGenerator {
         let op = match node.operator {
             ast::BinaryOperator::Add => swc::BinaryOp::Add,
             ast::BinaryOperator::Div => swc::BinaryOp::Div,
-            ast::BinaryOperator::Eq => swc::BinaryOp::EqEqEq,
+            ast::BinaryOperator::EqEq => swc::BinaryOp::EqEqEq,
             ast::BinaryOperator::Geq => swc::BinaryOp::GtEq,
             ast::BinaryOperator::Grt => swc::BinaryOp::Gt,
             ast::BinaryOperator::LAnd => swc::BinaryOp::LogicalAnd,

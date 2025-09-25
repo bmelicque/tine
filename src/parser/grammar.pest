@@ -57,7 +57,7 @@ anonymous_expression = { struct_literal_body | expression }
 tuple_or_expression = { tuple_expression | expression }
 tuple_expression = { expression ~ ("," ~ expression)+ }
 expression = { if_expression | if_decl_expression | match_expression | loop_expression | block | element_expression | composite_literal | array_expression | equality }
-equality = { relation? ~ (("=="|"!=") ~ relation?)* }
+equality = { relation? ~ (eq_op ~ relation?)* }
 eq_op = { "==" | "!=" }
 relation = { addition? ~ (rel_op ~ addition?)*}
 rel_op = { "<" | "<=" | ">=" | ">" }
@@ -66,7 +66,7 @@ add_op = { "+" | "-" }
 multiplication = { exponentiation ~ (mul_op ~ exponentiation?)* }
 mul_op = { "*" | "/" | "%" }
 exponentiation = { (unary|primary) ~ ("**" ~ (unary|primary))* }
-unary = { unary_op ~ primary }
+unary = { unary_op ~ (unary|primary) }
 unary_op = { "*" | "&" | "@" | "$" }
 primary = { call_expression | member_expression | tuple_indexing | string_literal | number_literal | boolean_literal | value_identifier | function_expression | "(" ~ tuple_or_expression ~ ")" }
 call_expression = { callee ~ call_arguments }

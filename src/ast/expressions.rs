@@ -249,7 +249,7 @@ pub enum BinaryOperator {
     Pow,
     LAnd,
     LOr,
-    Eq,
+    EqEq,
     Neq,
     Grt,
     Geq,
@@ -267,7 +267,7 @@ impl BinaryOperator {
             BinaryOperator::Mod => "%",
             BinaryOperator::Pow => "**",
 
-            BinaryOperator::Eq => "==",
+            BinaryOperator::EqEq => "==",
             BinaryOperator::Neq => "!=",
             BinaryOperator::Less => "<",
             BinaryOperator::Leq => "<=",
@@ -297,7 +297,7 @@ impl From<String> for BinaryOperator {
             "%" => BinaryOperator::Mod,
             "**" => BinaryOperator::Pow,
 
-            "==" => BinaryOperator::Eq,
+            "==" => BinaryOperator::EqEq,
             "!=" => BinaryOperator::Neq,
             "<" => BinaryOperator::Less,
             "<=" => BinaryOperator::Leq,

@@ -100,4 +100,24 @@ mod tests {
             _ => panic!("Expected NumberLiteral on the right"),
         }
     }
+
+    #[test]
+    fn test_parse_equality() {
+        let input = "1 == 1";
+        let result = parse_expression_input(input);
+
+        let ast::Expression::Binary(binary) = result else {
+            panic!("Expected BinaryExpression, got {:?}", result);
+        };
+
+        assert_eq!(binary.operator, ast::BinaryOperator::EqEq);
+        match *binary.left {
+            ast::Expression::NumberLiteral(left) => assert_eq!(left.value, 1.0),
+            _ => panic!("Expected NumberLiteral on the left"),
+        }
+        match *binary.right {
+            ast::Expression::NumberLiteral(right) => assert_eq!(right.value, 1.0),
+            _ => panic!("Expected NumberLiteral on the right"),
+        }
+    }
 }
