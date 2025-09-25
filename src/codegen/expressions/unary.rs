@@ -81,7 +81,7 @@ impl CodeGenerator {
     }
 
     fn listener_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
-        let getter = self.reactive_to_swc_getter(*node.operand);
+        let getter = self.listener_expr_to_swc_getter(*node.operand);
         let dependencies = swc::Expr::Array(self.listener_deps_to_swc_array(node.span));
 
         swc::Expr::New(swc::NewExpr {
@@ -97,7 +97,7 @@ impl CodeGenerator {
         })
     }
 
-    pub fn reactive_to_swc_getter(&mut self, getter: ast::Expression) -> swc::ArrowExpr {
+    fn listener_expr_to_swc_getter(&mut self, getter: ast::Expression) -> swc::ArrowExpr {
         swc::ArrowExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),

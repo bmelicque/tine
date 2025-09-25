@@ -69,9 +69,12 @@ impl TypeChecker {
     }
 
     fn visit_dom_expression(&mut self, expr: &ast::Expression) -> types::Type {
-        let (expr_type, deps) = self.with_dependencies(|s| s.visit_expression(expr));
-        if expr_type.is_reactive() {
-            self.save_reactive_dependencies(&deps, expr.as_span());
+        let (mut expr_type, deps) = self.with_dependencies(|s| s.visit_expression(expr));
+        let count = self.save_reactive_dependencies(&deps, expr.as_span());
+        if count > 0 && !expr_type.is_reactive() {
+            expr_type = types::Type::Listener(types::ListenerType {
+                inner: Box::new(expr_type),
+            });
         }
         self.analysis_context.add_dependencies(deps);
         return expr_type;

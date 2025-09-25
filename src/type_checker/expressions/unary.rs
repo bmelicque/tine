@@ -44,7 +44,13 @@ impl TypeChecker {
 
     fn visit_listener(&mut self, node: &ast::UnaryExpression) -> types::ListenerType {
         let (expr_type, deps) = self.with_dependencies(|s| s.visit_expression(&node.operand));
-        self.save_reactive_dependencies(&deps, node.span);
+        let count = self.save_reactive_dependencies(&deps, node.span);
+        if count == 0 {
+            self.error(
+                "Expected reactive values in listened expression".to_string(),
+                node.operand.as_span(),
+            );
+        }
         self.analysis_context.add_dependencies(deps);
         if let ast::Expression::Identifier(id) = node.operand.as_ref() {
             if let Some(info) = self.analysis_context.lookup_mut(&id.as_str()) {

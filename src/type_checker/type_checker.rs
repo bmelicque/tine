@@ -147,7 +147,7 @@ impl TypeChecker {
     }
 
     /// Returns how many dependencies were actually reactive
-    pub fn save_reactive_dependencies(&mut self, deps: &Vec<SymbolId>, at: Span<'static>) {
+    pub fn save_reactive_dependencies(&mut self, deps: &Vec<SymbolId>, at: Span<'static>) -> usize {
         let deps: Vec<SymbolId> = deps
             .into_iter()
             .filter(|dep| self.analysis_context.symbols[**dep].ty.is_reactive())
@@ -156,12 +156,8 @@ impl TypeChecker {
         let len = deps.len();
         if len > 0 {
             self.analysis_context.other_dependencies.insert(at, deps);
-        } else {
-            self.error(
-                "Expected reactive values in listened expression".to_string(),
-                at,
-            );
         }
+        len
     }
 
     pub fn error(&mut self, message: String, span: Span<'static>) {

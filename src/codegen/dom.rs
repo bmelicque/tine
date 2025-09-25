@@ -137,4 +137,29 @@ impl CodeGenerator {
             type_args: None,
         })
     }
+
+    pub fn reactive_to_swc_getter(&mut self, expr: ast::Expression) -> swc::ArrowExpr {
+        let expr = swc::Expr::Call(swc::CallExpr {
+            span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
+            callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(self.expr_to_swc(expr)),
+                prop: swc::MemberProp::Ident(create_ident("get").into()),
+            }))),
+            args: Vec::new(),
+            type_args: None,
+        });
+
+        swc::ArrowExpr {
+            span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
+            params: Vec::new(),
+            body: Box::new(expr.into()),
+            is_async: false,
+            is_generator: false,
+            type_params: None,
+            return_type: None,
+        }
+    }
 }
