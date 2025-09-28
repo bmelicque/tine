@@ -154,6 +154,14 @@ sum_type = { (NEWLINE? ~ "|")? ~ sum_constructor ~ (NEWLINE? ~ "|" ~ sum_constru
 sum_constructor = { type_identifier ~ (struct_body | sum_param)? }
 sum_param = { "(" ~ type_annotation ~ ")" }
 
+// Items
+item = { use_declaration | statement }
+use_declaration = { "use" ~ relative_count ~ use_tree }
+relative_count = { "."* }
+use_tree = { file_name ~ ("." ~ file_name)* ~ ("(" ~ use_tree ~ ((","|NEWLINE) ~ use_tree)* ~ ")")? }
+file_name = @{ (ASCII_ALPHANUMERIC | "_" | "-")+ }
+
+
 // Program
 blank_line = _{ NEWLINE }
-program = { SOI ~ ((blank_line | statement) ~ (NEWLINE+ ~ (blank_line | statement))*)? ~ NEWLINE* ~ EOI }
+program = { SOI ~ ((blank_line | item) ~ (NEWLINE+ ~ (blank_line | item))*)? ~ NEWLINE* ~ EOI }

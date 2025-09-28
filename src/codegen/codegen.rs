@@ -43,14 +43,12 @@ impl CodeGenerator {
     }
 
     pub fn program_to_swc_module(&mut self, node: ast::Program) -> swc::Module {
-        self.enter_block();
-        for stmt in node.statements {
-            let stmts = self.stmt_to_swc(stmt);
-            for stmt in stmts {
-                self.push_to_block(stmt);
-            }
-        }
-        let swc_stmts = self.exit_block();
+        let items: Vec<swc::ModuleItem> = self.with_scope(|s| {
+            node.items
+                .into_iter()
+                .flat_map(|item| s.item_to_swc(item))
+                .collect()
+        });
 
         let internals_import =
             swc::ModuleItem::ModuleDecl(swc::ModuleDecl::Import(swc::ImportDecl {
@@ -73,11 +71,7 @@ impl CodeGenerator {
 
         let mut body: Vec<swc::ModuleItem> = Vec::new();
         body.push(internals_import);
-        body.extend(
-            swc_stmts
-                .into_iter()
-                .map(|stmt| swc::ModuleItem::Stmt(stmt)),
-        );
+        body.extend(items);
 
         swc::Module {
             span: DUMMY_SP,
@@ -106,6 +100,15 @@ impl CodeGenerator {
     }
     pub fn drop_scope(&mut self) {
         self.scope.exit();
+    }
+    pub fn with_scope<F, T>(&mut self, predicate: F) -> T
+    where
+        F: FnOnce(&mut Self) -> T,
+    {
+        self.scope.enter();
+        let res = predicate(self);
+        self.scope.exit();
+        res
     }
     pub fn find(&self, name: &String) -> Option<&Vec<String>> {
         self.scope.find(name)

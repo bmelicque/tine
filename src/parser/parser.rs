@@ -36,21 +36,20 @@ impl ParserEngine {
     }
 
     fn build_ast(&mut self, pairs: Pairs<'static, Rule>) -> ParseResult {
-        let statements: Vec<ast::Statement> = pairs
+        let items: Vec<ast::Item> = pairs
             .into_iter()
             .filter(|pair| pair.as_rule() == Rule::program)
             .flat_map(|pair| {
-                let statements: Vec<ast::Statement> = pair
+                let statements: Vec<ast::Item> = pair
                     .into_inner()
-                    .map(|pair| self.parse_statement(pair))
-                    .filter(|statement| !statement.is_empty())
+                    .map(|pair| self.parse_item(pair))
                     .collect();
                 statements
             })
             .collect();
 
         ParseResult {
-            node: ast::Program { statements },
+            node: ast::Program { items },
             errors: self.errors.drain(..).collect(),
         }
     }

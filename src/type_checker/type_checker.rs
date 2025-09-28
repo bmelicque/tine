@@ -29,9 +29,7 @@ impl TypeChecker {
     }
 
     pub fn check(&mut self, program: &ast::Program) -> Result<(), Vec<ParseError>> {
-        program.statements.iter().for_each(|st| {
-            self.visit_statement(st);
-        });
+        program.items.iter().for_each(|item| self.visit_item(item));
         if self.errors.is_empty() {
             Ok(())
         } else {

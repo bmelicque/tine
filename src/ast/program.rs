@@ -1,6 +1,6 @@
-use super::statements::Statement;
+use crate::ast::Item;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
-    pub statements: Vec<Statement>,
+    pub items: Vec<Item>,
 }

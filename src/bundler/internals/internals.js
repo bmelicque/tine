@@ -5,6 +5,13 @@ export class Option {
 	}
 }
 
+export class Result {
+	constructor(__, _) {
+		this.__ = __;
+		this[0] = _;
+	}
+}
+
 /**
  * GENERAL STRATEGY FOR REACTIVE VALUES
  *
