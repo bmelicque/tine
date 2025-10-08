@@ -11,7 +11,7 @@ use swc_ecma_ast as swc;
 use super::utils::this_assignment;
 
 impl CodeGenerator {
-    pub fn struct_to_swc_constructor(&mut self, node: ast::StructDefinition) -> swc::Constructor {
+    pub fn struct_to_swc_constructor(&mut self, node: &ast::StructDefinition) -> swc::Constructor {
         let mandatory_fields: Vec<&ast::StructDefinitionField> = node
             .fields
             .iter()
@@ -58,7 +58,7 @@ impl CodeGenerator {
                         id: create_ident(&field.name),
                         type_ann: None,
                     })),
-                    right: Box::new(self.expr_to_swc(field.default.clone())),
+                    right: Box::new(self.expr_to_swc(&field.default)),
                 }),
             };
 

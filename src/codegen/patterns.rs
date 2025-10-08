@@ -11,27 +11,27 @@ use super::{
 
 impl CodeGenerator {
     /// Used to build a destructuring expression, like the `{ name }` part of `const { name } = user;`
-    pub fn pattern_to_swc(&mut self, node: ast::Pattern) -> swc::Pat {
+    pub fn pattern_to_swc(&mut self, node: &ast::Pattern) -> swc::Pat {
         match node {
             ast::Pattern::Identifier(pattern) => self.identifier_pattern_to_swc(pattern),
             ast::Pattern::Literal(pattern) => {
                 // TODO: this is probably useless (investigate)
                 swc::Pat::Expr(self.literal_pattern_to_swc(pattern).into())
             }
-            ast::Pattern::Struct(pattern) => self.struct_pattern_to_swc(pattern.fields).into(),
+            ast::Pattern::Struct(pattern) => self.struct_pattern_to_swc(&pattern.fields).into(),
             ast::Pattern::Tuple(pattern) => self.tuple_pattern_to_swc(pattern).into(),
             ast::Pattern::Variant(pattern) => self.variant_pattern_to_swc(pattern),
         }
     }
 
-    pub fn identifier_pattern_to_swc(&mut self, node: ast::IdentifierPattern) -> swc::Pat {
+    pub fn identifier_pattern_to_swc(&mut self, node: &ast::IdentifierPattern) -> swc::Pat {
         swc::Pat::Ident(swc::BindingIdent {
             id: create_ident(node.span.as_str()),
             type_ann: None,
         })
     }
 
-    fn literal_pattern_to_swc(&mut self, node: ast::LiteralPattern) -> swc::Lit {
+    fn literal_pattern_to_swc(&mut self, node: &ast::LiteralPattern) -> swc::Lit {
         match node {
             ast::LiteralPattern::Boolean(b) => swc::Lit::Bool(swc::Bool {
                 span: DUMMY_SP,
@@ -52,7 +52,7 @@ impl CodeGenerator {
 
     pub fn struct_pattern_to_swc(
         &mut self,
-        fields: Vec<ast::StructPatternField>,
+        fields: &Vec<ast::StructPatternField>,
     ) -> swc::ObjectPat {
         swc::ObjectPat {
             span: DUMMY_SP,
@@ -69,8 +69,11 @@ impl CodeGenerator {
         }
     }
 
-    fn struct_pattern_field_to_swc(&mut self, node: ast::StructPatternField) -> swc::ObjectPatProp {
-        match node.pattern {
+    fn struct_pattern_field_to_swc(
+        &mut self,
+        node: &ast::StructPatternField,
+    ) -> swc::ObjectPatProp {
+        match &node.pattern {
             Some(pattern) => swc::KeyValuePatProp {
                 key: create_ident(&node.identifier).into(),
                 value: Box::new(self.pattern_to_swc(pattern)),
@@ -85,12 +88,12 @@ impl CodeGenerator {
         }
     }
 
-    pub fn tuple_pattern_to_swc(&mut self, node: ast::TuplePattern) -> swc::ArrayPat {
+    pub fn tuple_pattern_to_swc(&mut self, node: &ast::TuplePattern) -> swc::ArrayPat {
         swc::ArrayPat {
             span: DUMMY_SP,
             elems: node
                 .elements
-                .into_iter()
+                .iter()
                 .filter(|element| !element.is_refutable())
                 .map(|element| Some(self.pattern_to_swc(element)))
                 .collect(),
@@ -99,17 +102,13 @@ impl CodeGenerator {
         }
     }
 
-    fn variant_pattern_to_swc(&mut self, node: ast::VariantPattern) -> swc::Pat {
-        let Some(body) = node.body else {
+    fn variant_pattern_to_swc(&mut self, node: &ast::VariantPattern) -> swc::Pat {
+        let Some(ref body) = node.body else {
             return swc::Pat::Ident(create_ident("__").into());
         };
         match body {
-            ast::VariantPatternBody::Struct(ref fields) => {
-                self.struct_pattern_to_swc(fields.to_vec()).into()
-            }
-            ast::VariantPatternBody::Tuple(ref body) => {
-                self.tuple_pattern_to_swc(body.clone()).into()
-            }
+            ast::VariantPatternBody::Struct(fields) => self.struct_pattern_to_swc(fields).into(),
+            ast::VariantPatternBody::Tuple(body) => self.tuple_pattern_to_swc(body).into(),
         }
     }
 
@@ -142,8 +141,8 @@ impl CodeGenerator {
         swc::Expr::Bin(swc::BinExpr {
             span: DUMMY_SP,
             op: swc::BinaryOp::EqEqEq,
-            left: Box::new(self.expr_to_swc(against.clone())),
-            right: Box::new(self.literal_pattern_to_swc(pattern.clone()).into()),
+            left: Box::new(self.expr_to_swc(against)),
+            right: Box::new(self.literal_pattern_to_swc(pattern).into()),
         })
     }
 
@@ -215,7 +214,7 @@ impl CodeGenerator {
             op: swc::BinaryOp::EqEqEq,
             left: Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
-                obj: Box::new(self.expr_to_swc(against.clone())),
+                obj: Box::new(self.expr_to_swc(against)),
                 prop: swc::MemberProp::Ident(create_ident("__").into()),
             })),
             right: Box::new(swc::Expr::Lit(swc::Lit::Str(swc::Str {

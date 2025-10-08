@@ -42,10 +42,10 @@ impl CodeGenerator {
         }
     }
 
-    pub fn program_to_swc_module(&mut self, node: ast::Program) -> swc::Module {
+    pub fn program_to_swc_module(&mut self, node: &ast::Program) -> swc::Module {
         let items: Vec<swc::ModuleItem> = self.with_scope(|s| {
             node.items
-                .into_iter()
+                .iter()
                 .flat_map(|item| s.item_to_swc(item))
                 .collect()
         });

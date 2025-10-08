@@ -10,7 +10,7 @@ use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
 impl CodeGenerator {
-    pub fn unary_expression_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
+    pub fn unary_expression_to_swc_expr(&mut self, node: &ast::UnaryExpression) -> swc::Expr {
         match node.operator {
             ast::UnaryOperator::Ampersand => self.ref_to_swc_expr(node),
             ast::UnaryOperator::At => self.listener_to_swc_expr(node),
@@ -24,13 +24,13 @@ impl CodeGenerator {
     /**
      * `*expr` => `expr.get()`
      */
-    fn indirection_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
+    fn indirection_to_swc_expr(&mut self, node: &ast::UnaryExpression) -> swc::Expr {
         swc::Expr::Call(swc::CallExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
             callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
-                obj: Box::new(self.expr_to_swc(*node.operand)),
+                obj: Box::new(self.expr_to_swc(&node.operand)),
                 prop: swc::MemberProp::Ident(create_ident("get").into()),
             }))),
             args: vec![],
@@ -38,17 +38,17 @@ impl CodeGenerator {
         })
     }
 
-    fn ref_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
-        let (ctx, value) = match *node.operand {
+    fn ref_to_swc_expr(&mut self, node: &ast::UnaryExpression) -> swc::Expr {
+        let (ctx, value) = match node.operand.as_ref() {
             ast::Expression::Identifier(expr) => {
                 (self.ident_to_swc(expr).into(), create_number(0.0))
             }
             ast::Expression::FieldAccess(expr) => (
-                self.expr_to_swc(*expr.object),
+                self.expr_to_swc(&expr.object),
                 create_str(expr.prop.as_str().into()),
             ),
             ast::Expression::TupleIndexing(expr) => (
-                self.expr_to_swc(*expr.tuple),
+                self.expr_to_swc(&expr.tuple),
                 create_number(*expr.index.value),
             ),
             expr => (
@@ -65,8 +65,8 @@ impl CodeGenerator {
         })
     }
 
-    fn signal_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
-        let init = self.expr_to_swc(*node.operand);
+    fn signal_to_swc_expr(&mut self, node: &ast::UnaryExpression) -> swc::Expr {
+        let init = self.expr_to_swc(&node.operand);
         swc::Expr::New(swc::NewExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
@@ -80,8 +80,8 @@ impl CodeGenerator {
         })
     }
 
-    fn listener_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
-        let getter = self.listener_expr_to_swc_getter(*node.operand);
+    fn listener_to_swc_expr(&mut self, node: &ast::UnaryExpression) -> swc::Expr {
+        let getter = self.listener_expr_to_swc_getter(&node.operand);
         let dependencies = swc::Expr::Array(self.listener_deps_to_swc_array(node.span));
 
         swc::Expr::New(swc::NewExpr {
@@ -97,7 +97,7 @@ impl CodeGenerator {
         })
     }
 
-    fn listener_expr_to_swc_getter(&mut self, getter: ast::Expression) -> swc::ArrowExpr {
+    fn listener_expr_to_swc_getter(&mut self, getter: &ast::Expression) -> swc::ArrowExpr {
         swc::ArrowExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
@@ -126,19 +126,19 @@ impl CodeGenerator {
         }
     }
 
-    fn negation_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
+    fn negation_to_swc_expr(&mut self, node: &ast::UnaryExpression) -> swc::Expr {
         swc::Expr::Unary(swc::UnaryExpr {
             span: DUMMY_SP,
             op: swc::UnaryOp::Minus,
-            arg: Box::new(self.expr_to_swc(*node.operand)),
+            arg: Box::new(self.expr_to_swc(&node.operand)),
         })
     }
 
-    fn logical_not_to_swc_expr(&mut self, node: ast::UnaryExpression) -> swc::Expr {
+    fn logical_not_to_swc_expr(&mut self, node: &ast::UnaryExpression) -> swc::Expr {
         swc::Expr::Unary(swc::UnaryExpr {
             span: DUMMY_SP,
             op: swc::UnaryOp::Bang,
-            arg: Box::new(self.expr_to_swc(*node.operand)),
+            arg: Box::new(self.expr_to_swc(&node.operand)),
         })
     }
 }

@@ -15,14 +15,14 @@ use super::{
 };
 
 impl CodeGenerator {
-    pub fn expr_or_an_to_swc(&mut self, node: ast::ExpressionOrAnonymous) -> swc::Expr {
+    pub fn expr_or_an_to_swc(&mut self, node: &ast::ExpressionOrAnonymous) -> swc::Expr {
         match node {
             ast::ExpressionOrAnonymous::Expression(node) => self.expr_to_swc(node),
             ast::ExpressionOrAnonymous::Struct(node) => self.anonymous_struct_to_swc(node).into(),
         }
     }
 
-    pub fn expr_to_swc(&mut self, node: ast::Expression) -> swc::Expr {
+    pub fn expr_to_swc(&mut self, node: &ast::Expression) -> swc::Expr {
         match node {
             ast::Expression::Array(node) => self.array_to_swc(node).into(),
             ast::Expression::Binary(node) => self.binary_expression_to_swc_expr(node),
@@ -61,10 +61,10 @@ impl CodeGenerator {
         }
     }
 
-    pub fn array_to_swc(&mut self, node: ast::ArrayExpression) -> swc::ArrayLit {
+    pub fn array_to_swc(&mut self, node: &ast::ArrayExpression) -> swc::ArrayLit {
         let elems = node
             .elements
-            .into_iter()
+            .iter()
             .map(|node| Some(self.expr_to_swc(node).into()))
             .collect::<Vec<_>>();
         swc::ArrayLit {
@@ -73,9 +73,9 @@ impl CodeGenerator {
         }
     }
 
-    fn binary_expression_to_swc_expr(&mut self, node: ast::BinaryExpression) -> swc::Expr {
-        let left_expr = self.expr_to_swc(*node.left);
-        let right_expr = self.expr_to_swc(*node.right);
+    fn binary_expression_to_swc_expr(&mut self, node: &ast::BinaryExpression) -> swc::Expr {
+        let left_expr = self.expr_to_swc(&node.left);
+        let right_expr = self.expr_to_swc(&node.right);
 
         let op = match node.operator {
             ast::BinaryOperator::Add => swc::BinaryOp::Add,
@@ -103,7 +103,7 @@ impl CodeGenerator {
         .into()
     }
 
-    fn block_expr_to_swc(&mut self, node: ast::BlockExpression) -> swc::Expr {
+    fn block_expr_to_swc(&mut self, node: &ast::BlockExpression) -> swc::Expr {
         if node.statements.len() == 0 {
             undefined()
         } else if node.can_be_inlined() {
@@ -113,7 +113,7 @@ impl CodeGenerator {
         }
     }
 
-    fn block_to_swc_inlined(&mut self, node: ast::BlockExpression) -> swc::SeqExpr {
+    fn block_to_swc_inlined(&mut self, node: &ast::BlockExpression) -> swc::SeqExpr {
         let exprs = node
             .statements
             .iter()
@@ -121,7 +121,7 @@ impl CodeGenerator {
                 let ast::Statement::Expression(expr) = stmt else {
                     panic!()
                 };
-                Box::new(self.expr_to_swc(*expr.expression.clone()))
+                Box::new(self.expr_to_swc(&expr.expression))
             })
             .collect();
         swc::SeqExpr {
@@ -150,7 +150,7 @@ impl CodeGenerator {
     /// }
     /// 42 + __cq6s81c68qzzej5i;
     /// ```
-    fn block_to_swc_extracted(&mut self, node: ast::BlockExpression) -> swc::Ident {
+    fn block_to_swc_extracted(&mut self, node: &ast::BlockExpression) -> swc::Ident {
         let len = node.statements.len();
         assert!(len > 0);
 
@@ -162,11 +162,11 @@ impl CodeGenerator {
         create_ident(&id)
     }
 
-    fn call_expr_to_swc(&mut self, node: ast::CallExpression) -> swc::CallExpr {
-        let callee = swc::Callee::Expr(Box::new(self.expr_to_swc(*node.callee)));
+    fn call_expr_to_swc(&mut self, node: &ast::CallExpression) -> swc::CallExpr {
+        let callee = swc::Callee::Expr(Box::new(self.expr_to_swc(&node.callee)));
         let args = node
             .args
-            .into_iter()
+            .iter()
             .map(|arg| self.call_arg_to_swc(arg).into())
             .collect();
         swc::CallExpr {
@@ -178,24 +178,24 @@ impl CodeGenerator {
         }
     }
 
-    fn call_arg_to_swc(&mut self, node: ast::CallArgument) -> swc::Expr {
+    fn call_arg_to_swc(&mut self, node: &ast::CallArgument) -> swc::Expr {
         match node {
             ast::CallArgument::Expression(expr) => self.expr_to_swc(expr),
             ast::CallArgument::Predicate(pred) => self.predicate_to_swc(pred).into(),
         }
     }
 
-    fn predicate_to_swc(&mut self, node: ast::Predicate) -> swc::ArrowExpr {
+    fn predicate_to_swc(&mut self, node: &ast::Predicate) -> swc::ArrowExpr {
         let params = node
             .params
-            .into_iter()
+            .iter()
             .map(|param| self.predicate_param_to_swc(&param))
             .collect();
         swc::ArrowExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
             params,
-            body: Box::new(self.function_body_to_swc(node.body)),
+            body: Box::new(self.function_body_to_swc(&node.body)),
             is_async: false,
             is_generator: false,
             type_params: None,
@@ -214,17 +214,17 @@ impl CodeGenerator {
         })
     }
 
-    pub fn field_access_to_swc(&mut self, node: ast::FieldAccessExpression) -> swc::MemberExpr {
+    pub fn field_access_to_swc(&mut self, node: &ast::FieldAccessExpression) -> swc::MemberExpr {
         swc::MemberExpr {
             span: DUMMY_SP,
-            obj: Box::new(self.expr_to_swc(*node.object)),
+            obj: Box::new(self.expr_to_swc(&node.object)),
             prop: swc::MemberProp::Ident(create_ident(node.prop.as_str()).into()),
         }
     }
 
-    fn function_expression_to_swc(&mut self, node: ast::FunctionExpression) -> swc::ArrowExpr {
-        let swc_params = self.function_params_to_swc(node.params);
-        let swc_body = self.function_body_to_swc(node.body);
+    fn function_expression_to_swc(&mut self, node: &ast::FunctionExpression) -> swc::ArrowExpr {
+        let swc_params = self.function_params_to_swc(&node.params);
+        let swc_body = self.function_body_to_swc(&node.body);
 
         swc::ArrowExpr {
             span: DUMMY_SP,
@@ -238,7 +238,7 @@ impl CodeGenerator {
         }
     }
 
-    pub fn function_params_to_swc(&mut self, params: Vec<ast::FunctionParam>) -> Vec<swc::Pat> {
+    pub fn function_params_to_swc(&mut self, params: &Vec<ast::FunctionParam>) -> Vec<swc::Pat> {
         params
             .into_iter()
             .map(|param| {
@@ -250,27 +250,27 @@ impl CodeGenerator {
             .collect()
     }
 
-    pub fn function_body_to_swc(&mut self, node: ast::FunctionBody) -> swc::BlockStmtOrExpr {
+    pub fn function_body_to_swc(&mut self, node: &ast::FunctionBody) -> swc::BlockStmtOrExpr {
         match node {
             ast::FunctionBody::TypedBlock(typed_block) => {
                 let stmts = typed_block
                     .block
                     .statements
                     .iter()
-                    .flat_map(|stmt| self.stmt_to_swc(stmt.clone()))
+                    .flat_map(|stmt| self.stmt_to_swc(stmt))
                     .collect();
 
                 swc::BlockStmtOrExpr::BlockStmt(create_block_stmt(stmts))
             }
             ast::FunctionBody::Expression(expr) => {
-                swc::BlockStmtOrExpr::Expr(Box::new(self.expr_to_swc(*expr.clone())))
+                swc::BlockStmtOrExpr::Expr(Box::new(self.expr_to_swc(expr)))
             }
         }
     }
 
     /// Create code for identifiers.
     /// Identifiers that have references are declared wrapped in an array (like `let identifier = [value]`), so their reads are generated like `identifier[0]`
-    pub fn ident_to_swc(&mut self, node: ast::Identifier) -> swc::Expr {
+    pub fn ident_to_swc(&mut self, node: &ast::Identifier) -> swc::Expr {
         let info = self.get_info(node.as_str()).unwrap();
 
         if info.has_ref() {
@@ -287,7 +287,7 @@ impl CodeGenerator {
         }
     }
 
-    fn if_to_swc_expr(&mut self, node: ast::IfExpression) -> swc::Expr {
+    fn if_to_swc_expr(&mut self, node: &ast::IfExpression) -> swc::Expr {
         if node.consequent.statements.len() == 0 && node.alternate.is_none() {
             undefined()
         } else if node.can_be_inlined() {
@@ -297,9 +297,9 @@ impl CodeGenerator {
         }
     }
 
-    fn if_to_swc_inlined(&mut self, node: ast::IfExpression) -> swc::Expr {
-        if let Some(alternate) = node.alternate {
-            let alt = match *alternate {
+    fn if_to_swc_inlined(&mut self, node: &ast::IfExpression) -> swc::Expr {
+        if let Some(alternate) = &node.alternate {
+            let alt = match alternate.as_ref() {
                 ast::Alternate::Block(b) => self.block_to_swc_inlined(b).into(),
                 ast::Alternate::If(i) => self.if_to_swc_inlined(i).into(),
                 ast::Alternate::IfDecl(_) => {
@@ -309,22 +309,22 @@ impl CodeGenerator {
             let alt = Box::new(alt);
             swc::Expr::Cond(swc::CondExpr {
                 span: DUMMY_SP,
-                test: Box::new(self.expr_to_swc(*node.condition)),
-                cons: Box::new(self.block_to_swc_inlined(*node.consequent).into()),
+                test: Box::new(self.expr_to_swc(&node.condition)),
+                cons: Box::new(self.block_to_swc_inlined(&node.consequent).into()),
                 alt,
             })
         } else {
-            let cons = self.block_to_swc_inlined(*node.consequent).into();
+            let cons = self.block_to_swc_inlined(&node.consequent).into();
             swc::Expr::Cond(swc::CondExpr {
                 span: DUMMY_SP,
-                test: Box::new(self.expr_to_swc(*node.condition)),
+                test: Box::new(self.expr_to_swc(&node.condition)),
                 cons: Box::new(self.some(cons).into()),
                 alt: Box::new(self.none().into()),
             })
         }
     }
 
-    fn if_to_swc_extracted(&mut self, node: ast::IfExpression) -> swc::Expr {
+    fn if_to_swc_extracted(&mut self, node: &ast::IfExpression) -> swc::Expr {
         let is_option = node.alternate.is_none();
         let id = self.add_temp_var_to_current_block();
         self.enter_block();
@@ -338,7 +338,7 @@ impl CodeGenerator {
         create_ident(&id).into()
     }
 
-    fn if_decl_to_swc_expr(&mut self, node: ast::IfPatExpression) -> swc::Expr {
+    fn if_decl_to_swc_expr(&mut self, node: &ast::IfPatExpression) -> swc::Expr {
         let is_option = node.alternate.is_none();
         let id = self.add_temp_var_to_current_block();
         self.enter_block();
@@ -352,7 +352,7 @@ impl CodeGenerator {
         create_ident(&id).into()
     }
 
-    fn loop_to_swc_expr(&mut self, node: ast::Loop) -> swc::Expr {
+    fn loop_to_swc_expr(&mut self, node: &ast::Loop) -> swc::Expr {
         let id = self.add_temp_var_to_current_block();
         self.enter_block();
         let loop_stmt = self.loop_to_swc_stmt(node, AssignTo::Break(id.clone()));
@@ -363,7 +363,7 @@ impl CodeGenerator {
         create_ident(&id).into()
     }
 
-    fn match_to_swc_expr(&mut self, node: ast::MatchExpression) -> swc::Expr {
+    fn match_to_swc_expr(&mut self, node: &ast::MatchExpression) -> swc::Expr {
         let id = self.add_temp_var_to_current_block();
         self.enter_block();
         let stmt = self.match_to_swc_stmt(node, AssignTo::Last(id.clone()));
@@ -372,10 +372,10 @@ impl CodeGenerator {
         create_ident(&id).into()
     }
 
-    fn tuple_to_swc(&mut self, node: ast::TupleExpression) -> swc::ArrayLit {
+    fn tuple_to_swc(&mut self, node: &ast::TupleExpression) -> swc::ArrayLit {
         let elems = node
             .elements
-            .into_iter()
+            .iter()
             .map(|node| Some(self.expr_to_swc(node).into()))
             .collect::<Vec<_>>();
         swc::ArrayLit {
@@ -384,13 +384,16 @@ impl CodeGenerator {
         }
     }
 
-    pub fn tuple_indexing_to_swc(&mut self, node: ast::TupleIndexingExpression) -> swc::MemberExpr {
+    pub fn tuple_indexing_to_swc(
+        &mut self,
+        node: &ast::TupleIndexingExpression,
+    ) -> swc::MemberExpr {
         swc::MemberExpr {
             span: DUMMY_SP,
-            obj: Box::new(self.expr_to_swc(*node.tuple)),
+            obj: Box::new(self.expr_to_swc(&node.tuple)),
             prop: swc::MemberProp::Computed(swc::ComputedPropName {
                 span: DUMMY_SP,
-                expr: Box::new(self.expr_to_swc(node.index.into())),
+                expr: Box::new(self.expr_to_swc(&node.index.clone().into())),
             }),
         }
     }

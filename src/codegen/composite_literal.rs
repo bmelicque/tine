@@ -9,7 +9,7 @@ use crate::{
 use super::utils::create_ident;
 
 impl CodeGenerator {
-    pub fn composite_literal_to_swc_expr(&mut self, node: ast::CompositeLiteral) -> swc::Expr {
+    pub fn composite_literal_to_swc_expr(&mut self, node: &ast::CompositeLiteral) -> swc::Expr {
         match node {
             ast::CompositeLiteral::AnonymousStruct(node) => {
                 self.anonymous_struct_to_swc(node).into()
@@ -24,11 +24,11 @@ impl CodeGenerator {
         }
     }
 
-    pub fn anonymous_struct_to_swc(&mut self, node: ast::AnonymousStructLiteral) -> swc::NewExpr {
+    pub fn anonymous_struct_to_swc(&mut self, node: &ast::AnonymousStructLiteral) -> swc::NewExpr {
         let swc_args = node
             .fields
             .iter()
-            .map(|field| self.expr_to_swc(field.value.clone()).into())
+            .map(|field| self.expr_to_swc(&field.value).into())
             .collect();
         swc::NewExpr {
             span: DUMMY_SP,
@@ -39,11 +39,11 @@ impl CodeGenerator {
         }
     }
 
-    pub fn array_literal_to_swc_array(&mut self, node: ast::ArrayLiteral) -> swc::ArrayLit {
+    pub fn array_literal_to_swc_array(&mut self, node: &ast::ArrayLiteral) -> swc::ArrayLit {
         let swc_elements = node
             .elements
-            .into_iter()
-            .map(|node| Some(self.expr_or_an_to_swc(node).into()))
+            .iter()
+            .map(|node| Some(self.expr_or_an_to_swc(&node).into()))
             .collect::<Vec<_>>();
         swc::ArrayLit {
             span: DUMMY_SP,
@@ -51,13 +51,13 @@ impl CodeGenerator {
         }
     }
 
-    pub fn map_literal_to_swc_new_map(&mut self, node: ast::MapLiteral) -> swc::NewExpr {
+    pub fn map_literal_to_swc_new_map(&mut self, node: &ast::MapLiteral) -> swc::NewExpr {
         let swc_args = node
             .entries
-            .into_iter()
+            .iter()
             .map(|entry| {
-                let key = self.expr_to_swc(*entry.key);
-                let value = self.expr_or_an_to_swc(*entry.value);
+                let key = self.expr_to_swc(&entry.key);
+                let value = self.expr_or_an_to_swc(&entry.value);
                 Some(swc::ExprOrSpread {
                     spread: None,
                     expr: Box::new(swc::Expr::Array(swc::ArrayLit {
@@ -82,10 +82,10 @@ impl CodeGenerator {
         }
     }
 
-    pub fn option_literal_to_swc_new_option(&mut self, node: ast::OptionLiteral) -> swc::NewExpr {
-        let exprs = match node.value {
+    pub fn option_literal_to_swc_new_option(&mut self, node: &ast::OptionLiteral) -> swc::NewExpr {
+        let exprs = match &node.value {
             Some(value) => {
-                vec![create_str("Some"), self.expr_or_an_to_swc(*value)]
+                vec![create_str("Some"), self.expr_or_an_to_swc(value)]
             }
             None => vec![create_str("None")],
         };
@@ -110,9 +110,9 @@ impl CodeGenerator {
         }
     }
 
-    pub fn struct_literal_to_swc_new_expr(&mut self, node: ast::StructLiteral) -> swc::NewExpr {
-        let name = node.ty.name;
-        let swc_args = self.get_sorted_args(&name, node.fields);
+    pub fn struct_literal_to_swc_new_expr(&mut self, node: &ast::StructLiteral) -> swc::NewExpr {
+        let name = &node.ty.name;
+        let swc_args = self.get_sorted_args(name, &node.fields);
         swc::NewExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
@@ -125,7 +125,7 @@ impl CodeGenerator {
     fn get_sorted_args(
         &mut self,
         name: &str,
-        fields: Vec<StructLiteralField>,
+        fields: &Vec<StructLiteralField>,
     ) -> Vec<swc::ExprOrSpread> {
         let mut remaining = fields.len();
         let mut sorted_args = vec![];
@@ -135,7 +135,7 @@ impl CodeGenerator {
             let expr = match field {
                 Some(field) => {
                     remaining -= 1;
-                    self.expr_to_swc(field.value.clone())
+                    self.expr_to_swc(&field.value)
                 }
                 None => swc::Expr::Ident(create_ident("undefined")),
             };
@@ -151,8 +151,8 @@ impl CodeGenerator {
         sorted_args
     }
 
-    fn variant_literal_to_swc(&mut self, node: ast::VariantLiteral) -> swc::NewExpr {
-        let name = node.ty.name;
+    fn variant_literal_to_swc(&mut self, node: &ast::VariantLiteral) -> swc::NewExpr {
+        let name = &node.ty.name;
 
         let mut args = Vec::<swc::ExprOrSpread>::new();
         args.push(
@@ -163,7 +163,7 @@ impl CodeGenerator {
             }))
             .into(),
         );
-        match node.body {
+        match &node.body {
             Some(ast::VariantLiteralBody::Struct(body)) => {
                 let name = format!("{}.{}", name, node.name.clone());
                 args.extend(self.get_sorted_args(&name, body));

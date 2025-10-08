@@ -7,8 +7,8 @@ use swc_ecma_ast as swc;
 
 use super::utils::{name_to_swc_param, this_assignment};
 
-pub fn enum_def_to_swc_constructor(node: ast::EnumDefinition) -> swc::Constructor {
-    let stmts = match variants_to_swc_switch(node.variants) {
+pub fn enum_def_to_swc_constructor(node: &ast::EnumDefinition) -> swc::Constructor {
+    let stmts = match variants_to_swc_switch(&node.variants) {
         Some(swc_switch) => vec![this_assignment("__"), swc_switch.into()],
         None => vec![this_assignment("__")],
     };
@@ -39,7 +39,7 @@ fn get_sum_values_param() -> swc::ParamOrTsParamProp {
     })
 }
 
-fn variants_to_swc_switch(variants: Vec<VariantDefinition>) -> Option<swc::SwitchStmt> {
+fn variants_to_swc_switch(variants: &Vec<VariantDefinition>) -> Option<swc::SwitchStmt> {
     let cases: Vec<swc::SwitchCase> = variants
         .iter()
         .filter(|variant| !variant.is_unit())

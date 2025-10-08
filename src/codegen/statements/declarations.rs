@@ -7,7 +7,7 @@ use crate::{
 };
 
 impl CodeGenerator {
-    pub fn declaration_to_swc(&mut self, node: ast::VariableDeclaration) -> Vec<swc::Stmt> {
+    pub fn declaration_to_swc(&mut self, node: &ast::VariableDeclaration) -> Vec<swc::Stmt> {
         if let ast::Pattern::Identifier(_) = *node.pattern {
             return vec![self.identifier_declaration_to_swc(node).into()];
         };
@@ -21,19 +21,19 @@ impl CodeGenerator {
             .map(|symbol| wrap_identifier(&symbol.name).into())
             .collect();
 
-        let pattern = self.pattern_to_swc(*node.pattern);
-        let init = self.expr_to_swc(*node.value);
+        let pattern = self.pattern_to_swc(&node.pattern);
+        let init = self.expr_to_swc(&node.value);
         let decl = create_declaration(swc::VarDeclKind::Let, pattern, init);
 
         vec![vec![decl.into()], wrappers].concat()
     }
 
-    fn identifier_declaration_to_swc(&mut self, node: ast::VariableDeclaration) -> swc::Decl {
-        let ast::Pattern::Identifier(id) = *node.pattern else {
+    fn identifier_declaration_to_swc(&mut self, node: &ast::VariableDeclaration) -> swc::Decl {
+        let ast::Pattern::Identifier(id) = node.pattern.as_ref() else {
             panic!()
         };
 
-        let mut init = self.expr_to_swc(*node.value);
+        let mut init = self.expr_to_swc(&node.value);
         let info = self.get_info(id.span.as_str()).unwrap();
         if info.has_ref() {
             init = swc::Expr::Array(swc::ArrayLit {
