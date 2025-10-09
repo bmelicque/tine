@@ -10,5 +10,6 @@ mod type_declaration;
 mod types;
 mod utils;
 
-pub use analysis_context::{AnalysisContext, Symbol};
-pub use type_checker::TypeChecker;
+pub use analysis_context::{ModuleMetadata, Symbol};
+pub use std::dom::dom_context;
+pub use type_checker::{CheckResult, TypeChecker};

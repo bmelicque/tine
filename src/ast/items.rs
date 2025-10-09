@@ -8,6 +8,15 @@ pub enum Item {
     Statement(Statement),
 }
 
+impl Item {
+    pub fn as_use_declaration_ref(&self) -> Option<&UseDeclaration> {
+        match self {
+            Item::UseDeclaration(u) => Some(u),
+            _ => None,
+        }
+    }
+}
+
 impl From<Statement> for Item {
     fn from(value: Statement) -> Self {
         Self::Statement(value)
@@ -36,4 +45,10 @@ pub struct UseTree {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FileName {
     pub span: Span<'static>,
+}
+
+impl FileName {
+    pub fn as_str(&self) -> &'static str {
+        self.span.as_str()
+    }
 }

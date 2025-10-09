@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn test_visit_array_type() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
         let array_type = ast::ArrayType {
             element: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "number".to_string(),
@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn test_visit_function_type() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
         let function_type = ast::FunctionType {
             params: vec![
                 ast::Type::Named(ast::NamedType {
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn test_visit_map_type() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
         let map_type = ast::MapType {
             key: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "string".to_string(),
@@ -257,7 +257,7 @@ mod tests {
 
     #[test]
     fn test_visit_named_type() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
         checker.type_registry.define(
             "Box",
             types::Type::Struct(types::StructType { fields: vec![] }),
@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn test_visit_option_type() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
         let option_type = ast::OptionType {
             base: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "number".to_string(),
@@ -303,7 +303,7 @@ mod tests {
 
     #[test]
     fn test_visit_reference_type() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
         let reference_type = ast::ReferenceType {
             target: Box::new(ast::Type::Named(ast::NamedType {
                 name: "string".to_string(),
@@ -324,7 +324,7 @@ mod tests {
 
     #[test]
     fn test_visit_result_type() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
         let result_type = ast::ResultType {
             ok: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "number".to_string(),
@@ -351,7 +351,7 @@ mod tests {
 
     #[test]
     fn test_visit_tuple_type() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
         let tuple_type = ast::TupleType {
             elements: vec![
                 ast::Type::Named(ast::NamedType {

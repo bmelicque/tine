@@ -96,7 +96,7 @@ mod tests {
     use crate::types::{StructField, Variant};
 
     fn create_type_checker() -> TypeChecker {
-        TypeChecker::new()
+        TypeChecker::new(Vec::new())
     }
 
     fn dummy_span() -> pest::Span<'static> {

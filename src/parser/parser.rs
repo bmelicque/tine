@@ -30,18 +30,20 @@ impl ParserEngine {
 
     pub fn parse(&mut self, input: &'static str) -> ParseResult {
         match MyLanguageParser::parse(Rule::program, input) {
-            Ok(pairs) => self.build_ast(pairs),
+            Ok(pairs) => self.build_ast(input, pairs),
             Err(err) => panic!("{}", err),
         }
     }
 
-    fn build_ast(&mut self, pairs: Pairs<'static, Rule>) -> ParseResult {
+    fn build_ast(&mut self, input: &'static str, pairs: Pairs<'static, Rule>) -> ParseResult {
+        let span = pest::Span::new(input, 0, input.len()).unwrap();
         let items: Vec<ast::Item> = pairs
             .into_iter()
             .filter(|pair| pair.as_rule() == Rule::program)
             .flat_map(|pair| {
                 let statements: Vec<ast::Item> = pair
                     .into_inner()
+                    .filter(|p| p.as_rule() == Rule::item)
                     .map(|pair| self.parse_item(pair))
                     .collect();
                 statements
@@ -49,7 +51,7 @@ impl ParserEngine {
             .collect();
 
         ParseResult {
-            node: ast::Program { items },
+            node: ast::Program { span, items },
             errors: self.errors.drain(..).collect(),
         }
     }

@@ -1,6 +1,6 @@
 use crate::parser::parser::ParseError;
 
-pub fn pretty_print_error(source: &str, error: &ParseError) {
+pub fn pretty_print_error(error: &ParseError) {
     let span = &error.span;
     let start_pos = span.start_pos();
     let end_pos = span.end_pos();
@@ -9,7 +9,9 @@ pub fn pretty_print_error(source: &str, error: &ParseError) {
     let col_start = start_pos.line_col().1;
     let col_end = end_pos.line_col().1;
 
-    let line_text = source
+    let line_text = error
+        .span
+        .as_str()
         .lines()
         .nth(line_str - 1) // lines are 1-based
         .unwrap_or("");
@@ -28,4 +30,8 @@ pub fn pretty_print_error(source: &str, error: &ParseError) {
     };
 
     println!("{} | {}{}", gutter, " ".repeat(col_start - 1), underline);
+}
+
+pub fn dummy_span() -> pest::Span<'static> {
+    pest::Span::new("_", 0, 0).unwrap()
 }

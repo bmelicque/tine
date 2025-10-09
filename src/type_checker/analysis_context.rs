@@ -6,6 +6,7 @@ use crate::{type_checker::utils::within, types};
 
 pub type SymbolId = usize;
 
+#[derive(Clone, Debug)]
 pub struct Symbol {
     pub name: String,
     pub ty: types::Type,
@@ -82,6 +83,7 @@ impl Scope {
     }
 }
 
+#[derive(Clone)]
 pub struct AnalysisContext {
     /** Map of existing symbols */
     pub symbols: Vec<Symbol>,
@@ -155,9 +157,7 @@ impl AnalysisContext {
             }
         }
     }
-    pub fn lookup(&self, name: &str) -> Option<&Symbol> {
-        self.get_id(name).map(|id| self.symbols.get(id)).flatten()
-    }
+
     pub fn lookup_mut(&mut self, name: &str) -> Option<&mut Symbol> {
         self.get_id(name)
             .map(|id| self.symbols.get_mut(id))
@@ -169,5 +169,39 @@ impl AnalysisContext {
             return;
         };
         current_dependencies.extend(deps);
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ModuleMetadata {
+    pub exports: HashMap<SymbolId, Symbol>,
+    pub types: HashMap<Span<'static>, types::Type>,
+    pub dependencies: HashMap<Span<'static>, Vec<SymbolId>>,
+}
+
+impl ModuleMetadata {
+    pub fn lookup(&self, name: &str) -> Option<&Symbol> {
+        self.exports.values().find(|s| s.name == name)
+    }
+}
+
+impl From<&AnalysisContext> for ModuleMetadata {
+    fn from(value: &AnalysisContext) -> Self {
+        let main_scope = value
+            .scopes
+            .values()
+            .find(|s| s.outer_id.is_none())
+            .unwrap();
+        let symbols: HashMap<_, _> = main_scope
+            .bindings
+            .iter()
+            .map(|i| (*i, value.symbols[*i].clone()))
+            .collect();
+
+        Self {
+            exports: symbols,
+            types: value.types.clone(),
+            dependencies: value.other_dependencies.clone(),
+        }
     }
 }

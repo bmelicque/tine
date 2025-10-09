@@ -29,16 +29,16 @@ pub struct CodeGenerator {
     scope: Scope,
     _source_map: Lrc<SourceMap>,
     current_block: Vec<Vec<swc::Stmt>>,
-    analysis_context: type_checker::AnalysisContext,
+    metadata: type_checker::ModuleMetadata,
 }
 
 impl CodeGenerator {
-    pub fn new(context: type_checker::AnalysisContext) -> Self {
+    pub fn new(metadata: type_checker::ModuleMetadata) -> Self {
         Self {
             scope: Scope::new(),
             _source_map: Lrc::new(SourceMap::new(Default::default())),
             current_block: vec![],
-            analysis_context: context,
+            metadata,
         }
     }
 
@@ -115,19 +115,19 @@ impl CodeGenerator {
     }
 
     pub fn get_info(&self, name: &str) -> Option<&Symbol> {
-        self.analysis_context.lookup(name)
+        self.metadata.lookup(name)
     }
 
     pub fn get_expression_dependencies(&self, span: Span<'static>) -> Vec<&Symbol> {
-        let Some(list) = self.analysis_context.other_dependencies.get(&span) else {
+        let Some(list) = self.metadata.dependencies.get(&span) else {
             return Vec::new();
         };
         list.into_iter()
-            .map(|id| &self.analysis_context.symbols[*id])
+            .map(|id| self.metadata.exports.get(id).unwrap())
             .collect()
     }
 
     pub fn get_expr_type(&self, node: &ast::Expression) -> Option<&types::Type> {
-        self.analysis_context.types.get(&node.as_span())
+        self.metadata.types.get(&node.as_span())
     }
 }

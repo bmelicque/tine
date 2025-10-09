@@ -6,9 +6,7 @@ mod type_checker;
 mod types;
 mod utils;
 
-use std::env;
-
-use bundler::Bundler;
+use std::{env, path::PathBuf};
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
@@ -19,6 +17,20 @@ fn main() {
         std::process::exit(1);
     }
 
-    let bundler = Bundler::new();
-    let _ = bundler.bundle_entry(&args[1], &args[2]);
+    let entry = match to_absolute_path(&args[1].clone()) {
+        Ok(path) => path,
+        Err(e) => panic!("{:?}", e),
+    };
+
+    bundler::transpile(entry, &args[2]);
+}
+
+fn to_absolute_path(arg: &str) -> std::io::Result<PathBuf> {
+    let path = PathBuf::from(arg);
+
+    if path.is_absolute() {
+        Ok(path.to_path_buf())
+    } else {
+        Ok(env::current_dir()?.join(path))
+    }
 }

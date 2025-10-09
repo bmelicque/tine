@@ -307,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_visit_anonymous_struct_literal() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
         let struct_literal = ast::AnonymousStructLiteral {
             fields: vec![
                 ast::StructLiteralField {
@@ -352,7 +352,7 @@ mod tests {
 
     #[test]
     fn test_visit_array_literal() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
         let array_literal = ast::ArrayLiteral {
             ty: ast::ArrayType {
                 element: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -391,7 +391,7 @@ mod tests {
 
     #[test]
     fn test_visit_map_literal() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
         let map_literal = ast::MapLiteral {
             ty: ast::MapType {
                 key: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -448,7 +448,7 @@ mod tests {
 
     #[test]
     fn test_visit_option_literal() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
         let option_literal = ast::OptionLiteral {
             ty: ast::OptionType {
                 base: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -479,7 +479,7 @@ mod tests {
 
     #[test]
     fn test_visit_struct_literal() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
         checker.type_registry.define(
             "User",
             types::Type::Struct(types::StructType {
@@ -539,7 +539,7 @@ mod tests {
 
     #[test]
     fn test_visit_variant_literal_valid() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
 
         // Define a sum type with variants
         checker.type_registry.define(
@@ -615,7 +615,7 @@ mod tests {
 
     #[test]
     fn test_visit_variant_literal_non_existent_variant() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
 
         // Define a sum type with variants
         checker.type_registry.define(
@@ -657,7 +657,7 @@ mod tests {
 
     #[test]
     fn test_visit_variant_literal_mismatched_body() {
-        let mut checker = TypeChecker::new();
+        let mut checker = TypeChecker::new(Vec::new());
 
         // Define a sum type with variants
         checker.type_registry.define(

@@ -1,39 +1,48 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use pest::Span;
 
 use super::scopes::TypeRegistry;
 
-use crate::ast;
 use crate::parser::parser::ParseError;
-use crate::type_checker::analysis_context::{AnalysisContext, SymbolId};
+use crate::type_checker::analysis_context::{AnalysisContext, ModuleMetadata, SymbolId};
 use crate::type_checker::std::dom::node::node;
 use crate::types;
+use crate::{ast, bundler};
+
+pub struct CheckResult {
+    pub metadata: ModuleMetadata,
+    pub errors: Vec<ParseError>,
+}
 
 pub struct TypeChecker {
+    project_modules: Vec<Rc<RefCell<bundler::Module>>>,
     pub errors: Vec<ParseError>,
     pub type_registry: TypeRegistry,
     pub analysis_context: AnalysisContext,
 }
 
 impl TypeChecker {
-    pub fn new() -> Self {
+    pub fn new(external: Vec<Rc<RefCell<bundler::Module>>>) -> Self {
         let mut analysis_context = AnalysisContext::new();
         analysis_context.enter_scope(pest::Span::new("", 0, 0).unwrap());
         let mut type_registry = TypeRegistry::new();
         type_registry.define("Node", node(), None);
 
         Self {
+            project_modules: external,
             errors: Vec::new(),
             type_registry,
             analysis_context,
         }
     }
 
-    pub fn check(&mut self, program: &ast::Program) -> Result<(), Vec<ParseError>> {
+    pub fn check(mut self, program: &ast::Program) -> CheckResult {
         program.items.iter().for_each(|item| self.visit_item(item));
-        if self.errors.is_empty() {
-            Ok(())
-        } else {
-            Err(self.errors.clone())
+        CheckResult {
+            metadata: (&self.analysis_context).into(),
+            errors: self.errors,
         }
     }
 
