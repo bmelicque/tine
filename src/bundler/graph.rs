@@ -18,6 +18,7 @@ pub struct Module {
 
 pub type Edge = (Rc<FileName>, Rc<FileName>);
 
+#[derive(Debug)]
 pub struct ModuleGraph {
     nodes: HashMap<Rc<FileName>, Rc<RefCell<Module>>>,
     edges: HashSet<Edge>,
@@ -74,13 +75,13 @@ impl ModuleGraph {
 
             let edges_to_remove: Vec<_> = edges
                 .iter()
-                .filter(|edge| edge.1 == node)
+                .filter(|edge| edge.0 == node)
                 .cloned()
                 .collect();
             for edge in edges_to_remove {
                 edges.remove(&edge);
-                if edges.iter().find(|e| *e.1 == *edge.0).is_none() {
-                    queue.push_back(edge.0);
+                if edges.iter().find(|e| *e.1 == *edge.1).is_none() {
+                    queue.push_back(edge.1);
                 }
             }
         }

@@ -5,7 +5,7 @@ use crate::{
     utils::dummy_span,
 };
 
-pub fn dom_context() -> ModuleMetadata {
+pub fn dom_metadata() -> ModuleMetadata {
     let render = Symbol::new(
         "render".to_string(),
         render().into(),

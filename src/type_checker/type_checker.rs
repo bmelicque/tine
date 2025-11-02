@@ -2,9 +2,11 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use pest::Span;
+use swc_common::FileName;
 
 use super::scopes::TypeRegistry;
 
+use crate::bundler::Module;
 use crate::parser::parser::ParseError;
 use crate::type_checker::analysis_context::{AnalysisContext, ModuleMetadata, SymbolId};
 use crate::type_checker::std::dom::node::node;
@@ -17,6 +19,7 @@ pub struct CheckResult {
 }
 
 pub struct TypeChecker {
+    file_name: Option<Rc<FileName>>,
     project_modules: Vec<Rc<RefCell<bundler::Module>>>,
     pub errors: Vec<ParseError>,
     pub type_registry: TypeRegistry,
@@ -31,6 +34,7 @@ impl TypeChecker {
         type_registry.define("Node", node(), None);
 
         Self {
+            file_name: None,
             project_modules: external,
             errors: Vec::new(),
             type_registry,
@@ -38,8 +42,17 @@ impl TypeChecker {
         }
     }
 
-    pub fn check(mut self, program: &ast::Program) -> CheckResult {
-        program.items.iter().for_each(|item| self.visit_item(item));
+    pub fn get_file_name(&self) -> Option<Rc<FileName>> {
+        self.file_name.clone()
+    }
+
+    pub fn check(mut self, module: &Module) -> CheckResult {
+        self.file_name = Some(module.name.clone());
+        module
+            .ast
+            .items
+            .iter()
+            .for_each(|item| self.visit_item(item));
         CheckResult {
             metadata: (&self.analysis_context).into(),
             errors: self.errors,
@@ -108,6 +121,11 @@ impl TypeChecker {
         }
     }
     fn implements(&self, test: &types::Type, duck: &types::DuckType) -> bool {
+        if let types::Type::Duck(test) = test {
+            if *test == *duck {
+                return true;
+            }
+        }
         let types::Type::Struct(ref st) = *duck.like else {
             return false;
         };
@@ -169,5 +187,11 @@ impl TypeChecker {
 
     pub fn error(&mut self, message: String, span: Span<'static>) {
         self.errors.push(ParseError { message, span });
+    }
+
+    pub(super) fn get_module(&self, name: &FileName) -> Option<&Rc<RefCell<bundler::Module>>> {
+        self.project_modules
+            .iter()
+            .find(|m| *m.borrow().name == *name)
     }
 }

@@ -5,10 +5,8 @@ use swc_common::FileName;
 
 use crate::{
     ast,
-    bundler::{
-        graph::{Module, ModuleGraph},
-        utils::use_decl_to_paths,
-    },
+    bundler::graph::{Module, ModuleGraph},
+    common::use_decl_to_paths,
     parser::ParserEngine,
 };
 
@@ -82,6 +80,7 @@ fn get_dependencies(module: &Module) -> Vec<FileName> {
         .iter()
         .filter_map(|item| item.as_use_declaration_ref())
         .flat_map(|decl| use_decl_to_paths(&module.name, decl))
+        .map(|imports| imports.module_name)
         .collect();
     file_names.sort();
     file_names.dedup();

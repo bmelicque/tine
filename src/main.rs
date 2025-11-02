@@ -1,6 +1,7 @@
 mod ast;
 mod bundler;
 mod codegen;
+mod common;
 mod parser;
 mod type_checker;
 mod types;

@@ -51,9 +51,9 @@ impl ParserEngine {
         ast::UseTree { path, sub_trees }
     }
 
-    fn parse_file_name(&mut self, pair: Pair<'static, Rule>) -> ast::FileName {
+    fn parse_file_name(&mut self, pair: Pair<'static, Rule>) -> ast::PathElement {
         assert_eq!(pair.as_rule(), Rule::file_name);
-        ast::FileName {
+        ast::PathElement {
             span: pair.as_span(),
         }
     }

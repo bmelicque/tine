@@ -1,7 +1,7 @@
-mod context;
+mod metadata;
 mod utils;
 
 pub mod node;
 pub mod render;
 
-pub use context::dom_context;
+pub use metadata::dom_metadata;

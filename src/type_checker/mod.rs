@@ -11,5 +11,5 @@ mod types;
 mod utils;
 
 pub use analysis_context::{ModuleMetadata, Symbol};
-pub use std::dom::dom_context;
+pub use std::dom::dom_metadata;
 pub use type_checker::{CheckResult, TypeChecker};

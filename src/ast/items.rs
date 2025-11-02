@@ -1,6 +1,6 @@
 use pest::Span;
 
-use crate::ast::Statement;
+use crate::{ast::Statement, parser::utils::merge_span};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Item {
@@ -38,16 +38,45 @@ impl Into<Item> for UseDeclaration {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UseTree {
-    pub path: Vec<FileName>,
+    pub path: Vec<PathElement>,
     pub sub_trees: Vec<UseTree>,
 }
 
+impl UseTree {
+    pub fn as_span(&self) -> Span<'static> {
+        let start = self.span_start();
+        let end = self.end();
+        merge_span(start, end)
+    }
+
+    /// Find the span of the first element of the tree
+    fn span_start(&self) -> Span<'static> {
+        if let Some(element) = self.path.get(0) {
+            return element.span;
+        }
+        if let Some(subtree) = self.sub_trees.get(0) {
+            return subtree.span_start();
+        }
+        panic!("cannot get span of empty UseTree")
+    }
+
+    fn end(&self) -> Span<'static> {
+        if let Some(last) = self.sub_trees.last() {
+            return last.end();
+        }
+        if let Some(last) = self.path.last() {
+            return last.span;
+        }
+        panic!("cannot get span of empty UseTree")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct FileName {
+pub struct PathElement {
     pub span: Span<'static>,
 }
 
-impl FileName {
+impl PathElement {
     pub fn as_str(&self) -> &'static str {
         self.span.as_str()
     }

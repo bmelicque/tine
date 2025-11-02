@@ -4,7 +4,7 @@ use swc_common::FileName;
 
 use crate::{
     bundler::{bundle_entry, parse_package, utils::print_errors, Module, SwcLoader, SwcResolver},
-    type_checker::{self, dom_context, CheckResult, TypeChecker},
+    type_checker::{self, dom_metadata, CheckResult, TypeChecker},
     utils::pretty_print_error,
 };
 
@@ -55,7 +55,7 @@ fn type_check_module(
     match *module.name {
         FileName::Real(_) => {
             let checker = TypeChecker::new(checked_modules.clone());
-            checker.check(&module.ast)
+            checker.check(&module)
         }
         FileName::Custom(ref name) => type_check_virtual_module(name),
         _ => unreachable!("unexpected FileName variant"),
@@ -65,7 +65,7 @@ fn type_check_module(
 fn type_check_virtual_module(name: &str) -> type_checker::CheckResult {
     match name {
         "dom" => CheckResult {
-            metadata: dom_context(),
+            metadata: dom_metadata(),
             errors: Vec::new(),
         },
         _ => panic!("unexpected module name '{}'", name),
