@@ -31,7 +31,8 @@ impl<'a> SwcLoader<'a> {
             module.ast.span.as_str(),
         );
 
-        let mut code_generator = CodeGenerator::new(module.context.as_ref().unwrap().clone());
+        let mut code_generator =
+            CodeGenerator::new(file.clone(), module.context.as_ref().unwrap().clone());
         let module = code_generator.program_to_swc_module(&module.ast);
 
         Ok(swc_bundler::ModuleData {

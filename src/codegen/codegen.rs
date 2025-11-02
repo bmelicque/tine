@@ -1,6 +1,6 @@
 use pest::Span;
 use std::error::Error;
-use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
+use swc_common::{sync::Lrc, FileName, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
 
 use crate::{
@@ -26,6 +26,7 @@ impl std::fmt::Display for TranspilerError {
 impl Error for TranspilerError {}
 
 pub struct CodeGenerator {
+    filename: FileName,
     scope: Scope,
     _source_map: Lrc<SourceMap>,
     current_block: Vec<Vec<swc::Stmt>>,
@@ -33,8 +34,9 @@ pub struct CodeGenerator {
 }
 
 impl CodeGenerator {
-    pub fn new(metadata: type_checker::ModuleMetadata) -> Self {
+    pub fn new(filename: FileName, metadata: type_checker::ModuleMetadata) -> Self {
         Self {
+            filename,
             scope: Scope::new(),
             _source_map: Lrc::new(SourceMap::new(Default::default())),
             current_block: vec![],
@@ -78,6 +80,10 @@ impl CodeGenerator {
             body,
             shebang: None,
         }
+    }
+
+    pub fn get_filename(&self) -> &FileName {
+        &self.filename
     }
 
     pub fn enter_block(&mut self) {
