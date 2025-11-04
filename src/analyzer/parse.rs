@@ -3,12 +3,9 @@ use std::{cell::RefCell, path::PathBuf, rc::Rc};
 use anyhow::bail;
 use swc_common::FileName;
 
-use crate::{
-    ast,
-    bundler::graph::{Module, ModuleGraph},
-    common::use_decl_to_paths,
-    parser::ParserEngine,
-};
+use super::graph::{Module, ModuleGraph};
+
+use crate::{ast, common::use_decl_to_paths, parser::ParserEngine};
 
 struct ProjectParser {
     graph: ModuleGraph,

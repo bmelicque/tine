@@ -6,12 +6,11 @@ use swc_common::FileName;
 
 use super::scopes::TypeRegistry;
 
-use crate::bundler::Module;
 use crate::parser::parser::ParseError;
 use crate::type_checker::analysis_context::{AnalysisContext, ModuleMetadata, SymbolId};
 use crate::type_checker::std::dom::node::node;
 use crate::types;
-use crate::{ast, bundler};
+use crate::{analyzer, ast};
 
 pub struct CheckResult {
     pub metadata: ModuleMetadata,
@@ -20,14 +19,14 @@ pub struct CheckResult {
 
 pub struct TypeChecker {
     file_name: Option<Rc<FileName>>,
-    project_modules: Vec<Rc<RefCell<bundler::Module>>>,
+    project_modules: Vec<Rc<RefCell<analyzer::Module>>>,
     pub errors: Vec<ParseError>,
     pub type_registry: TypeRegistry,
     pub analysis_context: AnalysisContext,
 }
 
 impl TypeChecker {
-    pub fn new(external: Vec<Rc<RefCell<bundler::Module>>>) -> Self {
+    pub fn new(external: Vec<Rc<RefCell<analyzer::Module>>>) -> Self {
         let mut analysis_context = AnalysisContext::new();
         analysis_context.enter_scope(pest::Span::new("", 0, 0).unwrap());
         let mut type_registry = TypeRegistry::new();
@@ -46,7 +45,7 @@ impl TypeChecker {
         self.file_name.clone()
     }
 
-    pub fn check(mut self, module: &Module) -> CheckResult {
+    pub fn check(mut self, module: &analyzer::Module) -> CheckResult {
         self.file_name = Some(module.name.clone());
         module
             .ast
@@ -189,7 +188,7 @@ impl TypeChecker {
         self.errors.push(ParseError { message, span });
     }
 
-    pub(super) fn get_module(&self, name: &FileName) -> Option<&Rc<RefCell<bundler::Module>>> {
+    pub(super) fn get_module(&self, name: &FileName) -> Option<&Rc<RefCell<analyzer::Module>>> {
         self.project_modules
             .iter()
             .find(|m| *m.borrow().name == *name)

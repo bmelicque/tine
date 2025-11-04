@@ -1,3 +1,4 @@
+mod analyzer;
 mod ast;
 mod bundler;
 mod codegen;

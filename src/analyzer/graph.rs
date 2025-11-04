@@ -92,8 +92,4 @@ impl ModuleGraph {
             Ok(sorted)
         }
     }
-
-    pub fn read_nodes(&self) -> &HashMap<Rc<FileName>, Rc<RefCell<Module>>> {
-        &self.nodes
-    }
 }

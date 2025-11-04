@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{bundler::Module, utils::pretty_print_error};
+use crate::{analyzer::Module, utils::pretty_print_error};
 
 /// Pretty print all errors found in iterated modules.
 ///

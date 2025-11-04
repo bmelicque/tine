@@ -1,26 +1,24 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use swc_common::{FileName, SourceMap};
 
 use crate::{
-    bundler::{
-        internals::{parse_dom, parse_internals},
-        Module,
-    },
+    analyzer::Module,
+    bundler::internals::{parse_dom, parse_internals},
     codegen::CodeGenerator,
 };
 
-pub struct SwcLoader<'a> {
-    modules: &'a HashMap<Rc<FileName>, Rc<RefCell<Module>>>,
+pub struct SwcLoader {
+    modules: Vec<Rc<RefCell<Module>>>,
 }
 
-impl<'a> SwcLoader<'a> {
-    pub fn new(modules: &'a HashMap<Rc<FileName>, Rc<RefCell<Module>>>) -> Self {
+impl SwcLoader {
+    pub fn new(modules: Vec<Rc<RefCell<Module>>>) -> Self {
         Self { modules }
     }
 
     fn load_real_module(&self, file: &FileName) -> anyhow::Result<swc_bundler::ModuleData> {
-        let Some(module) = self.modules.get(file) else {
+        let Some(module) = self.modules.iter().find(|m| *m.borrow().name == *file) else {
             panic!("couldn't find module '{:?}'", file)
         };
         let module = module.borrow();
@@ -43,7 +41,7 @@ impl<'a> SwcLoader<'a> {
     }
 }
 
-impl swc_bundler::Load for SwcLoader<'_> {
+impl swc_bundler::Load for SwcLoader {
     fn load(&self, file: &FileName) -> anyhow::Result<swc_bundler::ModuleData> {
         match file {
             FileName::Real(_) => self.load_real_module(file),
