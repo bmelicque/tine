@@ -1,0 +1,183 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "MyLang",
+    "patterns": [
+        {
+            "include": "#xml-element"
+        },
+        {
+            "include": "#xml-children"
+        },
+        {
+            "include": "#keywords"
+        },
+        {
+            "include": "#types"
+        },
+        {
+            "include": "#booleans"
+        },
+        {
+            "include": "#functions"
+        },
+        {
+            "include": "#identifiers"
+        },
+        {
+            "include": "#numbers"
+        },
+        {
+            "include": "#strings"
+        },
+        {
+            "include": "#comments"
+        }
+    ],
+    "repository": {
+        "xml-element": {
+            "name": "meta",
+            "begin": "(<\/?)([A-Za-z][A-Za-z0-9\\-]*)",
+            "beginCaptures": {
+                "1": {
+                    "name": "punctuation.definition.tag.begin.my"
+                },
+                "2": {
+                    "name": "entity.name.tag.open.my"
+                }
+            },
+            "end": "(\/?>)",
+            "endCaptures": {
+                "1": {
+                    "name": "punctuation.definition.tag.end.my"
+                }
+            },
+            "patterns": [
+                {
+                    "include": "#xml-tag-attributes"
+                }
+            ]
+        },
+        "xml-tag-attributes": {
+            "name": "meta.jsx.attributes",
+            "begin": "(?<=<[^>]*)(?=[^>]*>)",
+            "end": "(?=/?>)",
+            "patterns": [
+                {
+                    "match": "\\b([A-Za-z_:][A-Za-z0-9_:\\-\\.]*)\\b",
+                    "captures": {
+                        "1": {
+                            "name": "entity.other.attribute-name.my"
+                        }
+                    }
+                },
+                {
+                    "match": "\"[^\"]*\"",
+                    "name": "string.quoted.double.my"
+                },
+                {
+                    "match": "'[^']*'",
+                    "name": "string.quoted.single.my"
+                },
+                {
+                    "begin": "\\{",
+                    "end": "\\}",
+                    "name": "meta.embedded.expression.my",
+                    "patterns": [
+                        {
+                            "include": "#expressions"
+                        }
+                    ]
+                }
+            ]
+        },
+        "xml-children": {
+            "match": "(?<=>).*?(?=<\/)",
+            "name": "text.my"
+        },
+        "keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.control.my",
+                    "match": "\\b(if|else|for|in|return|break|continue|match|use)\\b"
+                }
+            ]
+        },
+        "types": {
+            "patterns": [
+                {
+                    "name": "entity.name.type.my",
+                    "match": "\\b([A-Z][a-zA-Z0-9_]*|string|number|boolean)\\b"
+                }
+            ]
+        },
+        "booleans": {
+            "name": "constant.language.boolean.my",
+            "match": "\\b(true|false)\\b"
+        },
+        "functions": {
+            "patterns": [
+                {
+                    "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*:(:|=)\\s*(?=\\(.*?\\)\\s*=>)",
+                    "captures": {
+                        "1": {
+                            "name": "entity.name.function.my"
+                        }
+                    }
+                },
+                {
+                    "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+                    "captures": {
+                        "1": {
+                            "name": "entity.name.function.call.my"
+                        }
+                    }
+                }
+            ]
+        },
+        "identifiers": {
+            "patterns": [
+                {
+                    "name": "variable.other.my",
+                    "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)"
+                }
+            ]
+        },
+        "numbers": {
+            "patterns": [
+                {
+                    "name": "constant.numeric.integer.decimal.my",
+                    "match": "\\b([0-9]+)\\b"
+                },
+                {
+                    "name": "constant.numeric.integer.hexadecimal.my",
+                    "match": "\\b0x([0-9a-fA-F]+)\\b"
+                },
+                {
+                    "name": "constant.numeric.integer.binary.my",
+                    "match": "\\b0b([01]+)\\b"
+                },
+                {
+                    "name": "constant.numeric.float.my",
+                    "match": "\\b([0-9]+\\.[0-9]*)([eE][+-]?[0-9]+)?\\b"
+                }
+            ]
+        },
+        "strings": {
+            "name": "string.quoted.double.my",
+            "begin": "\"",
+            "end": "\"",
+            "patterns": [
+                {
+                    "name": "constant.character.escape.my",
+                    "match": "\\\\."
+                }
+            ]
+        },
+        "comments": {
+            "name": "comment.line.double-slash.my",
+            "begin": "//",
+            "end": "$"
+        }
+    },
+    "scopeName": "source.my"
+}

@@ -8,5 +8,6 @@ mod utils;
 
 pub use analyzer::{analyze, Module};
 pub use common::{use_decl_to_paths, ModuleImports};
+pub use parser::ParseError;
 pub use type_checker::{ModuleMetadata, Symbol};
 pub use utils::pretty_print_error;
