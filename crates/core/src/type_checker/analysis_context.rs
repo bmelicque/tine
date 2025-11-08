@@ -180,6 +180,14 @@ pub struct ModuleMetadata {
 }
 
 impl ModuleMetadata {
+    pub fn new() -> Self {
+        ModuleMetadata {
+            exports: HashMap::new(),
+            types: HashMap::new(),
+            dependencies: HashMap::new(),
+        }
+    }
+
     pub fn lookup(&self, name: &str) -> Option<&Symbol> {
         self.exports.values().find(|s| s.name == name)
     }

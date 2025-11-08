@@ -132,7 +132,7 @@ pub fn can_block_be_inlined(block: &ast::BlockExpression) -> bool {
 }
 
 pub fn can_ifexpr_be_inlined(expr: &ast::IfExpression) -> bool {
-    if can_block_be_inlined(&expr.consequent) {
+    if !can_block_be_inlined(&expr.consequent) {
         return false;
     }
     let Some(ref alt) = expr.alternate else {

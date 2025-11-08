@@ -58,7 +58,7 @@ pub fn bundle_entry(
                         sequences: 0,
                         ..Default::default()
                     }),
-                    mangle: Some(Default::default()),
+                    mangle: None,
                     ..Default::default()
                 },
                 &swc_ecma_minifier::option::ExtraOptions {

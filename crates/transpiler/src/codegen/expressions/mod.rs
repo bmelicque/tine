@@ -1,12 +1,11 @@
+mod ifs;
 mod unary;
 
 use super::{
     utils::{create_ident, undefined},
     CodeGenerator,
 };
-use crate::codegen::utils::{
-    can_block_be_inlined, can_ifexpr_be_inlined, create_block_stmt, create_number, AssignTo,
-};
+use crate::codegen::utils::{can_block_be_inlined, create_block_stmt, create_number, AssignTo};
 use mylang_core::ast;
 use rand::{distr::Alphanumeric, Rng};
 use swc_common::{SyntaxContext, DUMMY_SP};
@@ -111,7 +110,14 @@ impl CodeGenerator {
         }
     }
 
-    fn block_to_swc_inlined(&mut self, node: &ast::BlockExpression) -> swc::SeqExpr {
+    fn block_to_swc_inlined(&mut self, node: &ast::BlockExpression) -> swc::Expr {
+        if node.statements.len() == 1 {
+            let ast::Statement::Expression(ref expr) = node.statements[0] else {
+                panic!()
+            };
+            return self.expr_to_swc(&expr.expression);
+        }
+
         let exprs = node
             .statements
             .iter()
@@ -122,10 +128,11 @@ impl CodeGenerator {
                 Box::new(self.expr_to_swc(&expr.expression))
             })
             .collect();
-        swc::SeqExpr {
+
+        swc::Expr::Seq(swc::SeqExpr {
             span: DUMMY_SP,
             exprs,
-        }
+        })
     }
 
     /// Extract a block from the current expression.
@@ -283,71 +290,6 @@ impl CodeGenerator {
         } else {
             swc::Expr::Ident(create_ident(node.as_str()))
         }
-    }
-
-    fn if_to_swc_expr(&mut self, node: &ast::IfExpression) -> swc::Expr {
-        if node.consequent.statements.len() == 0 && node.alternate.is_none() {
-            undefined()
-        } else if can_ifexpr_be_inlined(node) {
-            self.if_to_swc_inlined(node).into()
-        } else {
-            self.if_to_swc_extracted(node).into()
-        }
-    }
-
-    fn if_to_swc_inlined(&mut self, node: &ast::IfExpression) -> swc::Expr {
-        if let Some(alternate) = &node.alternate {
-            let alt = match alternate.as_ref() {
-                ast::Alternate::Block(b) => self.block_to_swc_inlined(b).into(),
-                ast::Alternate::If(i) => self.if_to_swc_inlined(i).into(),
-                ast::Alternate::IfDecl(_) => {
-                    panic!("Shouldn't try to inline IfDeclExpression!")
-                }
-            };
-            let alt = Box::new(alt);
-            swc::Expr::Cond(swc::CondExpr {
-                span: DUMMY_SP,
-                test: Box::new(self.expr_to_swc(&node.condition)),
-                cons: Box::new(self.block_to_swc_inlined(&node.consequent).into()),
-                alt,
-            })
-        } else {
-            let cons = self.block_to_swc_inlined(&node.consequent).into();
-            swc::Expr::Cond(swc::CondExpr {
-                span: DUMMY_SP,
-                test: Box::new(self.expr_to_swc(&node.condition)),
-                cons: Box::new(self.some(cons).into()),
-                alt: Box::new(self.none().into()),
-            })
-        }
-    }
-
-    fn if_to_swc_extracted(&mut self, node: &ast::IfExpression) -> swc::Expr {
-        let is_option = node.alternate.is_none();
-        let id = self.add_temp_var_to_current_block();
-        self.enter_block();
-        let if_stmt = self.if_to_swc_stmt(node, AssignTo::Last(id.clone()));
-        self.exit_block();
-        self.push_to_block(if_stmt.into());
-        if is_option {
-            let stmt = self.into_option(&id);
-            self.push_to_block(stmt);
-        }
-        create_ident(&id).into()
-    }
-
-    fn if_decl_to_swc_expr(&mut self, node: &ast::IfPatExpression) -> swc::Expr {
-        let is_option = node.alternate.is_none();
-        let id = self.add_temp_var_to_current_block();
-        self.enter_block();
-        let if_stmt = self.if_decl_to_swc_stmt(node, AssignTo::Last(id.clone()));
-        self.exit_block();
-        self.push_to_block(if_stmt.into());
-        if is_option {
-            let stmt = self.into_option(&id);
-            self.push_to_block(stmt);
-        }
-        create_ident(&id).into()
     }
 
     fn loop_to_swc_expr(&mut self, node: &ast::Loop) -> swc::Expr {
