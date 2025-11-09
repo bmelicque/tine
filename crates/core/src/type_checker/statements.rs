@@ -13,6 +13,7 @@ impl TypeChecker {
             ast::Statement::Empty => Type::Void,
             ast::Statement::Expression(node) => self.visit_expression(&node.expression),
             ast::Statement::Break(node) => self.visit_break_statement(node),
+            ast::Statement::Invalid(_) => Type::Unknown,
             ast::Statement::MethodDefinition(node) => self.visit_method_definition(node),
             ast::Statement::Return(node) => self.visit_return_statement(node),
             ast::Statement::TypeAlias(node) => self.visit_type_declaration(node),

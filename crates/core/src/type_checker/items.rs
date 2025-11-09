@@ -7,6 +7,7 @@ use crate::{
 impl TypeChecker {
     pub fn visit_item(&mut self, node: &ast::Item) {
         match node {
+            ast::Item::Invalid(_) => {}
             ast::Item::Statement(s) => {
                 self.visit_statement(s);
             }

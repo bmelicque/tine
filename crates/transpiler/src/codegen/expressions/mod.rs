@@ -38,6 +38,9 @@ impl CodeGenerator {
             ast::Expression::Identifier(node) => self.ident_to_swc(node).into(),
             ast::Expression::If(node) => self.if_to_swc_expr(node).into(),
             ast::Expression::IfDecl(node) => self.if_decl_to_swc_expr(node).into(),
+            ast::Expression::Invalid(_) => {
+                unreachable!("Invalid input should've been detected during analysis phase")
+            }
             ast::Expression::Loop(node) => self.loop_to_swc_expr(node).into(),
             ast::Expression::Match(node) => self.match_to_swc_expr(node).into(),
             ast::Expression::NumberLiteral(node) => swc::Lit::Num(swc::Number {

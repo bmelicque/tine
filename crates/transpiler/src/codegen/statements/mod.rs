@@ -31,6 +31,9 @@ impl CodeGenerator {
                 }
                 .into()],
             },
+            ast::Statement::Invalid(_) => {
+                unreachable!("Invalid input should've been detected during analysis phase")
+            }
             ast::Statement::MethodDefinition(node) => vec![swc::ExprStmt {
                 span: DUMMY_SP,
                 expr: Box::new(self.method_definition_to_swc(node).into()),

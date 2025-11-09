@@ -1,9 +1,13 @@
 use pest::Span;
 
-use crate::{ast::Statement, parser::utils::merge_span};
+use crate::{
+    ast::{InvalidStatement, Statement},
+    parser::utils::merge_span,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Item {
+    Invalid(InvalidItem),
     UseDeclaration(UseDeclaration),
     Statement(Statement),
 }
@@ -20,6 +24,21 @@ impl Item {
 impl From<Statement> for Item {
     fn from(value: Statement) -> Self {
         Self::Statement(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InvalidItem {
+    pub span: Span<'static>,
+}
+impl Into<Item> for InvalidItem {
+    fn into(self) -> Item {
+        Item::Invalid(self)
+    }
+}
+impl From<InvalidStatement> for InvalidItem {
+    fn from(value: InvalidStatement) -> Self {
+        InvalidItem { span: value.span }
     }
 }
 

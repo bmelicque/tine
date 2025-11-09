@@ -20,6 +20,7 @@ impl TypeChecker {
             ast::Expression::Identifier(node) => self.visit_identifier(node),
             ast::Expression::If(node) => self.visit_if_expression(node),
             ast::Expression::IfDecl(node) => self.visit_if_decl_expression(node),
+            ast::Expression::Invalid(_) => types::Type::Unknown,
             ast::Expression::Loop(node) => self.visit_loop(node),
             ast::Expression::Match(node) => self.visit_match_expression(node),
             ast::Expression::NumberLiteral(_) => types::Type::Number,

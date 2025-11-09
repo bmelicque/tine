@@ -22,6 +22,7 @@ pub enum Expression {
     Identifier(Identifier),
     If(IfExpression),
     IfDecl(IfPatExpression),
+    Invalid(InvalidExpression),
     Loop(Loop),
     Match(MatchExpression),
     NumberLiteral(NumberLiteral),
@@ -47,6 +48,7 @@ impl Expression {
             Self::Identifier(e) => e.span,
             Self::If(e) => e.span,
             Self::IfDecl(e) => e.span,
+            Self::Invalid(e) => e.span,
             Self::Loop(e) => e.as_span(),
             Self::Match(e) => e.span,
             Self::NumberLiteral(e) => e.span,
@@ -160,6 +162,17 @@ impl From<IfExpression> for Alternate {
 impl From<IfPatExpression> for Alternate {
     fn from(value: IfPatExpression) -> Self {
         Self::IfDecl(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct InvalidExpression {
+    pub span: Span<'static>,
+}
+
+impl Into<Expression> for InvalidExpression {
+    fn into(self) -> Expression {
+        Expression::Invalid(self)
     }
 }
 
@@ -342,7 +355,6 @@ pub enum CallArgument {
     Expression(Expression),
     Predicate(Predicate),
 }
-
 impl From<Expression> for CallArgument {
     fn from(value: Expression) -> Self {
         Self::Expression(value)

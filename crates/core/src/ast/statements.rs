@@ -1,6 +1,6 @@
 use pest::Span;
 
-use crate::ast::{FieldAccessExpression, TupleIndexingExpression};
+use crate::ast::{FieldAccessExpression, InvalidExpression, TupleIndexingExpression};
 
 use super::{
     expressions::{Expression, FunctionExpression, Identifier},
@@ -14,6 +14,7 @@ pub enum Statement {
     Assignment(Assignment),
     Break(BreakStatement),
     Expression(ExpressionStatement),
+    Invalid(InvalidStatement),
     MethodDefinition(MethodDefinition),
     Return(ReturnStatement),
     TypeAlias(TypeAlias),
@@ -339,7 +340,10 @@ pub struct ExpressionStatement {
 
 impl Into<Statement> for ExpressionStatement {
     fn into(self) -> Statement {
-        Statement::Expression(self)
+        match *self.expression {
+            Expression::Invalid(i) => Statement::Invalid(i.into()),
+            expr => Statement::Expression(expr.into()),
+        }
     }
 }
 
@@ -348,5 +352,20 @@ impl From<Expression> for ExpressionStatement {
         ExpressionStatement {
             expression: Box::new(expression),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct InvalidStatement {
+    pub span: Span<'static>,
+}
+impl Into<Statement> for InvalidStatement {
+    fn into(self) -> Statement {
+        Statement::Invalid(self)
+    }
+}
+impl From<InvalidExpression> for InvalidStatement {
+    fn from(value: InvalidExpression) -> Self {
+        Self { span: value.span }
     }
 }
