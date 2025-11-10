@@ -41,13 +41,12 @@ impl CodeGenerator {
             ast::Expression::Identifier(expr) => {
                 (self.ident_to_swc(expr).into(), create_number(0.0))
             }
-            ast::Expression::FieldAccess(expr) => (
+            ast::Expression::Member(expr) => (
                 self.expr_to_swc(&expr.object),
-                create_str(expr.prop.as_str().into()),
-            ),
-            ast::Expression::TupleIndexing(expr) => (
-                self.expr_to_swc(&expr.tuple),
-                create_number(*expr.index.value),
+                match expr.prop.clone().unwrap() {
+                    ast::MemberProp::FieldName(i) => create_str(i.as_str().into()),
+                    ast::MemberProp::Index(n) => create_number(*n.value),
+                },
             ),
             expr => (
                 swc::Expr::Ident(create_ident("undefined")),

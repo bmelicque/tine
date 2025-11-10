@@ -1,6 +1,6 @@
 use pest::Span;
 
-use crate::ast::{FieldAccessExpression, InvalidExpression, TupleIndexingExpression};
+use crate::ast::{InvalidExpression, MemberExpression};
 
 use super::{
     expressions::{Expression, FunctionExpression, Identifier},
@@ -272,25 +272,16 @@ impl Into<Statement> for Assignment {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Assignee {
-    FieldAccess(FieldAccessExpression),
+    Member(MemberExpression),
     Indirection(IndirectionAssignee),
-    TupleIndexing(TupleIndexingExpression),
 
     Pattern(Pattern),
 }
-
-impl From<FieldAccessExpression> for Assignee {
-    fn from(value: FieldAccessExpression) -> Self {
-        Self::FieldAccess(value)
+impl From<MemberExpression> for Assignee {
+    fn from(value: MemberExpression) -> Self {
+        Self::Member(value)
     }
 }
-
-impl From<TupleIndexingExpression> for Assignee {
-    fn from(value: TupleIndexingExpression) -> Self {
-        Self::TupleIndexing(value)
-    }
-}
-
 impl From<Pattern> for Assignee {
     fn from(value: Pattern) -> Self {
         Self::Pattern(value)
@@ -302,7 +293,6 @@ pub struct IndirectionAssignee {
     pub span: Span<'static>,
     pub identifier: Identifier,
 }
-
 impl Into<Assignee> for IndirectionAssignee {
     fn into(self) -> Assignee {
         Assignee::Indirection(self)

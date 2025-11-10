@@ -17,7 +17,6 @@ pub enum Expression {
     Call(CallExpression),
     CompositeLiteral(CompositeLiteral),
     Element(ElementExpression),
-    FieldAccess(FieldAccessExpression),
     Function(FunctionExpression),
     Identifier(Identifier),
     If(IfExpression),
@@ -25,10 +24,10 @@ pub enum Expression {
     Invalid(InvalidExpression),
     Loop(Loop),
     Match(MatchExpression),
+    Member(MemberExpression),
     NumberLiteral(NumberLiteral),
     StringLiteral(StringLiteral),
     Tuple(TupleExpression),
-    TupleIndexing(TupleIndexingExpression),
     Unary(UnaryExpression),
 }
 
@@ -43,7 +42,7 @@ impl Expression {
             Self::CompositeLiteral(e) => e.as_span(),
             Self::Element(e) => e.as_span(),
             Self::Empty => Span::new("", 0, 0).unwrap(),
-            Self::FieldAccess(e) => e.span,
+            Self::Member(e) => e.span,
             Self::Function(e) => e.span,
             Self::Identifier(e) => e.span,
             Self::If(e) => e.span,
@@ -54,7 +53,6 @@ impl Expression {
             Self::NumberLiteral(e) => e.span,
             Self::StringLiteral(e) => e.span,
             Self::Tuple(e) => e.span,
-            Self::TupleIndexing(e) => e.span,
             Self::Unary(e) => e.span,
         }
     }
@@ -390,38 +388,49 @@ impl From<FunctionParam> for PredicateParam {
     }
 }
 
-pub trait PathExpression {
-    fn root_expression(&self) -> Expression;
-    fn base_expression(&self) -> &Expression;
-    fn as_span(&self) -> pest::Span<'static>;
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FieldAccessExpression {
+pub struct MemberExpression {
     pub span: Span<'static>,
     pub object: Box<Expression>,
-    pub prop: Identifier,
+    pub prop: Option<MemberProp>,
 }
 
-impl PathExpression for FieldAccessExpression {
-    fn as_span(&self) -> pest::Span<'static> {
-        self.span
-    }
-    fn root_expression(&self) -> Expression {
+impl MemberExpression {
+    pub fn root_expression(&self) -> Expression {
         match self.object.as_ref() {
-            Expression::FieldAccess(expr) => expr.root_expression(),
-            Expression::TupleIndexing(expr) => expr.root_expression(),
+            Expression::Member(expr) => expr.root_expression(),
             expr => expr.clone(),
         }
     }
-    fn base_expression(&self) -> &Expression {
-        self.object.as_ref()
+}
+
+impl Into<Expression> for MemberExpression {
+    fn into(self) -> Expression {
+        Expression::Member(self)
     }
 }
 
-impl Into<Expression> for FieldAccessExpression {
-    fn into(self) -> Expression {
-        Expression::FieldAccess(self)
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum MemberProp {
+    FieldName(Identifier),
+    Index(NumberLiteral),
+}
+impl MemberProp {
+    pub fn as_span(&self) -> Span<'static> {
+        match self {
+            Self::FieldName(i) => i.span,
+            Self::Index(n) => n.span,
+        }
+    }
+}
+impl From<Identifier> for MemberProp {
+    fn from(value: Identifier) -> Self {
+        Self::FieldName(value)
+    }
+}
+impl From<NumberLiteral> for MemberProp {
+    fn from(value: NumberLiteral) -> Self {
+        Self::Index(value)
     }
 }
 
@@ -434,35 +443,6 @@ pub struct TupleExpression {
 impl Into<Expression> for TupleExpression {
     fn into(self) -> Expression {
         Expression::Tuple(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TupleIndexingExpression {
-    pub span: Span<'static>,
-    pub tuple: Box<Expression>,
-    pub index: NumberLiteral,
-}
-
-impl PathExpression for TupleIndexingExpression {
-    fn as_span(&self) -> pest::Span<'static> {
-        self.span
-    }
-    fn root_expression(&self) -> Expression {
-        match *self.tuple.clone() {
-            Expression::FieldAccess(expr) => expr.root_expression(),
-            Expression::TupleIndexing(expr) => expr.root_expression(),
-            expr => expr,
-        }
-    }
-    fn base_expression(&self) -> &Expression {
-        &self.tuple
-    }
-}
-
-impl Into<Expression> for TupleIndexingExpression {
-    fn into(self) -> Expression {
-        Expression::TupleIndexing(self)
     }
 }
 

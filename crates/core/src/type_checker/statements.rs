@@ -30,9 +30,8 @@ impl TypeChecker {
 
     fn visit_assignee(&mut self, assignee: &ast::Assignee, against: Type) {
         match assignee {
-            ast::Assignee::FieldAccess(expr) => self.visit_expr_assignee(expr, against),
+            ast::Assignee::Member(expr) => self.visit_expr_assignee(expr, against),
             ast::Assignee::Indirection(expr) => self.visit_indirect_assignee(expr, against),
-            ast::Assignee::TupleIndexing(expr) => self.visit_expr_assignee(expr, against),
             ast::Assignee::Pattern(pat) => self.visit_pattern_assignee(pat, against),
         }
     }
@@ -64,12 +63,12 @@ impl TypeChecker {
         }
     }
 
-    fn visit_expr_assignee(&mut self, expr: &dyn ast::PathExpression, against: Type) {
-        let ty = self.visit_expression(expr.base_expression());
+    fn visit_expr_assignee(&mut self, expr: &ast::MemberExpression, against: Type) {
+        let ty = self.visit_expression(&expr.object);
         if ty != against {
             self.errors.push(ParseError {
                 message: format!("Cannot assign type {:?} to {:?}", against, ty),
-                span: expr.as_span(),
+                span: expr.span,
             });
         }
         let root = expr.root_expression();
@@ -94,7 +93,7 @@ impl TypeChecker {
         if !info.mutable {
             self.errors.push(ParseError {
                 message: "Cannot assign to immutable variable".to_string(),
-                span: expr.as_span(),
+                span: expr.span,
             });
         }
     }

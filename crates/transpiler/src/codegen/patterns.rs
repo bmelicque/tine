@@ -155,17 +155,17 @@ impl CodeGenerator {
             .iter()
             .filter(|field| field.pattern.is_some())
             .map(|field| {
-                let against = ast::FieldAccessExpression {
+                let against = ast::MemberExpression {
                     span: against.as_span(),
                     object: Box::new(against.clone()),
-                    prop: ast::Identifier {
+                    prop: Some(ast::MemberProp::FieldName(ast::Identifier {
                         span: pest::Span::new(
                             Box::leak(field.identifier.clone().into_boxed_str()),
                             0,
                             field.identifier.len(),
                         )
                         .unwrap(),
-                    },
+                    })),
                 };
                 self.pattern_to_swc_test(&field.pattern.as_ref().unwrap(), &against.into())
             })
@@ -191,13 +191,13 @@ impl CodeGenerator {
         against: &ast::Expression,
     ) -> swc::Expr {
         self.tuple_to_swc_test_helper(pattern, |i| {
-            ast::TupleIndexingExpression {
+            ast::MemberExpression {
                 span: against.as_span(),
-                tuple: Box::new(against.clone()),
-                index: ast::NumberLiteral {
+                object: Box::new(against.clone()),
+                prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
                     span: against.as_span(),
                     value: OrderedFloat(i as f64),
-                },
+                })),
             }
             .into()
         })
@@ -253,12 +253,12 @@ impl CodeGenerator {
         self.tuple_to_swc_test_helper(pattern, |i| {
             let id = format!("_{}", i);
             let leaked_id: &'static str = Box::leak(id.into_boxed_str());
-            ast::FieldAccessExpression {
+            ast::MemberExpression {
                 span: against.as_span(),
                 object: Box::new(against.clone()),
-                prop: ast::Identifier {
+                prop: Some(ast::MemberProp::FieldName(ast::Identifier {
                     span: pest::Span::new(leaked_id, 0, leaked_id.len()).unwrap(),
-                },
+                })),
             }
             .into()
         })

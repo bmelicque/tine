@@ -1,4 +1,5 @@
 mod ifs;
+mod member;
 mod unary;
 
 use super::{
@@ -33,7 +34,7 @@ impl CodeGenerator {
             ast::Expression::CompositeLiteral(node) => self.composite_literal_to_swc_expr(node),
             ast::Expression::Empty => panic!("shouldn't have empty expressions at codegen step"),
             ast::Expression::Element(node) => self.element_expression_to_swc(node),
-            ast::Expression::FieldAccess(node) => self.field_access_to_swc(node).into(),
+            ast::Expression::Member(node) => self.member_expr_to_swc(node).into(),
             ast::Expression::Function(node) => self.function_expression_to_swc(node).into(),
             ast::Expression::Identifier(node) => self.ident_to_swc(node).into(),
             ast::Expression::If(node) => self.if_to_swc_expr(node).into(),
@@ -57,7 +58,6 @@ impl CodeGenerator {
             })
             .into(),
             ast::Expression::Tuple(node) => self.tuple_to_swc(node).into(),
-            ast::Expression::TupleIndexing(node) => self.tuple_indexing_to_swc(node).into(),
         }
     }
 
@@ -222,14 +222,6 @@ impl CodeGenerator {
         })
     }
 
-    pub fn field_access_to_swc(&mut self, node: &ast::FieldAccessExpression) -> swc::MemberExpr {
-        swc::MemberExpr {
-            span: DUMMY_SP,
-            obj: Box::new(self.expr_to_swc(&node.object)),
-            prop: swc::MemberProp::Ident(create_ident(node.prop.as_str()).into()),
-        }
-    }
-
     fn function_expression_to_swc(&mut self, node: &ast::FunctionExpression) -> swc::ArrowExpr {
         let swc_params = self.function_params_to_swc(&node.params);
         let swc_body = self.function_body_to_swc(&node.body);
@@ -324,20 +316,6 @@ impl CodeGenerator {
         swc::ArrayLit {
             span: DUMMY_SP,
             elems,
-        }
-    }
-
-    pub fn tuple_indexing_to_swc(
-        &mut self,
-        node: &ast::TupleIndexingExpression,
-    ) -> swc::MemberExpr {
-        swc::MemberExpr {
-            span: DUMMY_SP,
-            obj: Box::new(self.expr_to_swc(&node.tuple)),
-            prop: swc::MemberProp::Computed(swc::ComputedPropName {
-                span: DUMMY_SP,
-                expr: Box::new(self.expr_to_swc(&node.index.clone().into())),
-            }),
         }
     }
 

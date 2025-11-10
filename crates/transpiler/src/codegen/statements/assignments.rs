@@ -25,13 +25,10 @@ impl CodeGenerator {
 
     fn assign_target_to_swc(&mut self, node: &ast::Assignee) -> swc::AssignTarget {
         match node {
-            ast::Assignee::FieldAccess(expr) => {
-                swc::SimpleAssignTarget::Member(self.field_access_to_swc(expr)).into()
+            ast::Assignee::Member(expr) => {
+                swc::SimpleAssignTarget::Member(self.member_expr_to_swc(expr)).into()
             }
             ast::Assignee::Indirection(_) => unreachable!(),
-            ast::Assignee::TupleIndexing(expr) => {
-                swc::SimpleAssignTarget::Member(self.tuple_indexing_to_swc(expr)).into()
-            }
 
             ast::Assignee::Pattern(pat) => match pat {
                 ast::Pattern::Identifier(id) => {

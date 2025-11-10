@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{ast, parser::parser::ParseError, type_checker::analysis_context::Symbol, types};
 
 use super::TypeChecker;
@@ -15,7 +13,7 @@ impl TypeChecker {
             ast::Expression::CompositeLiteral(node) => self.visit_composite_literal(node),
             ast::Expression::Element(node) => self.visit_element_expression(node),
             ast::Expression::Empty => types::Type::Void,
-            ast::Expression::FieldAccess(node) => self.visit_field_access_expression(node),
+            ast::Expression::Member(node) => self.visit_member_expression(node),
             ast::Expression::Function(node) => self.visit_function_expression(node).into(),
             ast::Expression::Identifier(node) => self.visit_identifier(node),
             ast::Expression::If(node) => self.visit_if_expression(node),
@@ -26,7 +24,6 @@ impl TypeChecker {
             ast::Expression::NumberLiteral(_) => types::Type::Number,
             ast::Expression::StringLiteral(_) => types::Type::String,
             ast::Expression::Tuple(node) => self.visit_tuple_expression(node).into(),
-            ast::Expression::TupleIndexing(node) => self.visit_tuple_indexing(node),
             ast::Expression::Unary(node) => self.visit_unary_expression(&node),
         }
     }
@@ -161,43 +158,6 @@ impl TypeChecker {
             ty
         });
         self.set_type_at(node.span, ty)
-    }
-
-    fn visit_field_access_expression(&mut self, node: &ast::FieldAccessExpression) -> types::Type {
-        let mut ty = self.visit_expression(&node.object);
-        let type_str = format!("{}", ty.clone());
-        while let types::Type::Named(ref named) = ty {
-            let mut substitutions = HashMap::new();
-            let params = self.type_registry.get_type_params(&named.name);
-            for (i, param) in params.iter().enumerate() {
-                let substitute = match named.args.get(i) {
-                    Some(arg) => arg.clone(),
-                    None => types::Type::Dynamic,
-                };
-                substitutions.insert(param, substitute);
-            }
-            let raw = self.type_registry.lookup(&named.name).unwrap();
-            ty = substitute_type(&raw, &substitutions);
-        }
-
-        let prop = node.prop.as_str();
-        let types::Type::Struct(ty) = ty else {
-            self.errors.push(ParseError {
-                message: format!("Property '{}' does not exist on type '{}'", prop, type_str),
-                span: node.span,
-            });
-            return self.set_type_at(node.span, types::Type::Unknown);
-        };
-        match ty.fields.iter().find(|field| field.name == prop) {
-            Some(field) => self.set_type_at(node.span, field.def.clone()),
-            None => {
-                self.errors.push(ParseError {
-                    message: format!("Property '{}' does not exist on type '{}'", prop, type_str),
-                    span: node.span,
-                });
-                self.set_type_at(node.span, types::Type::Unknown)
-            }
-        }
     }
 
     pub fn visit_function_expression(
@@ -360,43 +320,6 @@ impl TypeChecker {
         self.set_type_at(node.span, ty)
     }
 
-    pub fn visit_tuple_indexing(&mut self, node: &ast::TupleIndexingExpression) -> types::Type {
-        let left_type = self.visit_expression(&node.tuple);
-        let types::Type::Tuple(tuple) = self.unwrap_named_type(&left_type) else {
-            self.errors.push(ParseError {
-                message: format!("Expected tuple type, got {}", left_type),
-                span: node.tuple.as_span(),
-            });
-            return self.set_type_at(node.span, types::Type::Unknown);
-        };
-        let value = node.index.value;
-        if value != value.round() {
-            self.errors.push(ParseError {
-                message: "Integer expected".into(),
-                span: node.index.span,
-            });
-            return self.set_type_at(node.span, types::Type::Unknown);
-        }
-        let value = *value as isize;
-        if value < 0 {
-            self.errors.push(ParseError {
-                message: "Index out of range".into(),
-                span: node.index.span,
-            });
-            return self.set_type_at(node.span, types::Type::Unknown);
-        }
-        let value = value as usize;
-        if value >= tuple.elements.len() {
-            self.errors.push(ParseError {
-                message: "Index out of range".into(),
-                span: node.index.span,
-            });
-            self.set_type_at(node.span, types::Type::Unknown)
-        } else {
-            self.set_type_at(node.span, tuple.elements[value].clone())
-        }
-    }
-
     pub fn visit_condition(&mut self, node: &ast::Expression) {
         let condition = self.visit_expression(node);
         if condition != types::Type::Boolean {
@@ -405,47 +328,6 @@ impl TypeChecker {
                 span: node.as_span(),
             });
         }
-    }
-}
-
-fn substitute_type(ty: &types::Type, substitutions: &HashMap<&String, types::Type>) -> types::Type {
-    match ty {
-        types::Type::Named(named) => {
-            if let Some(substituted) = substitutions.get(&named.name) {
-                substituted.clone()
-            } else {
-                // FIXME: substitute args
-                // for arg in args {
-                // }
-                ty.clone()
-            }
-        }
-        types::Type::Array(array) => {
-            let element = Box::new(substitute_type(&array.element, substitutions));
-            types::ArrayType { element }.into()
-        }
-        types::Type::Option(option) => {
-            let some = Box::new(substitute_type(&option.some, substitutions));
-            types::OptionType { some }.into()
-        }
-        types::Type::Map(map) => {
-            let key = Box::new(substitute_type(&map.key, substitutions));
-            let value = Box::new(substitute_type(&map.value, substitutions));
-            types::MapType { key, value }.into()
-        }
-        types::Type::Struct(st) => {
-            let fields = st
-                .fields
-                .iter()
-                .map(|field| types::StructField {
-                    name: field.name.clone(),
-                    def: substitute_type(&field.def, substitutions),
-                    optional: field.optional,
-                })
-                .collect();
-            types::StructType { fields }.into()
-        }
-        _ => ty.clone(),
     }
 }
 
@@ -561,56 +443,6 @@ mod tests {
         let result = checker.visit_binary_expression(&binary_expression);
         assert_eq!(result, types::Type::Number);
         assert!(checker.errors.is_empty());
-    }
-
-    #[test]
-    fn test_visit_field_access_expression() {
-        let mut checker = create_type_checker();
-        checker.type_registry.define(
-            "User",
-            types::StructType {
-                fields: vec![
-                    StructField {
-                        name: "name".to_string(),
-                        def: types::Type::String,
-                        optional: false,
-                    },
-                    StructField {
-                        name: "age".to_string(),
-                        def: types::Type::Number,
-                        optional: false,
-                    },
-                ],
-            }
-            .into(),
-            None,
-        );
-
-        let field_access_expression = ast::FieldAccessExpression {
-            object: Box::new(ast::Expression::Identifier(ast::Identifier {
-                span: span("user"),
-            })),
-            prop: ast::Identifier { span: span("name") },
-            span: dummy_span(),
-        };
-
-        checker.analysis_context.register_symbol(Symbol::pure(
-            "user".into(),
-            types::NamedType {
-                name: "User".to_string(),
-                args: vec![],
-            }
-            .into(),
-            dummy_span(),
-        ));
-
-        let result = checker.visit_field_access_expression(&field_access_expression);
-        assert!(
-            checker.errors.is_empty(),
-            "Expected no errors, got {:?}",
-            checker.errors
-        );
-        assert_eq!(result, types::Type::String);
     }
 
     #[test]
@@ -778,156 +610,5 @@ mod tests {
             .into()
         );
         assert!(checker.errors.is_empty());
-    }
-
-    #[test]
-    fn test_visit_tuple_indexing_valid() {
-        let mut checker = create_type_checker();
-        let tuple_type = types::Type::Tuple(types::TupleType {
-            elements: vec![
-                types::Type::Number,
-                types::Type::String,
-                types::Type::Boolean,
-            ],
-        });
-
-        checker.analysis_context.register_symbol(Symbol::pure(
-            "my_tuple".into(),
-            tuple_type.clone(),
-            span("my_tuple"),
-        ));
-
-        let tuple_indexing = ast::TupleIndexingExpression {
-            tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
-                span: span("my_tuple"),
-            })),
-            index: ast::NumberLiteral {
-                value: ordered_float::OrderedFloat(1.0),
-                span: dummy_span(),
-            },
-            span: dummy_span(),
-        };
-
-        let result = checker.visit_tuple_indexing(&tuple_indexing);
-        assert_eq!(result, types::Type::String);
-        assert!(checker.errors.is_empty());
-    }
-
-    #[test]
-    fn test_visit_tuple_indexing_invalid_type() {
-        let mut checker = create_type_checker();
-        checker.analysis_context.register_symbol(Symbol::pure(
-            "not_a_tuple".into(),
-            types::Type::Number,
-            span("not_a_tuple"),
-        ));
-
-        let tuple_indexing = ast::TupleIndexingExpression {
-            tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
-                span: span("not_a_tuple"),
-            })),
-            index: ast::NumberLiteral {
-                value: ordered_float::OrderedFloat(0.0),
-                span: dummy_span(),
-            },
-            span: dummy_span(),
-        };
-
-        let result = checker.visit_tuple_indexing(&tuple_indexing);
-        assert_eq!(result, types::Type::Unknown);
-        assert_eq!(checker.errors.len(), 1);
-        assert!(checker.errors[0]
-            .message
-            .contains("Expected tuple type, got number"));
-    }
-
-    #[test]
-    fn test_visit_tuple_indexing_non_integer_index() {
-        let mut checker = create_type_checker();
-        let tuple_type = types::Type::Tuple(types::TupleType {
-            elements: vec![Type::Number, types::Type::String],
-        });
-
-        checker.analysis_context.register_symbol(Symbol::pure(
-            "my_tuple".into(),
-            tuple_type.clone(),
-            span("my_tuple"),
-        ));
-
-        let tuple_indexing = ast::TupleIndexingExpression {
-            tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
-                span: span("my_tuple"),
-            })),
-            index: ast::NumberLiteral {
-                value: ordered_float::OrderedFloat(1.5),
-                span: dummy_span(),
-            },
-            span: dummy_span(),
-        };
-
-        let result = checker.visit_tuple_indexing(&tuple_indexing);
-        assert_eq!(result, types::Type::Unknown);
-        assert_eq!(checker.errors.len(), 1);
-        assert!(checker.errors[0].message.contains("Integer expected"));
-    }
-
-    #[test]
-    fn test_visit_tuple_indexing_out_of_range() {
-        let mut checker = create_type_checker();
-        let tuple_type = types::Type::Tuple(types::TupleType {
-            elements: vec![Type::Number, types::Type::String],
-        });
-
-        checker.analysis_context.register_symbol(Symbol::pure(
-            "my_tuple".into(),
-            tuple_type.clone(),
-            span("my_tuple"),
-        ));
-
-        let tuple_indexing = ast::TupleIndexingExpression {
-            tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
-                span: span("my_tuple"),
-            })),
-            index: ast::NumberLiteral {
-                value: ordered_float::OrderedFloat(2.0),
-                span: dummy_span(),
-            },
-            span: dummy_span(),
-        };
-
-        let result = checker.visit_tuple_indexing(&tuple_indexing);
-        assert_eq!(result, types::Type::Unknown);
-        assert_eq!(checker.errors.len(), 1);
-        assert!(checker.errors[0].message.contains("Index out of range"));
-    }
-
-    #[test]
-    fn test_visit_tuple_indexing_negative_index() {
-        let mut checker = create_type_checker();
-        let tuple_type = types::Type::Tuple(types::TupleType {
-            elements: vec![Type::Number, types::Type::String],
-        });
-
-        checker.analysis_context.register_symbol(Symbol::pure(
-            "my_tuple".into(),
-            tuple_type.clone(),
-            span("my_tuple"),
-        ));
-
-        let tuple_indexing = ast::TupleIndexingExpression {
-            tuple: Box::new(ast::Expression::Identifier(ast::Identifier {
-                span: span("my_tuple"),
-            })),
-            index: ast::NumberLiteral {
-                value: ordered_float::OrderedFloat(-1.0),
-                span: dummy_span(),
-            },
-            span: dummy_span(),
-        };
-
-        let result = checker.visit_tuple_indexing(&tuple_indexing);
-        assert_eq!(result, types::Type::Unknown);
-        assert_eq!(checker.errors.len(), 1);
-        assert!(checker.errors[0].message.contains("Index out of range"));
     }
 }

@@ -62,11 +62,21 @@ impl ParserEngine {
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {
             Rule::indirection => self.parse_indirection_assignee(pair).into(),
-            Rule::member_expression => self.parse_field_access_expression(pair).into(),
-            Rule::tuple_indexing => self.parse_tuple_indexing(pair).into(),
+            Rule::member_assignee => self.parse_member_assignee(pair).into(),
             Rule::pattern => self.parse_pattern(pair).into(),
             rule => unreachable!("Unexpected rule {:?}", rule),
         }
+    }
+
+    fn parse_member_assignee(&mut self, pair: Pair<'static, Rule>) -> ast::MemberExpression {
+        debug_assert_eq!(pair.as_rule(), Rule::member_assignee);
+        let mut inner = pair.into_inner();
+        let root = self.parse_identifier(inner.next().unwrap());
+        let mut node = self.parse_member_expression(root.into(), inner.next().unwrap());
+        for suffix in inner {
+            node = self.parse_member_expression(node.into(), suffix);
+        }
+        node
     }
 
     fn parse_indirection_assignee(
@@ -210,9 +220,10 @@ mod tests {
             ast::Statement::Assignment(assignment) => {
                 // Check the pattern
                 match assignment.pattern {
-                    ast::Assignee::FieldAccess(field_access) => {
-                        assert_eq!(field_access.object.as_span().as_str(), "user");
-                        assert_eq!(field_access.prop.span.as_str(), "name");
+                    ast::Assignee::Member(expr) => {
+                        assert_eq!(expr.object.as_span().as_str(), "user");
+                        assert!(matches!(expr.prop, Some(ast::MemberProp::FieldName(_))));
+                        assert_eq!(expr.prop.unwrap().as_span().as_str(), "name");
                     }
                     _ => panic!("Expected FieldAccessExpression as the assignee"),
                 }
@@ -228,30 +239,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_tuple_indexing_assignment() {
-        let input = "tuple.0 = 42";
-        let result = parse_statement_input(input, Rule::assignment);
-
-        match result {
-            ast::Statement::Assignment(assignment) => {
-                match assignment.pattern {
-                    ast::Assignee::TupleIndexing(indexing) => {
-                        assert_eq!(indexing.tuple.as_span().as_str(), "tuple");
-                        assert_eq!(indexing.index.value, 0.0);
-                    }
-                    _ => panic!("Expected TupleIndexingExpression as the assignee"),
-                }
-
-                match assignment.value {
-                    ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
-                    _ => panic!("Expected NumberLiteral as assignment value"),
-                }
-            }
-            _ => panic!("Expected Assignment"),
-        }
-    }
-
-    #[test]
     fn test_parse_nested_assignment() {
         let input = "user.address.city = \"New York\"";
         let result = parse_statement_input(input, Rule::assignment);
@@ -260,9 +247,10 @@ mod tests {
             ast::Statement::Assignment(assignment) => {
                 // Check the pattern
                 match assignment.pattern {
-                    ast::Assignee::FieldAccess(field_access) => {
-                        assert_eq!(field_access.object.as_span().as_str(), "user.address");
-                        assert_eq!(field_access.prop.span.as_str(), "city");
+                    ast::Assignee::Member(expr) => {
+                        assert_eq!(expr.object.as_span().as_str(), "user.address");
+                        assert!(matches!(expr.prop, Some(ast::MemberProp::FieldName(_))));
+                        assert_eq!(expr.prop.unwrap().as_span().as_str(), "city");
                     }
                     _ => panic!("Expected FieldAccessExpression as the assignee"),
                 }

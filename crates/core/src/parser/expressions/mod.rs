@@ -1,11 +1,10 @@
+mod access_or_call;
 mod array;
 mod binary;
 mod block;
-mod call;
 mod composite_literals;
 mod dom;
 mod exponentiation;
-mod field_access;
 mod function;
 mod identifier;
 mod ifs;
@@ -26,6 +25,7 @@ impl ParserEngine {
             | Rule::expression
             | Rule::primary
             | Rule::tuple_or_expression
+            | Rule::access_or_call_root
             | Rule::type_annotation => {
                 if let Some(inner) = pair.into_inner().next() {
                     self.parse_expression(inner)
@@ -33,9 +33,9 @@ impl ParserEngine {
                     ast::Expression::Empty
                 }
             }
+            Rule::access_or_call_expression => self.parse_access_or_call(pair),
             Rule::array_expression => self.parse_array_expression(pair).into(),
             Rule::block => self.parse_block(pair).into(),
-            Rule::call_expression => self.parse_call_expression(pair).into(),
             Rule::composite_literal => self.parse_composite_literal(pair).into(),
             Rule::element_expression => self.parse_element_expression(pair).into(),
             Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
@@ -48,9 +48,7 @@ impl ParserEngine {
             Rule::if_decl_expression => self.parse_if_pat_expression(pair).into(),
             Rule::loop_expression => self.parse_loop(pair).into(),
             Rule::match_expression => self.parse_match_expression(pair).into(),
-            Rule::member_expression => self.parse_field_access_expression(pair).into(),
             Rule::tuple_expression => self.parse_tuple_expression(pair).into(),
-            Rule::tuple_indexing => self.parse_tuple_indexing(pair).into(),
             Rule::unary => self.parse_unary_expression(pair).into(),
             Rule::string_literal => ast::StringLiteral {
                 span: pair.as_span(),
@@ -78,21 +76,6 @@ impl ParserEngine {
             Rule::struct_literal_body => self.parse_anonymous_struct_literal(inner).into(),
             _ => panic!(),
         }
-    }
-
-    pub fn parse_tuple_indexing(
-        &mut self,
-        pair: Pair<'static, Rule>,
-    ) -> ast::TupleIndexingExpression {
-        assert!(pair.as_rule() == Rule::tuple_indexing);
-        let span = pair.as_span();
-        let mut inner = pair.into_inner();
-
-        let tuple = Box::new(self.parse_expression(inner.next().unwrap()));
-
-        let index = self.parse_number_literal(inner.next().unwrap());
-
-        ast::TupleIndexingExpression { span, tuple, index }
     }
 
     fn parse_number_literal(&mut self, pair: Pair<'static, Rule>) -> ast::NumberLiteral {
@@ -162,20 +145,6 @@ mod tests {
                 assert_eq!(literal.value, 42.0);
             }
             _ => panic!("Expected NumberLiteral"),
-        }
-    }
-
-    #[test]
-    fn test_parse_tuple_indexing_expression() {
-        let input = "tuple.0";
-        let result = parse_expression_input(input, Rule::tuple_indexing);
-
-        match result {
-            ast::Expression::TupleIndexing(tuple_indexing) => {
-                assert_eq!(tuple_indexing.tuple.as_span().as_str(), "tuple");
-                assert_eq!(tuple_indexing.index.value, 0.0);
-            }
-            _ => panic!("Expected TupleIndexingExpression"),
         }
     }
 }

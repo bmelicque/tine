@@ -2,11 +2,13 @@
 NEWLINE = _{ "\n" | "\r\n" }
 WHITESPACE = _{ " " | "\t" }
 COMMENT = _{ "//" ~ (!"\n" ~ ANY)* ~ "\n" | "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+dot = { "." }
 
 // Identifiers and literals
 value_identifier = @{ "_"? ~ ASCII_ALPHA_LOWER ~ (ASCII_ALPHANUMERIC | "_")* }
 string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
 number_literal = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+integer = @{ ASCII_DIGIT+ }
 boolean_literal = @{ "true" | "false" }
 
 // Type annotations
@@ -68,13 +70,12 @@ mul_op = { "*" | "/" | "%" }
 exponentiation = { (unary|primary) ~ ("**" ~ (unary|primary))* }
 unary = { unary_op ~ (unary|primary) }
 unary_op = { "*" | "&" | "@" | "$" }
-primary = { call_expression | member_expression | tuple_indexing | string_literal | number_literal | boolean_literal | value_identifier | function_expression | "(" ~ tuple_or_expression ~ ")" }
-call_expression = { callee ~ call_arguments }
-callee = { member_expression | value_identifier | "(" ~ expression ~ ")" }
+primary = { access_or_call_expression | string_literal | number_literal | boolean_literal | value_identifier | function_expression | "(" ~ tuple_or_expression ~ ")" }
+access_or_call_expression = { access_or_call_root ~ (member_suffix | call_arguments)+ }
+access_or_call_root = { value_identifier | "(" ~ tuple_or_expression ~ ")" }
+member_suffix = { "." ~ (value_identifier | integer)? }
 call_arguments = { "(" ~ (call_argument ~ ("," ~ call_argument)*)? ~ ")" }
 call_argument = { predicate | expression }
-tuple_indexing = { (member_expression|value_identifier|"(" ~ tuple_or_expression ~ ")") ~ "." ~ number_literal }
-member_expression = { value_identifier ~ ("." ~ value_identifier)+ }
 array_expression = { "[" ~ NEWLINE? ~ expression ~ ("," ~ NEWLINE? ~ expression)* ~ (","? ~ NEWLINE)? ~ "]" }
 block = { "{" ~ NEWLINE? ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ NEWLINE? ~ "}" }
 
@@ -135,7 +136,8 @@ method_receiver = { value_identifier ~ type_identifier } // TODO: type_identifie
 variable_declaration = { pattern ~ decl_op ~ expression }
 decl_op = { ":=" | "::" }
 assignment = { assignee ~ "=" ~ expression }
-assignee = { indirection | member_expression | tuple_indexing | pattern }
+assignee = { indirection | member_assignee | pattern }
+member_assignee = { value_identifier ~ member_suffix+ }
 indirection = { "*" ~ value_identifier }
 break_statement = { "break" ~ expression? }
 return_statement = { "return" ~ expression? }

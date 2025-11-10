@@ -4,6 +4,7 @@ mod dom;
 mod expressions;
 mod loops;
 mod matches;
+mod member;
 mod unary;
 
 pub use super::TypeChecker;
