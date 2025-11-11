@@ -31,7 +31,7 @@ impl ParserEngine {
     pub fn parse(&mut self, input: &'static str) -> ParseResult {
         match MyLanguageParser::parse(Rule::program, input) {
             Ok(pairs) => self.build_ast(input, pairs),
-            Err(err) => panic!("{}", err),
+            Err(err) => make_invalid_program(input, err),
         }
     }
 
@@ -58,5 +58,22 @@ impl ParserEngine {
 
     pub fn error(&mut self, message: String, span: Span<'static>) {
         self.errors.push(ParseError { message, span });
+    }
+}
+
+fn make_invalid_program(input: &'static str, err: pest::error::Error<Rule>) -> ParseResult {
+    let span = Span::new(input, 0, input.len()).unwrap();
+    let invalid = ast::Item::Invalid(ast::InvalidItem { span });
+    let program = ast::Program {
+        span,
+        items: vec![invalid],
+    };
+    let error = ParseError {
+        message: format!("{}", err),
+        span,
+    };
+    ParseResult {
+        node: program,
+        errors: vec![error],
     }
 }

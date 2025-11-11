@@ -20,7 +20,7 @@ pub fn analyze(entry_point: PathBuf) -> Result<AnalyzedModules, anyhow::Error> {
     let graph = match parse::parse_package(entry_point.clone()) {
         Ok(graph) => graph,
         Err(e) => {
-            println!("{:?}", e);
+            eprintln!("{:?}", e);
             return Err(e);
         }
     };

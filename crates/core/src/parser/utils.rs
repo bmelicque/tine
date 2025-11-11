@@ -12,7 +12,6 @@ pub fn merge_span(a: pest::Span<'static>, b: pest::Span<'static>) -> pest::Span<
 pub fn increment_span(span: pest::Span<'static>) -> pest::Span<'static> {
     let str = span.get_input();
     let end = span.end();
-    println!("{end}");
     if end >= str.len() {
         pest::Span::new(str, end - 1, end).unwrap()
     } else {
