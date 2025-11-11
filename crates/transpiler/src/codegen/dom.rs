@@ -78,7 +78,7 @@ impl CodeGenerator {
         match value {
             Some(ast::AttributeValue::String(s)) => swc::Expr::Lit(swc::Lit::Str(swc::Str {
                 span: DUMMY_SP,
-                value: s.clone().into(),
+                value: s.clone()[1..s.len() - 1].into(),
                 raw: None,
             })),
             Some(ast::AttributeValue::Expression(e)) => self.expr_to_swc(e),

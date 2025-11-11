@@ -50,7 +50,7 @@ impl TypeChecker {
             info.writes += 1;
             if info.ty != ty {
                 self.errors.push(ParseError {
-                    message: format!("Cannot assign type {:?} to {:?}", ty, info.ty),
+                    message: format!("Cannot assign type '{}' to type '{}'", ty, info.ty),
                     span: pattern.as_span(),
                 });
             }

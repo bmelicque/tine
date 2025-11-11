@@ -7,13 +7,18 @@ use crate::{
 
 impl TypeChecker {
     pub fn visit_call_expression(&mut self, node: &ast::CallExpression) -> types::Type {
-        let callee_type = self.visit_expression(&node.callee);
-        let types::Type::Function(callee_type) = callee_type else {
-            self.errors.push(ParseError {
-                message: format!("Type '{}' is not callable", callee_type),
-                span: node.span,
-            });
-            return self.set_type_at(node.span, types::Type::Unknown);
+        let callee_type = match self.visit_expression(&node.callee) {
+            types::Type::Function(t) => t,
+            types::Type::Unknown => {
+                return self.set_type_at(node.span, types::Type::Unknown);
+            }
+            t => {
+                self.error(
+                    format!("type '{}' is not callable", t),
+                    node.callee.as_span(),
+                );
+                return self.set_type_at(node.span, types::Type::Unknown);
+            }
         };
 
         if node.args.len() != callee_type.params.len() {

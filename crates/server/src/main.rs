@@ -42,17 +42,17 @@ impl tower_lsp::LanguageServer for Backend {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let uri = params.text_document.uri;
-        if let Ok(path) = uri.to_file_path() {
-            self.run_project_analysis(path).await;
-        } else {
-            self.client
-                .log_message(
-                    MessageType::WARNING,
-                    format!("didOpen: cannot convert uri {} to path", uri),
-                )
-                .await;
-        }
+        // let uri = params.text_document.uri;
+        // if let Ok(path) = uri.to_file_path() {
+        //     self.run_project_analysis(path).await;
+        // } else {
+        //     self.client
+        //         .log_message(
+        //             MessageType::WARNING,
+        //             format!("didOpen: cannot convert uri {} to path", uri),
+        //         )
+        //         .await;
+        // }
     }
 
     async fn did_save(&self, params: DidSaveTextDocumentParams) {

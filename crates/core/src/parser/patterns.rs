@@ -20,6 +20,16 @@ impl ParserEngine {
     }
 
     fn parse_identifier_pattern(&mut self, pair: Pair<'static, Rule>) -> ast::IdentifierPattern {
+        match pair.as_str() {
+            "break" | "continue" | "else" | "for" | "if" | "in" | "match" | "return" | "use" => {
+                self.error(
+                    format!("invalid identifier: '{}' is a reserved name", pair.as_str()),
+                    pair.as_span(),
+                );
+            }
+            _ => {}
+        }
+
         ast::IdentifierPattern {
             span: pair.as_span(),
         }
