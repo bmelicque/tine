@@ -164,6 +164,16 @@ impl AnalysisContext {
             .flatten()
     }
 
+    pub fn find_in_current_scope(&self, name: &str) -> Option<Symbol> {
+        self.get_current_scope()
+            .bindings
+            .iter()
+            .find(|id| self.symbols[**id].name == name)
+            .map(|id| self.symbols.get(*id))
+            .flatten()
+            .cloned()
+    }
+
     pub fn add_dependencies(&mut self, deps: Vec<SymbolId>) {
         let Some(current_dependencies) = self.current_declaration_dependencies.as_mut() else {
             return;

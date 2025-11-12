@@ -4,6 +4,7 @@ use crate::{
     parser::parser::ParseError,
     type_checker::analysis_context::Symbol,
     types::{FunctionType, Type},
+    utils::subspan_from_str,
 };
 
 impl TypeChecker {
@@ -205,13 +206,19 @@ impl TypeChecker {
         }
         self.match_pattern(&node.pattern, inferred_type, &mut variables);
         for (name, ty) in variables {
-            self.analysis_context.register_symbol(Symbol::new(
-                name.clone(),
-                ty.clone(),
-                mutable,
-                node.pattern.as_span(),
-                dependencies.clone(),
-            ));
+            if self.analysis_context.find_in_current_scope(&name).is_some() {
+                let message = format!("variable '{}' already defined in current scope", name);
+                let span = subspan_from_str(node.pattern.as_span(), &name).unwrap();
+                self.error(message, span);
+            } else {
+                self.analysis_context.register_symbol(Symbol::new(
+                    name.clone(),
+                    ty.clone(),
+                    mutable,
+                    node.pattern.as_span(),
+                    dependencies.clone(),
+                ));
+            }
         }
         Type::Void
     }
