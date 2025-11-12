@@ -22,7 +22,10 @@ impl TypeChecker {
     }
 
     fn visit_assignment(&mut self, node: &ast::Assignment) -> Type {
-        let value_type = self.visit_expression(&node.value);
+        let value_type = match &node.value {
+            ast::Expression::Empty => Type::Unknown,
+            value => self.visit_expression(value),
+        };
         self.visit_assignee(&node.pattern, value_type);
 
         Type::Void
@@ -48,7 +51,7 @@ impl TypeChecker {
                 continue;
             };
             info.writes += 1;
-            if info.ty != ty {
+            if info.ty != ty && !ty.is_unknown() {
                 self.errors.push(ParseError {
                     message: format!("Cannot assign type '{}' to type '{}'", ty, info.ty),
                     span: pattern.as_span(),

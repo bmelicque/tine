@@ -34,6 +34,10 @@ impl Type {
             _ => false,
         }
     }
+
+    pub fn is_unknown(&self) -> bool {
+        *self == Type::Unknown
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

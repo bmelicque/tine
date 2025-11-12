@@ -135,7 +135,8 @@ method_definition = { "(" ~ method_receiver ~ ")" ~ value_identifier ~ "::" ~ fu
 method_receiver = { value_identifier ~ type_identifier } // TODO: type_identifier -> include reference_type
 variable_declaration = { pattern ~ decl_op ~ expression }
 decl_op = { ":=" | "::" }
-assignment = { assignee ~ "=" ~ expression }
+assignment = { assignee ~ assign_op ~ expression }
+assign_op = { "=" }
 assignee = { indirection | member_assignee | pattern }
 member_assignee = { value_identifier ~ member_suffix+ }
 indirection = { "*" ~ value_identifier }
