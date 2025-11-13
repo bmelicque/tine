@@ -13,8 +13,7 @@
       {
         "id": "my-lang",
         "aliases": [
-          "MyLang",
-          "my-lang"
+          "MyLang"
         ],
         "extensions": [
           ".my"
