@@ -1,21 +1,24 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{
-    type_checker::{analysis_context::ModuleMetadata, std::dom::render::render, Symbol},
+    type_checker::{
+        analysis_context::{ModuleMetadata, VariableHandle},
+        std::dom::render::render,
+        VariableData,
+    },
     utils::dummy_span,
 };
 
 pub fn dom_metadata() -> ModuleMetadata {
-    let render = Symbol::new(
+    let render = VariableData::new(
         "render".to_string(),
-        render().into(),
+        Rc::new(render().into()),
         false,
         dummy_span(),
         Vec::new(),
     );
 
-    let mut exports = HashMap::new();
-    exports.insert(0, render);
+    let exports = vec![VariableHandle::new(render).readonly()];
 
     ModuleMetadata {
         exports,

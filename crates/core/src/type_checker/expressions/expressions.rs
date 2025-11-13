@@ -1,4 +1,4 @@
-use crate::{ast, parser::parser::ParseError, type_checker::analysis_context::Symbol, types};
+use crate::{ast, parser::parser::ParseError, type_checker::analysis_context::VariableData, types};
 
 use super::TypeChecker;
 
@@ -168,9 +168,9 @@ impl TypeChecker {
             let mut param_types = Vec::with_capacity(node.params.len());
             for param in node.params.iter() {
                 let ty = s.visit_type(&param.type_annotation);
-                s.analysis_context.register_symbol(Symbol::pure(
+                s.analysis_context.register_symbol(VariableData::pure(
                     param.name.as_str().into(),
-                    ty.clone(),
+                    ty.clone().into(),
                     param.name.span,
                 ));
                 param_types.push(ty);
@@ -230,13 +230,13 @@ impl TypeChecker {
     }
 
     fn visit_identifier(&mut self, node: &ast::Identifier) -> types::Type {
-        let symbol_id = self.analysis_context.get_id(node.as_str());
-        let ty = match symbol_id {
-            Some(id) => {
-                self.analysis_context.add_dependencies(vec![id]);
-                let symbol = self.analysis_context.symbols.get_mut(id).unwrap();
-                symbol.reads += 1;
-                symbol.ty.clone()
+        let var = self.analysis_context.lookup_mut(node.as_str());
+        let ty = match var {
+            Some(handle) => {
+                self.analysis_context
+                    .add_dependencies(vec![handle.readonly()]);
+                handle.add_read();
+                (*handle.borrow().ty).clone()
             }
             None => {
                 self.errors.push(ParseError {
@@ -272,9 +272,9 @@ impl TypeChecker {
             let mut variables = Vec::<(String, types::Type)>::new();
             s.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
             for (name, ty) in variables {
-                s.analysis_context.register_symbol(Symbol::new(
+                s.analysis_context.register_symbol(VariableData::new(
                     name.clone(),
-                    ty.clone(),
+                    ty.clone().into(),
                     false,
                     node.pattern.as_span(),
                     dependencies.clone(),
@@ -499,9 +499,9 @@ mod tests {
     #[test]
     fn test_visit_identifier() {
         let mut checker = create_type_checker();
-        checker.analysis_context.register_symbol(Symbol::pure(
+        checker.analysis_context.register_symbol(VariableData::pure(
             "x".into(),
-            types::Type::Number,
+            types::Type::Number.into(),
             span("x"),
         ));
 

@@ -2,7 +2,7 @@ use super::TypeChecker;
 use crate::{
     ast,
     parser::parser::ParseError,
-    type_checker::analysis_context::Symbol,
+    type_checker::analysis_context::VariableData,
     types::{FunctionType, Type},
     utils::subspan_from_str,
 };
@@ -51,14 +51,14 @@ impl TypeChecker {
                 });
                 continue;
             };
-            info.writes += 1;
-            if info.ty != ty && !ty.is_unknown() {
+            info.add_write();
+            if *info.borrow().ty != ty && !ty.is_unknown() {
                 self.errors.push(ParseError {
-                    message: format!("Cannot assign type '{}' to type '{}'", ty, info.ty),
+                    message: format!("Cannot assign type '{}' to type '{}'", ty, info.borrow().ty),
                     span: pattern.as_span(),
                 });
             }
-            if !info.mutable {
+            if !info.borrow().mutable {
                 self.errors.push(ParseError {
                     message: "Cannot assign to immutable variable".to_string(),
                     span: pattern.as_span(),
@@ -90,11 +90,11 @@ impl TypeChecker {
             });
             return;
         };
-        info.writes += 1;
+        info.add_write();
         // visit expression at the beginning of the current scope adds a read
         // so we need to remove it here
-        info.reads -= 1;
-        if !info.mutable {
+        info.remove_read();
+        if !info.borrow().mutable {
             self.errors.push(ParseError {
                 message: "Cannot assign to immutable variable".to_string(),
                 span: expr.span,
@@ -108,9 +108,10 @@ impl TypeChecker {
             self.error(format!("Cannot find name '{}'", name), node.identifier.span);
             return;
         };
-        info.writes += 1;
-        match info.ty.clone() {
-            Type::Signal(ty) => {
+        info.add_write();
+        let ty = info.borrow().ty.clone();
+        match *ty {
+            Type::Signal(ref ty) => {
                 if *ty.inner != against {
                     self.error(
                         format!("Cannot assign type {:?} to {:?}", against, ty),
@@ -118,7 +119,7 @@ impl TypeChecker {
                     )
                 }
             }
-            Type::Listener(ty) => {
+            Type::Listener(ref ty) => {
                 if *ty.inner != against {
                     self.error(
                         format!("Cannot assign type {:?} to {:?}", against, ty),
@@ -126,7 +127,7 @@ impl TypeChecker {
                     )
                 }
             }
-            ty => {
+            ref ty => {
                 self.error(
                     format!("Cannot dereference variable '{}' of type {}", name, ty),
                     node.span,
@@ -175,9 +176,9 @@ impl TypeChecker {
     fn visit_method_expression(&mut self, node: &ast::MethodDefinition) -> (Type, FunctionType) {
         self.with_scope(node.span, |checker| {
             let receiver = checker.visit_named_type(&node.receiver.ty);
-            checker.analysis_context.register_symbol(Symbol::pure(
+            checker.analysis_context.register_symbol(VariableData::pure(
                 node.receiver.name.as_str().into(),
-                receiver.clone(),
+                receiver.clone().into(),
                 node.receiver.span,
             ));
             let function = checker.visit_function_expression(&node.definition);
@@ -211,9 +212,9 @@ impl TypeChecker {
                 let span = subspan_from_str(node.pattern.as_span(), &name).unwrap();
                 self.error(message, span);
             } else {
-                self.analysis_context.register_symbol(Symbol::new(
+                self.analysis_context.register_symbol(VariableData::new(
                     name.clone(),
-                    ty.clone(),
+                    ty.clone().into(),
                     mutable,
                     node.pattern.as_span(),
                     dependencies.clone(),

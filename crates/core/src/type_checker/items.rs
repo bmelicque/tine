@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{
     ast,
     common::{use_decl_to_paths, ModuleImports},
@@ -81,16 +83,20 @@ impl TypeChecker {
     fn visit_imported_name(&mut self, tree: &ast::UseTree, metadata: &ModuleMetadata) {
         let path_element = &tree.path[0];
         let name = path_element.as_str();
-        let symbol = metadata.exports.values().find(|s| s.name.as_str() == name);
+        let symbol = metadata.exports.iter().find(|s| s.borrow().name == *name);
         match symbol {
             Some(symbol) => {
+                let ty = Rc::new((*symbol.borrow().ty).clone());
+                let symbol = type_checker::VariableData::pure(
+                    name.to_string(),
+                    ty.clone(),
+                    path_element.span,
+                );
+                let var = self.analysis_context.register_symbol(symbol);
                 self.analysis_context
-                    .register_symbol(type_checker::Symbol::pure(
-                        name.to_string(),
-                        symbol.ty.clone(),
-                        path_element.span,
-                    ));
-                self.set_type_at(path_element.span, symbol.ty.clone());
+                    .save_expression_type(path_element.span, ty.clone());
+                self.analysis_context
+                    .save_symbol_token(path_element.span, var);
             }
             None => self.error(
                 format!("This module has no exported element named '{}'", name),

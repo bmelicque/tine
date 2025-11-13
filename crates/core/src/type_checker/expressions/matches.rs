@@ -4,7 +4,7 @@ use crate::{
     ast,
     parser::parser::ParseError,
     type_checker::{
-        analysis_context::{Symbol, SymbolId},
+        analysis_context::{VariableData, VariableRef},
         TypeChecker,
     },
     types::{self, Type, Variant},
@@ -29,14 +29,19 @@ impl TypeChecker {
         self.set_type_at(node.span, expected)
     }
 
-    fn visit_match_arm(&mut self, arm: &ast::MatchArm, against: Type, deps: Vec<SymbolId>) -> Type {
+    fn visit_match_arm(
+        &mut self,
+        arm: &ast::MatchArm,
+        against: Type,
+        deps: Vec<VariableRef>,
+    ) -> Type {
         let arm_ty = self.with_scope(arm.span, |s| {
             let mut variables = Vec::new();
             s.match_pattern(&arm.pattern, against.clone(), &mut variables);
             for (name, ty) in variables {
-                s.analysis_context.register_symbol(Symbol::new(
+                s.analysis_context.register_symbol(VariableData::new(
                     name.clone(),
-                    ty.clone(),
+                    ty.clone().into(),
                     false,
                     arm.pattern.as_span(),
                     deps.clone(),

@@ -1,6 +1,6 @@
 use super::sort::Scope;
 use crate::codegen::utils::create_ident;
-use mylang_core::{ast, types, ModuleMetadata, Symbol};
+use mylang_core::{ast, types, ModuleMetadata, VariableRef};
 use pest::Span;
 use swc_common::{sync::Lrc, FileName, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
@@ -101,17 +101,16 @@ impl CodeGenerator {
         self.scope.find(name)
     }
 
-    pub fn get_info(&self, name: &str) -> Option<&Symbol> {
+    pub fn get_info(&self, name: &str) -> Option<VariableRef> {
         self.metadata.lookup(name)
     }
 
-    pub fn get_expression_dependencies(&self, span: Span<'static>) -> Vec<&Symbol> {
-        let Some(list) = self.metadata.dependencies.get(&span) else {
-            return Vec::new();
-        };
-        list.into_iter()
-            .map(|id| self.metadata.exports.get(id).unwrap())
-            .collect()
+    pub fn get_expression_dependencies(&self, span: Span<'static>) -> Vec<VariableRef> {
+        self.metadata
+            .dependencies
+            .get(&span)
+            .unwrap_or(&vec![])
+            .to_vec()
     }
 
     pub fn get_expr_type(&self, node: &ast::Expression) -> Option<&types::Type> {

@@ -1,9 +1,8 @@
 mod utils;
 
 use dashmap::DashMap;
+use mylang_core::Module;
 use mylang_core::{analyze, ParseError};
-use mylang_core::{types, Module};
-use std::cmp::Ordering;
 use std::path::PathBuf;
 use std::sync::Arc;
 use swc_common::FileName;

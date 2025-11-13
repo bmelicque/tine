@@ -14,8 +14,8 @@ impl CodeGenerator {
             .list_identifiers()
             .into_iter()
             .filter_map(|id| self.get_info(id.span.as_str()))
-            .filter(|symbol| symbol.has_ref())
-            .map(|symbol| wrap_identifier(&symbol.name).into())
+            .filter(|var| var.borrow().has_ref())
+            .map(|var| wrap_identifier(&var.borrow().name).into())
             .collect();
 
         let pattern = self.pattern_to_swc(&node.pattern);
@@ -32,7 +32,7 @@ impl CodeGenerator {
 
         let mut init = self.expr_to_swc(&node.value);
         let info = self.get_info(id.span.as_str()).unwrap();
-        if info.has_ref() {
+        if info.borrow().has_ref() {
             init = swc::Expr::Array(swc::ArrayLit {
                 span: DUMMY_SP,
                 elems: vec![Some(init.into())],

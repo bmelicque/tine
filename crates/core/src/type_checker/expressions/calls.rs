@@ -1,7 +1,7 @@
 use crate::{
     ast,
     parser::parser::ParseError,
-    type_checker::{analysis_context::Symbol, TypeChecker},
+    type_checker::{analysis_context::VariableData, TypeChecker},
     types,
 };
 
@@ -95,9 +95,9 @@ impl TypeChecker {
         for (i, param) in got.iter().take(expected.len()).enumerate() {
             match param {
                 ast::PredicateParam::Identifier(id) => {
-                    self.analysis_context.register_symbol(Symbol::new(
+                    self.analysis_context.register_symbol(VariableData::new(
                         id.as_str().into(),
-                        expected[i].clone(),
+                        expected[i].clone().into(),
                         false,
                         id.span,
                         vec![],
@@ -105,9 +105,9 @@ impl TypeChecker {
                 }
                 ast::PredicateParam::Param(param) => {
                     let ty = self.resolve_type(&param.type_annotation);
-                    self.analysis_context.register_symbol(Symbol::new(
+                    self.analysis_context.register_symbol(VariableData::new(
                         param.name.as_str().into(),
-                        ty,
+                        ty.into(),
                         false,
                         param.name.span,
                         vec![],

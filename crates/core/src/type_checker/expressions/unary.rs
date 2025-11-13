@@ -54,8 +54,8 @@ impl TypeChecker {
         self.analysis_context.add_dependencies(deps);
         if let ast::Expression::Identifier(id) = node.operand.as_ref() {
             if let Some(info) = self.analysis_context.lookup_mut(&id.as_str()) {
-                info.ro_refs += 1;
-                info.reads -= 1; // previous visit_expression added a read
+                info.add_readonly_ref();
+                info.remove_read(); // previous visit_expression added a read
             };
         }
 
@@ -67,29 +67,27 @@ impl TypeChecker {
         let expr_type = self.visit_expression(&node.operand);
         if let ast::Expression::Identifier(id) = node.operand.as_ref() {
             if let Some(info) = self.analysis_context.lookup_mut(&id.as_str()) {
-                if !info.mutable {
-                    self.errors.push(ParseError {
-                        message: format!(
-                            "Cannot take mutable reference of immutable variable '{}'",
-                            id.as_str()
-                        ),
-                        span: node.span,
-                    });
+                if !info.is_mutable() {
+                    let error_message = format!(
+                        "Cannot take mutable reference of immutable variable '{}'",
+                        id.as_str()
+                    );
+                    self.error(error_message, node.span);
                 } else {
-                    info.mut_refs += 1;
-                    info.reads -= 1; // previous visit_expression added a read
+                    info.add_mutable_ref();
+                    info.remove_read(); // previous visit_expression added a read
                 }
             };
         } else if let Some(id) = root_identifier(&node.operand) {
             if let Some(info) = self.analysis_context.lookup_mut(&id.as_str()) {
-                if !info.mutable {
-                    self.errors.push(ParseError {
-                        message: format!("Cannot assign to immutable variable '{}'", id.as_str()),
-                        span: node.span,
-                    });
+                if !info.is_mutable() {
+                    self.error(
+                        format!("Cannot assign to immutable variable '{}'", id.as_str()),
+                        node.span,
+                    );
                 } else {
-                    info.writes += 1;
-                    info.reads -= 1; // previous visit_expression added a read
+                    info.add_write();
+                    info.remove_read(); // previous visit_expression added a read
                 }
             };
         };

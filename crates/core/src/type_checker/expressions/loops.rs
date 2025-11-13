@@ -1,4 +1,9 @@
-use crate::{ast, parser::parser::ParseError, type_checker::analysis_context::Symbol, types};
+use crate::{
+    ast,
+    parser::parser::ParseError,
+    type_checker::analysis_context::{VariableData, VariableRef},
+    types,
+};
 
 use super::TypeChecker;
 
@@ -17,14 +22,14 @@ impl TypeChecker {
     }
 
     fn visit_for_in_expression(&mut self, node: &ast::ForInExpression) -> types::Type {
-        let (inferred_type, dependencies) = self.visit_for_in_iteratable(&node.iterable);
+        let (inferred_type, dependencies) = self.visit_for_in_iterable(&node.iterable);
         let ty = self.with_scope(node.span, |checker| {
             let mut variables = Vec::<(String, types::Type)>::new();
             checker.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
             for (name, ty) in variables {
-                checker.analysis_context.register_symbol(Symbol::new(
+                checker.analysis_context.register_symbol(VariableData::new(
                     name.clone(),
-                    ty.clone(),
+                    ty.clone().into(),
                     false,
                     node.pattern.as_span(),
                     dependencies.clone(),
@@ -36,14 +41,14 @@ impl TypeChecker {
         self.set_type_at(node.span, ty)
     }
 
-    fn visit_for_in_iteratable(&mut self, iterable: &ast::Expression) -> (types::Type, Vec<usize>) {
+    fn visit_for_in_iterable(
+        &mut self,
+        iterable: &ast::Expression,
+    ) -> (types::Type, Vec<VariableRef>) {
         self.with_dependencies(|checker| match checker.visit_expression(iterable) {
             types::Type::Array(ty) => *ty.element.clone(),
             ty => {
-                checker.errors.push(ParseError {
-                    message: format!("Type {} is not iterable", ty),
-                    span: iterable.as_span(),
-                });
+                checker.error(format!("Type {} is not iterable", ty), iterable.as_span());
                 types::Type::Unknown
             }
         })

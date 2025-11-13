@@ -273,7 +273,7 @@ impl CodeGenerator {
     pub fn ident_to_swc(&mut self, node: &ast::Identifier) -> swc::Expr {
         let info = self.get_info(node.as_str()).unwrap();
 
-        if info.has_ref() {
+        if info.borrow().has_ref() {
             swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(create_ident(node.as_str()).into()),

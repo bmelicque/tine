@@ -137,8 +137,10 @@ fn substitute_type(ty: &types::Type, substitutions: &HashMap<&String, types::Typ
 
 #[cfg(test)]
 mod tests {
+    use std::rc::Rc;
+
     use super::*;
-    use crate::{ast, types::*, Symbol};
+    use crate::{ast, types::*, VariableData};
 
     fn create_type_checker() -> TypeChecker {
         TypeChecker::new(Vec::new())
@@ -183,13 +185,12 @@ mod tests {
             span: dummy_span(),
         };
 
-        checker.analysis_context.register_symbol(Symbol::pure(
+        checker.analysis_context.register_symbol(VariableData::pure(
             "user".into(),
-            types::NamedType {
+            Rc::new(types::Type::Named(types::NamedType {
                 name: "User".to_string(),
                 args: vec![],
-            }
-            .into(),
+            })),
             dummy_span(),
         ));
 
@@ -213,9 +214,9 @@ mod tests {
             ],
         });
 
-        checker.analysis_context.register_symbol(Symbol::pure(
+        checker.analysis_context.register_symbol(VariableData::pure(
             "my_tuple".into(),
-            tuple_type.clone(),
+            tuple_type.clone().into(),
             span("my_tuple"),
         ));
 
@@ -238,9 +239,9 @@ mod tests {
     #[test]
     fn test_visit_tuple_indexing_invalid_type() {
         let mut checker = create_type_checker();
-        checker.analysis_context.register_symbol(Symbol::pure(
+        checker.analysis_context.register_symbol(VariableData::pure(
             "not_a_tuple".into(),
-            types::Type::Number,
+            types::Type::Number.into(),
             span("not_a_tuple"),
         ));
 
@@ -270,9 +271,9 @@ mod tests {
             elements: vec![Type::Number, types::Type::String],
         });
 
-        checker.analysis_context.register_symbol(Symbol::pure(
+        checker.analysis_context.register_symbol(VariableData::pure(
             "my_tuple".into(),
-            tuple_type.clone(),
+            tuple_type.clone().into(),
             span("my_tuple"),
         ));
 
@@ -300,9 +301,9 @@ mod tests {
             elements: vec![Type::Number, types::Type::String],
         });
 
-        checker.analysis_context.register_symbol(Symbol::pure(
+        checker.analysis_context.register_symbol(VariableData::pure(
             "my_tuple".into(),
-            tuple_type.clone(),
+            tuple_type.clone().into(),
             span("my_tuple"),
         ));
 

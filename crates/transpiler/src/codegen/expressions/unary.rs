@@ -111,8 +111,8 @@ impl CodeGenerator {
         let reactive_dependencies: Vec<swc::Ident> = self
             .get_expression_dependencies(listener_span)
             .into_iter()
-            .filter(|dep| dep.ty.is_reactive())
-            .map(|dep| create_ident(&dep.name))
+            .filter(|dep| dep.borrow().ty.is_reactive())
+            .map(|dep| create_ident(&dep.borrow().name))
             .collect();
         swc::ArrayLit {
             span: DUMMY_SP,
