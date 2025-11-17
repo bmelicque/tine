@@ -1,11 +1,16 @@
+pub mod type_store;
 mod variables;
+
 pub use variables::{VariableData, VariableHandle, VariableRef};
 
 use std::{collections::HashMap, rc::Rc};
 
 use pest::Span;
 
-use crate::{type_checker::utils::within, types};
+use crate::{
+    type_checker::analysis_context::type_store::TypeStore,
+    types::{self, Type, TypeId},
+};
 
 #[derive(Clone, Debug)]
 pub enum Token {
@@ -57,9 +62,11 @@ pub struct AnalysisContext {
     pub scopes: HashMap<Span<'static>, Scope>,
     current_scope: Option<Span<'static>>,
 
+    /// FIXME:
+    /// This property is legacy code and will disappear
     pub types: HashMap<Span<'static>, types::Type>,
-
-    pub expressions: HashMap<Span<'static>, Rc<types::Type>>,
+    pub(crate) type_store: TypeStore,
+    pub expressions: HashMap<Span<'static>, TypeId>,
     pub tokens: HashMap<Span<'static>, Token>,
 
     pub current_declaration_dependencies: Option<Vec<VariableRef>>,
@@ -73,6 +80,7 @@ impl AnalysisContext {
             scopes: HashMap::new(),
             current_scope: None,
             types: HashMap::new(),
+            type_store: TypeStore::new(),
             expressions: HashMap::new(),
             tokens: HashMap::new(),
             current_declaration_dependencies: None,
@@ -113,8 +121,9 @@ impl AnalysisContext {
         handle.readonly()
     }
 
-    pub fn save_expression_type(&mut self, span: Span<'static>, ty: Rc<types::Type>) {
+    pub fn save_expression_type(&mut self, span: Span<'static>, ty: TypeId) -> TypeId {
         self.expressions.insert(span, ty);
+        ty
     }
     pub fn save_symbol_token(&mut self, span: Span<'static>, symbol: VariableRef) {
         let token = Token::Symbol(SymbolToken { span, symbol });
@@ -160,8 +169,13 @@ impl AnalysisContext {
     }
 }
 
+fn within(outer: Span<'static>, inner: Span<'static>) -> bool {
+    inner.start() >= outer.start() && inner.end() <= outer.end()
+}
+
 #[derive(Clone, Debug)]
 pub struct ModuleMetadata {
+    type_store: TypeStore,
     pub exports: Vec<VariableRef>,
     pub types: HashMap<Span<'static>, types::Type>,
     pub dependencies: HashMap<Span<'static>, Vec<VariableRef>>,
@@ -170,6 +184,7 @@ pub struct ModuleMetadata {
 impl ModuleMetadata {
     pub fn new() -> Self {
         ModuleMetadata {
+            type_store: TypeStore::new(),
             exports: vec![],
             types: HashMap::new(),
             dependencies: HashMap::new(),
@@ -181,6 +196,10 @@ impl ModuleMetadata {
             .iter()
             .find(|e| e.borrow().name == *name)
             .cloned()
+    }
+
+    pub fn resolve_type(&self, type_id: TypeId) -> Type {
+        self.type_store.get(type_id).clone()
     }
 }
 
@@ -194,6 +213,7 @@ impl From<&AnalysisContext> for ModuleMetadata {
         let exports = main_scope.bindings.clone();
 
         Self {
+            type_store: value.type_store.clone(),
             exports,
             types: value.types.clone(),
             dependencies: value.other_dependencies.clone(),

@@ -1,35 +1,35 @@
 use crate::{
     ast,
-    parser::parser::ParseError,
-    type_checker::analysis_context::{VariableData, VariableRef},
-    types,
+    type_checker::analysis_context::{type_store::TypeStore, VariableData, VariableRef},
+    types::{self, OptionType, Type, TypeId},
 };
 
 use super::TypeChecker;
 
 impl TypeChecker {
-    pub fn visit_loop(&mut self, node: &ast::Loop) -> types::Type {
+    pub fn visit_loop(&mut self, node: &ast::Loop) -> TypeId {
         match node {
             ast::Loop::For(node) => self.visit_for_expression(node),
             ast::Loop::ForIn(node) => self.visit_for_in_expression(node),
         }
     }
 
-    fn visit_for_expression(&mut self, node: &ast::ForExpression) -> types::Type {
+    fn visit_for_expression(&mut self, node: &ast::ForExpression) -> TypeId {
         self.visit_condition(&node.condition);
         let ty = self.with_scope(node.span, |checker| checker.visit_loop_body(&node.body));
-        self.set_type_at(node.span, ty)
+
+        self.analysis_context.save_expression_type(node.span, ty)
     }
 
-    fn visit_for_in_expression(&mut self, node: &ast::ForInExpression) -> types::Type {
+    fn visit_for_in_expression(&mut self, node: &ast::ForInExpression) -> TypeId {
         let (inferred_type, dependencies) = self.visit_for_in_iterable(&node.iterable);
         let ty = self.with_scope(node.span, |checker| {
-            let mut variables = Vec::<(String, types::Type)>::new();
+            let mut variables = vec![];
             checker.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
             for (name, ty) in variables {
                 checker.analysis_context.register_symbol(VariableData::new(
                     name.clone(),
-                    ty.clone().into(),
+                    ty,
                     false,
                     node.pattern.as_span(),
                     dependencies.clone(),
@@ -38,28 +38,28 @@ impl TypeChecker {
             checker.visit_loop_body(&node.body)
         });
 
-        self.set_type_at(node.span, ty)
+        self.analysis_context.save_expression_type(node.span, ty)
     }
 
-    fn visit_for_in_iterable(
-        &mut self,
-        iterable: &ast::Expression,
-    ) -> (types::Type, Vec<VariableRef>) {
-        self.with_dependencies(|checker| match checker.visit_expression(iterable) {
-            types::Type::Array(ty) => *ty.element.clone(),
-            ty => {
-                checker.error(format!("Type {} is not iterable", ty), iterable.as_span());
-                types::Type::Unknown
+    fn visit_for_in_iterable(&mut self, iterable: &ast::Expression) -> (TypeId, Vec<VariableRef>) {
+        self.with_dependencies(|checker| {
+            let ty = checker.visit_expression(iterable);
+            match checker.resolve(ty) {
+                types::Type::Array(ty) => ty.element,
+                ty => {
+                    checker.error(format!("Type {} is not iterable", ty), iterable.as_span());
+                    TypeStore::UNKNOWN
+                }
             }
         })
     }
 
-    fn visit_loop_body(&mut self, node: &ast::BlockExpression) -> types::Type {
+    fn visit_loop_body(&mut self, node: &ast::BlockExpression) -> TypeId {
         self.visit_block_expression(node);
         let mut breaks = Vec::<ast::BreakStatement>::new();
         node.find_breaks(&mut breaks);
         if breaks.len() == 0 {
-            return types::Type::Unit;
+            return TypeStore::UNIT;
         }
 
         let first = breaks.first().unwrap();
@@ -67,21 +67,18 @@ impl TypeChecker {
 
         for stmt in breaks.iter().skip(1) {
             let curr = self.break_type(stmt);
-            if !self.can_be_assigned_to(&curr, &ty) {
-                self.errors.push(ParseError {
-                    message: format!("Type {} doesn't match type {}", curr, ty),
-                    span: stmt.span,
-                });
-            }
+            self.check_assigned_type(ty, curr, stmt.span);
         }
 
-        types::OptionType { some: Box::new(ty) }.into()
+        self.analysis_context
+            .type_store
+            .add(Type::Option(OptionType { some: ty }))
     }
 
-    fn break_type(&mut self, stmt: &ast::BreakStatement) -> types::Type {
+    fn break_type(&mut self, stmt: &ast::BreakStatement) -> TypeId {
         stmt.value
             .as_ref()
             .map(|expr| self.get_type_at(expr.as_span()).unwrap())
-            .unwrap_or(types::Type::Unit)
+            .unwrap_or(TypeStore::UNIT)
     }
 }

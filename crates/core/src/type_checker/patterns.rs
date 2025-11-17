@@ -1,4 +1,8 @@
-use crate::{ast, parser::parser::ParseError, types};
+use crate::{
+    ast,
+    type_checker::analysis_context::type_store::TypeStore,
+    types::{self, Type, TypeId},
+};
 
 use super::TypeChecker;
 
@@ -6,8 +10,8 @@ impl TypeChecker {
     pub fn match_pattern(
         &mut self,
         pattern: &ast::Pattern,
-        against: types::Type,
-        variables: &mut Vec<(String, types::Type)>,
+        against: TypeId,
+        variables: &mut Vec<(String, TypeId)>,
     ) {
         match pattern {
             ast::Pattern::Identifier(id) => variables.push((id.span.as_str().into(), against)),
@@ -20,58 +24,73 @@ impl TypeChecker {
         }
     }
 
-    fn match_literal_pattern(&mut self, pattern: &ast::LiteralPattern, against: types::Type) {
+    fn match_literal_pattern(&mut self, pattern: &ast::LiteralPattern, against: TypeId) {
+        let against = self.analysis_context.type_store.get(against);
         let got = match pattern {
             ast::LiteralPattern::Boolean(_) => types::Type::Boolean,
             ast::LiteralPattern::Number(_) => types::Type::Number,
             ast::LiteralPattern::String(_) => types::Type::String,
         };
-        if against != types::Type::Unknown && against != got {
-            self.errors.push(ParseError {
-                message: format!("Cannot match {} literal against {}", got, against),
-                span: pattern.as_span(),
-            });
+        if *against != types::Type::Unknown && *against != got {
+            self.error(
+                format!("Cannot match {} literal against {}", got, *against),
+                pattern.as_span(),
+            );
         }
     }
 
-    /// `src` is the type against which the pattern will be compared
+    /// Try to match the given struct pattern against the given type id.
+    ///
+    /// For example, matching a pattern like `User(name, age)` against a value of type `User`.
+    /// This will regiter errors:
+    /// - if the matched type is not a struct
+    /// - if some
     pub fn match_struct_pattern(
         &mut self,
         pattern: &ast::StructPattern,
-        against: types::Type,
-        variables: &mut Vec<(String, types::Type)>,
+        against: TypeId,
+        variables: &mut Vec<(String, TypeId)>,
     ) {
-        let Some(against_name) = self.against_name(&pattern.ty, &against) else {
+        let Some(ty) = self.analysis_context.lookup(&pattern.ty.name) else {
+            self.error(
+                format!("cannot find type '{}'", &pattern.ty.name),
+                pattern.ty.span,
+            );
+            return;
+        };
+        let Type::Struct(pattern_type) = self.resolve(ty.borrow().ty).clone() else {
+            self.error(
+                format!("type '{}' is not a structured type", &pattern.ty.name),
+                pattern.span,
+            );
             return;
         };
 
-        let types::Type::Struct(st) = self.unwrap_named_type(&against) else {
-            self.errors.push(ParseError {
-                message: "Expected structured type".into(),
-                span: pattern.span,
-            });
-            return;
+        let ty = match self.resolve(against) {
+            Type::Struct(st) if st.id == pattern_type.id => st.clone(),
+            _ => {
+                self.error("pattern doesn't match expected type".into(), pattern.span);
+                return;
+            }
         };
 
-        self.match_struct_pattern_fields(&pattern.fields, &st.fields, against_name, variables);
+        self.match_struct_pattern_fields(&pattern.fields, &ty.fields, &pattern.ty.name, variables);
     }
 
     fn match_struct_pattern_fields(
         &mut self,
         pattern_fields: &Vec<ast::StructPatternField>,
         against_fields: &Vec<types::StructField>,
-        type_name: String,
-        variables: &mut Vec<(String, types::Type)>,
+        type_name: &str,
+        variables: &mut Vec<(String, TypeId)>,
     ) {
         for field in pattern_fields.iter() {
             let Some(against) = against_fields.iter().find(|f| f.name == field.identifier) else {
-                self.errors.push(ParseError {
-                    message: format!(
-                        "Property '{}' does not exist on type '{}'",
-                        field.identifier, type_name
-                    ),
-                    span: field.span,
-                });
+                let error = format!(
+                    "Property '{}' does not exist on type '{}'",
+                    field.identifier, type_name
+                );
+                self.error(error, field.span);
                 continue;
             };
             match field.pattern {
@@ -86,67 +105,89 @@ impl TypeChecker {
     pub fn match_tuple_pattern(
         &mut self,
         pattern: &ast::TuplePattern,
-        against: types::Type,
-        variables: &mut Vec<(String, types::Type)>,
+        against: TypeId,
+        variables: &mut Vec<(String, TypeId)>,
     ) {
-        let types::Type::Tuple(ty) = self.unwrap_named_type(&against) else {
-            self.errors.push(ParseError {
-                message: "Expected tuple type".into(),
-                span: pattern.span,
-            });
+        let types::Type::Tuple(ty) = self.resolve(against).clone() else {
+            self.error("Expected tuple type".into(), pattern.span);
             return;
         };
 
         if pattern.elements.len() != ty.elements.len() {
-            self.errors.push(ParseError {
-                message: format!(
+            self.error(
+                format!(
                     "Expected {} elements, got {}",
                     ty.elements.len(),
                     pattern.elements.len()
                 ),
-                span: pattern.span,
-            });
+                pattern.span,
+            );
         }
 
         for (index, pattern) in pattern.elements.iter().enumerate() {
-            let against = ty.elements.get(index).unwrap_or(&types::Type::Unknown);
-            self.match_pattern(pattern, against.clone(), variables);
+            let against = ty
+                .elements
+                .get(index)
+                .unwrap_or(&TypeStore::UNKNOWN)
+                .clone();
+            self.match_pattern(pattern, against, variables);
         }
     }
 
+    /// Try to match the given variant pattern against the given type.
+    ///
+    /// For example in statements like `Role.Admin(acl) := role`
     fn match_variant_pattern(
         &mut self,
         pattern: &ast::VariantPattern,
-        against: types::Type,
-        variables: &mut Vec<(String, types::Type)>,
+        against: TypeId,
+        variables: &mut Vec<(String, TypeId)>,
     ) {
-        let Some(against_name) = self.against_name(&pattern.ty, &against) else {
+        let Some(ty) = self.analysis_context.lookup(&pattern.ty.name) else {
+            self.error(
+                format!("cannot find type '{}'", &pattern.ty.name),
+                pattern.ty.span,
+            );
+            return;
+        };
+        let Type::Enum(pattern_type) = self.resolve(ty.borrow().ty).clone() else {
+            self.error(
+                format!("type '{}' is not an enum", &pattern.ty.name),
+                pattern.span,
+            );
             return;
         };
 
-        let types::Type::Enum(ty) = self.unwrap_named_type(&against) else {
-            self.errors.push(ParseError {
-                message: format!("Cannot match a variant against type {}", against),
-                span: pattern.span,
-            });
-            return;
+        let ty = match self.resolve(against) {
+            Type::Enum(e) if e.id == pattern_type.id => e.clone(),
+            _ => {
+                self.error("pattern doesn't match expected type".into(), pattern.span);
+                return;
+            }
         };
 
         let Some(variant) = ty.variants.iter().find(|var| var.name == pattern.name) else {
-            self.errors.push(ParseError {
-                message: format!(
+            self.error(
+                format!(
                     "Variant '{}' does not exist on type {}",
-                    pattern.name, against_name
+                    pattern.name, pattern.ty.name,
                 ),
-                span: pattern.span,
-            });
+                pattern.span,
+            );
             return;
         };
 
-        match &variant.def {
-            types::Type::Struct(ty) => self.match_struct_variant(pattern, &ty.fields, variables),
-            types::Type::Tuple(def) => self.match_tuple_variant(pattern, &def.elements, variables),
-            types::Type::Unit => self.match_unit_variant(pattern),
+        match self.resolve(variant.def).clone() {
+            Type::Struct(ty) => self.match_struct_variant(pattern, &ty.fields, variables),
+            Type::Tuple(def) => {
+                let id = self
+                    .analysis_context
+                    .type_store
+                    .find_id(&def.into())
+                    .unwrap();
+                self.match_tuple_variant(pattern, id, variables)
+            }
+            Type::Unit => self.match_unit_variant(pattern),
             ty => unreachable!("Unexpected type {}", ty),
         }
     }
@@ -155,19 +196,16 @@ impl TypeChecker {
         &mut self,
         pattern: &ast::VariantPattern,
         fields: &Vec<types::StructField>,
-        variables: &mut Vec<(String, types::Type)>,
+        variables: &mut Vec<(String, TypeId)>,
     ) {
         let Some(ast::VariantPatternBody::Struct(body)) = &pattern.body else {
-            self.errors.push(ParseError {
-                message: "Tuple variant expected".to_string(),
-                span: pattern.span,
-            });
+            self.error("Structured variant expected".to_string(), pattern.span);
             return;
         };
         self.match_struct_pattern_fields(
             body,
             fields,
-            format!("{}.{}", pattern.ty.name, pattern.name),
+            &format!("{}.{}", pattern.ty.name, pattern.name),
             variables,
         );
     }
@@ -175,45 +213,22 @@ impl TypeChecker {
     fn match_tuple_variant(
         &mut self,
         pattern: &ast::VariantPattern,
-        def: &Vec<types::Type>,
-        variables: &mut Vec<(String, types::Type)>,
+        def: TypeId,
+        variables: &mut Vec<(String, TypeId)>,
     ) {
         let Some(ast::VariantPatternBody::Tuple(ref body)) = pattern.body else {
-            self.errors.push(ParseError {
-                message: "Tuple variant expected".to_string(),
-                span: pattern.span,
-            });
+            self.error("Tuple variant expected".to_string(), pattern.span);
             return;
         };
-        self.match_tuple_pattern(
-            body,
-            types::Type::Tuple(types::TupleType {
-                elements: def.clone(),
-            })
-            .into(),
-            variables,
-        );
+        self.match_tuple_pattern(body, def, variables);
     }
 
     fn match_unit_variant(&mut self, pattern: &ast::VariantPattern) {
         if pattern.body.is_some() {
-            self.errors.push(ParseError {
-                message: "No body expected for unit variant".to_string(),
-                span: pattern.span,
-            });
-        }
-    }
-
-    fn against_name(&mut self, ty: &ast::NamedType, against: &types::Type) -> Option<String> {
-        match against {
-            types::Type::Named(ref named) if *named.name == ty.name => Some(named.name.clone()),
-            _ => {
-                self.errors.push(ParseError {
-                    message: format!("Type '{}' does not match type '{}'", ty.name, against),
-                    span: ty.span,
-                });
-                None
-            }
+            self.error(
+                "No body expected for unit variant".to_string(),
+                pattern.span,
+            );
         }
     }
 }

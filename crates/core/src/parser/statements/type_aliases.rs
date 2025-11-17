@@ -294,7 +294,7 @@ mod tests {
 
     #[test]
     fn test_parse_struct_with_duplicate_fields() {
-        let input = "MyStruct :: (field: number, field: string)";
+        let input = "MyStruct :: (field number, field string)";
         let (result, errors) = parse_type_alias_input(input, Rule::type_alias);
 
         assert_eq!(result.name, "MyStruct");

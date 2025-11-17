@@ -2,19 +2,19 @@ use super::TypeChecker;
 use crate::{
     ast,
     parser::parser::ParseError,
-    type_checker::analysis_context::VariableData,
-    types::{FunctionType, Type},
+    type_checker::analysis_context::{type_store::TypeStore, VariableData},
+    types::{Type, TypeId},
     utils::subspan_from_str,
 };
 
 impl TypeChecker {
-    pub fn visit_statement(&mut self, node: &ast::Statement) -> Type {
+    pub fn visit_statement(&mut self, node: &ast::Statement) -> TypeId {
         match node {
             ast::Statement::Assignment(node) => self.visit_assignment(node),
-            ast::Statement::Empty => Type::Void,
+            ast::Statement::Empty => TypeStore::VOID,
             ast::Statement::Expression(node) => self.visit_expression(&node.expression),
             ast::Statement::Break(node) => self.visit_break_statement(node),
-            ast::Statement::Invalid(_) => Type::Unknown,
+            ast::Statement::Invalid(_) => TypeStore::UNKNOWN,
             ast::Statement::MethodDefinition(node) => self.visit_method_definition(node),
             ast::Statement::Return(node) => self.visit_return_statement(node),
             ast::Statement::TypeAlias(node) => self.visit_type_declaration(node),
@@ -22,17 +22,18 @@ impl TypeChecker {
         }
     }
 
-    fn visit_assignment(&mut self, node: &ast::Assignment) -> Type {
+    fn visit_assignment(&mut self, node: &ast::Assignment) -> TypeId {
         let value_type = match &node.value {
-            ast::Expression::Empty => Type::Unknown,
+            ast::Expression::Empty => TypeStore::UNKNOWN,
             value => self.visit_expression(value),
         };
         self.visit_assignee(&node.pattern, value_type);
 
-        Type::Void
+        TypeStore::VOID
     }
 
-    fn visit_assignee(&mut self, assignee: &ast::Assignee, against: Type) {
+    /// Visit an assignee (i.e. the lhs of an assignment)
+    fn visit_assignee(&mut self, assignee: &ast::Assignee, against: TypeId) {
         match assignee {
             ast::Assignee::Member(expr) => self.visit_expr_assignee(expr, against),
             ast::Assignee::Indirection(expr) => self.visit_indirect_assignee(expr, against),
@@ -40,7 +41,8 @@ impl TypeChecker {
         }
     }
 
-    fn visit_pattern_assignee(&mut self, pattern: &ast::Pattern, against: Type) {
+    /// Visit an assignee which is a pattern
+    fn visit_pattern_assignee(&mut self, pattern: &ast::Pattern, against: TypeId) {
         let mut variables = Vec::new();
         self.match_pattern(pattern, against, &mut variables);
         for (name, ty) in variables {
@@ -52,29 +54,19 @@ impl TypeChecker {
                 continue;
             };
             info.add_write();
-            if *info.borrow().ty != ty && !ty.is_unknown() {
-                self.errors.push(ParseError {
-                    message: format!("Cannot assign type '{}' to type '{}'", ty, info.borrow().ty),
-                    span: pattern.as_span(),
-                });
-            }
+            self.check_assigned_type(info.borrow().ty, ty, pattern.as_span());
             if !info.borrow().mutable {
-                self.errors.push(ParseError {
-                    message: "Cannot assign to immutable variable".to_string(),
-                    span: pattern.as_span(),
-                });
+                self.error(
+                    "Cannot assign to immutable variable".to_string(),
+                    pattern.as_span(),
+                );
             }
         }
     }
 
-    fn visit_expr_assignee(&mut self, expr: &ast::MemberExpression, against: Type) {
+    fn visit_expr_assignee(&mut self, expr: &ast::MemberExpression, against: TypeId) {
         let ty = self.visit_expression(&expr.object);
-        if ty != against {
-            self.errors.push(ParseError {
-                message: format!("Cannot assign type {:?} to {:?}", against, ty),
-                span: expr.span,
-            });
-        }
+        self.check_assigned_type(against, ty, expr.span);
         let root = expr.root_expression();
         let ast::Expression::Identifier(root) = root else {
             self.errors.push(ParseError {
@@ -102,7 +94,7 @@ impl TypeChecker {
         }
     }
 
-    fn visit_indirect_assignee(&mut self, node: &ast::IndirectionAssignee, against: Type) {
+    fn visit_indirect_assignee(&mut self, node: &ast::IndirectionAssignee, against: TypeId) {
         let name = node.identifier.as_str();
         let Some(info) = self.analysis_context.lookup_mut(&name) else {
             self.error(format!("Cannot find name '{}'", name), node.identifier.span);
@@ -110,22 +102,12 @@ impl TypeChecker {
         };
         info.add_write();
         let ty = info.borrow().ty.clone();
-        match *ty {
-            Type::Signal(ref ty) => {
-                if *ty.inner != against {
-                    self.error(
-                        format!("Cannot assign type {:?} to {:?}", against, ty),
-                        node.span,
-                    )
-                }
+        match self.resolve(ty).clone() {
+            Type::Signal(_) => {
+                self.check_assigned_type(ty, against, node.span);
             }
-            Type::Listener(ref ty) => {
-                if *ty.inner != against {
-                    self.error(
-                        format!("Cannot assign type {:?} to {:?}", against, ty),
-                        node.span,
-                    )
-                }
+            Type::Listener(_) => {
+                self.check_assigned_type(ty, against, node.span);
             }
             ref ty => {
                 self.error(
@@ -136,49 +118,49 @@ impl TypeChecker {
         }
     }
 
-    fn visit_break_statement(&mut self, node: &ast::BreakStatement) -> Type {
+    fn visit_break_statement(&mut self, node: &ast::BreakStatement) -> TypeId {
         if let Some(ref value) = node.value {
             self.visit_expression(value);
         }
-        Type::Void
+        TypeStore::VOID
     }
 
-    fn visit_method_definition(&mut self, node: &ast::MethodDefinition) -> Type {
+    fn visit_method_definition(&mut self, node: &ast::MethodDefinition) -> TypeId {
         let ((receiver, function), _) = self.with_dependencies(|s| s.visit_method_expression(node));
         let type_name = node.receiver.ty.name.as_str();
         let method_name = node.name.as_str();
 
-        let Type::Named(receiver) = receiver else {
-            self.errors.push(ParseError {
-                message: format!("Cannot define method on type '{}'", type_name),
-                span: node.span,
-            });
-            return Type::Void;
-        };
-
-        if self.type_registry.type_has(type_name, method_name) {
-            self.errors.push(ParseError {
-                message: format!(
-                    "Name '{}' already exists on type {}",
-                    method_name, type_name
-                ),
-                span: node.span,
-            });
-            return Type::Void;
+        if receiver == TypeStore::UNKNOWN {
+            return TypeStore::VOID;
         }
 
-        self.type_registry
-            .define_method(receiver, method_name.into(), function);
+        let field_exists = self
+            .analysis_context
+            .type_store
+            .has_property(receiver, method_name);
+        if field_exists {
+            self.error(
+                format!(
+                    "field '{}' already defined on type '{}'",
+                    method_name, type_name
+                ),
+                node.span,
+            );
+        } else {
+            self.analysis_context
+                .type_store
+                .define_method(receiver, method_name, function);
+        }
 
-        Type::Void
+        TypeStore::VOID
     }
 
-    fn visit_method_expression(&mut self, node: &ast::MethodDefinition) -> (Type, FunctionType) {
+    fn visit_method_expression(&mut self, node: &ast::MethodDefinition) -> (TypeId, TypeId) {
         self.with_scope(node.span, |checker| {
             let receiver = checker.visit_named_type(&node.receiver.ty);
             checker.analysis_context.register_symbol(VariableData::pure(
                 node.receiver.name.as_str().into(),
-                receiver.clone().into(),
+                receiver,
                 node.receiver.span,
             ));
             let function = checker.visit_function_expression(&node.definition);
@@ -186,24 +168,24 @@ impl TypeChecker {
         })
     }
 
-    fn visit_return_statement(&mut self, node: &ast::ReturnStatement) -> Type {
+    fn visit_return_statement(&mut self, node: &ast::ReturnStatement) -> TypeId {
         if let Some(ref value) = node.value {
             self.visit_expression(value);
         }
-        Type::Void
+        TypeStore::VOID
     }
 
-    pub fn visit_variable_declaration(&mut self, node: &ast::VariableDeclaration) -> Type {
+    pub fn visit_variable_declaration(&mut self, node: &ast::VariableDeclaration) -> TypeId {
         let (inferred_type, dependencies) =
             self.with_dependencies(|s| s.visit_expression(&node.value));
 
         let mutable = node.op == ast::DeclarationOp::Mut;
-        let mut variables = Vec::<(String, Type)>::new();
+        let mut variables = Vec::<(String, TypeId)>::new();
         if node.pattern.is_refutable() {
-            self.errors.push(ParseError {
-                message: "Irrefutable pattern expected".into(),
-                span: node.pattern.as_span(),
-            });
+            self.error(
+                "Irrefutable pattern expected".into(),
+                node.pattern.as_span(),
+            );
         }
         self.match_pattern(&node.pattern, inferred_type, &mut variables);
         for (name, ty) in variables {
@@ -214,13 +196,13 @@ impl TypeChecker {
             } else {
                 self.analysis_context.register_symbol(VariableData::new(
                     name.clone(),
-                    ty.clone().into(),
+                    ty,
                     mutable,
                     node.pattern.as_span(),
                     dependencies.clone(),
                 ));
             }
         }
-        Type::Void
+        TypeStore::VOID
     }
 }

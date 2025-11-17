@@ -126,6 +126,23 @@ pub enum VariantLiteralBody {
     Struct(Vec<StructLiteralField>),
 }
 
+impl VariantLiteralBody {
+    pub fn as_span(&self) -> Span<'static> {
+        match self {
+            Self::Tuple(tuple) => {
+                let start_span = tuple.first().unwrap().as_span();
+                let end_span = tuple.last().unwrap().as_span();
+                Span::new(start_span.get_input(), start_span.start(), end_span.end()).unwrap()
+            }
+            Self::Struct(st) => {
+                let start_span = st.first().unwrap().span;
+                let end_span = st.last().unwrap().span;
+                Span::new(start_span.get_input(), start_span.start(), end_span.end()).unwrap()
+            }
+        }
+    }
+}
+
 impl From<Vec<ExpressionOrAnonymous>> for VariantLiteralBody {
     fn from(value: Vec<ExpressionOrAnonymous>) -> Self {
         VariantLiteralBody::Tuple(value)

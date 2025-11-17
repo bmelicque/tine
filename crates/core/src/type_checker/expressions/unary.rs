@@ -1,12 +1,11 @@
 use crate::{
     ast::{self, utils::root_identifier},
-    parser::parser::ParseError,
-    type_checker::TypeChecker,
-    types,
+    type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
+    types::{ListenerType, ReferenceType, SignalType, Type, TypeId},
 };
 
 impl TypeChecker {
-    pub fn visit_unary_expression(&mut self, node: &ast::UnaryExpression) -> types::Type {
+    pub fn visit_unary_expression(&mut self, node: &ast::UnaryExpression) -> TypeId {
         match node.operator {
             ast::UnaryOperator::Ampersand => self.visit_reference(node),
             ast::UnaryOperator::At => self.visit_listener(node).into(),
@@ -17,32 +16,31 @@ impl TypeChecker {
         }
     }
 
-    fn visit_indirection(&mut self, node: &ast::UnaryExpression) -> types::Type {
+    fn visit_indirection(&mut self, node: &ast::UnaryExpression) -> TypeId {
         let expr_type = self.visit_expression(&node.operand);
-        match expr_type {
-            types::Type::Listener(l) => self.set_type_at(node.span, *l.inner.clone()),
-            types::Type::Reference(r) => self.set_type_at(node.span, *r.target.clone()),
-            types::Type::Signal(s) => self.set_type_at(node.span, *s.inner.clone()),
-            types::Type::Unknown => self.set_type_at(node.span, types::Type::Unknown),
-            _ => {
-                self.errors.push(ParseError {
-                    message: format!("Cannot dereference type {}", expr_type),
-                    span: node.span,
-                });
-                self.set_type_at(node.span, types::Type::Unknown)
+        let ty = match self.resolve(expr_type) {
+            Type::Listener(l) => l.inner,
+            Type::Reference(r) => r.target,
+            Type::Signal(s) => s.inner,
+            Type::Unknown => TypeStore::UNKNOWN,
+            ty => {
+                self.error(format!("Cannot dereference type {}", *ty), node.span);
+                TypeStore::UNKNOWN
             }
-        }
-    }
-
-    fn visit_signal_expression(&mut self, node: &ast::UnaryExpression) -> types::Type {
-        let expr_type = self.visit_expression(&node.operand);
-        let ty = types::SignalType {
-            inner: Box::new(expr_type),
         };
-        self.set_type_at(node.span, ty.into())
+        self.analysis_context.save_expression_type(node.span, ty)
     }
 
-    fn visit_listener(&mut self, node: &ast::UnaryExpression) -> types::ListenerType {
+    fn visit_signal_expression(&mut self, node: &ast::UnaryExpression) -> TypeId {
+        let inner = self.visit_expression(&node.operand);
+        let ty = self
+            .analysis_context
+            .type_store
+            .add(Type::Signal(SignalType { inner }));
+        self.analysis_context.save_expression_type(node.span, ty)
+    }
+
+    fn visit_listener(&mut self, node: &ast::UnaryExpression) -> TypeId {
         let (expr_type, deps) = self.with_dependencies(|s| s.visit_expression(&node.operand));
         let count = self.save_reactive_dependencies(&deps, node.span);
         if count == 0 {
@@ -59,11 +57,14 @@ impl TypeChecker {
             };
         }
 
-        let inner = Box::new(expr_type);
-        self.set_type_at(node.span, types::ListenerType { inner })
+        let ty = self
+            .analysis_context
+            .type_store
+            .add(Type::Listener(ListenerType { inner: expr_type }));
+        self.analysis_context.save_expression_type(node.span, ty)
     }
 
-    fn visit_reference(&mut self, node: &ast::UnaryExpression) -> types::Type {
+    fn visit_reference(&mut self, node: &ast::UnaryExpression) -> TypeId {
         let expr_type = self.visit_expression(&node.operand);
         if let ast::Expression::Identifier(id) = node.operand.as_ref() {
             if let Some(info) = self.analysis_context.lookup_mut(&id.as_str()) {
@@ -92,34 +93,40 @@ impl TypeChecker {
             };
         };
 
-        let target = Box::new(expr_type);
-        self.set_type_at(node.span, types::ReferenceType { target }.into())
+        let ty = self
+            .analysis_context
+            .type_store
+            .add(Type::Reference(ReferenceType { target: expr_type }));
+        self.analysis_context.save_expression_type(node.span, ty)
     }
 
-    fn visit_negate_expresion(&mut self, node: &ast::UnaryExpression) -> types::Type {
-        let expr_type = self.visit_expression(&node.operand);
-        if expr_type != types::Type::Number {
-            self.errors.push(ParseError {
-                message: format!("Cannot negate type {} (number expected)", expr_type),
-                span: node.span,
-            });
-            return self.set_type_at(node.span, types::Type::Unknown);
+    fn visit_negate_expresion(&mut self, node: &ast::UnaryExpression) -> TypeId {
+        let expr_type = match node.operand.as_ref() {
+            ast::Expression::Empty => TypeStore::UNKNOWN,
+            operand => self.visit_expression(operand),
+        };
+        if expr_type != TypeStore::NUMBER && expr_type != TypeStore::UNKNOWN {
+            self.error("expected number".into(), node.operand.as_span());
+            return self
+                .analysis_context
+                .save_expression_type(node.span, TypeStore::UNKNOWN);
         }
-        self.set_type_at(node.span, types::Type::Number)
+        self.analysis_context
+            .save_expression_type(node.span, TypeStore::NUMBER)
     }
 
-    fn visit_logical_not_expresion(&mut self, node: &ast::UnaryExpression) -> types::Type {
-        let expr_type = self.visit_expression(&node.operand);
-        if expr_type != types::Type::Boolean {
-            self.errors.push(ParseError {
-                message: format!(
-                    "Cannot apply logical not to type {} (boolean expected)",
-                    expr_type
-                ),
-                span: node.span,
-            });
-            return self.set_type_at(node.span, types::Type::Unknown);
+    fn visit_logical_not_expresion(&mut self, node: &ast::UnaryExpression) -> TypeId {
+        let expr_type = match node.operand.as_ref() {
+            ast::Expression::Empty => TypeStore::UNKNOWN,
+            operand => self.visit_expression(operand),
+        };
+        if expr_type != TypeStore::BOOLEAN && expr_type != TypeStore::UNKNOWN {
+            self.error("expected boolean".into(), node.operand.as_span());
+            return self
+                .analysis_context
+                .save_expression_type(node.span, TypeStore::UNKNOWN);
         }
-        self.set_type_at(node.span, types::Type::Boolean)
+        self.analysis_context
+            .save_expression_type(node.span, TypeStore::BOOLEAN)
     }
 }

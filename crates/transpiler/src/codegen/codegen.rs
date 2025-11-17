@@ -10,7 +10,7 @@ pub struct CodeGenerator {
     scope: Scope,
     _source_map: Lrc<SourceMap>,
     current_block: Vec<Vec<swc::Stmt>>,
-    metadata: ModuleMetadata,
+    pub(crate) metadata: ModuleMetadata,
 }
 
 impl CodeGenerator {
@@ -105,12 +105,14 @@ impl CodeGenerator {
         self.metadata.lookup(name)
     }
 
-    pub fn get_expression_dependencies(&self, span: Span<'static>) -> Vec<VariableRef> {
-        self.metadata
-            .dependencies
-            .get(&span)
-            .unwrap_or(&vec![])
-            .to_vec()
+    pub fn get_reactive_dependencies(&self, span: Span<'static>) -> Vec<VariableRef> {
+        let Some(deps) = self.metadata.dependencies.get(&span) else {
+            return vec![];
+        };
+        deps.iter()
+            .filter(|dep| self.metadata.resolve_type(dep.borrow().ty).is_reactive())
+            .cloned()
+            .collect()
     }
 
     pub fn get_expr_type(&self, node: &ast::Expression) -> Option<&types::Type> {

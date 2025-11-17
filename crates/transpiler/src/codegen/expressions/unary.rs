@@ -109,9 +109,8 @@ impl CodeGenerator {
 
     pub fn listener_deps_to_swc_array(&mut self, listener_span: Span<'static>) -> swc::ArrayLit {
         let reactive_dependencies: Vec<swc::Ident> = self
-            .get_expression_dependencies(listener_span)
+            .get_reactive_dependencies(listener_span)
             .into_iter()
-            .filter(|dep| dep.borrow().ty.is_reactive())
             .map(|dep| create_ident(&dep.borrow().name))
             .collect();
         swc::ArrayLit {

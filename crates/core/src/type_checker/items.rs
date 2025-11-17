@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::{
     ast,
     common::{use_decl_to_paths, ModuleImports},
@@ -86,12 +84,9 @@ impl TypeChecker {
         let symbol = metadata.exports.iter().find(|s| s.borrow().name == *name);
         match symbol {
             Some(symbol) => {
-                let ty = Rc::new((*symbol.borrow().ty).clone());
-                let symbol = type_checker::VariableData::pure(
-                    name.to_string(),
-                    ty.clone(),
-                    path_element.span,
-                );
+                let ty = symbol.borrow().ty;
+                let symbol =
+                    type_checker::VariableData::pure(name.to_string(), ty, path_element.span);
                 let var = self.analysis_context.register_symbol(symbol);
                 self.analysis_context
                     .save_expression_type(path_element.span, ty.clone());

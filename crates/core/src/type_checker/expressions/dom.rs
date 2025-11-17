@@ -1,26 +1,34 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::OnceLock};
 
 use pest::Span;
 
-use crate::{ast, type_checker::TypeChecker, types};
+use crate::{
+    ast,
+    type_checker::TypeChecker,
+    types::{DuckType, ListenerType, StructType, Type, TypeId},
+};
+
+static ELEMENT: OnceLock<TypeId> = OnceLock::new();
 
 impl TypeChecker {
-    pub fn visit_element_expression(&mut self, node: &ast::ElementExpression) -> types::Type {
+    pub fn visit_element_expression(&mut self, node: &ast::ElementExpression) -> TypeId {
         match node {
             ast::ElementExpression::Element(e) => self.visit_element_with_children(e),
             ast::ElementExpression::Void(v) => self.visit_void_element(v),
         }
     }
 
-    fn visit_element_with_children(&mut self, node: &ast::Element) -> types::Type {
+    fn visit_element_with_children(&mut self, node: &ast::Element) -> TypeId {
         self.visit_attributes(&node.attributes);
         self.visit_children(&node.children);
-        self.set_type_at(node.span, element_type())
+        let t = self.element_type();
+        self.analysis_context.save_expression_type(node.span, t)
     }
 
-    fn visit_void_element(&mut self, node: &ast::VoidElement) -> types::Type {
+    fn visit_void_element(&mut self, node: &ast::VoidElement) -> TypeId {
         self.visit_attributes(&node.attributes);
-        self.set_type_at(node.span, element_type())
+        let t = self.element_type();
+        self.analysis_context.save_expression_type(node.span, t)
     }
 
     fn visit_attributes(&mut self, attributes: &Vec<ast::Attribute>) {
@@ -60,32 +68,52 @@ impl TypeChecker {
     fn visit_children(&mut self, children: &Vec<ast::ElementChild>) {
         for child in children {
             match child {
-                ast::ElementChild::Expression(e) => self.visit_dom_expression(e),
-                ast::ElementChild::Text(_) => types::Type::String,
-                ast::ElementChild::Element(e) => self.visit_element_with_children(e),
-                ast::ElementChild::VoidElement(v) => self.visit_void_element(v),
+                ast::ElementChild::Expression(e) => {
+                    self.visit_dom_expression(e);
+                }
+                ast::ElementChild::Text(_) => {}
+                ast::ElementChild::Element(e) => {
+                    self.visit_element_with_children(e);
+                }
+                ast::ElementChild::VoidElement(v) => {
+                    self.visit_void_element(v);
+                }
             };
         }
     }
 
-    fn visit_dom_expression(&mut self, expr: &ast::Expression) -> types::Type {
+    fn visit_dom_expression(&mut self, expr: &ast::Expression) -> TypeId {
         let (mut expr_type, deps) = self.with_dependencies(|s| s.visit_expression(expr));
         let count = self.save_reactive_dependencies(&deps, expr.as_span());
-        if count > 0 && !expr_type.is_reactive() {
-            expr_type = types::Type::Listener(types::ListenerType {
-                inner: Box::new(expr_type),
-            });
+        let is_reactive = self.resolve(expr_type).is_reactive();
+        if count > 0 && !is_reactive {
+            expr_type = self
+                .analysis_context
+                .type_store
+                .add(Type::Listener(ListenerType { inner: expr_type }));
         }
         self.analysis_context.add_dependencies(deps);
         return expr_type;
     }
-}
 
-fn element_type() -> types::Type {
-    types::Type::Duck(types::DuckType {
-        like: Box::new(types::Type::Named(types::NamedType {
-            name: "Element".into(),
-            args: Vec::new(),
-        })),
-    })
+    pub fn element_type(&mut self) -> TypeId {
+        match ELEMENT.get() {
+            Some(t) => *t,
+            None => {
+                let st = self
+                    .analysis_context
+                    .type_store
+                    .add(Type::Struct(StructType {
+                        id: self.analysis_context.type_store.get_next_id(),
+                        fields: vec![],
+                    }));
+                let t = self
+                    .analysis_context
+                    .type_store
+                    .add(Type::Duck(DuckType { like: st }));
+                let _ = ELEMENT.set(t);
+                t
+            }
+        }
+    }
 }

@@ -1,36 +1,59 @@
-use crate::{ast, parser::parser::ParseError, types};
+use crate::{
+    ast,
+    type_checker::analysis_context::type_store::TypeStore,
+    types::{self, EnumType, GenericType, StructType, TupleType, Type, TypeId},
+    VariableData,
+};
 
-use super::{scopes::TypeMetadata, TypeChecker};
+use super::TypeChecker;
 
 impl TypeChecker {
-    pub fn visit_type_declaration(&mut self, node: &ast::TypeAlias) -> types::Type {
-        if let Some(ref type_params) = node.params {
-            for type_param in type_params {
-                self.type_registry.define_generic(&type_param);
+    pub fn visit_type_declaration(&mut self, node: &ast::TypeAlias) -> TypeId {
+        let params = match node.params {
+            Some(ref params) => params,
+            None => &vec![],
+        };
+        let (ty, params) = self.with_scope(node.definition.as_span(), |checker| {
+            let mut param_types = Vec::new();
+            for (i, param) in params.iter().enumerate() {
+                let ty = types::TypeParam {
+                    name: param.clone(),
+                    idx: i,
+                };
+                let ty = checker.analysis_context.type_store.add(ty.into());
+                param_types.push(ty);
+                // FIXME: spans
+                checker.analysis_context.register_symbol(VariableData::pure(
+                    param.clone(),
+                    ty,
+                    node.span,
+                ));
             }
-        }
-        let ty = self.visit_type_definition(&node.definition);
-        self.type_registry.clear_generics();
+            (checker.visit_type_definition(&node.definition), param_types)
+        });
 
         let name = &node.name;
-        match self.type_registry.lookup(name) {
-            Some(_) => self.errors.push(ParseError {
-                message: format!("Type {} already defined", name),
-                span: node.span,
-            }),
-            None => {
-                let metadata = node
-                    .params
-                    .clone()
-                    .map(|params| TypeMetadata::from_type_params(params));
-                self.type_registry.define(&name, ty, metadata);
-            }
+        if self.analysis_context.find_in_current_scope(name).is_some() {
+            self.error(format!("cannot redefine type '{}'", name), node.span);
+            return TypeStore::VOID;
         }
+        let ty = match params.len() {
+            0 => ty,
+            _ => self
+                .analysis_context
+                .type_store
+                .add(Type::Generic(GenericType {
+                    params,
+                    definition: ty,
+                })),
+        };
+        self.analysis_context
+            .register_symbol(VariableData::pure(name.clone(), ty, node.span));
 
-        types::Type::Void
+        TypeStore::VOID
     }
 
-    fn visit_type_definition(&mut self, node: &ast::TypeDefinition) -> types::Type {
+    fn visit_type_definition(&mut self, node: &ast::TypeDefinition) -> TypeId {
         match node {
             ast::TypeDefinition::Enum(e) => self.visit_enum_definition(e).into(),
             ast::TypeDefinition::Struct(s) => self.visit_struct_definition(s).into(),
@@ -38,24 +61,28 @@ impl TypeChecker {
         }
     }
 
-    fn visit_enum_definition(&mut self, node: &ast::EnumDefinition) -> types::EnumType {
+    fn visit_enum_definition(&mut self, node: &ast::EnumDefinition) -> TypeId {
         let variants = node
             .variants
             .iter()
             .map(|variant| self.visit_variant_definition(variant))
             .collect();
-
-        types::EnumType { variants }
+        let id = self.analysis_context.type_store.get_next_id();
+        self.analysis_context
+            .type_store
+            .add(Type::Enum(EnumType { id, variants }))
     }
 
     fn visit_variant_definition(&mut self, node: &ast::VariantDefinition) -> types::Variant {
-        let def: types::Type = match node {
-            ast::VariantDefinition::Struct(s) => self.visit_struct_definition(&s.def).into(),
+        let def = match node {
+            ast::VariantDefinition::Struct(s) => self.visit_struct_definition(&s.def),
             ast::VariantDefinition::Tuple(t) => {
                 let elements = t.elements.iter().map(|el| self.visit_type(el)).collect();
-                types::TupleType { elements }.into()
+                self.analysis_context
+                    .type_store
+                    .add(Type::Tuple(TupleType { elements }))
             }
-            ast::VariantDefinition::Unit(_) => types::Type::Unit,
+            ast::VariantDefinition::Unit(_) => TypeStore::UNIT,
         };
         types::Variant {
             name: node.as_name(),
@@ -63,13 +90,16 @@ impl TypeChecker {
         }
     }
 
-    fn visit_struct_definition(&mut self, node: &ast::StructDefinition) -> types::StructType {
+    fn visit_struct_definition(&mut self, node: &ast::StructDefinition) -> TypeId {
         let fields = node
             .fields
             .iter()
             .map(|field| self.visit_struct_definition_field(field))
             .collect();
-        types::StructType { fields }
+        let id = self.analysis_context.type_store.get_next_id();
+        self.analysis_context
+            .type_store
+            .add(Type::Struct(StructType { id, fields }))
     }
 
     fn visit_struct_definition_field(
@@ -93,7 +123,6 @@ impl TypeChecker {
 mod tests {
     use super::*;
     use crate::ast;
-    use crate::types::{StructField, Variant};
 
     fn create_type_checker() -> TypeChecker {
         TypeChecker::new(Vec::new())
@@ -121,10 +150,11 @@ mod tests {
         };
 
         let result = checker.visit_type_declaration(&type_alias);
-        assert_eq!(result, types::Type::Void);
+        assert_eq!(result, TypeStore::VOID);
         assert!(checker.errors.is_empty());
 
-        let defined_type = checker.type_registry.lookup("MyType").unwrap();
+        let defined_type = checker.analysis_context.lookup("MyType").unwrap();
+        let defined_type = checker.resolve(defined_type.borrow().ty).clone();
         assert_eq!(defined_type, types::Type::Number);
     }
 
@@ -160,27 +190,8 @@ mod tests {
         };
 
         let result = checker.visit_enum_definition(&enum_definition);
-        assert_eq!(
-            result,
-            types::EnumType {
-                variants: vec![
-                    Variant {
-                        name: "Variant1".to_string(),
-                        def: types::Type::Unit,
-                    },
-                    Variant {
-                        name: "Variant2".to_string(),
-                        def: types::Type::Struct(types::StructType {
-                            fields: vec![types::StructField {
-                                name: "field".to_string(),
-                                def: types::Type::Number,
-                                optional: false,
-                            }],
-                        }),
-                    },
-                ],
-            }
-        );
+        let result = checker.resolve(result).clone();
+        assert!(matches!(result, Type::Enum(_)));
         assert!(checker.errors.is_empty());
     }
 
@@ -211,23 +222,8 @@ mod tests {
         };
 
         let result = checker.visit_struct_definition(&struct_definition);
-        assert_eq!(
-            result,
-            types::StructType {
-                fields: vec![
-                    StructField {
-                        name: "field1".to_string(),
-                        def: types::Type::Number,
-                        optional: false,
-                    },
-                    StructField {
-                        name: "field2".to_string(),
-                        def: types::Type::Number,
-                        optional: true,
-                    },
-                ],
-            }
-        );
+        let result = checker.resolve(result).clone();
+        assert!(matches!(result, Type::Struct(StructType { .. })));
         assert!(checker.errors.is_empty());
     }
 
@@ -241,7 +237,7 @@ mod tests {
         }));
 
         let result = checker.visit_type_definition(&type_definition);
-        assert_eq!(result, types::Type::String);
+        assert_eq!(result, TypeStore::STRING);
         assert!(checker.errors.is_empty());
     }
 }

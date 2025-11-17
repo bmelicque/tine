@@ -4,13 +4,10 @@ use std::rc::Rc;
 use pest::Span;
 use swc_common::FileName;
 
-use super::scopes::TypeRegistry;
-
+use crate::analyzer;
 use crate::parser::parser::ParseError;
 use crate::type_checker::analysis_context::{AnalysisContext, ModuleMetadata, VariableRef};
-use crate::type_checker::std::dom::node::node;
-use crate::types;
-use crate::{analyzer, ast};
+use crate::types::{Type, TypeId};
 
 pub struct CheckResult {
     pub metadata: ModuleMetadata,
@@ -21,7 +18,6 @@ pub struct TypeChecker {
     file_name: Option<Rc<FileName>>,
     project_modules: Vec<Rc<RefCell<analyzer::Module>>>,
     pub errors: Vec<ParseError>,
-    pub type_registry: TypeRegistry,
     pub analysis_context: AnalysisContext,
 }
 
@@ -29,14 +25,11 @@ impl TypeChecker {
     pub fn new(external: Vec<Rc<RefCell<analyzer::Module>>>) -> Self {
         let mut analysis_context = AnalysisContext::new();
         analysis_context.enter_scope(pest::Span::new("", 0, 0).unwrap());
-        let mut type_registry = TypeRegistry::new();
-        type_registry.define("Node", node(), None);
 
         Self {
             file_name: None,
             project_modules: external,
             errors: Vec::new(),
-            type_registry,
             analysis_context,
         }
     }
@@ -58,85 +51,23 @@ impl TypeChecker {
         }
     }
 
-    pub(super) fn resolve_type(&mut self, node: &ast::Type) -> types::Type {
-        match node {
-            ast::Type::Named(named) => match named.name.as_str() {
-                "string" => types::Type::String,
-                "number" => types::Type::Number,
-                "boolean" => types::Type::Boolean,
-                "void" => types::Type::Void,
-                id => match self.type_registry.lookup(id) {
-                    Some(ty) => ty.clone(),
-                    None => {
-                        self.errors.push(ParseError {
-                            message: format!("Unknown type: {}", id),
-                            span: named.span,
-                        });
-                        types::Type::Unknown
-                    }
-                },
-            },
-            _ => panic!("Not implemented yet!"),
-        }
+    pub fn resolve(&self, id: TypeId) -> &Type {
+        self.analysis_context.type_store.get(id)
     }
 
-    /// If type is Named, unwraps the underlying type, else returns original type
-    /// TODO: it should also resolve type arguments
-    pub fn unwrap_named_type(&self, ty: &types::Type) -> types::Type {
-        match ty {
-            types::Type::Named(named) => match named.name.as_str() {
-                "string" => types::Type::String,
-                "number" => types::Type::Number,
-                "boolean" => types::Type::Boolean,
-                "void" => types::Type::Void,
-                id => self
-                    .type_registry
-                    .lookup(id)
-                    .unwrap_or(types::Type::Unknown),
-            },
-            _ => ty.clone(),
-        }
+    pub fn get_type_at(&mut self, span: Span<'static>) -> Option<TypeId> {
+        self.analysis_context.expressions.get(&span).map(|ty| *ty)
     }
 
-    pub(super) fn set_type_at<T: Clone + Into<types::Type>>(
-        &mut self,
-        span: Span<'static>,
-        ty: T,
-    ) -> T {
-        self.analysis_context.types.insert(span, ty.clone().into());
-        ty
-    }
-
-    pub fn get_type_at(&mut self, span: Span<'static>) -> Option<types::Type> {
-        self.analysis_context.types.get(&span).map(|ty| ty.clone())
-    }
-
-    pub fn can_be_assigned_to(&self, test: &types::Type, against: &types::Type) -> bool {
+    pub fn can_be_assigned_to(&self, test_id: TypeId, against: TypeId) -> bool {
+        let test = self.analysis_context.type_store.get(test_id);
+        let against = self.analysis_context.type_store.get(against);
         match (test, against) {
-            (types::Type::Unknown, _) => true,
-            (_, types::Type::Unknown) => true,
-            (_, types::Type::Duck(duck)) => self.implements(test, duck),
+            (Type::Unknown, _) => true,
+            (_, Type::Unknown) => true,
+            (_, Type::Duck(duck)) => self.analysis_context.type_store.implements(test_id, duck),
             (_, _) => test == against,
         }
-    }
-    fn implements(&self, test: &types::Type, duck: &types::DuckType) -> bool {
-        if let types::Type::Duck(test) = test {
-            if *test == *duck {
-                return true;
-            }
-        }
-        let types::Type::Struct(ref st) = *duck.like else {
-            return false;
-        };
-
-        let types::Type::Named(name) = test else {
-            return false;
-        };
-
-        st.fields
-            .iter()
-            .find(|field| !self.type_registry.type_has(&name.name, &field.name))
-            .is_none()
     }
 
     pub fn with_scope<F, T>(&mut self, scope_span: Span<'static>, mut predicate: F) -> T
@@ -179,7 +110,7 @@ impl TypeChecker {
     ) -> usize {
         let deps: Vec<VariableRef> = deps
             .into_iter()
-            .filter(|dep| dep.borrow().ty.is_reactive())
+            .filter(|dep| self.resolve(dep.borrow().ty).is_reactive())
             .cloned()
             .collect();
         let len = deps.len();

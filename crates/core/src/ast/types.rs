@@ -2,17 +2,35 @@ use pest::Span;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
+    Array(ArrayType),
+    Duck(DuckType),
+    Function(FunctionType),
+    Listener(ListenerType),
+    Map(MapType),
     Named(NamedType),
     Option(OptionType),
-    Array(ArrayType),
-    Signal(SignalType),
-    Listener(ListenerType),
     Reference(ReferenceType),
-    Duck(DuckType),
-    Tuple(TupleType),
-    Map(MapType),
     Result(ResultType),
-    Function(FunctionType),
+    Signal(SignalType),
+    Tuple(TupleType),
+}
+
+impl Type {
+    pub fn as_span(&self) -> Span<'static> {
+        match self {
+            Self::Array(t) => t.span,
+            Self::Duck(t) => t.span,
+            Self::Function(t) => t.span,
+            Self::Listener(t) => t.span,
+            Self::Map(t) => t.span,
+            Self::Named(t) => t.span,
+            Self::Option(t) => t.span,
+            Self::Reference(t) => t.span,
+            Self::Result(t) => t.span,
+            Self::Signal(t) => t.span,
+            Self::Tuple(t) => t.span,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

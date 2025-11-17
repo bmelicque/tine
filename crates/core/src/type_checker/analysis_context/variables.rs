@@ -10,7 +10,7 @@ use crate::types;
 #[derive(Clone, Debug, PartialEq)]
 pub struct VariableData {
     pub name: String,
-    pub ty: Rc<types::Type>,
+    pub ty: types::TypeId,
     pub defined_at: Span<'static>,
     pub mutable: bool,
     pub reads: usize,
@@ -23,14 +23,14 @@ pub struct VariableData {
 impl VariableData {
     pub fn new(
         name: String,
-        ty: Rc<types::Type>,
+        ty: types::TypeId,
         mutable: bool,
         defined_at: Span<'static>,
         dependencies: Vec<VariableRef>,
     ) -> Self {
         Self {
             name,
-            ty: ty.clone(),
+            ty,
             defined_at,
             mutable,
             reads: 0,
@@ -41,10 +41,10 @@ impl VariableData {
         }
     }
 
-    pub fn pure(name: String, ty: Rc<types::Type>, defined_at: Span<'static>) -> Self {
+    pub fn pure(name: String, ty: types::TypeId, defined_at: Span<'static>) -> Self {
         Self {
             name,
-            ty: ty.clone(),
+            ty,
             defined_at,
             mutable: false,
             reads: 0,

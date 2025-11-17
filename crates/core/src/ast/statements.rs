@@ -116,6 +116,16 @@ pub enum TypeDefinition {
     Type(Type),
 }
 
+impl TypeDefinition {
+    pub fn as_span(&self) -> Span<'static> {
+        match self {
+            Self::Struct(s) => s.span,
+            Self::Enum(e) => e.span,
+            Self::Type(t) => t.as_span(),
+        }
+    }
+}
+
 impl From<Type> for TypeDefinition {
     fn from(value: Type) -> Self {
         TypeDefinition::Type(value)
