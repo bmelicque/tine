@@ -1,8 +1,8 @@
 mod utils;
 
 use dashmap::DashMap;
-use mylang_core::Module;
 use mylang_core::{analyze, ParseError};
+use mylang_core::{Module, Token};
 use std::path::PathBuf;
 use std::sync::Arc;
 use swc_common::FileName;
@@ -17,7 +17,7 @@ use crate::utils::normalize_file_url;
 struct ModuleSummary {
     pub uri: Url,
     pub diagnostics: Vec<Diagnostic>,
-    pub types: Vec<(Range, mylang_core::types::Type)>,
+    pub tokens: Vec<(Range, mylang_core::types::Type)>,
 }
 
 #[derive(Clone)]
@@ -162,19 +162,26 @@ fn summarize_module(m: &Module) -> ModuleSummary {
         _ => unreachable!(),
     };
     let diagnostics = m.errors.iter().map(|e| error_to_lsp(e)).collect();
-    let types = match &m.context {
-        Some(c) => c
-            .types
-            .iter()
-            .map(|(span, t)| (span_to_range(*span), t.clone()))
-            .collect(),
-        _ => unreachable!(),
+    let Some(c) = &m.context else {
+        unreachable!();
     };
+
+    let tokens = c
+        .tokens
+        .iter()
+        .map(|(span, t)| {
+            let ty = match t {
+                Token::Member(t) => c.resolve_type(t.ty),
+                Token::Symbol(t) => c.resolve_type(t.symbol.borrow().ty),
+            };
+            (span_to_range(*span), ty)
+        })
+        .collect();
 
     ModuleSummary {
         uri,
         diagnostics,
-        types,
+        tokens,
     }
 }
 

@@ -46,7 +46,7 @@ impl TypeChecker {
             .iter()
             .for_each(|item| self.visit_item(item));
         CheckResult {
-            metadata: (&self.analysis_context).into(),
+            metadata: self.analysis_context.into(),
             errors: self.errors,
         }
     }

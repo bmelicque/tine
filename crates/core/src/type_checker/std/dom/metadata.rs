@@ -32,5 +32,5 @@ pub fn dom_metadata() -> ModuleMetadata {
         dummy_span(),
     ));
 
-    (&analysis_context).into()
+    analysis_context.into()
 }

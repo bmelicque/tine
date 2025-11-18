@@ -1,7 +1,7 @@
 use crate::{
     ast,
     type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
-    types::{self, TypeId},
+    types::{Type, TypeId},
 };
 
 impl TypeChecker {
@@ -26,40 +26,34 @@ impl TypeChecker {
         };
 
         let prop = field_name.as_str();
-        let types::Type::Struct(ty) = self.resolve(root_type).clone() else {
+        let Type::Struct(ty) = self.resolve(root_type).clone() else {
             self.error(
                 format!("Property '{}' does not exist on type '{}'", prop, type_str),
                 field_name.span,
             );
-            return self
-                .analysis_context
-                .save_expression_type(expr.span, TypeStore::UNKNOWN);
+            return self.save_member_type(expr, TypeStore::UNKNOWN);
         };
-        match ty.fields.iter().find(|field| field.name == prop) {
-            Some(field) => self
-                .analysis_context
-                .save_expression_type(expr.span, field.def),
+        let ty = match ty.fields.iter().find(|field| field.name == prop) {
+            Some(field) => field.def,
             None => {
                 self.error(
                     format!("Property '{}' does not exist on type '{}'", prop, type_str),
                     expr.span,
                 );
-                self.analysis_context
-                    .save_expression_type(expr.span, TypeStore::UNKNOWN)
+                TypeStore::UNKNOWN
             }
-        }
+        };
+        self.save_member_type(expr, ty)
     }
 
     pub fn visit_tuple_indexing(&mut self, expr: &ast::MemberExpression) -> TypeId {
         let root_type = self.visit_expression(&expr.object);
-        let types::Type::Tuple(tuple) = self.resolve(root_type) else {
+        let Type::Tuple(tuple) = self.resolve(root_type) else {
             self.error(
                 format!("Expected tuple type, got {}", root_type),
                 expr.object.as_span(),
             );
-            return self
-                .analysis_context
-                .save_expression_type(expr.span, TypeStore::UNKNOWN);
+            return self.save_member_type(expr, TypeStore::UNKNOWN);
         };
 
         let Some(ast::MemberProp::Index(index)) = &expr.prop else {
@@ -68,28 +62,27 @@ impl TypeChecker {
         let value = index.value;
         if value != value.round() {
             self.error("Integer expected".into(), index.span);
-            return self
-                .analysis_context
-                .save_expression_type(expr.span, TypeStore::UNKNOWN);
+            return self.save_member_type(expr, TypeStore::UNKNOWN);
         }
         let value = *value as isize;
         if value < 0 {
             self.error("Index out of range".into(), index.span);
-            return self
-                .analysis_context
-                .save_expression_type(expr.span, TypeStore::UNKNOWN);
+            return self.save_member_type(expr, TypeStore::UNKNOWN);
         }
         let value = value as usize;
         if value >= tuple.elements.len() {
             self.error("Index out of range".into(), index.span);
-            return self
-                .analysis_context
-                .save_expression_type(expr.span, TypeStore::UNKNOWN);
+            return self.save_member_type(expr, TypeStore::UNKNOWN);
         } else {
-            return self
-                .analysis_context
-                .save_expression_type(expr.span, tuple.elements[value]);
+            return self.save_member_type(expr, tuple.elements[value]);
         }
+    }
+
+    fn save_member_type(&mut self, expr: &ast::MemberExpression, ty: TypeId) -> TypeId {
+        self.analysis_context
+            .save_member_token(expr.prop.as_ref().unwrap().as_span(), ty);
+        self.analysis_context.save_expression_type(expr.span, ty);
+        ty
     }
 }
 
@@ -167,7 +160,7 @@ mod tests {
     #[test]
     fn test_visit_tuple_indexing_valid() {
         let mut checker = create_type_checker();
-        let tuple_type = types::Type::Tuple(types::TupleType {
+        let tuple_type = Type::Tuple(TupleType {
             elements: vec![TypeStore::NUMBER, TypeStore::STRING, TypeStore::BOOLEAN],
         });
 
@@ -222,7 +215,7 @@ mod tests {
     #[test]
     fn test_visit_tuple_indexing_out_of_range() {
         let mut checker = create_type_checker();
-        let tuple_type = types::Type::Tuple(types::TupleType {
+        let tuple_type = Type::Tuple(TupleType {
             elements: vec![TypeStore::NUMBER, TypeStore::STRING],
         });
         let tuple_type = checker.analysis_context.type_store.add(tuple_type);
@@ -252,7 +245,7 @@ mod tests {
     #[test]
     fn test_visit_tuple_indexing_negative_index() {
         let mut checker = create_type_checker();
-        let tuple_type = types::Type::Tuple(types::TupleType {
+        let tuple_type = Type::Tuple(TupleType {
             elements: vec![TypeStore::NUMBER, TypeStore::STRING],
         });
         let tuple_type = checker.analysis_context.type_store.add(tuple_type);

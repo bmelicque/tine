@@ -3,7 +3,7 @@ mod variables;
 
 pub use variables::{VariableData, VariableHandle, VariableRef};
 
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use pest::Span;
 
@@ -27,7 +27,7 @@ pub struct SymbolToken {
 #[derive(Clone, Debug)]
 pub struct MemberToken {
     pub span: Span<'static>,
-    pub ty: Rc<types::Type>,
+    pub ty: TypeId,
 }
 
 #[derive(Clone)]
@@ -129,6 +129,10 @@ impl AnalysisContext {
         let token = Token::Symbol(SymbolToken { span, symbol });
         self.tokens.insert(span, token);
     }
+    pub fn save_member_token(&mut self, span: Span<'static>, type_id: TypeId) {
+        let token = Token::Member(MemberToken { span, ty: type_id });
+        self.tokens.insert(span, token);
+    }
 
     pub fn lookup(&self, name: &str) -> Option<VariableRef> {
         let mut scope = self.get_current_scope();
@@ -177,7 +181,8 @@ fn within(outer: Span<'static>, inner: Span<'static>) -> bool {
 pub struct ModuleMetadata {
     type_store: TypeStore,
     pub exports: Vec<VariableRef>,
-    pub types: HashMap<Span<'static>, types::Type>,
+    pub expressions: HashMap<Span<'static>, TypeId>,
+    pub tokens: HashMap<Span<'static>, Token>,
     pub dependencies: HashMap<Span<'static>, Vec<VariableRef>>,
 }
 
@@ -186,7 +191,8 @@ impl ModuleMetadata {
         ModuleMetadata {
             type_store: TypeStore::new(),
             exports: vec![],
-            types: HashMap::new(),
+            expressions: HashMap::new(),
+            tokens: HashMap::new(),
             dependencies: HashMap::new(),
         }
     }
@@ -203,20 +209,20 @@ impl ModuleMetadata {
     }
 }
 
-impl From<&AnalysisContext> for ModuleMetadata {
-    fn from(value: &AnalysisContext) -> Self {
+impl From<AnalysisContext> for ModuleMetadata {
+    fn from(value: AnalysisContext) -> Self {
         let main_scope = value
             .scopes
             .values()
             .find(|s| s.outer_id.is_none())
             .unwrap();
-        let exports = main_scope.bindings.clone();
 
         Self {
-            type_store: value.type_store.clone(),
-            exports,
-            types: value.types.clone(),
-            dependencies: value.other_dependencies.clone(),
+            type_store: value.type_store,
+            exports: main_scope.bindings.clone(),
+            expressions: value.expressions,
+            tokens: value.tokens,
+            dependencies: value.other_dependencies,
         }
     }
 }
