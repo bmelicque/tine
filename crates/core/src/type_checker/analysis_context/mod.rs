@@ -179,7 +179,7 @@ fn within(outer: Span<'static>, inner: Span<'static>) -> bool {
 
 #[derive(Clone, Debug)]
 pub struct ModuleMetadata {
-    type_store: TypeStore,
+    pub type_store: TypeStore,
     pub exports: Vec<VariableRef>,
     pub expressions: HashMap<Span<'static>, TypeId>,
     pub tokens: HashMap<Span<'static>, Token>,

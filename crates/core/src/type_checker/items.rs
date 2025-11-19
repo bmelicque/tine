@@ -84,7 +84,10 @@ impl TypeChecker {
         let symbol = metadata.exports.iter().find(|s| s.borrow().name == *name);
         match symbol {
             Some(symbol) => {
-                let ty = symbol.borrow().ty;
+                let ty = self
+                    .analysis_context
+                    .type_store
+                    .import(&metadata.type_store, symbol.borrow().ty);
                 let symbol =
                     type_checker::VariableData::pure(name.to_string(), ty, path_element.span);
                 let var = self.analysis_context.register_symbol(symbol);

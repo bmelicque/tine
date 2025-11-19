@@ -13,7 +13,7 @@ pub fn pretty_print_error(error: &ParseError) {
 
     let line_text = error
         .span
-        .as_str()
+        .get_input()
         .lines()
         .nth(line_str - 1) // lines are 1-based
         .unwrap_or("");

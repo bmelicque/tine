@@ -103,11 +103,11 @@ impl TypeChecker {
         info.add_write();
         let ty = info.borrow().ty.clone();
         match self.resolve(ty).clone() {
-            Type::Signal(_) => {
-                self.check_assigned_type(ty, against, node.span);
+            Type::Signal(t) => {
+                self.check_assigned_type(t.inner, against, node.span);
             }
-            Type::Listener(_) => {
-                self.check_assigned_type(ty, against, node.span);
+            Type::Listener(t) => {
+                self.check_assigned_type(t.inner, against, node.span);
             }
             ref ty => {
                 self.error(

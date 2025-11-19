@@ -23,6 +23,7 @@ pub struct TypeStore {
     arena: Vec<Type>,
     lookup: HashMap<Type, TypeId>,
     metadata: HashMap<TypeId, TypeMetadata>,
+    aliases: HashMap<TypeId, String>,
 }
 
 impl TypeStore {
@@ -39,6 +40,7 @@ impl TypeStore {
             arena: vec![],
             lookup: HashMap::new(),
             metadata: HashMap::new(),
+            aliases: HashMap::new(),
         };
         store.add(Type::Unknown);
         store.add(Type::Void);
@@ -63,9 +65,16 @@ impl TypeStore {
             }
         }
     }
+    pub fn add_alias(&mut self, ty: TypeId, name: String) {
+        self.aliases.insert(ty, name);
+    }
 
     pub fn get(&self, id: TypeId) -> &Type {
         &self.arena[id as usize]
+    }
+
+    pub fn find_id(&self, ty: &Type) -> Option<TypeId> {
+        self.lookup.get(ty).copied()
     }
 
     pub(crate) fn define_method(&mut self, host: TypeId, method_name: &str, signature: TypeId) {
@@ -223,7 +232,200 @@ impl TypeStore {
             .is_none()
     }
 
-    pub fn find_id(&self, ty: &Type) -> Option<TypeId> {
-        self.lookup.get(ty).copied()
+    pub fn display_type(&self, ty: TypeId) -> String {
+        if let Some(name) = self.aliases.get(&ty) {
+            return name.clone();
+        }
+        match &self.arena[ty as usize] {
+            Type::Array(t) => {
+                format!("[]{}", self.display_type(t.element))
+            }
+            Type::Boolean => "boolean".into(),
+            Type::Duck(t) => {
+                format!("~{}", self.display_type(t.like))
+            }
+            Type::Dynamic => "dynamic".into(),
+            Type::Enum(t) => t
+                .variants
+                .iter()
+                .map(|variant| format!("{}({})", variant.name, self.display_type(variant.def)))
+                .collect::<Vec<_>>()
+                .join(" | "),
+            Type::Function(t) => {
+                let params = t
+                    .params
+                    .iter()
+                    .map(|p| self.display_type(*p))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("({}) => {}", params, self.display_type(t.return_type))
+            }
+            Type::Generic(_) => "generic".into(),
+            Type::Listener(t) => {
+                format!("@{}", self.display_type(t.inner))
+            }
+            Type::Map(t) => {
+                format!(
+                    "{}#{}",
+                    self.display_type(t.key),
+                    self.display_type(t.value)
+                )
+            }
+            Type::Number => "number".into(),
+            Type::Option(t) => {
+                format!("?{}", self.display_type(t.some))
+            }
+            Type::Param(t) => t.name.clone(),
+            Type::Reference(t) => {
+                format!("&{}", self.display_type(t.target))
+            }
+            Type::Result(t) => {
+                if let Some(error) = &t.error {
+                    format!("{}!{}", self.display_type(*error), self.display_type(t.ok))
+                } else {
+                    format!("!{}", self.display_type(t.ok))
+                }
+            }
+            Type::SelfType => "Self".into(),
+            Type::Signal(t) => {
+                format!("${}", self.display_type(t.inner))
+            }
+            Type::String => "string".into(),
+            Type::Struct(t) => {
+                let fields = t
+                    .fields
+                    .iter()
+                    .map(|field| format!("{} {}", field.name, self.display_type(field.def)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("({})", fields)
+            }
+            Type::Trait(t) => {
+                let methods = t
+                    .methods
+                    .iter()
+                    .map(|method| format!("{} {}", method.name, self.display_type(method.def)))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(".({})", methods)
+            }
+            Type::Tuple(t) => {
+                let elements = t
+                    .elements
+                    .iter()
+                    .map(|e| self.display_type(*e))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("({})", elements)
+            }
+            Type::Unit => "()".into(),
+            Type::Unknown => "unknown".into(),
+            Type::Void => "void".into(),
+        }
+    }
+
+    pub fn import(&mut self, from: &TypeStore, id: TypeId) -> TypeId {
+        match from.get(id) {
+            Type::Array(t) => {
+                let element = self.import(from, t.element);
+                self.add(Type::Array(ArrayType { element }))
+            }
+            Type::Boolean => TypeStore::BOOLEAN,
+            Type::Duck(t) => {
+                let like = self.import(from, t.like);
+                self.add(Type::Duck(DuckType { like }))
+            }
+            Type::Dynamic => TypeStore::DYNAMIC,
+            Type::Enum(t) => {
+                let variants: Vec<_> = t
+                    .variants
+                    .iter()
+                    .map(|variant| Variant {
+                        name: variant.name.clone(),
+                        def: self.import(from, variant.def),
+                    })
+                    .collect();
+                self.add(Type::Enum(EnumType {
+                    id: self.get_next_id(),
+                    variants,
+                }))
+            }
+            Type::Function(t) => {
+                let params: Vec<_> = t
+                    .params
+                    .iter()
+                    .map(|param| self.import(from, *param))
+                    .collect();
+                let return_type = self.import(from, t.return_type);
+                self.add(Type::Function(FunctionType {
+                    params,
+                    return_type,
+                }))
+            }
+            Type::Generic(g) => self.add(Type::Generic(g.clone())),
+            Type::Listener(t) => {
+                let inner = self.import(from, t.inner);
+                self.add(Type::Listener(ListenerType { inner }))
+            }
+            Type::Map(t) => {
+                let key = self.import(from, t.key);
+                let value = self.import(from, t.value);
+                self.add(Type::Map(MapType { key, value }))
+            }
+            Type::Number => TypeStore::NUMBER,
+            Type::Option(t) => {
+                let some = self.import(from, t.some);
+                self.add(Type::Option(OptionType { some }))
+            }
+            Type::Param(t) => self.add(Type::Param(t.clone())),
+            Type::Reference(t) => {
+                let target = self.import(from, t.target);
+                self.add(Type::Reference(ReferenceType { target }))
+            }
+            Type::Result(t) => {
+                let ok = self.import(from, t.ok);
+                let error = t.error.map(|err| self.import(from, err));
+                self.add(Type::Result(ResultType { ok, error }))
+            }
+            Type::SelfType => self.add(Type::SelfType),
+            Type::Signal(t) => {
+                let inner = self.import(from, t.inner);
+                self.add(Type::Signal(SignalType { inner }))
+            }
+            Type::String => TypeStore::STRING,
+            Type::Struct(t) => {
+                let fields: Vec<_> = t
+                    .fields
+                    .iter()
+                    .map(|field| StructField {
+                        name: field.name.clone(),
+                        def: self.import(from, field.def),
+                        optional: field.optional,
+                    })
+                    .collect();
+                self.add(Type::Struct(StructType {
+                    id: self.get_next_id(),
+                    fields,
+                }))
+            }
+            Type::Trait(t) => {
+                let methods: Vec<_> = t
+                    .methods
+                    .iter()
+                    .map(|method| TraitMethod {
+                        name: method.name.clone(),
+                        def: self.import(from, method.def),
+                    })
+                    .collect();
+                self.add(Type::Trait(TraitType { methods }))
+            }
+            Type::Tuple(t) => {
+                let elements: Vec<_> = t.elements.iter().map(|e| self.import(from, *e)).collect();
+                self.add(Type::Tuple(TupleType { elements }))
+            }
+            Type::Unit => TypeStore::UNIT,
+            Type::Unknown => TypeStore::UNKNOWN,
+            Type::Void => TypeStore::VOID,
+        }
     }
 }

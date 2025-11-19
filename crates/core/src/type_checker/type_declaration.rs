@@ -49,6 +49,9 @@ impl TypeChecker {
         };
         self.analysis_context
             .register_symbol(VariableData::pure(name.clone(), ty, node.span));
+        self.analysis_context
+            .type_store
+            .add_alias(ty, name.to_string());
 
         TypeStore::VOID
     }

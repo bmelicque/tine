@@ -1,3 +1,4 @@
+mod tokens;
 mod utils;
 
 use dashmap::DashMap;
@@ -15,15 +16,17 @@ use crate::utils::normalize_file_url;
 
 #[derive(Debug, Clone)]
 struct ModuleSummary {
+    type_store: mylang_core::TypeStore,
     pub uri: Url,
     pub diagnostics: Vec<Diagnostic>,
-    pub tokens: Vec<(Range, mylang_core::types::Type)>,
+    pub tokens: Vec<(Range, mylang_core::types::TypeId)>,
 }
 
 #[derive(Clone)]
 struct Backend {
     client: Client,
     analyzed: Arc<DashMap<Url, ModuleSummary>>,
+    semantic_legend: SemanticTokensLegend,
 }
 
 #[tower_lsp::async_trait]
@@ -48,14 +51,7 @@ impl tower_lsp::LanguageServer for Backend {
                             },
                             semantic_tokens_options: SemanticTokensOptions {
                                 work_done_progress_options: Default::default(),
-                                legend: SemanticTokensLegend {
-                                    token_types: vec![
-                                        SemanticTokenType::KEYWORD,
-                                        SemanticTokenType::VARIABLE,
-                                        SemanticTokenType::FUNCTION,
-                                    ],
-                                    token_modifiers: vec![],
-                                },
+                                legend: self.semantic_legend.clone(),
                                 range: None,
                                 full: Some(SemanticTokensFullOptions::Bool(true)),
                             },
@@ -99,9 +95,11 @@ impl tower_lsp::LanguageServer for Backend {
             return Ok(None);
         };
 
+        let data = self.tokens_to_semantic(&summary);
+
         Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
             result_id: None,
-            data: vec![],
+            data,
         })))
     }
 
@@ -111,6 +109,22 @@ impl tower_lsp::LanguageServer for Backend {
 }
 
 impl Backend {
+    pub fn new(client: Client) -> Self {
+        let semantic_legend = SemanticTokensLegend {
+            token_types: vec![
+                SemanticTokenType::KEYWORD,
+                SemanticTokenType::VARIABLE,
+                SemanticTokenType::FUNCTION,
+            ],
+            token_modifiers: vec![],
+        };
+        Self {
+            semantic_legend,
+            client,
+            analyzed: Arc::new(DashMap::new()),
+        }
+    }
+
     async fn run_project_analysis(&self, entry_path: PathBuf) {
         let client = self.client.clone();
         match get_summary(entry_path) {
@@ -171,14 +185,15 @@ fn summarize_module(m: &Module) -> ModuleSummary {
         .iter()
         .map(|(span, t)| {
             let ty = match t {
-                Token::Member(t) => c.resolve_type(t.ty),
-                Token::Symbol(t) => c.resolve_type(t.symbol.borrow().ty),
+                Token::Member(t) => t.ty,
+                Token::Symbol(t) => t.symbol.borrow().ty,
             };
             (span_to_range(*span), ty)
         })
         .collect();
 
     ModuleSummary {
+        type_store: c.type_store.clone(),
         uri,
         diagnostics,
         tokens,
@@ -203,43 +218,10 @@ fn span_to_range(span: pest::Span) -> Range {
     }
 }
 
-fn push_token(
-    data: &mut Vec<SemanticToken>,
-    prev_line: &mut u32,
-    prev_start: &mut u32,
-    range: &Range,
-    token_type: u32,
-) {
-    let start_line = range.start.line;
-    let start_char = range.start.character;
-    let length = range.end.character - range.start.character;
-
-    let delta_line = start_line - *prev_line;
-    let delta_start = if delta_line == 0 {
-        start_char - *prev_start
-    } else {
-        start_char
-    };
-
-    data.push(SemanticToken {
-        delta_line,
-        delta_start,
-        length,
-        token_type,
-        token_modifiers_bitset: 0,
-    });
-
-    *prev_line = start_line;
-    *prev_start = start_char;
-}
-
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> anyhow::Result<()> {
     let (stdin, stdout) = (tokio::io::stdin(), tokio::io::stdout());
-    let (service, socket) = LspService::new(|client| Backend {
-        client,
-        analyzed: Arc::new(DashMap::new()),
-    });
+    let (service, socket) = LspService::new(|client| Backend::new(client));
     Server::new(stdin, stdout, socket).serve(service).await;
     Ok(())
 }

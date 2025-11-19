@@ -9,7 +9,8 @@ mod type_declaration;
 mod types;
 
 pub use analysis_context::{
-    MemberToken, ModuleMetadata, SymbolToken, Token, VariableData, VariableRef,
+    type_store::TypeStore, MemberToken, ModuleMetadata, SymbolToken, Token, VariableData,
+    VariableRef,
 };
 pub use std::dom::dom_metadata;
 pub use type_checker::{CheckResult, TypeChecker};

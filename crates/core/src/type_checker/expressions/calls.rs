@@ -11,7 +11,7 @@ impl TypeChecker {
     pub fn visit_call_expression(&mut self, node: &ast::CallExpression) -> TypeId {
         let callee_type = self.visit_expression(&node.callee);
         let callee_type = match self.analysis_context.type_store.get(callee_type) {
-            types::Type::Function(t) => t,
+            types::Type::Function(t) => t.clone(),
             types::Type::Unknown => {
                 return self
                     .analysis_context
@@ -27,7 +27,6 @@ impl TypeChecker {
                     .save_expression_type(node.span, TypeStore::UNKNOWN);
             }
         };
-        let callee_type = callee_type.clone();
 
         if node.args.len() != callee_type.params.len() {
             let error_message = format!(
