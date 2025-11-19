@@ -1,7 +1,7 @@
+mod symbols;
 pub mod type_store;
-mod variables;
 
-pub use variables::{VariableData, VariableHandle, VariableRef};
+pub use symbols::{SymbolData, SymbolHandle, SymbolKind, SymbolRef};
 
 use std::collections::HashMap;
 
@@ -21,7 +21,7 @@ pub enum Token {
 #[derive(Clone, Debug)]
 pub struct SymbolToken {
     pub span: Span<'static>,
-    pub symbol: VariableRef,
+    pub symbol: SymbolRef,
 }
 
 #[derive(Clone, Debug)]
@@ -32,12 +32,12 @@ pub struct MemberToken {
 
 #[derive(Clone)]
 pub struct Scope {
-    pub bindings: Vec<VariableRef>,
+    pub bindings: Vec<SymbolRef>,
     pub outer_id: Option<Span<'static>>,
     /**
      * Lists symbols captured by the scope
      */
-    captured: Vec<VariableRef>,
+    captured: Vec<SymbolRef>,
 }
 
 impl Scope {
@@ -49,7 +49,7 @@ impl Scope {
         }
     }
 
-    pub fn captured(&self) -> Vec<VariableRef> {
+    pub fn captured(&self) -> Vec<SymbolRef> {
         self.captured.clone()
     }
 }
@@ -57,7 +57,7 @@ impl Scope {
 #[derive(Clone)]
 pub struct AnalysisContext {
     /** Map of existing symbols */
-    pub symbols: Vec<VariableHandle>,
+    pub symbols: Vec<SymbolHandle>,
 
     pub scopes: HashMap<Span<'static>, Scope>,
     current_scope: Option<Span<'static>>,
@@ -69,14 +69,14 @@ pub struct AnalysisContext {
     pub expressions: HashMap<Span<'static>, TypeId>,
     pub tokens: HashMap<Span<'static>, Token>,
 
-    pub current_declaration_dependencies: Option<Vec<VariableRef>>,
-    pub other_dependencies: HashMap<Span<'static>, Vec<VariableRef>>,
+    pub current_declaration_dependencies: Option<Vec<SymbolRef>>,
+    pub other_dependencies: HashMap<Span<'static>, Vec<SymbolRef>>,
 }
 
 impl AnalysisContext {
     pub fn new() -> Self {
         Self {
-            symbols: Vec::<VariableHandle>::new(),
+            symbols: Vec::<SymbolHandle>::new(),
             scopes: HashMap::new(),
             current_scope: None,
             types: HashMap::new(),
@@ -105,7 +105,7 @@ impl AnalysisContext {
         self.get_scope(self.current_scope.unwrap())
     }
 
-    pub fn register_symbol(&mut self, symbol: VariableData) -> VariableRef {
+    pub fn register_symbol(&mut self, symbol: SymbolData) -> SymbolRef {
         let mut scope = self.get_current_scope().clone();
         for dep in &symbol.dependencies {
             if !within(self.current_scope.unwrap(), dep.borrow().defined_at) {
@@ -113,7 +113,7 @@ impl AnalysisContext {
             }
         }
 
-        let handle = VariableHandle::new(symbol);
+        let handle = SymbolHandle::new(symbol);
         scope.bindings.push(handle.readonly());
 
         self.scopes.insert(self.current_scope.unwrap(), scope);
@@ -125,7 +125,7 @@ impl AnalysisContext {
         self.expressions.insert(span, ty);
         ty
     }
-    pub fn save_symbol_token(&mut self, span: Span<'static>, symbol: VariableRef) {
+    pub fn save_symbol_token(&mut self, span: Span<'static>, symbol: SymbolRef) {
         let token = Token::Symbol(SymbolToken { span, symbol });
         self.tokens.insert(span, token);
     }
@@ -134,7 +134,7 @@ impl AnalysisContext {
         self.tokens.insert(span, token);
     }
 
-    pub fn lookup(&self, name: &str) -> Option<VariableRef> {
+    pub fn lookup(&self, name: &str) -> Option<SymbolRef> {
         let mut scope = self.get_current_scope();
         loop {
             let var = scope.bindings.iter().find(|b| b.borrow().name == *name);
@@ -147,17 +147,17 @@ impl AnalysisContext {
             }
         }
     }
-    pub fn lookup_mut(&self, name: &str) -> Option<VariableHandle> {
+    pub fn lookup_mut(&self, name: &str) -> Option<SymbolHandle> {
         match self.lookup(name) {
             Some(var) => self.get_handle(&var),
             None => None,
         }
     }
-    fn get_handle(&self, var: &VariableRef) -> Option<VariableHandle> {
+    fn get_handle(&self, var: &SymbolRef) -> Option<SymbolHandle> {
         self.symbols.iter().find(|s| s.has_ref(var)).cloned()
     }
 
-    pub fn find_in_current_scope(&self, name: &str) -> Option<VariableRef> {
+    pub fn find_in_current_scope(&self, name: &str) -> Option<SymbolRef> {
         self.get_current_scope()
             .bindings
             .iter()
@@ -165,7 +165,7 @@ impl AnalysisContext {
             .cloned()
     }
 
-    pub fn add_dependencies(&mut self, deps: Vec<VariableRef>) {
+    pub fn add_dependencies(&mut self, deps: Vec<SymbolRef>) {
         let Some(current_dependencies) = self.current_declaration_dependencies.as_mut() else {
             return;
         };
@@ -180,10 +180,10 @@ fn within(outer: Span<'static>, inner: Span<'static>) -> bool {
 #[derive(Clone, Debug)]
 pub struct ModuleMetadata {
     pub type_store: TypeStore,
-    pub exports: Vec<VariableRef>,
+    pub exports: Vec<SymbolRef>,
     pub expressions: HashMap<Span<'static>, TypeId>,
     pub tokens: HashMap<Span<'static>, Token>,
-    pub dependencies: HashMap<Span<'static>, Vec<VariableRef>>,
+    pub dependencies: HashMap<Span<'static>, Vec<SymbolRef>>,
 }
 
 impl ModuleMetadata {
@@ -197,7 +197,7 @@ impl ModuleMetadata {
         }
     }
 
-    pub fn lookup(&self, name: &str) -> Option<VariableRef> {
+    pub fn lookup(&self, name: &str) -> Option<SymbolRef> {
         self.exports
             .iter()
             .find(|e| e.borrow().name == *name)

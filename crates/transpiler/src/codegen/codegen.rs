@@ -1,6 +1,6 @@
 use super::sort::Scope;
 use crate::codegen::utils::create_ident;
-use mylang_core::{ast, types, ModuleMetadata, VariableRef};
+use mylang_core::{ast, types, ModuleMetadata, SymbolRef};
 use pest::Span;
 use swc_common::{sync::Lrc, FileName, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
@@ -101,11 +101,11 @@ impl CodeGenerator {
         self.scope.find(name)
     }
 
-    pub fn get_info(&self, name: &str) -> Option<VariableRef> {
+    pub fn get_info(&self, name: &str) -> Option<SymbolRef> {
         self.metadata.lookup(name)
     }
 
-    pub fn get_reactive_dependencies(&self, span: Span<'static>) -> Vec<VariableRef> {
+    pub fn get_reactive_dependencies(&self, span: Span<'static>) -> Vec<SymbolRef> {
         let Some(deps) = self.metadata.dependencies.get(&span) else {
             return vec![];
         };

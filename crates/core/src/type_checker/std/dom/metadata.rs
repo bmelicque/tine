@@ -1,7 +1,7 @@
 use crate::{
     type_checker::{
         analysis_context::{type_store::TypeStore, AnalysisContext, ModuleMetadata},
-        VariableData,
+        SymbolData,
     },
     types::{DuckType, FunctionType, StructType, Type},
     utils::dummy_span,
@@ -26,7 +26,7 @@ pub fn dom_metadata() -> ModuleMetadata {
             return_type: TypeStore::VOID,
         }));
 
-    analysis_context.register_symbol(VariableData::pure(
+    analysis_context.register_symbol(SymbolData::pure(
         "render".to_string(),
         render_type,
         dummy_span(),

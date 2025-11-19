@@ -5,11 +5,18 @@ use std::{
 
 use pest::Span;
 
-use crate::types;
+use crate::types::{self, TypeId};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SymbolKind {
+    Value,
+    Type,
+}
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct VariableData {
+pub struct SymbolData {
     pub name: String,
+    pub kind: SymbolKind,
     pub ty: types::TypeId,
     pub defined_at: Span<'static>,
     pub mutable: bool,
@@ -17,19 +24,21 @@ pub struct VariableData {
     pub writes: usize,
     pub mut_refs: usize,
     pub ro_refs: usize,
-    pub dependencies: Vec<VariableRef>,
+    pub dependencies: Vec<SymbolRef>,
 }
 
-impl VariableData {
+impl SymbolData {
     pub fn new(
         name: String,
+        kind: SymbolKind,
         ty: types::TypeId,
         mutable: bool,
         defined_at: Span<'static>,
-        dependencies: Vec<VariableRef>,
+        dependencies: Vec<SymbolRef>,
     ) -> Self {
         Self {
             name,
+            kind,
             ty,
             defined_at,
             mutable,
@@ -44,7 +53,23 @@ impl VariableData {
     pub fn pure(name: String, ty: types::TypeId, defined_at: Span<'static>) -> Self {
         Self {
             name,
+            kind: SymbolKind::Value,
             ty,
+            defined_at,
+            mutable: false,
+            reads: 0,
+            writes: 0,
+            mut_refs: 0,
+            ro_refs: 0,
+            dependencies: vec![],
+        }
+    }
+
+    pub fn new_type(name: String, type_id: TypeId, defined_at: Span<'static>) -> Self {
+        Self {
+            name,
+            kind: SymbolKind::Type,
+            ty: type_id,
             defined_at,
             mutable: false,
             reads: 0,
@@ -61,10 +86,10 @@ impl VariableData {
 }
 
 #[derive(Debug, Clone)]
-pub struct VariableHandle(Rc<RefCell<VariableData>>);
+pub struct SymbolHandle(Rc<RefCell<SymbolData>>);
 
-impl VariableHandle {
-    pub fn new(symbol: VariableData) -> Self {
+impl SymbolHandle {
+    pub fn new(symbol: SymbolData) -> Self {
         Self(Rc::new(RefCell::new(symbol)))
     }
 
@@ -87,23 +112,23 @@ impl VariableHandle {
         self.0.borrow_mut().mut_refs += 1;
     }
 
-    pub fn borrow(&self) -> Ref<'_, VariableData> {
+    pub fn borrow(&self) -> Ref<'_, SymbolData> {
         self.0.borrow()
     }
-    pub fn readonly(&self) -> VariableRef {
-        VariableRef(self.0.clone())
+    pub fn readonly(&self) -> SymbolRef {
+        SymbolRef(self.0.clone())
     }
 
-    pub fn has_ref(&self, variable: &VariableRef) -> bool {
+    pub fn has_ref(&self, variable: &SymbolRef) -> bool {
         Rc::ptr_eq(&self.0, &variable.0)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct VariableRef(Rc<RefCell<VariableData>>);
+pub struct SymbolRef(Rc<RefCell<SymbolData>>);
 
-impl VariableRef {
-    pub fn borrow(&self) -> Ref<'_, VariableData> {
+impl SymbolRef {
+    pub fn borrow(&self) -> Ref<'_, SymbolData> {
         self.0.borrow()
     }
 }

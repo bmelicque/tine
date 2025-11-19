@@ -1,8 +1,8 @@
 use crate::{
     ast,
-    type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
+    type_checker::{analysis_context::type_store::TypeStore, SymbolKind, TypeChecker},
     types::{OptionType, Type, TypeId},
-    VariableData,
+    SymbolData,
 };
 
 impl TypeChecker {
@@ -42,8 +42,9 @@ impl TypeChecker {
             let mut variables = Vec::<(String, TypeId)>::new();
             s.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
             for (name, ty) in variables {
-                s.analysis_context.register_symbol(VariableData::new(
+                s.analysis_context.register_symbol(SymbolData::new(
                     name.clone(),
+                    SymbolKind::Value,
                     ty,
                     false,
                     node.pattern.as_span(),

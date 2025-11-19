@@ -1,6 +1,9 @@
 use crate::{
     ast,
-    type_checker::analysis_context::{type_store::TypeStore, VariableData, VariableRef},
+    type_checker::{
+        analysis_context::{type_store::TypeStore, SymbolData, SymbolRef},
+        SymbolKind,
+    },
     types::{self, OptionType, Type, TypeId},
 };
 
@@ -27,8 +30,9 @@ impl TypeChecker {
             let mut variables = vec![];
             checker.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
             for (name, ty) in variables {
-                checker.analysis_context.register_symbol(VariableData::new(
+                checker.analysis_context.register_symbol(SymbolData::new(
                     name.clone(),
+                    SymbolKind::Value,
                     ty,
                     false,
                     node.pattern.as_span(),
@@ -41,7 +45,7 @@ impl TypeChecker {
         self.analysis_context.save_expression_type(node.span, ty)
     }
 
-    fn visit_for_in_iterable(&mut self, iterable: &ast::Expression) -> (TypeId, Vec<VariableRef>) {
+    fn visit_for_in_iterable(&mut self, iterable: &ast::Expression) -> (TypeId, Vec<SymbolRef>) {
         self.with_dependencies(|checker| {
             let ty = checker.visit_expression(iterable);
             match checker.resolve(ty) {

@@ -12,6 +12,7 @@ use tower_lsp::Client;
 use tower_lsp::{lsp_types::*, LspService, Server};
 use url::Url;
 
+use crate::tokens::ServerToken;
 use crate::utils::normalize_file_url;
 
 #[derive(Debug, Clone)]
@@ -19,7 +20,7 @@ struct ModuleSummary {
     type_store: mylang_core::TypeStore,
     pub uri: Url,
     pub diagnostics: Vec<Diagnostic>,
-    pub tokens: Vec<(Range, mylang_core::types::TypeId)>,
+    pub tokens: Vec<ServerToken>,
 }
 
 #[derive(Clone)]
@@ -113,6 +114,7 @@ impl Backend {
         let semantic_legend = SemanticTokensLegend {
             token_types: vec![
                 SemanticTokenType::KEYWORD,
+                SemanticTokenType::TYPE,
                 SemanticTokenType::VARIABLE,
                 SemanticTokenType::FUNCTION,
             ],
@@ -180,17 +182,16 @@ fn summarize_module(m: &Module) -> ModuleSummary {
         unreachable!();
     };
 
-    let tokens = c
+    let mut tokens = c
         .tokens
-        .iter()
-        .map(|(span, t)| {
-            let ty = match t {
-                Token::Member(t) => t.ty,
-                Token::Symbol(t) => t.symbol.borrow().ty,
-            };
-            (span_to_range(*span), ty)
-        })
-        .collect();
+        .values()
+        .map(|t| core_token_to_server(t))
+        .collect::<Vec<_>>();
+    tokens.sort_by(|a, b| {
+        let a = a.range.start;
+        let b = b.range.start;
+        (a.line, a.character).cmp(&(b.line, b.character))
+    });
 
     ModuleSummary {
         type_store: c.type_store.clone(),
@@ -206,6 +207,24 @@ fn error_to_lsp(e: &ParseError) -> Diagnostic {
         message: e.message.clone(),
         severity: Some(DiagnosticSeverity::ERROR),
         ..Default::default()
+    }
+}
+
+fn core_token_to_server(token: &Token) -> ServerToken {
+    match token {
+        Token::Member(token) => ServerToken {
+            range: span_to_range(token.span),
+            ty: token.ty,
+            kind: mylang_core::SymbolKind::Value,
+        },
+        Token::Symbol(token) => {
+            let symbol = token.symbol.borrow();
+            ServerToken {
+                range: span_to_range(token.span),
+                ty: symbol.ty,
+                kind: symbol.kind,
+            }
+        }
     }
 }
 

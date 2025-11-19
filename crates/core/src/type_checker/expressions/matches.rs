@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use crate::{
     ast,
     type_checker::{
-        analysis_context::{type_store::TypeStore, VariableData, VariableRef},
-        TypeChecker,
+        analysis_context::{type_store::TypeStore, SymbolData, SymbolRef},
+        SymbolKind, TypeChecker,
     },
     types::{Type, TypeId, Variant},
 };
@@ -30,14 +30,15 @@ impl TypeChecker {
         &mut self,
         arm: &ast::MatchArm,
         against: TypeId,
-        deps: Vec<VariableRef>,
+        deps: Vec<SymbolRef>,
     ) -> TypeId {
         let arm_ty = self.with_scope(arm.span, |s| {
             let mut variables = vec![];
             s.match_pattern(&arm.pattern, against, &mut variables);
             for (name, ty) in variables {
-                s.analysis_context.register_symbol(VariableData::new(
+                s.analysis_context.register_symbol(SymbolData::new(
                     name.clone(),
+                    SymbolKind::Value,
                     ty,
                     false,
                     arm.pattern.as_span(),

@@ -89,7 +89,7 @@ impl TypeChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ast, types::*, VariableData};
+    use crate::{ast, types::*, SymbolData};
 
     fn create_type_checker() -> TypeChecker {
         TypeChecker::new(Vec::new())
@@ -124,11 +124,9 @@ mod tests {
                     },
                 ],
             }));
-        checker.analysis_context.register_symbol(VariableData::pure(
-            "User".into(),
-            id,
-            dummy_span(),
-        ));
+        checker
+            .analysis_context
+            .register_symbol(SymbolData::new_type("User".into(), id, dummy_span()));
 
         let field_access_expression = ast::MemberExpression {
             object: Box::new(ast::Expression::Identifier(ast::Identifier {
@@ -137,16 +135,9 @@ mod tests {
             prop: Some(ast::Identifier { span: span("name") }.into()),
             span: dummy_span(),
         };
-        checker.analysis_context.register_symbol(VariableData::pure(
-            "User".into(),
-            id,
-            dummy_span(),
-        ));
-        checker.analysis_context.register_symbol(VariableData::pure(
-            "user".into(),
-            id,
-            dummy_span(),
-        ));
+        checker
+            .analysis_context
+            .register_symbol(SymbolData::pure("user".into(), id, dummy_span()));
 
         let result = checker.visit_member_expression(&field_access_expression);
         assert!(
@@ -165,7 +156,7 @@ mod tests {
         });
 
         let ty = checker.analysis_context.type_store.add(tuple_type);
-        checker.analysis_context.register_symbol(VariableData::pure(
+        checker.analysis_context.register_symbol(SymbolData::pure(
             "my_tuple".into(),
             ty,
             span("my_tuple"),
@@ -190,7 +181,7 @@ mod tests {
     #[test]
     fn test_visit_tuple_indexing_invalid_type() {
         let mut checker = create_type_checker();
-        checker.analysis_context.register_symbol(VariableData::pure(
+        checker.analysis_context.register_symbol(SymbolData::pure(
             "not_a_tuple".into(),
             TypeStore::NUMBER.into(),
             span("not_a_tuple"),
@@ -219,7 +210,7 @@ mod tests {
             elements: vec![TypeStore::NUMBER, TypeStore::STRING],
         });
         let tuple_type = checker.analysis_context.type_store.add(tuple_type);
-        checker.analysis_context.register_symbol(VariableData::pure(
+        checker.analysis_context.register_symbol(SymbolData::pure(
             "my_tuple".into(),
             tuple_type,
             span("my_tuple"),
@@ -249,7 +240,7 @@ mod tests {
             elements: vec![TypeStore::NUMBER, TypeStore::STRING],
         });
         let tuple_type = checker.analysis_context.type_store.add(tuple_type);
-        checker.analysis_context.register_symbol(VariableData::pure(
+        checker.analysis_context.register_symbol(SymbolData::pure(
             "my_tuple".into(),
             tuple_type,
             span("my_tuple"),

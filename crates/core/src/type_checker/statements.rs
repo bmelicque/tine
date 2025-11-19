@@ -2,7 +2,7 @@ use super::TypeChecker;
 use crate::{
     ast,
     parser::parser::ParseError,
-    type_checker::analysis_context::{type_store::TypeStore, VariableData},
+    type_checker::analysis_context::{type_store::TypeStore, SymbolData},
     types::{Type, TypeId},
     utils::subspan_from_str,
 };
@@ -158,7 +158,7 @@ impl TypeChecker {
     fn visit_method_expression(&mut self, node: &ast::MethodDefinition) -> (TypeId, TypeId) {
         self.with_scope(node.span, |checker| {
             let receiver = checker.visit_named_type(&node.receiver.ty);
-            checker.analysis_context.register_symbol(VariableData::pure(
+            checker.analysis_context.register_symbol(SymbolData::pure(
                 node.receiver.name.as_str().into(),
                 receiver,
                 node.receiver.span,
@@ -194,8 +194,9 @@ impl TypeChecker {
                 let span = subspan_from_str(node.pattern.as_span(), &name).unwrap();
                 self.error(message, span);
             } else {
-                self.analysis_context.register_symbol(VariableData::new(
+                self.analysis_context.register_symbol(SymbolData::new(
                     name.clone(),
+                    super::SymbolKind::Value,
                     ty,
                     mutable,
                     node.pattern.as_span(),

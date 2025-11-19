@@ -6,7 +6,7 @@ use swc_common::FileName;
 
 use crate::analyzer;
 use crate::parser::parser::ParseError;
-use crate::type_checker::analysis_context::{AnalysisContext, ModuleMetadata, VariableRef};
+use crate::type_checker::analysis_context::{AnalysisContext, ModuleMetadata, SymbolRef};
 use crate::types::{Type, TypeId};
 
 pub struct CheckResult {
@@ -83,7 +83,7 @@ impl TypeChecker {
     }
 
     /// Execute the given predicate while registering outer dependencies (=enclosed variables)
-    pub fn with_dependencies<F, T>(&mut self, mut predicate: F) -> (T, Vec<VariableRef>)
+    pub fn with_dependencies<F, T>(&mut self, mut predicate: F) -> (T, Vec<SymbolRef>)
     where
         F: FnMut(&mut Self) -> T,
     {
@@ -105,10 +105,10 @@ impl TypeChecker {
     /// Returns how many dependencies were actually reactive
     pub fn save_reactive_dependencies(
         &mut self,
-        deps: &Vec<VariableRef>,
+        deps: &Vec<SymbolRef>,
         at: Span<'static>,
     ) -> usize {
-        let deps: Vec<VariableRef> = deps
+        let deps: Vec<SymbolRef> = deps
             .into_iter()
             .filter(|dep| self.resolve(dep.borrow().ty).is_reactive())
             .cloned()

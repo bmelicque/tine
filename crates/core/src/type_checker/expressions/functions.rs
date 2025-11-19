@@ -2,7 +2,7 @@ use crate::{
     ast,
     type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
     types::{FunctionType, Type, TypeId},
-    VariableData,
+    SymbolData,
 };
 
 impl TypeChecker {
@@ -27,7 +27,7 @@ impl TypeChecker {
         let mut param_types = Vec::with_capacity(node.params.len());
         for param in node.params.iter() {
             let ty = self.visit_type(&param.type_annotation);
-            self.analysis_context.register_symbol(VariableData::pure(
+            self.analysis_context.register_symbol(SymbolData::pure(
                 param.name.as_str().into(),
                 ty,
                 param.name.span,

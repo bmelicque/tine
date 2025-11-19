@@ -2,7 +2,7 @@ use crate::{
     ast,
     type_checker::analysis_context::type_store::TypeStore,
     types::{self, EnumType, GenericType, StructType, TupleType, Type, TypeId},
-    VariableData,
+    SymbolData,
 };
 
 use super::TypeChecker;
@@ -23,11 +23,9 @@ impl TypeChecker {
                 let ty = checker.analysis_context.type_store.add(ty.into());
                 param_types.push(ty);
                 // FIXME: spans
-                checker.analysis_context.register_symbol(VariableData::pure(
-                    param.clone(),
-                    ty,
-                    node.span,
-                ));
+                checker
+                    .analysis_context
+                    .register_symbol(SymbolData::new_type(param.clone(), ty, node.span));
             }
             (checker.visit_type_definition(&node.definition), param_types)
         });
@@ -48,7 +46,7 @@ impl TypeChecker {
                 })),
         };
         self.analysis_context
-            .register_symbol(VariableData::pure(name.clone(), ty, node.span));
+            .register_symbol(SymbolData::new_type(name.clone(), ty, node.span));
         self.analysis_context
             .type_store
             .add_alias(ty, name.to_string());

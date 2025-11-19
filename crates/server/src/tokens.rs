@@ -1,26 +1,33 @@
-use mylang_core::types::Type;
-use tower_lsp::lsp_types::{SemanticToken, SemanticTokenType};
+use mylang_core::{
+    types::{Type, TypeId},
+    SymbolKind,
+};
+use tower_lsp::lsp_types::{Range, SemanticToken, SemanticTokenType};
 
 use crate::{Backend, ModuleSummary};
 
+#[derive(Debug, Clone)]
+pub struct ServerToken {
+    pub range: Range,
+    pub ty: TypeId,
+    pub kind: SymbolKind,
+}
+
 impl Backend {
     pub fn tokens_to_semantic(&self, summary: &ModuleSummary) -> Vec<SemanticToken> {
-        let tokens = {
-            let mut tokens = summary.tokens.clone();
-            tokens.sort_by(|(a, _), (b, _)| {
-                (a.start.line, a.start.character).cmp(&(b.start.line, b.start.character))
-            });
-            tokens
-        };
-
-        let mut data = Vec::with_capacity(tokens.len());
+        let mut data = Vec::with_capacity(summary.tokens.len());
         let mut prev_line = 0;
         let mut prev_start = 0;
 
-        for (range, type_id) in tokens {
-            let global_type = summary.type_store.get(type_id);
-
-            let type_name = token_type_from_global(&global_type);
+        for token in &summary.tokens {
+            let global_type = summary.type_store.get(token.ty);
+            let type_name = match token.kind {
+                SymbolKind::Type => SemanticTokenType::TYPE,
+                SymbolKind::Value => match global_type {
+                    Type::Function(_) => SemanticTokenType::FUNCTION,
+                    _ => SemanticTokenType::VARIABLE,
+                },
+            };
             let token_type_index = self
                 .semantic_legend
                 .token_types
@@ -28,6 +35,7 @@ impl Backend {
                 .position(|s| *s == type_name)
                 .unwrap_or(0); // fallback
 
+            let range = token.range;
             let start_line = range.start.line;
             let start_col = range.start.character;
             let length = (range.end.character - range.start.character) as u32;
@@ -58,12 +66,5 @@ impl Backend {
         }
 
         data
-    }
-}
-
-fn token_type_from_global(ty: &Type) -> SemanticTokenType {
-    match ty {
-        Type::Function(_) => SemanticTokenType::FUNCTION,
-        _ => SemanticTokenType::VARIABLE,
     }
 }

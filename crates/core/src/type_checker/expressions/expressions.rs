@@ -118,7 +118,7 @@ mod tests {
     use super::*;
     use crate::ast;
     use crate::types::*;
-    use crate::VariableData;
+    use crate::SymbolData;
 
     fn create_type_checker() -> TypeChecker {
         TypeChecker::new(Vec::new())
@@ -279,7 +279,7 @@ mod tests {
     #[test]
     fn test_visit_identifier() {
         let mut checker = create_type_checker();
-        checker.analysis_context.register_symbol(VariableData::pure(
+        checker.analysis_context.register_symbol(SymbolData::pure(
             "x".into(),
             TypeStore::NUMBER,
             span("x"),

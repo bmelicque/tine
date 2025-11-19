@@ -191,7 +191,7 @@ mod tests {
     use crate::ast;
     use crate::types::StructType;
     use crate::types::Type;
-    use crate::VariableData;
+    use crate::SymbolData;
 
     fn dummy_span() -> pest::Span<'static> {
         pest::Span::new("_", 0, 0).unwrap()
@@ -292,11 +292,9 @@ mod tests {
                 id: 7,
                 fields: vec![],
             }));
-        checker.analysis_context.register_symbol(VariableData::pure(
-            "Box".into(),
-            def,
-            dummy_span(),
-        ));
+        checker
+            .analysis_context
+            .register_symbol(SymbolData::new_type("Box".into(), def, dummy_span()));
 
         let named_type = ast::NamedType {
             name: "Box".to_string(),
