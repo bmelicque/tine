@@ -16,6 +16,9 @@ pub fn dom_metadata() -> ModuleMetadata {
         // TODO: define fields
         fields: vec![],
     }));
+    analysis_context
+        .type_store
+        .add_alias(element_type, "Element".into());
     let element_trait = analysis_context
         .type_store
         .add(Type::Duck(DuckType { like: element_type }));
