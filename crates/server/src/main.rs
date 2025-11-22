@@ -13,7 +13,7 @@ use tower_lsp::{lsp_types::*, LspService, Server};
 use url::Url;
 
 use crate::tokens::ServerToken;
-use crate::utils::normalize_file_url;
+use crate::utils::{normalize_file_url, position_in_range};
 
 #[derive(Debug, Clone)]
 struct ModuleSummary {
@@ -40,6 +40,7 @@ impl tower_lsp::LanguageServer for Backend {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
                 )),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
                 semantic_tokens_provider: Some(
                     SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(
                         SemanticTokensRegistrationOptions {
@@ -102,6 +103,40 @@ impl tower_lsp::LanguageServer for Backend {
             result_id: None,
             data,
         })))
+    }
+
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let uri = normalize_file_url(uri).unwrap();
+        let Some(summary) = self.analyzed.get(&uri) else {
+            return Ok(None);
+        };
+
+        let position = params.text_document_position_params.position;
+        let token = summary
+            .tokens
+            .iter()
+            .find(|t| position_in_range(position, &t.range));
+        let Some(token) = token else { return Ok(None) };
+
+        let type_display = summary.type_store.display_type(token.ty);
+
+        let docs = "";
+
+        let contents = HoverContents::Scalar(MarkedString::String(format!(
+            r#"```mylang-types
+{}
+```
+
+{}
+"#,
+            type_display, docs
+        )));
+
+        Ok(Some(Hover {
+            contents,
+            range: Some(token.range),
+        }))
     }
 
     async fn shutdown(&self) -> Result<()> {

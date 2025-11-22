@@ -19,6 +19,10 @@
           ".my"
         ],
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "my-lang-types",
+        "extensions": []
       }
     ],
     "grammars": [
@@ -26,6 +30,11 @@
         "language": "my-lang",
         "scopeName": "source.my",
         "path": "./syntaxes/my.tmLanguage.json"
+      },
+      {
+        "language": "my-lang-types",
+        "scopeName": "source.mylang-types",
+        "path": "./syntaxes/mylangtypes.tmLanguage.json"
       }
     ]
   },
