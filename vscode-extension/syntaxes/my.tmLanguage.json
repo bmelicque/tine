@@ -107,6 +107,10 @@
                 {
                     "name": "entity.name.type.my",
                     "match": "\\b([A-Z][a-zA-Z0-9_]*|string|number|boolean)\\b"
+                },
+                {
+                    "name": "entity.name.type.my",
+                    "match": "(?<=^use)\\s+[A-Za-z_][A-Za-z0-9_]*|(?<=\\.)[A-Za-z_][A-Za-z0-9_]*"
                 }
             ]
         },

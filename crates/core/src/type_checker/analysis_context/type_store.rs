@@ -325,7 +325,7 @@ impl TypeStore {
     }
 
     pub fn import(&mut self, from: &TypeStore, id: TypeId) -> TypeId {
-        match from.get(id) {
+        let type_id = match from.get(id) {
             Type::Array(t) => {
                 let element = self.import(from, t.element);
                 self.add(Type::Array(ArrayType { element }))
@@ -426,6 +426,10 @@ impl TypeStore {
             Type::Unit => TypeStore::UNIT,
             Type::Unknown => TypeStore::UNKNOWN,
             Type::Void => TypeStore::VOID,
+        };
+        if let Some(alias) = from.aliases.get(&id) {
+            self.add_alias(type_id, alias.clone());
         }
+        type_id
     }
 }
