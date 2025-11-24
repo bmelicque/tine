@@ -20,7 +20,7 @@ impl Backend {
         let mut prev_start = 0;
 
         for token in &summary.tokens {
-            let global_type = summary.type_store.get(token.ty);
+            let global_type = self.type_store.get(token.ty);
             let type_name = match token.kind {
                 SymbolKind::Type => SemanticTokenType::TYPE,
                 SymbolKind::Value => match global_type {

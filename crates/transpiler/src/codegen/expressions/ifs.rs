@@ -76,7 +76,7 @@ impl CodeGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mylang_core::{ast, ModuleMetadata};
+    use mylang_core::{ast, CheckedModule};
     use swc_ecma_ast as swc;
 
     fn dummy_span() -> pest::Span<'static> {
@@ -116,7 +116,7 @@ mod tests {
         fn new_for_test() -> Self {
             let mut gen = CodeGenerator::new(
                 swc_common::FileName::Custom("".into()),
-                ModuleMetadata::new(),
+                CheckedModule::dummy(),
             );
             gen.enter_block();
             gen

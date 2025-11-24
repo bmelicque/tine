@@ -1,9 +1,9 @@
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use std::{path::PathBuf, rc::Rc};
 
 use anyhow::bail;
 use swc_common::FileName;
 
-use super::graph::{Module, ModuleGraph};
+use super::graph::{ModuleGraph, ParsedModule};
 
 use crate::{ast, common::use_decl_to_paths, parser::ParserEngine};
 
@@ -17,11 +17,7 @@ impl ProjectParser {
         Ok(self.graph)
     }
 
-    fn parse_file(&mut self, file_name: &FileName) -> Result<Rc<RefCell<Module>>, anyhow::Error> {
-        if let Some(module) = self.graph.get_module(file_name) {
-            return Ok(module);
-        }
-
+    fn parse_file(&mut self, file_name: &FileName) -> Result<&ParsedModule, anyhow::Error> {
         let module = match file_name {
             FileName::Real(p) => parse_file(p)?,
             FileName::Custom(c) => parse_virtual_module(c).unwrap(),
@@ -29,48 +25,55 @@ impl ProjectParser {
         };
         let file_names = get_dependencies(&module);
 
-        let name = module.name.clone();
-        for file_name in file_names {
-            match self.parse_file(&file_name) {
-                Ok(child) => self.graph.add_edge(&module, &child.borrow()),
-                Err(_) => {
-                    todo!()
-                }
-            }
-        }
+        let parsed_name = module.name.clone();
         self.graph.add_module(module);
 
-        Ok(self.graph.get_module(&name).unwrap())
+        for dependency_name in file_names {
+            self.parse_dependency(dependency_name, parsed_name.clone());
+        }
+
+        Ok(self.graph.get_module(&parsed_name).unwrap())
+    }
+
+    fn parse_dependency(&mut self, dependency_name: FileName, dependant_name: Rc<FileName>) {
+        if let Some(dependency) = self.graph.get_module(&dependency_name) {
+            self.graph
+                .add_edge(dependency.name.clone(), dependant_name.clone());
+            return;
+        }
+        let Ok(dependency) = self.parse_file(&dependency_name) else {
+            todo!()
+        };
+        let dependency_name = dependency.name.clone();
+        self.graph.add_edge(dependency_name, dependant_name.clone());
     }
 }
 
-fn parse_file(path: &PathBuf) -> Result<Module, anyhow::Error> {
+fn parse_file(path: &PathBuf) -> Result<ParsedModule, anyhow::Error> {
     let src = std::fs::read_to_string(path)?;
     let src = Box::leak(src.into_boxed_str());
     let mut parser = ParserEngine::new();
     let result = parser.parse(src);
 
-    Ok(Module {
+    Ok(ParsedModule {
         name: Rc::new(FileName::Real(path.clone())),
         ast: result.node,
-        context: None,
         errors: result.errors,
     })
 }
 
-fn parse_virtual_module(name: &String) -> anyhow::Result<Module> {
+fn parse_virtual_module(name: &String) -> anyhow::Result<ParsedModule> {
     match name.as_str() {
-        "dom" => Ok(Module {
+        "dom" => Ok(ParsedModule {
             name: Rc::new(FileName::Custom(name.clone())),
             ast: ast::Program::dummy(),
-            context: None,
             errors: Vec::new(),
         }),
         name => bail!("Cannot find module '{}'", name),
     }
 }
 
-fn get_dependencies(module: &Module) -> Vec<FileName> {
+fn get_dependencies(module: &ParsedModule) -> Vec<FileName> {
     let mut file_names: Vec<FileName> = module
         .ast
         .items

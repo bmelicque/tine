@@ -2,8 +2,8 @@ mod tokens;
 mod utils;
 
 use dashmap::DashMap;
-use mylang_core::{analyze, ParseError};
-use mylang_core::{Module, Token};
+use mylang_core::Token;
+use mylang_core::{analyze, CheckedModule, ParseError, TypeStore};
 use std::path::PathBuf;
 use std::sync::Arc;
 use swc_common::FileName;
@@ -16,8 +16,7 @@ use crate::tokens::ServerToken;
 use crate::utils::{normalize_file_url, position_in_range};
 
 #[derive(Debug, Clone)]
-struct ModuleSummary {
-    type_store: mylang_core::TypeStore,
+pub struct ModuleSummary {
     pub uri: Url,
     pub diagnostics: Vec<Diagnostic>,
     pub tokens: Vec<ServerToken>,
@@ -26,6 +25,7 @@ struct ModuleSummary {
 #[derive(Clone)]
 struct Backend {
     client: Client,
+    type_store: TypeStore,
     analyzed: Arc<DashMap<Url, ModuleSummary>>,
     semantic_legend: SemanticTokensLegend,
 }
@@ -33,7 +33,8 @@ struct Backend {
 #[tower_lsp::async_trait]
 impl tower_lsp::LanguageServer for Backend {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
-        let root = params.root_uri.and_then(|u| u.to_file_path().ok());
+        // TODO:
+        let _root = params.root_uri.and_then(|u| u.to_file_path().ok());
 
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
@@ -119,7 +120,7 @@ impl tower_lsp::LanguageServer for Backend {
             .find(|t| position_in_range(position, &t.range));
         let Some(token) = token else { return Ok(None) };
 
-        let type_display = summary.type_store.display_type(token.ty);
+        let type_display = self.type_store.display_type(token.ty);
 
         let docs = "";
 
@@ -158,6 +159,7 @@ impl Backend {
         Self {
             semantic_legend,
             client,
+            type_store: TypeStore::new(),
             analyzed: Arc::new(DashMap::new()),
         }
     }
@@ -166,7 +168,7 @@ impl Backend {
         let client = self.client.clone();
         match get_summary(entry_path) {
             Ok(summary) => {
-                for module in summary.iter() {
+                for module in &summary.modules {
                     self.analyzed
                         .insert(normalize_file_url(&module.uri).unwrap(), module.clone());
                     client
@@ -197,27 +199,35 @@ impl Backend {
     }
 }
 
-fn get_summary(entry_point: PathBuf) -> anyhow::Result<Vec<ModuleSummary>, anyhow::Error> {
-    let analyzed_modules = analyze(entry_point)?;
-    Ok(analyzed_modules
-        .modules
-        .into_iter()
-        .filter(|m| matches!(*m.borrow().name, FileName::Real(_)))
-        .map(|m| summarize_module(&m.borrow()))
-        .collect())
+pub struct ProjectSummary {
+    pub modules: Vec<ModuleSummary>,
+    pub type_store: TypeStore,
 }
 
-fn summarize_module(m: &Module) -> ModuleSummary {
+fn get_summary(entry_point: PathBuf) -> anyhow::Result<ProjectSummary, anyhow::Error> {
+    let analyzed_modules = analyze(entry_point)?;
+    let type_store = (*analyzed_modules.modules.last().unwrap().metadata.type_store).clone();
+    let modules = analyzed_modules
+        .modules
+        .into_iter()
+        .filter(|m| matches!(*m.name, FileName::Real(_)))
+        .map(|m| summarize_module(&m))
+        .collect();
+    Ok(ProjectSummary {
+        modules,
+        type_store,
+    })
+}
+
+fn summarize_module(m: &CheckedModule) -> ModuleSummary {
     let uri: Url = match (*m.name).clone() {
         FileName::Real(path) => Url::from_file_path(path).unwrap(),
         _ => unreachable!(),
     };
     let diagnostics = m.errors.iter().map(|e| error_to_lsp(e)).collect();
-    let Some(c) = &m.context else {
-        unreachable!();
-    };
 
-    let mut tokens = c
+    let mut tokens = m
+        .metadata
         .tokens
         .values()
         .map(|t| core_token_to_server(t))
@@ -229,7 +239,6 @@ fn summarize_module(m: &Module) -> ModuleSummary {
     });
 
     ModuleSummary {
-        type_store: c.type_store.clone(),
         uri,
         diagnostics,
         tokens,

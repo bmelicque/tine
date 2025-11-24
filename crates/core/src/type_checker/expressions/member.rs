@@ -92,7 +92,7 @@ mod tests {
     use crate::{ast, types::*, SymbolData};
 
     fn create_type_checker() -> TypeChecker {
-        TypeChecker::new(Vec::new())
+        TypeChecker::dummy()
     }
 
     fn dummy_span() -> pest::Span<'static> {

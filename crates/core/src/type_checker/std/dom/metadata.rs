@@ -1,27 +1,20 @@
 use crate::{
     type_checker::{
-        analysis_context::{type_store::TypeStore, AnalysisContext, ModuleMetadata},
-        SymbolData,
+        analysis_context::{type_store::TypeStore, AnalysisContext},
+        CheckData, CheckResult, SymbolData,
     },
-    types::{DuckType, FunctionType, StructType, Type},
+    types::{DuckType, FunctionType, Type},
     utils::dummy_span,
 };
 
-pub fn dom_metadata() -> ModuleMetadata {
+pub fn dom_metadata(store: TypeStore) -> CheckResult {
     let mut analysis_context = AnalysisContext::new();
+    analysis_context.type_store = store;
     analysis_context.enter_scope(dummy_span());
 
-    let element_type = analysis_context.type_store.add(Type::Struct(StructType {
-        id: analysis_context.type_store.get_next_id(),
-        // TODO: define fields
-        fields: vec![],
+    let element_trait = analysis_context.type_store.add(Type::Duck(DuckType {
+        like: TypeStore::ELEMENT,
     }));
-    analysis_context
-        .type_store
-        .add_alias(element_type, "Element".into());
-    let element_trait = analysis_context
-        .type_store
-        .add(Type::Duck(DuckType { like: element_type }));
     let render_type = analysis_context
         .type_store
         .add(Type::Function(FunctionType {
@@ -35,5 +28,21 @@ pub fn dom_metadata() -> ModuleMetadata {
         dummy_span(),
     ));
 
-    analysis_context.into()
+    let main_scope = analysis_context
+        .scopes
+        .values()
+        .find(|s| s.outer_id.is_none())
+        .unwrap();
+    let data = CheckData {
+        exports: main_scope.bindings.clone(),
+        expressions: analysis_context.expressions,
+        tokens: analysis_context.tokens,
+        dependencies: analysis_context.other_dependencies,
+    };
+
+    CheckResult {
+        type_store: analysis_context.type_store,
+        data,
+        errors: vec![],
+    }
 }

@@ -1,4 +1,4 @@
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use std::path::PathBuf;
 
 use anyhow::anyhow;
 use swc_common::FileName;
@@ -9,11 +9,13 @@ mod graph;
 mod parse;
 mod type_check;
 
-pub use graph::Module;
+pub use graph::ParsedModule;
+pub use type_check::{CheckedModule, ModuleTypeData};
 
 pub struct AnalyzedModules {
-    pub modules: Vec<Rc<RefCell<Module>>>,
-    pub entry: Rc<RefCell<Module>>,
+    pub modules: Vec<CheckedModule>,
+    /// Index of the main entry in the list of checked modules
+    pub entry: usize,
 }
 
 pub fn analyze(entry_point: PathBuf) -> Result<AnalyzedModules, anyhow::Error> {
@@ -34,11 +36,8 @@ pub fn analyze(entry_point: PathBuf) -> Result<AnalyzedModules, anyhow::Error> {
         }
     };
 
-    type_check::type_check(&modules);
+    let modules = type_check::type_check(modules);
     let filename = FileName::Real(entry_point.canonicalize().unwrap());
-    let module = graph.get_module(&filename).unwrap();
-    Ok(AnalyzedModules {
-        modules,
-        entry: module,
-    })
+    let entry = modules.iter().position(|m| *m.name == filename).unwrap();
+    Ok(AnalyzedModules { modules, entry })
 }

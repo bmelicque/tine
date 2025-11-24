@@ -1,29 +1,53 @@
-use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use pest::Span;
 use swc_common::FileName;
 
-use crate::analyzer;
 use crate::parser::parser::ParseError;
-use crate::type_checker::analysis_context::{AnalysisContext, ModuleMetadata, SymbolRef};
+use crate::type_checker::analysis_context::{AnalysisContext, CheckData, SymbolRef};
 use crate::types::{Type, TypeId};
+use crate::{analyzer, TypeStore};
 
 pub struct CheckResult {
-    pub metadata: ModuleMetadata,
+    pub type_store: TypeStore,
+    pub data: CheckData,
     pub errors: Vec<ParseError>,
 }
 
 pub struct TypeChecker {
     file_name: Option<Rc<FileName>>,
-    project_modules: Vec<Rc<RefCell<analyzer::Module>>>,
+    project_modules: HashMap<Rc<FileName>, CheckData>,
     pub errors: Vec<ParseError>,
     pub analysis_context: AnalysisContext,
 }
 
 impl TypeChecker {
-    pub fn new(external: Vec<Rc<RefCell<analyzer::Module>>>) -> Self {
+    pub fn new(external: HashMap<Rc<FileName>, CheckData>) -> Self {
         let mut analysis_context = AnalysisContext::new();
+        analysis_context.enter_scope(pest::Span::new("", 0, 0).unwrap());
+
+        Self {
+            file_name: None,
+            project_modules: external,
+            errors: Vec::new(),
+            analysis_context,
+        }
+    }
+    pub fn dummy() -> Self {
+        let mut analysis_context = AnalysisContext::new();
+        analysis_context.enter_scope(pest::Span::new("", 0, 0).unwrap());
+
+        Self {
+            file_name: None,
+            project_modules: HashMap::new(),
+            errors: Vec::new(),
+            analysis_context,
+        }
+    }
+    pub fn with_store(external: HashMap<Rc<FileName>, CheckData>, store: TypeStore) -> Self {
+        let mut analysis_context = AnalysisContext::new();
+        analysis_context.type_store = store;
         analysis_context.enter_scope(pest::Span::new("", 0, 0).unwrap());
 
         Self {
@@ -38,15 +62,30 @@ impl TypeChecker {
         self.file_name.clone()
     }
 
-    pub fn check(mut self, module: &analyzer::Module) -> CheckResult {
+    pub fn check(mut self, module: &analyzer::ParsedModule) -> CheckResult {
         self.file_name = Some(module.name.clone());
         module
             .ast
             .items
             .iter()
             .for_each(|item| self.visit_item(item));
+
+        let main_scope = self
+            .analysis_context
+            .scopes
+            .values()
+            .find(|s| s.outer_id.is_none())
+            .unwrap();
+        let data = CheckData {
+            exports: main_scope.bindings.clone(),
+            expressions: self.analysis_context.expressions,
+            tokens: self.analysis_context.tokens,
+            dependencies: self.analysis_context.other_dependencies,
+        };
+
         CheckResult {
-            metadata: self.analysis_context.into(),
+            type_store: self.analysis_context.type_store,
+            data,
             errors: self.errors,
         }
     }
@@ -124,9 +163,7 @@ impl TypeChecker {
         self.errors.push(ParseError { message, span });
     }
 
-    pub(super) fn get_module(&self, name: &FileName) -> Option<&Rc<RefCell<analyzer::Module>>> {
-        self.project_modules
-            .iter()
-            .find(|m| *m.borrow().name == *name)
+    pub(super) fn get_module_data(&self, name: &FileName) -> Option<&CheckData> {
+        self.project_modules.get(name)
     }
 }

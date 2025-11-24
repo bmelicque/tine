@@ -1,7 +1,9 @@
+use swc_common::FileName;
+
 use crate::{
     ast,
     common::{use_decl_to_paths, ModuleImports},
-    type_checker::{self, dom_metadata, ModuleMetadata, TypeChecker},
+    type_checker::{self, CheckData, TypeChecker},
 };
 
 impl TypeChecker {
@@ -26,10 +28,10 @@ impl TypeChecker {
     fn visit_use_virtual_module(&mut self, node: &ast::UseDeclaration) {
         assert_eq!(node.relative_count, 0);
         let module_name = node.tree.path[0].as_str();
-        let metadata = match module_name {
-            "dom" => dom_metadata(),
-            name => panic!("Unexpected virtual module '{}'", name),
+        let Some(metadata) = self.get_module_data(&FileName::Custom(module_name.into())) else {
+            panic!("Unexpected virtual module '{}'", module_name);
         };
+        let metadata = metadata.clone();
         let subtree = ast::UseTree {
             path: node.tree.path.iter().skip(1).cloned().collect(),
             sub_trees: node.tree.sub_trees.clone(),
@@ -57,37 +59,25 @@ impl TypeChecker {
     /// For example, `use Module.(a, b.c)` will visit import trees `a` and `b.c` from module `Module`
     fn visit_module_imports(&mut self, imports: ModuleImports) {
         let module_name = imports.module_name;
-        let Some(module) = self.get_module(&module_name) else {
+        let Some(check_data) = self.get_module_data(&module_name) else {
             panic!("Cannot find module '{}' within parsed modules", module_name)
         };
-        // cloning rc to stop borrowing self
-        let module = module.clone();
-        let module = module.borrow();
-        let Some(ref metadata) = module.context else {
-            panic!(
-                "Module '{}' should've already been type-checked at this point!",
-                module_name
-            )
-        };
-
+        let check_data = check_data.clone();
         for subtree in &imports.import_tree {
-            self.visit_imported_name(&subtree, metadata);
+            self.visit_imported_name(&subtree, &check_data);
         }
     }
 
     /// Visit an imported element.
     ///
     /// Subvalue imports (like `use Module.value.subvalue`) are not permitted (yet?).
-    fn visit_imported_name(&mut self, tree: &ast::UseTree, metadata: &ModuleMetadata) {
+    fn visit_imported_name(&mut self, tree: &ast::UseTree, metadata: &CheckData) {
         let path_element = &tree.path[0];
         let name = path_element.as_str();
         let symbol = metadata.exports.iter().find(|s| s.borrow().name == *name);
         match symbol {
             Some(symbol) => {
-                let ty = self
-                    .analysis_context
-                    .type_store
-                    .import(&metadata.type_store, symbol.borrow().ty);
+                let ty = symbol.borrow().ty;
                 let symbol = type_checker::SymbolData::new(
                     name.to_string(),
                     symbol.borrow().kind,
@@ -98,7 +88,7 @@ impl TypeChecker {
                 );
                 let var = self.analysis_context.register_symbol(symbol);
                 self.analysis_context
-                    .save_expression_type(path_element.span, ty.clone());
+                    .save_expression_type(path_element.span, ty);
                 self.analysis_context
                     .save_symbol_token(path_element.span, var);
             }

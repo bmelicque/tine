@@ -1,14 +1,13 @@
-use std::{collections::HashMap, sync::OnceLock};
+use std::collections::HashMap;
 
 use pest::Span;
 
 use crate::{
     ast,
     type_checker::TypeChecker,
-    types::{DuckType, ListenerType, StructType, Type, TypeId},
+    types::{DuckType, ListenerType, Type, TypeId},
+    TypeStore,
 };
-
-static ELEMENT: OnceLock<TypeId> = OnceLock::new();
 
 impl TypeChecker {
     pub fn visit_element_expression(&mut self, node: &ast::ElementExpression) -> TypeId {
@@ -97,23 +96,8 @@ impl TypeChecker {
     }
 
     pub fn element_type(&mut self) -> TypeId {
-        match ELEMENT.get() {
-            Some(t) => *t,
-            None => {
-                let st = self
-                    .analysis_context
-                    .type_store
-                    .add(Type::Struct(StructType {
-                        id: self.analysis_context.type_store.get_next_id(),
-                        fields: vec![],
-                    }));
-                let t = self
-                    .analysis_context
-                    .type_store
-                    .add(Type::Duck(DuckType { like: st }));
-                let _ = ELEMENT.set(t);
-                t
-            }
-        }
+        self.analysis_context.type_store.add(Type::Duck(DuckType {
+            like: TypeStore::ELEMENT,
+        }))
     }
 }

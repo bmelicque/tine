@@ -7,10 +7,7 @@ use std::collections::HashMap;
 
 use pest::Span;
 
-use crate::{
-    type_checker::analysis_context::type_store::TypeStore,
-    types::{self, Type, TypeId},
-};
+use crate::{type_checker::analysis_context::type_store::TypeStore, types::TypeId};
 
 #[derive(Clone, Debug)]
 pub enum Token {
@@ -62,9 +59,6 @@ pub struct AnalysisContext {
     pub scopes: HashMap<Span<'static>, Scope>,
     current_scope: Option<Span<'static>>,
 
-    /// FIXME:
-    /// This property is legacy code and will disappear
-    pub types: HashMap<Span<'static>, types::Type>,
     pub(crate) type_store: TypeStore,
     pub expressions: HashMap<Span<'static>, TypeId>,
     pub tokens: HashMap<Span<'static>, Token>,
@@ -79,7 +73,6 @@ impl AnalysisContext {
             symbols: Vec::<SymbolHandle>::new(),
             scopes: HashMap::new(),
             current_scope: None,
-            types: HashMap::new(),
             type_store: TypeStore::new(),
             expressions: HashMap::new(),
             tokens: HashMap::new(),
@@ -178,51 +171,9 @@ fn within(outer: Span<'static>, inner: Span<'static>) -> bool {
 }
 
 #[derive(Clone, Debug)]
-pub struct ModuleMetadata {
-    pub type_store: TypeStore,
+pub struct CheckData {
     pub exports: Vec<SymbolRef>,
     pub expressions: HashMap<Span<'static>, TypeId>,
     pub tokens: HashMap<Span<'static>, Token>,
     pub dependencies: HashMap<Span<'static>, Vec<SymbolRef>>,
-}
-
-impl ModuleMetadata {
-    pub fn new() -> Self {
-        ModuleMetadata {
-            type_store: TypeStore::new(),
-            exports: vec![],
-            expressions: HashMap::new(),
-            tokens: HashMap::new(),
-            dependencies: HashMap::new(),
-        }
-    }
-
-    pub fn lookup(&self, name: &str) -> Option<SymbolRef> {
-        self.exports
-            .iter()
-            .find(|e| e.borrow().name == *name)
-            .cloned()
-    }
-
-    pub fn resolve_type(&self, type_id: TypeId) -> Type {
-        self.type_store.get(type_id).clone()
-    }
-}
-
-impl From<AnalysisContext> for ModuleMetadata {
-    fn from(value: AnalysisContext) -> Self {
-        let main_scope = value
-            .scopes
-            .values()
-            .find(|s| s.outer_id.is_none())
-            .unwrap();
-
-        Self {
-            type_store: value.type_store,
-            exports: main_scope.bindings.clone(),
-            expressions: value.expressions,
-            tokens: value.tokens,
-            dependencies: value.other_dependencies,
-        }
-    }
 }

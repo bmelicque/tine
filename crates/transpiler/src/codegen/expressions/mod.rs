@@ -271,7 +271,7 @@ impl CodeGenerator {
     /// Create code for identifiers.
     /// Identifiers that have references are declared wrapped in an array (like `let identifier = [value]`), so their reads are generated like `identifier[0]`
     pub fn ident_to_swc(&mut self, node: &ast::Identifier) -> swc::Expr {
-        let info = self.get_info(node.as_str()).unwrap();
+        let info = self.get_info(node.span).unwrap();
 
         if info.borrow().has_ref() {
             swc::Expr::Member(swc::MemberExpr {

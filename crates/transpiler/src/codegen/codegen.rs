@@ -1,6 +1,6 @@
 use super::sort::Scope;
 use crate::codegen::utils::create_ident;
-use mylang_core::{ast, types, ModuleMetadata, SymbolRef};
+use mylang_core::{ast, types, CheckedModule, SymbolRef, Token};
 use pest::Span;
 use swc_common::{sync::Lrc, FileName, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
@@ -10,17 +10,17 @@ pub struct CodeGenerator {
     scope: Scope,
     _source_map: Lrc<SourceMap>,
     current_block: Vec<Vec<swc::Stmt>>,
-    pub(crate) metadata: ModuleMetadata,
+    pub(crate) module: CheckedModule,
 }
 
 impl CodeGenerator {
-    pub fn new(filename: FileName, metadata: ModuleMetadata) -> Self {
+    pub fn new(filename: FileName, metadata: CheckedModule) -> Self {
         Self {
             filename,
             scope: Scope::new(),
             _source_map: Lrc::new(SourceMap::new(Default::default())),
             current_block: vec![],
-            metadata,
+            module: metadata,
         }
     }
 
@@ -101,22 +101,37 @@ impl CodeGenerator {
         self.scope.find(name)
     }
 
-    pub fn get_info(&self, name: &str) -> Option<SymbolRef> {
-        self.metadata.lookup(name)
+    pub fn get_info(&self, span: Span<'static>) -> Option<SymbolRef> {
+        self.module
+            .metadata
+            .tokens
+            .get(&span)
+            .map(|token| match token {
+                Token::Member(_) => None,
+                Token::Symbol(symbol) => Some(symbol.symbol.clone()),
+            })
+            .flatten()
     }
 
     pub fn get_reactive_dependencies(&self, span: Span<'static>) -> Vec<SymbolRef> {
-        let Some(deps) = self.metadata.dependencies.get(&span) else {
+        let Some(deps) = self.module.metadata.dependencies.get(&span) else {
             return vec![];
         };
         deps.iter()
-            .filter(|dep| self.metadata.resolve_type(dep.borrow().ty).is_reactive())
+            .filter(|dep| {
+                self.module
+                    .metadata
+                    .resolve_type(dep.borrow().ty)
+                    .is_reactive()
+            })
             .cloned()
             .collect()
     }
 
     pub fn get_expr_type(&self, node: &ast::Expression) -> Option<types::Type> {
-        let type_id = self.metadata.expressions.get(&node.as_span());
-        type_id.map(|id| self.metadata.resolve_type(*id))
+        let type_id = self.module.metadata.expressions.get(&node.as_span());
+        type_id
+            .map(|id| self.module.metadata.type_store.get(*id))
+            .cloned()
     }
 }

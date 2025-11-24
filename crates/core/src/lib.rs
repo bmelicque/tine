@@ -6,10 +6,10 @@ mod type_checker;
 pub mod types;
 mod utils;
 
-pub use analyzer::{analyze, Module};
+pub use analyzer::{analyze, CheckedModule, ModuleTypeData, ParsedModule};
 pub use common::{use_decl_to_paths, ModuleImports};
 pub use parser::ParseError;
 pub use type_checker::{
-    MemberToken, ModuleMetadata, SymbolData, SymbolKind, SymbolRef, SymbolToken, Token, TypeStore,
+    MemberToken, SymbolData, SymbolKind, SymbolRef, SymbolToken, Token, TypeStore,
 };
 pub use utils::pretty_print_error;

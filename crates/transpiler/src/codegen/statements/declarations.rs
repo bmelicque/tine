@@ -13,7 +13,7 @@ impl CodeGenerator {
             .pattern
             .list_identifiers()
             .into_iter()
-            .filter_map(|id| self.get_info(id.span.as_str()))
+            .filter_map(|id| self.get_info(id.span))
             .filter(|var| var.borrow().has_ref())
             .map(|var| wrap_identifier(&var.borrow().name).into())
             .collect();
@@ -31,7 +31,7 @@ impl CodeGenerator {
         };
 
         let mut init = self.expr_to_swc(&node.value);
-        let info = self.get_info(id.span.as_str()).unwrap();
+        let info = self.get_info(id.span).unwrap();
         if info.borrow().has_ref() {
             init = swc::Expr::Array(swc::ArrayLit {
                 span: DUMMY_SP,

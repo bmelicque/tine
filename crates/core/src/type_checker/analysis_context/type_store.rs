@@ -23,7 +23,7 @@ pub struct TypeStore {
     arena: Vec<Type>,
     lookup: HashMap<Type, TypeId>,
     metadata: HashMap<TypeId, TypeMetadata>,
-    aliases: HashMap<TypeId, String>,
+    aliases: Vec<(TypeId, String)>,
 }
 
 impl TypeStore {
@@ -34,13 +34,14 @@ impl TypeStore {
     pub const BOOLEAN: TypeId = 4;
     pub const STRING: TypeId = 5;
     pub const NUMBER: TypeId = 6;
+    pub const ELEMENT: TypeId = 7;
 
     pub fn new() -> Self {
         let mut store = Self {
             arena: vec![],
             lookup: HashMap::new(),
             metadata: HashMap::new(),
-            aliases: HashMap::new(),
+            aliases: Vec::new(),
         };
         store.add(Type::Unknown);
         store.add(Type::Void);
@@ -49,6 +50,12 @@ impl TypeStore {
         store.add(Type::Boolean);
         store.add(Type::String);
         store.add(Type::Number);
+        let element = store.add(Type::Struct(StructType {
+            id: TypeStore::ELEMENT,
+            // TODO: define fields
+            fields: vec![],
+        }));
+        store.add_alias(element, "Element".into());
         store
     }
 
@@ -67,11 +74,14 @@ impl TypeStore {
         }
     }
     pub fn add_alias(&mut self, ty: TypeId, name: String) {
-        self.aliases.insert(ty, name);
+        self.aliases.push((ty, name));
     }
 
     pub fn get(&self, id: TypeId) -> &Type {
         &self.arena[id as usize]
+    }
+    pub fn get_alias(&self, id: TypeId) -> Option<&String> {
+        self.aliases.iter().find(|(i, _)| *i == id).map(|(_, a)| a)
     }
 
     pub fn find_id(&self, ty: &Type) -> Option<TypeId> {
@@ -234,7 +244,7 @@ impl TypeStore {
     }
 
     pub fn display_type(&self, ty: TypeId) -> String {
-        if let Some(name) = self.aliases.get(&ty) {
+        if let Some(name) = self.get_alias(ty) {
             return name.clone();
         }
         match &self.arena[ty as usize] {
@@ -428,7 +438,7 @@ impl TypeStore {
             Type::Unknown => TypeStore::UNKNOWN,
             Type::Void => TypeStore::VOID,
         };
-        if let Some(alias) = from.aliases.get(&id) {
+        if let Some(alias) = from.get_alias(id) {
             self.add_alias(type_id, alias.clone());
         }
         type_id

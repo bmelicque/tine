@@ -2,24 +2,23 @@ use crate::{
     bundler::internals::{parse_dom, parse_internals},
     codegen::CodeGenerator,
 };
-use mylang_core::Module;
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use mylang_core::CheckedModule;
+use std::sync::Arc;
 use swc_common::{FileName, SourceMap};
 
 pub struct SwcLoader {
-    modules: Vec<Rc<RefCell<Module>>>,
+    modules: Vec<CheckedModule>,
 }
 
 impl SwcLoader {
-    pub fn new(modules: Vec<Rc<RefCell<Module>>>) -> Self {
+    pub fn new(modules: Vec<CheckedModule>) -> Self {
         Self { modules }
     }
 
     fn load_real_module(&self, file: &FileName) -> anyhow::Result<swc_bundler::ModuleData> {
-        let Some(module) = self.modules.iter().find(|m| *m.borrow().name == *file) else {
+        let Some(module) = self.modules.iter().find(|m| *m.name == *file) else {
             panic!("couldn't find module '{:?}'", file)
         };
-        let module = module.borrow();
 
         let cm = Arc::new(SourceMap::default());
         let fm = cm.new_source_file(
@@ -27,8 +26,7 @@ impl SwcLoader {
             module.ast.span.as_str(),
         );
 
-        let mut code_generator =
-            CodeGenerator::new(file.clone(), module.context.as_ref().unwrap().clone());
+        let mut code_generator = CodeGenerator::new(file.clone(), module.clone());
         let module = code_generator.program_to_swc_module(&module.ast);
 
         Ok(swc_bundler::ModuleData {
