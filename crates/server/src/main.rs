@@ -154,7 +154,7 @@ impl Backend {
                 SemanticTokenType::VARIABLE,
                 SemanticTokenType::FUNCTION,
             ],
-            token_modifiers: vec![],
+            token_modifiers: vec![SemanticTokenModifier::READONLY],
         };
         Self {
             semantic_legend,
@@ -210,7 +210,6 @@ pub struct ProjectSummary {
 fn get_summary(entry_point: PathBuf) -> anyhow::Result<ProjectSummary, anyhow::Error> {
     let analyzed_modules = analyze(entry_point)?;
     let type_store = (*analyzed_modules.modules.last().unwrap().metadata.type_store).clone();
-    eprintln!("get_summary {:?}", type_store);
     let modules = analyzed_modules
         .modules
         .into_iter()
@@ -264,6 +263,7 @@ fn core_token_to_server(token: &Token) -> ServerToken {
             range: span_to_range(token.span),
             ty: token.ty,
             kind: mylang_core::SymbolKind::Value,
+            mutable: true,
         },
         Token::Symbol(token) => {
             let symbol = token.symbol.borrow();
@@ -271,6 +271,7 @@ fn core_token_to_server(token: &Token) -> ServerToken {
                 range: span_to_range(token.span),
                 ty: symbol.ty,
                 kind: symbol.kind,
+                mutable: symbol.mutable,
             }
         }
     }
