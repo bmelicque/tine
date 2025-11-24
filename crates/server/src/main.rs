@@ -5,7 +5,7 @@ use dashmap::DashMap;
 use mylang_core::Token;
 use mylang_core::{analyze, CheckedModule, ParseError, TypeStore};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use swc_common::FileName;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::Client;
@@ -25,7 +25,7 @@ pub struct ModuleSummary {
 #[derive(Clone)]
 struct Backend {
     client: Client,
-    type_store: TypeStore,
+    type_store: Arc<Mutex<TypeStore>>,
     analyzed: Arc<DashMap<Url, ModuleSummary>>,
     semantic_legend: SemanticTokensLegend,
 }
@@ -120,7 +120,7 @@ impl tower_lsp::LanguageServer for Backend {
             .find(|t| position_in_range(position, &t.range));
         let Some(token) = token else { return Ok(None) };
 
-        let type_display = self.type_store.display_type(token.ty);
+        let type_display = self.type_store.lock().unwrap().display_type(token.ty);
 
         let docs = "";
 
@@ -159,7 +159,7 @@ impl Backend {
         Self {
             semantic_legend,
             client,
-            type_store: TypeStore::new(),
+            type_store: Arc::new(Mutex::new(TypeStore::new())),
             analyzed: Arc::new(DashMap::new()),
         }
     }
@@ -168,6 +168,9 @@ impl Backend {
         let client = self.client.clone();
         match get_summary(entry_path) {
             Ok(summary) => {
+                if let Ok(mut guard) = self.type_store.lock() {
+                    *guard = summary.type_store;
+                }
                 for module in &summary.modules {
                     self.analyzed
                         .insert(normalize_file_url(&module.uri).unwrap(), module.clone());
@@ -207,6 +210,7 @@ pub struct ProjectSummary {
 fn get_summary(entry_point: PathBuf) -> anyhow::Result<ProjectSummary, anyhow::Error> {
     let analyzed_modules = analyze(entry_point)?;
     let type_store = (*analyzed_modules.modules.last().unwrap().metadata.type_store).clone();
+    eprintln!("get_summary {:?}", type_store);
     let modules = analyzed_modules
         .modules
         .into_iter()
