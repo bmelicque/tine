@@ -2,9 +2,11 @@ use super::TypeChecker;
 use crate::{
     ast,
     parser::parser::ParseError,
-    type_checker::analysis_context::{type_store::TypeStore, SymbolData},
+    type_checker::{
+        analysis_context::{type_store::TypeStore, SymbolData},
+        patterns::TokenList,
+    },
     types::{Type, TypeId},
-    utils::subspan_from_str,
 };
 
 impl TypeChecker {
@@ -43,14 +45,14 @@ impl TypeChecker {
 
     /// Visit an assignee which is a pattern
     fn visit_pattern_assignee(&mut self, pattern: &ast::Pattern, against: TypeId) {
-        let mut variables = Vec::new();
+        let mut variables = TokenList::new();
         self.match_pattern(pattern, against, &mut variables);
-        for (name, ty) in variables {
-            let Some(info) = self.analysis_context.lookup_mut(&name) else {
-                self.errors.push(ParseError {
-                    message: format!("Cannot find name '{}'", name),
-                    span: pattern.as_span(),
-                });
+        for (name, ty) in variables.0 {
+            let Some(info) = self.analysis_context.lookup_mut(name.as_str()) else {
+                self.error(
+                    format!("Cannot find name '{}'", name.as_str()),
+                    pattern.as_span(),
+                );
                 continue;
             };
             info.add_write();
@@ -61,6 +63,8 @@ impl TypeChecker {
                     pattern.as_span(),
                 );
             }
+            self.analysis_context
+                .save_symbol_token(name, info.readonly());
         }
     }
 
@@ -116,6 +120,8 @@ impl TypeChecker {
                 );
             }
         }
+        self.analysis_context
+            .save_symbol_token(node.identifier.span, info.readonly());
     }
 
     fn visit_break_statement(&mut self, node: &ast::BreakStatement) -> TypeId {
@@ -180,29 +186,34 @@ impl TypeChecker {
             self.with_dependencies(|s| s.visit_expression(&node.value));
 
         let mutable = node.op == ast::DeclarationOp::Mut;
-        let mut variables = Vec::<(String, TypeId)>::new();
         if node.pattern.is_refutable() {
             self.error(
                 "Irrefutable pattern expected".into(),
                 node.pattern.as_span(),
             );
         }
+        let mut variables = TokenList::new();
         self.match_pattern(&node.pattern, inferred_type, &mut variables);
-        for (name, ty) in variables {
-            if self.analysis_context.find_in_current_scope(&name).is_some() {
-                let message = format!("variable '{}' already defined in current scope", name);
-                let span = subspan_from_str(node.pattern.as_span(), &name).unwrap();
-                self.error(message, span);
-            } else {
-                self.analysis_context.register_symbol(SymbolData::new(
-                    name.clone(),
+        for (id, ty) in variables.0 {
+            let symbol = match self.analysis_context.find_in_current_scope(id.as_str()) {
+                Some(symbol) => {
+                    let message = format!(
+                        "variable '{}' already defined in current scope",
+                        id.as_str()
+                    );
+                    self.error(message, id);
+                    symbol
+                }
+                None => self.analysis_context.register_symbol(SymbolData::new(
+                    id.as_str().to_string(),
                     super::SymbolKind::Value,
                     ty,
                     mutable,
                     node.pattern.as_span(),
                     dependencies.clone(),
-                ));
-            }
+                )),
+            };
+            self.analysis_context.save_symbol_token(id, symbol);
         }
         TypeStore::VOID
     }

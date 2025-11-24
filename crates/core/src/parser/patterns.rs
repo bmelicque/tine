@@ -79,7 +79,7 @@ impl ParserEngine {
         assert!(pair.as_rule() == Rule::struct_pattern_field);
         let span = pair.as_span();
         let mut inner = pair.into_inner();
-        let identifier = inner.next().unwrap().as_str().to_string();
+        let identifier = inner.next().unwrap().as_span();
         let pattern = inner.next().map(|pair| self.parse_pattern(pair));
         ast::StructPatternField {
             span,
@@ -170,12 +170,12 @@ mod tests {
 
                 // Check the first field
                 let field1 = &struct_pattern.fields[0];
-                assert_eq!(field1.identifier, "username");
+                assert_eq!(field1.identifier.as_str(), "username");
                 assert!(field1.pattern.is_none());
 
                 // Check the second field
                 let field2 = &struct_pattern.fields[1];
-                assert_eq!(field2.identifier, "age");
+                assert_eq!(field2.identifier.as_str(), "age");
                 assert!(field2.pattern.is_none());
             }
             _ => panic!("Expected StructPattern"),
@@ -194,20 +194,20 @@ mod tests {
 
                 // Check the first field
                 let field1 = &struct_pattern.fields[0];
-                assert_eq!(field1.identifier, "username");
+                assert_eq!(field1.identifier.as_str(), "username");
                 assert!(field1.pattern.is_none());
 
                 // Check the second field (nested pattern)
                 let field2 = &struct_pattern.fields[1];
-                assert_eq!(field2.identifier, "address");
+                assert_eq!(field2.identifier.as_str(), "address");
                 if let Some(ast::Pattern::Struct(nested_struct)) = &field2.pattern {
                     assert_eq!(nested_struct.ty.name.as_str(), "Address");
                     assert_eq!(nested_struct.fields.len(), 2);
 
                     // Check the nested fields
-                    assert_eq!(nested_struct.fields[0].identifier, "city");
+                    assert_eq!(nested_struct.fields[0].identifier.as_str(), "city");
                     assert!(nested_struct.fields[0].pattern.is_none());
-                    assert_eq!(nested_struct.fields[1].identifier, "zip");
+                    assert_eq!(nested_struct.fields[1].identifier.as_str(), "zip");
                     assert!(nested_struct.fields[1].pattern.is_none());
                 } else {
                     panic!("Expected nested StructPattern");

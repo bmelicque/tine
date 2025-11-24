@@ -2,6 +2,7 @@ use crate::{
     ast,
     type_checker::{
         analysis_context::{type_store::TypeStore, SymbolData, SymbolRef},
+        patterns::TokenList,
         SymbolKind,
     },
     types::{self, OptionType, Type, TypeId},
@@ -27,17 +28,18 @@ impl TypeChecker {
     fn visit_for_in_expression(&mut self, node: &ast::ForInExpression) -> TypeId {
         let (inferred_type, dependencies) = self.visit_for_in_iterable(&node.iterable);
         let ty = self.with_scope(node.span, |checker| {
-            let mut variables = vec![];
+            let mut variables = TokenList::new();
             checker.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
-            for (name, ty) in variables {
-                checker.analysis_context.register_symbol(SymbolData::new(
-                    name.clone(),
+            for (name, ty) in variables.0 {
+                let symbol = checker.analysis_context.register_symbol(SymbolData::new(
+                    name.as_str().into(),
                     SymbolKind::Value,
                     ty,
                     false,
                     node.pattern.as_span(),
                     dependencies.clone(),
                 ));
+                checker.analysis_context.save_symbol_token(name, symbol);
             }
             checker.visit_loop_body(&node.body)
         });

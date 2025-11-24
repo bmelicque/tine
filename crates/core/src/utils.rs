@@ -1,5 +1,3 @@
-use pest::Span;
-
 use crate::parser::parser::ParseError;
 
 pub fn pretty_print_error(error: &ParseError) {
@@ -36,12 +34,4 @@ pub fn pretty_print_error(error: &ParseError) {
 
 pub fn dummy_span() -> pest::Span<'static> {
     pest::Span::new("_", 0, 0).unwrap()
-}
-
-pub fn subspan_from_str<'a>(parent: Span<'a>, sub_str: &str) -> Option<Span<'a>> {
-    let parent_str = parent.as_str();
-    let start_rel = parent_str.find(sub_str)?;
-    let start_abs = parent.start() + start_rel;
-    let end_abs = start_abs + sub_str.len();
-    Span::new(parent.get_input(), start_abs, end_abs)
 }

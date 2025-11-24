@@ -75,13 +75,13 @@ impl CodeGenerator {
     ) -> swc::ObjectPatProp {
         match &node.pattern {
             Some(pattern) => swc::KeyValuePatProp {
-                key: create_ident(&node.identifier).into(),
+                key: create_ident(node.identifier.as_str()).into(),
                 value: Box::new(self.pattern_to_swc(pattern)),
             }
             .into(),
             None => swc::AssignPatProp {
                 span: DUMMY_SP,
-                key: create_ident(&node.identifier).into(),
+                key: create_ident(node.identifier.as_str()).into(),
                 value: None,
             }
             .into(),
@@ -159,12 +159,7 @@ impl CodeGenerator {
                     span: against.as_span(),
                     object: Box::new(against.clone()),
                     prop: Some(ast::MemberProp::FieldName(ast::Identifier {
-                        span: pest::Span::new(
-                            Box::leak(field.identifier.clone().into_boxed_str()),
-                            0,
-                            field.identifier.len(),
-                        )
-                        .unwrap(),
+                        span: field.identifier,
                     })),
                 };
                 self.pattern_to_swc_test(&field.pattern.as_ref().unwrap(), &against.into())

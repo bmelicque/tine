@@ -1,3 +1,5 @@
+use pest::Span;
+
 use crate::{
     ast,
     type_checker::analysis_context::type_store::TypeStore,
@@ -6,15 +8,27 @@ use crate::{
 
 use super::TypeChecker;
 
+#[derive(Debug, Clone)]
+pub struct TokenList(pub Vec<(Span<'static>, TypeId)>);
+impl TokenList {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn push(&mut self, span: Span<'static>, ty: TypeId) {
+        self.0.push((span, ty));
+    }
+}
+
 impl TypeChecker {
     pub fn match_pattern(
         &mut self,
         pattern: &ast::Pattern,
         against: TypeId,
-        variables: &mut Vec<(String, TypeId)>,
+        variables: &mut TokenList,
     ) {
         match pattern {
-            ast::Pattern::Identifier(id) => variables.push((id.span.as_str().into(), against)),
+            ast::Pattern::Identifier(id) => variables.push(id.span, against),
             ast::Pattern::Literal(l) => self.match_literal_pattern(l, against),
             ast::Pattern::Struct(pattern) => self.match_struct_pattern(pattern, against, variables),
             ast::Pattern::Tuple(pattern) => self.match_tuple_pattern(pattern, against, variables),
@@ -49,7 +63,7 @@ impl TypeChecker {
         &mut self,
         pattern: &ast::StructPattern,
         against: TypeId,
-        variables: &mut Vec<(String, TypeId)>,
+        variables: &mut TokenList,
     ) {
         let Some(ty) = self.analysis_context.lookup(&pattern.ty.name) else {
             self.error(
@@ -82,13 +96,17 @@ impl TypeChecker {
         pattern_fields: &Vec<ast::StructPatternField>,
         against_fields: &Vec<types::StructField>,
         type_name: &str,
-        variables: &mut Vec<(String, TypeId)>,
+        variables: &mut TokenList,
     ) {
         for field in pattern_fields.iter() {
-            let Some(against) = against_fields.iter().find(|f| f.name == field.identifier) else {
+            let Some(against) = against_fields
+                .iter()
+                .find(|f| f.name == field.identifier.as_str())
+            else {
                 let error = format!(
                     "Property '{}' does not exist on type '{}'",
-                    field.identifier, type_name
+                    field.identifier.as_str(),
+                    type_name
                 );
                 self.error(error, field.span);
                 continue;
@@ -97,7 +115,7 @@ impl TypeChecker {
                 Some(ref sub_pattern) => {
                     self.match_pattern(sub_pattern, against.def.clone(), variables)
                 }
-                None => variables.push((field.identifier.clone(), against.def.clone())),
+                None => variables.0.push((field.identifier, against.def.clone())),
             }
         }
     }
@@ -106,7 +124,7 @@ impl TypeChecker {
         &mut self,
         pattern: &ast::TuplePattern,
         against: TypeId,
-        variables: &mut Vec<(String, TypeId)>,
+        variables: &mut TokenList,
     ) {
         let types::Type::Tuple(ty) = self.resolve(against).clone() else {
             self.error("Expected tuple type".into(), pattern.span);
@@ -141,7 +159,7 @@ impl TypeChecker {
         &mut self,
         pattern: &ast::VariantPattern,
         against: TypeId,
-        variables: &mut Vec<(String, TypeId)>,
+        variables: &mut TokenList,
     ) {
         let Some(ty) = self.analysis_context.lookup(&pattern.ty.name) else {
             self.error(
@@ -196,7 +214,7 @@ impl TypeChecker {
         &mut self,
         pattern: &ast::VariantPattern,
         fields: &Vec<types::StructField>,
-        variables: &mut Vec<(String, TypeId)>,
+        variables: &mut TokenList,
     ) {
         let Some(ast::VariantPatternBody::Struct(body)) = &pattern.body else {
             self.error("Structured variant expected".to_string(), pattern.span);
@@ -214,7 +232,7 @@ impl TypeChecker {
         &mut self,
         pattern: &ast::VariantPattern,
         def: TypeId,
-        variables: &mut Vec<(String, TypeId)>,
+        variables: &mut TokenList,
     ) {
         let Some(ast::VariantPatternBody::Tuple(ref body)) = pattern.body else {
             self.error("Tuple variant expected".to_string(), pattern.span);

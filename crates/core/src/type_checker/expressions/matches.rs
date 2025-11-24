@@ -4,6 +4,7 @@ use crate::{
     ast,
     type_checker::{
         analysis_context::{type_store::TypeStore, SymbolData, SymbolRef},
+        patterns::TokenList,
         SymbolKind, TypeChecker,
     },
     types::{Type, TypeId, Variant},
@@ -33,17 +34,18 @@ impl TypeChecker {
         deps: Vec<SymbolRef>,
     ) -> TypeId {
         let arm_ty = self.with_scope(arm.span, |s| {
-            let mut variables = vec![];
+            let mut variables = TokenList::new();
             s.match_pattern(&arm.pattern, against, &mut variables);
-            for (name, ty) in variables {
-                s.analysis_context.register_symbol(SymbolData::new(
-                    name.clone(),
+            for (name, ty) in variables.0 {
+                let symbol = s.analysis_context.register_symbol(SymbolData::new(
+                    name.as_str().into(),
                     SymbolKind::Value,
                     ty,
                     false,
                     arm.pattern.as_span(),
                     deps.clone(),
                 ));
+                s.analysis_context.save_symbol_token(name, symbol);
             }
             s.visit_expression(&arm.expression)
         });

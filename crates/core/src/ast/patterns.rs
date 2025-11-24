@@ -165,7 +165,7 @@ impl Into<Pattern> for StructPattern {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructPatternField {
     pub span: pest::Span<'static>,
-    pub identifier: String,
+    pub identifier: pest::Span<'static>,
     pub pattern: Option<Pattern>,
 }
 
