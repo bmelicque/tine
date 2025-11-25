@@ -24,6 +24,18 @@ pub fn dom_metadata(store: TypeStore) -> CheckResult {
 
     analysis_context.register_symbol(SymbolData {
         name: "render".into(),
+        docs: Some(
+            r#"Renders a UI element into a target container in the DOM
+
+# Example
+```my-lang
+render("body", <article>Content</article>)
+```
+
+In this example, the `<article>` element is rendered inside the document's body.
+        "#
+            .into(),
+        ),
         ty: render_type,
         ..Default::default()
     });

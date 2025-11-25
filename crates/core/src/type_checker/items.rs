@@ -82,6 +82,7 @@ impl TypeChecker {
                     name: name.to_string(),
                     kind: symbol.borrow().kind,
                     ty,
+                    docs: symbol.borrow().docs.clone(),
                     defined_at: path_element.span,
                     ..Default::default()
                 };

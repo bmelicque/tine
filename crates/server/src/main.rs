@@ -128,6 +128,7 @@ impl tower_lsp::LanguageServer for Backend {
             r#"```mylang-types
 {}
 ```
+---
 
 {}
 "#,
