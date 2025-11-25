@@ -5,7 +5,7 @@ use std::{
 
 use pest::Span;
 
-use crate::types::{self, TypeId};
+use crate::{types, utils::dummy_span, TypeStore};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SymbolKind {
@@ -19,6 +19,7 @@ pub struct SymbolData {
     pub kind: SymbolKind,
     pub ty: types::TypeId,
     pub defined_at: Span<'static>,
+    pub docs: Option<String>,
     pub mutable: bool,
     pub reads: usize,
     pub writes: usize,
@@ -28,60 +29,26 @@ pub struct SymbolData {
 }
 
 impl SymbolData {
-    pub fn new(
-        name: String,
-        kind: SymbolKind,
-        ty: types::TypeId,
-        mutable: bool,
-        defined_at: Span<'static>,
-        dependencies: Vec<SymbolRef>,
-    ) -> Self {
-        Self {
-            name,
-            kind,
-            ty,
-            defined_at,
-            mutable,
-            reads: 0,
-            writes: 0,
-            mut_refs: 0,
-            ro_refs: 0,
-            dependencies,
-        }
-    }
-
-    pub fn pure(name: String, ty: types::TypeId, defined_at: Span<'static>) -> Self {
-        Self {
-            name,
-            kind: SymbolKind::Value,
-            ty,
-            defined_at,
-            mutable: false,
-            reads: 0,
-            writes: 0,
-            mut_refs: 0,
-            ro_refs: 0,
-            dependencies: vec![],
-        }
-    }
-
-    pub fn new_type(name: String, type_id: TypeId, defined_at: Span<'static>) -> Self {
-        Self {
-            name,
-            kind: SymbolKind::Type,
-            ty: type_id,
-            defined_at,
-            mutable: false,
-            reads: 0,
-            writes: 0,
-            mut_refs: 0,
-            ro_refs: 0,
-            dependencies: vec![],
-        }
-    }
-
     pub fn has_ref(&self) -> bool {
         self.mut_refs + self.ro_refs > 0
+    }
+}
+
+impl Default for SymbolData {
+    fn default() -> Self {
+        Self {
+            name: "".into(),
+            kind: SymbolKind::Value,
+            ty: TypeStore::UNKNOWN,
+            defined_at: dummy_span(),
+            docs: None,
+            mutable: false,
+            reads: 0,
+            writes: 0,
+            mut_refs: 0,
+            ro_refs: 0,
+            dependencies: vec![],
+        }
     }
 }
 

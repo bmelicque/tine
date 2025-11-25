@@ -279,11 +279,12 @@ mod tests {
     #[test]
     fn test_visit_identifier() {
         let mut checker = create_type_checker();
-        checker.analysis_context.register_symbol(SymbolData::pure(
-            "x".into(),
-            TypeStore::NUMBER,
-            span("x"),
-        ));
+        checker.analysis_context.register_symbol(SymbolData {
+            name: "x".into(),
+            ty: TypeStore::NUMBER,
+            defined_at: span("x"),
+            ..Default::default()
+        });
 
         let identifier = ast::Identifier { span: span("x") };
 

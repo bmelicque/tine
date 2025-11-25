@@ -23,9 +23,13 @@ impl TypeChecker {
                 let ty = checker.analysis_context.type_store.add(ty.into());
                 param_types.push(ty);
                 // FIXME: spans
-                checker
-                    .analysis_context
-                    .register_symbol(SymbolData::new_type(param.clone(), ty, node.span));
+                checker.analysis_context.register_symbol(SymbolData {
+                    name: param.clone(),
+                    kind: crate::SymbolKind::Type,
+                    ty,
+                    defined_at: node.span,
+                    ..Default::default()
+                });
             }
             (checker.visit_type_definition(&node.definition), param_types)
         });
@@ -45,8 +49,13 @@ impl TypeChecker {
                     definition: ty,
                 })),
         };
-        self.analysis_context
-            .register_symbol(SymbolData::new_type(name.clone(), ty, node.span));
+        self.analysis_context.register_symbol(SymbolData {
+            name: name.clone(),
+            kind: crate::SymbolKind::Type,
+            ty,
+            defined_at: node.span,
+            ..Default::default()
+        });
         self.analysis_context
             .type_store
             .add_alias(ty, name.to_string());

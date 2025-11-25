@@ -554,13 +554,12 @@ mod tests {
         });
 
         let user_type_id = checker.analysis_context.type_store.add(user_type);
-        checker
-            .analysis_context
-            .register_symbol(SymbolData::new_type(
-                "User".into(),
-                user_type_id,
-                dummy_span(),
-            ));
+        checker.analysis_context.register_symbol(SymbolData {
+            name: "User".into(),
+            kind: crate::SymbolKind::Type,
+            ty: user_type_id,
+            ..Default::default()
+        });
 
         let struct_literal = ast::StructLiteral {
             ty: ast::NamedType {
@@ -643,13 +642,12 @@ mod tests {
         });
 
         let shape_type_id = checker.analysis_context.type_store.add(enum_type);
-        checker
-            .analysis_context
-            .register_symbol(SymbolData::new_type(
-                "Shape".into(),
-                shape_type_id,
-                dummy_span(),
-            ));
+        checker.analysis_context.register_symbol(SymbolData {
+            name: "Shape".into(),
+            kind: crate::SymbolKind::Type,
+            ty: shape_type_id,
+            ..Default::default()
+        });
 
         // Create a valid variant literal
         let variant_literal = ast::VariantLiteral {

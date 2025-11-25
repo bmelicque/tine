@@ -1,4 +1,4 @@
-use pest::iterators::Pair;
+use pest::{iterators::Pair, Span};
 
 use crate::{
     ast,
@@ -15,10 +15,22 @@ impl ParserEngine {
         &mut self,
         pair: Pair<'static, Rule>,
     ) -> ast::VariableDeclaration {
-        let span = pair.as_span();
+        let whole_span = pair.as_span();
         let mut inner = pair.into_inner();
 
-        let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
+        let (docs, next) = match inner.next().unwrap() {
+            next if next.as_rule() == Rule::doc_comment => {
+                (self.parse_docs(next), inner.next().unwrap())
+            }
+            next => (None, next),
+        };
+        let span = Span::new(
+            whole_span.get_input(),
+            next.as_span().start(),
+            whole_span.end(),
+        )
+        .unwrap();
+        let pattern = Box::new(self.parse_pattern(next));
         let op_span = inner.next().unwrap().as_span();
         let op = op_span.as_str().to_string().into();
 
@@ -28,11 +40,20 @@ impl ParserEngine {
         }
 
         ast::VariableDeclaration {
+            docs,
             span,
             pattern,
             op,
             value,
         }
+    }
+
+    fn parse_docs(&mut self, pair: Pair<'static, Rule>) -> Option<Span<'static>> {
+        debug_assert_eq!(pair.as_rule(), Rule::doc_comment);
+        let docs_span = pair.as_span();
+        let line_count = docs_span.lines_span().count();
+        let last = docs_span.lines_span().take(line_count - 1).last().unwrap();
+        Span::new(docs_span.get_input(), docs_span.start(), last.end())
     }
 }
 
@@ -73,6 +94,37 @@ mod tests {
             ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
             _ => panic!("Expected NumberLiteral as variable value"),
         }
+    }
+
+    #[test]
+    fn test_parse_variable_declaration_with_single_doc() {
+        let input = r#"// a value
+        x := 42"#;
+        let (stmt, errors) = parse_statement_input(input, Rule::variable_declaration);
+
+        assert_eq!(errors.len(), 0);
+        let ast::Statement::VariableDeclaration(var_decl) = stmt else {
+            panic!("Expected VariableDeclaration");
+        };
+        let expected = "// a value\n";
+        match var_decl.docs {
+            Some(span) if span.as_str() == expected => {}
+            _ => panic!("expected comment '{}', got {:?}", expected, var_decl.docs),
+        }
+    }
+
+    #[test]
+    fn test_parse_variable_declaration_with_docs() {
+        let input = r#"// docs
+        // over several lines
+        x := 42"#;
+        let (stmt, errors) = parse_statement_input(input, Rule::variable_declaration);
+
+        assert_eq!(errors.len(), 0);
+        assert!(
+            matches!(stmt, ast::Statement::VariableDeclaration(_)),
+            "expected variable declaration"
+        );
     }
 
     #[test]

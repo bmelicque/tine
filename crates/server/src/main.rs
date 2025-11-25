@@ -122,7 +122,7 @@ impl tower_lsp::LanguageServer for Backend {
 
         let type_display = self.type_store.lock().unwrap().display_type(token.ty);
 
-        let docs = "";
+        let docs = token.docs.clone().unwrap_or("".into());
 
         let contents = HoverContents::Scalar(MarkedString::String(format!(
             r#"```mylang-types
@@ -263,6 +263,7 @@ fn core_token_to_server(token: &Token) -> ServerToken {
             range: span_to_range(token.span),
             ty: token.ty,
             kind: mylang_core::SymbolKind::Value,
+            docs: None,
             mutable: true,
         },
         Token::Symbol(token) => {
@@ -271,6 +272,7 @@ fn core_token_to_server(token: &Token) -> ServerToken {
                 range: span_to_range(token.span),
                 ty: symbol.ty,
                 kind: symbol.kind,
+                docs: symbol.docs.clone(),
                 mutable: symbol.mutable,
             }
         }

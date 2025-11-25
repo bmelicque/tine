@@ -5,6 +5,7 @@ use crate::{
     type_checker::{
         analysis_context::{type_store::TypeStore, SymbolData},
         patterns::TokenList,
+        utils::normalize_doc_comment,
     },
     types::{Type, TypeId},
 };
@@ -164,11 +165,12 @@ impl TypeChecker {
     fn visit_method_expression(&mut self, node: &ast::MethodDefinition) -> (TypeId, TypeId) {
         self.with_scope(node.span, |checker| {
             let receiver = checker.visit_named_type(&node.receiver.ty);
-            checker.analysis_context.register_symbol(SymbolData::pure(
-                node.receiver.name.as_str().into(),
-                receiver,
-                node.receiver.span,
-            ));
+            checker.analysis_context.register_symbol(SymbolData {
+                name: node.receiver.name.as_str().into(),
+                ty: receiver,
+                defined_at: node.receiver.span,
+                ..Default::default()
+            });
             let function = checker.visit_function_expression(&node.definition);
             (receiver, function)
         })
@@ -193,6 +195,7 @@ impl TypeChecker {
             );
         }
         let mut variables = TokenList::new();
+        let docs = node.docs.map(|d| normalize_doc_comment(d.as_str()));
         self.match_pattern(&node.pattern, inferred_type, &mut variables);
         for (id, ty) in variables.0 {
             let symbol = match self.analysis_context.find_in_current_scope(id.as_str()) {
@@ -204,14 +207,15 @@ impl TypeChecker {
                     self.error(message, id);
                     symbol
                 }
-                None => self.analysis_context.register_symbol(SymbolData::new(
-                    id.as_str().to_string(),
-                    super::SymbolKind::Value,
+                None => self.analysis_context.register_symbol(SymbolData {
+                    name: id.as_str().to_string(),
                     ty,
+                    docs: docs.clone(),
                     mutable,
-                    node.pattern.as_span(),
-                    dependencies.clone(),
-                )),
+                    defined_at: node.pattern.as_span(),
+                    dependencies: dependencies.clone(),
+                    ..Default::default()
+                }),
             };
             self.analysis_context.save_symbol_token(id, symbol);
         }

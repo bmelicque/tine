@@ -1,8 +1,6 @@
 use crate::{
     ast,
-    type_checker::{
-        analysis_context::type_store::TypeStore, patterns::TokenList, SymbolKind, TypeChecker,
-    },
+    type_checker::{analysis_context::type_store::TypeStore, patterns::TokenList, TypeChecker},
     types::{OptionType, Type, TypeId},
     SymbolData,
 };
@@ -44,14 +42,13 @@ impl TypeChecker {
             let mut variables = TokenList::new();
             s.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
             for (name, ty) in variables.0 {
-                let symbol = s.analysis_context.register_symbol(SymbolData::new(
-                    name.as_str().to_string(),
-                    SymbolKind::Value,
+                let symbol = s.analysis_context.register_symbol(SymbolData {
+                    name: name.as_str().into(),
                     ty,
-                    false,
-                    node.pattern.as_span(),
-                    dependencies.clone(),
-                ));
+                    defined_at: node.pattern.as_span(),
+                    dependencies: dependencies.clone(),
+                    ..Default::default()
+                });
                 s.analysis_context.save_symbol_token(name, symbol);
             }
             s.visit_block_expression(&node.consequent)

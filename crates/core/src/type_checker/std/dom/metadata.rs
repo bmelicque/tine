@@ -22,11 +22,11 @@ pub fn dom_metadata(store: TypeStore) -> CheckResult {
             return_type: TypeStore::VOID,
         }));
 
-    analysis_context.register_symbol(SymbolData::pure(
-        "render".to_string(),
-        render_type,
-        dummy_span(),
-    ));
+    analysis_context.register_symbol(SymbolData {
+        name: "render".into(),
+        ty: render_type,
+        ..Default::default()
+    });
 
     let main_scope = analysis_context
         .scopes

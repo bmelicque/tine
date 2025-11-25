@@ -29,6 +29,8 @@ impl Statement {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariableDeclaration {
+    pub docs: Option<Span<'static>>,
+    /// This is the span of the actual declaration, and does not include the `docs` (if any)
     pub span: Span<'static>,
     pub pattern: Box<Pattern>,
     pub op: DeclarationOp,

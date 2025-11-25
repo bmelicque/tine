@@ -2,7 +2,7 @@ use crate::{
     ast,
     type_checker::{
         analysis_context::{type_store::TypeStore, SymbolData},
-        SymbolKind, TypeChecker,
+        TypeChecker,
     },
     types::{self, Type, TypeId},
 };
@@ -94,25 +94,21 @@ impl TypeChecker {
         for (i, param) in got.iter().take(expected.len()).enumerate() {
             match param {
                 ast::PredicateParam::Identifier(id) => {
-                    self.analysis_context.register_symbol(SymbolData::new(
-                        id.as_str().into(),
-                        SymbolKind::Value,
-                        expected[i],
-                        false,
-                        id.span,
-                        vec![],
-                    ));
+                    self.analysis_context.register_symbol(SymbolData {
+                        name: id.as_str().into(),
+                        ty: expected[i],
+                        defined_at: id.span,
+                        ..Default::default()
+                    });
                 }
                 ast::PredicateParam::Param(param) => {
                     let ty = self.visit_type(&param.type_annotation);
-                    self.analysis_context.register_symbol(SymbolData::new(
-                        param.name.as_str().into(),
-                        SymbolKind::Value,
+                    self.analysis_context.register_symbol(SymbolData {
+                        name: param.name.as_str().into(),
                         ty,
-                        false,
-                        param.name.span,
-                        vec![],
-                    ));
+                        defined_at: param.name.span,
+                        ..Default::default()
+                    });
                 }
             }
         }

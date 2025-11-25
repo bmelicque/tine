@@ -78,14 +78,13 @@ impl TypeChecker {
         match symbol {
             Some(symbol) => {
                 let ty = symbol.borrow().ty;
-                let symbol = type_checker::SymbolData::new(
-                    name.to_string(),
-                    symbol.borrow().kind,
+                let symbol = type_checker::SymbolData {
+                    name: name.to_string(),
+                    kind: symbol.borrow().kind,
                     ty,
-                    false,
-                    path_element.span,
-                    vec![],
-                );
+                    defined_at: path_element.span,
+                    ..Default::default()
+                };
                 let var = self.analysis_context.register_symbol(symbol);
                 self.analysis_context
                     .save_expression_type(path_element.span, ty);

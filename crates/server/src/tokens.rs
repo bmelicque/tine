@@ -11,6 +11,7 @@ pub struct ServerToken {
     pub range: Range,
     pub ty: TypeId,
     pub kind: SymbolKind,
+    pub docs: Option<String>,
     pub mutable: bool,
 }
 

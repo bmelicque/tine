@@ -292,9 +292,12 @@ mod tests {
                 id: 7,
                 fields: vec![],
             }));
-        checker
-            .analysis_context
-            .register_symbol(SymbolData::new_type("Box".into(), def, dummy_span()));
+        checker.analysis_context.register_symbol(SymbolData {
+            name: "Box".into(),
+            kind: crate::SymbolKind::Type,
+            ty: def,
+            ..Default::default()
+        });
 
         let named_type = ast::NamedType {
             name: "Box".to_string(),

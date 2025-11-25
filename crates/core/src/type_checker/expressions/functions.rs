@@ -27,11 +27,12 @@ impl TypeChecker {
         let mut param_types = Vec::with_capacity(node.params.len());
         for param in node.params.iter() {
             let ty = self.visit_type(&param.type_annotation);
-            self.analysis_context.register_symbol(SymbolData::pure(
-                param.name.as_str().into(),
+            self.analysis_context.register_symbol(SymbolData {
+                name: param.name.as_str().into(),
                 ty,
-                param.name.span,
-            ));
+                defined_at: param.name.span,
+                ..Default::default()
+            });
             param_types.push(ty);
         }
         param_types

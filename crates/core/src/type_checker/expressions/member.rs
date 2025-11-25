@@ -124,9 +124,12 @@ mod tests {
                     },
                 ],
             }));
-        checker
-            .analysis_context
-            .register_symbol(SymbolData::new_type("User".into(), id, dummy_span()));
+        checker.analysis_context.register_symbol(SymbolData {
+            name: "User".into(),
+            kind: crate::SymbolKind::Type,
+            ty: id,
+            ..Default::default()
+        });
 
         let field_access_expression = ast::MemberExpression {
             object: Box::new(ast::Expression::Identifier(ast::Identifier {
@@ -135,9 +138,11 @@ mod tests {
             prop: Some(ast::Identifier { span: span("name") }.into()),
             span: dummy_span(),
         };
-        checker
-            .analysis_context
-            .register_symbol(SymbolData::pure("user".into(), id, dummy_span()));
+        checker.analysis_context.register_symbol(SymbolData {
+            name: "user".into(),
+            ty: id,
+            ..Default::default()
+        });
 
         let result = checker.visit_member_expression(&field_access_expression);
         assert!(
@@ -156,11 +161,12 @@ mod tests {
         });
 
         let ty = checker.analysis_context.type_store.add(tuple_type);
-        checker.analysis_context.register_symbol(SymbolData::pure(
-            "my_tuple".into(),
+        checker.analysis_context.register_symbol(SymbolData {
+            name: "my_tuple".into(),
             ty,
-            span("my_tuple"),
-        ));
+            defined_at: span("my_tuple"),
+            ..Default::default()
+        });
 
         let tuple_indexing = ast::MemberExpression {
             object: Box::new(ast::Expression::Identifier(ast::Identifier {
@@ -181,11 +187,12 @@ mod tests {
     #[test]
     fn test_visit_tuple_indexing_invalid_type() {
         let mut checker = create_type_checker();
-        checker.analysis_context.register_symbol(SymbolData::pure(
-            "not_a_tuple".into(),
-            TypeStore::NUMBER.into(),
-            span("not_a_tuple"),
-        ));
+        checker.analysis_context.register_symbol(SymbolData {
+            name: "not_a_tuple".into(),
+            ty: TypeStore::NUMBER,
+            defined_at: span("not_a_tuple"),
+            ..Default::default()
+        });
 
         let tuple_indexing = ast::MemberExpression {
             object: Box::new(ast::Expression::Identifier(ast::Identifier {
@@ -210,11 +217,12 @@ mod tests {
             elements: vec![TypeStore::NUMBER, TypeStore::STRING],
         });
         let tuple_type = checker.analysis_context.type_store.add(tuple_type);
-        checker.analysis_context.register_symbol(SymbolData::pure(
-            "my_tuple".into(),
-            tuple_type,
-            span("my_tuple"),
-        ));
+        checker.analysis_context.register_symbol(SymbolData {
+            name: "my_tuple".into(),
+            ty: tuple_type,
+            defined_at: span("my_tuple"),
+            ..Default::default()
+        });
 
         let tuple_indexing = ast::MemberExpression {
             object: Box::new(ast::Expression::Identifier(ast::Identifier {
@@ -240,11 +248,12 @@ mod tests {
             elements: vec![TypeStore::NUMBER, TypeStore::STRING],
         });
         let tuple_type = checker.analysis_context.type_store.add(tuple_type);
-        checker.analysis_context.register_symbol(SymbolData::pure(
-            "my_tuple".into(),
-            tuple_type,
-            span("my_tuple"),
-        ));
+        checker.analysis_context.register_symbol(SymbolData {
+            name: "my_tuple".into(),
+            ty: tuple_type,
+            defined_at: span("my_tuple"),
+            ..Default::default()
+        });
 
         let tuple_indexing = ast::MemberExpression {
             object: Box::new(ast::Expression::Identifier(ast::Identifier {
