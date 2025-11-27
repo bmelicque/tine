@@ -74,15 +74,19 @@ impl ParserEngine {
     }
 
     fn parse_expression_statement(&mut self, pair: Pair<'static, Rule>) -> ast::Statement {
-        let Some(inner) = pair.into_inner().next() else {
-            return ast::Statement::Empty;
-        };
-        match self.parse_expression(inner) {
-            ast::Expression::Empty => ast::Statement::Empty,
-            expression => ast::ExpressionStatement {
-                expression: Box::new(expression),
+        let mut expression = ast::Expression::Empty;
+        for pair in pair.into_inner() {
+            match pair.as_rule() {
+                Rule::comment => {}
+                Rule::expression => expression = self.parse_expression(pair),
+                rule => unreachable!("unexpected rule '{:?}'", rule),
             }
-            .into(),
+        }
+        match expression {
+            ast::Expression::Empty => ast::Statement::Empty,
+            expression => ast::Statement::Expression(ast::ExpressionStatement {
+                expression: Box::new(expression),
+            }),
         }
     }
 }
@@ -118,15 +122,32 @@ mod tests {
 
     #[test]
     fn test_parse_expression_statement() {
-        let input = "42;";
+        let input = "42";
         let result = parse_statement_input(input, Rule::expression_statement);
 
-        match result {
-            ast::Statement::Expression(expr_stmt) => match *expr_stmt.expression {
-                ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
-                _ => panic!("Expected NumberLiteral as expression"),
-            },
-            _ => panic!("Expected ExpressionStatement"),
+        let ast::Statement::Expression(expr_stmt) = result else {
+            panic!("Expected ExpressionStatement");
+        };
+
+        match *expr_stmt.expression {
+            ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
+            _ => panic!("Expected NumberLiteral as expression"),
+        }
+    }
+
+    #[test]
+    fn test_parse_expression_statement_with_comment() {
+        let input = r#"// useless comment
+42"#;
+        let result = parse_statement_input(input, Rule::expression_statement);
+
+        let ast::Statement::Expression(expr_stmt) = result else {
+            panic!("Expected ExpressionStatement");
+        };
+
+        match *expr_stmt.expression {
+            ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
+            _ => panic!("Expected NumberLiteral as expression"),
         }
     }
 }

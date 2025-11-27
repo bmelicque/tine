@@ -130,7 +130,7 @@ tuple_variant_pattern = { type_identifier ~ "." ~ type_identifier ~ "(" ~ patter
 literal_pattern = { string_literal | number_literal | boolean_literal }
 
 // Statements
-statement = { type_alias | method_definition | variable_declaration | assignment | break_statement | return_statement | comment | expression_statement }
+statement = { type_alias | method_definition | assignment | break_statement | return_statement | variable_declaration | expression_statement }
 method_definition = { "(" ~ method_receiver ~ ")" ~ value_identifier ~ "::" ~ function_expression }
 method_receiver = { value_identifier ~ type_identifier } // TODO: type_identifier -> include reference_type
 variable_declaration = { doc_comment? ~ pattern ~ decl_op ~ expression }
@@ -143,7 +143,7 @@ member_assignee = { value_identifier ~ member_suffix+ }
 indirection = { "*" ~ value_identifier }
 break_statement = { "break" ~ expression? }
 return_statement = { "return" ~ expression? }
-expression_statement = { expression }
+expression_statement = { comment* ~ expression }
 
 type_alias = { type_identifier ~ type_params? ~ type_def_op ~ type_def }
 type_def_op = { "::" | ":~" }
@@ -160,7 +160,7 @@ sum_param = { "(" ~ type_annotation ~ ")" }
 
 // Items
 item = { use_declaration | statement }
-use_declaration = { "use" ~ relative_count ~ use_tree }
+use_declaration = { "use " ~ relative_count ~ use_tree }
 relative_count = { "."* }
 use_tree = { file_name ~ ("." ~ file_name)* ~ ("(" ~ use_tree ~ ((","|NEWLINE) ~ use_tree)* ~ ")")? }
 file_name = @{ (ASCII_ALPHANUMERIC | "_" | "-")+ }
