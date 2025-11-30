@@ -5,6 +5,7 @@ use crate::{
         TypeChecker,
     },
     types::{self, Type, TypeId},
+    SymbolKind,
 };
 
 impl TypeChecker {
@@ -96,7 +97,7 @@ impl TypeChecker {
                 ast::PredicateParam::Identifier(id) => {
                     self.analysis_context.register_symbol(SymbolData {
                         name: id.as_str().into(),
-                        ty: expected[i],
+                        kind: SymbolKind::constant(expected[i]),
                         defined_at: id.span,
                         ..Default::default()
                     });
@@ -105,7 +106,7 @@ impl TypeChecker {
                     let ty = self.visit_type(&param.type_annotation);
                     self.analysis_context.register_symbol(SymbolData {
                         name: param.name.as_str().into(),
-                        ty,
+                        kind: SymbolKind::constant(ty),
                         defined_at: param.name.span,
                         ..Default::default()
                     });

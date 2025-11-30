@@ -1,6 +1,6 @@
 use mylang_core::{
     types::{Type, TypeId},
-    SymbolKind,
+    SymbolKind, TypeStore,
 };
 use tower_lsp::lsp_types::{Range, SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
@@ -8,12 +8,13 @@ use crate::{Backend, ModuleSummary};
 
 #[derive(Debug, Clone)]
 pub struct ServerToken {
+    pub name: String,
     pub range: Range,
-    pub ty: TypeId,
     pub kind: SymbolKind,
     pub docs: Option<String>,
-    pub mutable: bool,
 }
+
+impl ServerToken {}
 
 impl Backend {
     pub fn tokens_to_semantic(&self, summary: &ModuleSummary) -> Vec<SemanticToken> {
@@ -29,13 +30,10 @@ impl Backend {
             .unwrap();
 
         for token in &summary.tokens {
-            let global_type = self.type_store.lock().unwrap().get(token.ty).clone();
             let type_name = match token.kind {
-                SymbolKind::Type => SemanticTokenType::TYPE,
-                SymbolKind::Value => match global_type {
-                    Type::Function(_) => SemanticTokenType::FUNCTION,
-                    _ => SemanticTokenType::VARIABLE,
-                },
+                SymbolKind::Type(_) => SemanticTokenType::TYPE,
+                SymbolKind::Value { .. } => SemanticTokenType::VARIABLE,
+                SymbolKind::Function { .. } => SemanticTokenType::FUNCTION,
             };
             let token_type_index = self
                 .semantic_legend
@@ -44,7 +42,7 @@ impl Backend {
                 .position(|s| *s == type_name)
                 .unwrap_or(0); // fallback
 
-            let modifier_mask = if !token.mutable {
+            let modifier_mask = if !token.kind.is_mutable() {
                 1 << readonly_index
             } else {
                 0
@@ -82,4 +80,43 @@ impl Backend {
 
         data
     }
+}
+
+pub fn display_signature(store: &TypeStore, name: &String, signature: SymbolKind) -> String {
+    match signature {
+        SymbolKind::Function { params, ty } => {
+            let Type::Function(f) = store.get(ty) else {
+                panic!()
+            };
+            let params = f
+                .params
+                .iter()
+                .zip(params)
+                .map(|(ty, name)| display_signature_param(store, &name, *ty))
+                .collect::<Vec<_>>()
+                .join(", ");
+            match store.get(f.return_type) {
+                Type::Unit | Type::Void => format!("{}({})", name, params),
+                _ => format!(
+                    "{}({}) => {}",
+                    name,
+                    params,
+                    store.display_type(f.return_type)
+                ),
+            }
+        }
+        SymbolKind::Type(ty) => {
+            let ty = store.display_raw_type(ty);
+            format!("{} :: {}", name, ty)
+        }
+        SymbolKind::Value { ty, mutable } => {
+            let ty = store.display_type(ty);
+            let operator = if mutable { ":=" } else { "::" };
+            format!("{} {} {}(..)", name, operator, ty)
+        }
+    }
+}
+fn display_signature_param(store: &TypeStore, name: &String, ty: TypeId) -> String {
+    let ty = store.display_type(ty);
+    format!("{} {}", name, ty)
 }

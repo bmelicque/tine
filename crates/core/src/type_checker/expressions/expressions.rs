@@ -90,7 +90,7 @@ impl TypeChecker {
                     .add_dependencies(vec![handle.readonly()]);
                 self.analysis_context
                     .save_symbol_token(node.span, handle.readonly());
-                handle.borrow().ty.clone()
+                handle.borrow().get_type()
             }
             None => {
                 self.error(format!("Undefined variable: {}", node.as_str()), node.span);
@@ -119,6 +119,7 @@ mod tests {
     use crate::ast;
     use crate::types::*;
     use crate::SymbolData;
+    use crate::SymbolKind;
 
     fn create_type_checker() -> TypeChecker {
         TypeChecker::dummy()
@@ -281,7 +282,7 @@ mod tests {
         let mut checker = create_type_checker();
         checker.analysis_context.register_symbol(SymbolData {
             name: "x".into(),
-            ty: TypeStore::NUMBER,
+            kind: SymbolKind::constant(TypeStore::NUMBER),
             defined_at: span("x"),
             ..Default::default()
         });

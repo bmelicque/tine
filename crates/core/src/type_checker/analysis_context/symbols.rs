@@ -5,22 +5,50 @@ use std::{
 
 use pest::Span;
 
-use crate::{types, utils::dummy_span, TypeStore};
+use crate::{types::TypeId, utils::dummy_span, TypeStore};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum SymbolKind {
-    Value,
-    Type,
+    Value {
+        ty: TypeId,
+        mutable: bool,
+    },
+    /// Contains the list of param names
+    Function {
+        params: Vec<String>,
+        /// This TypeId should be guaranted to refer to a function type
+        ty: TypeId,
+    },
+    Type(TypeId),
+}
+
+impl SymbolKind {
+    pub fn constant(ty: TypeId) -> Self {
+        Self::Value { ty, mutable: false }
+    }
+
+    pub fn get_type(&self) -> TypeId {
+        match self {
+            SymbolKind::Function { ty, .. } => *ty,
+            SymbolKind::Type(ty) => *ty,
+            SymbolKind::Value { ty, .. } => *ty,
+        }
+    }
+
+    pub fn is_mutable(&self) -> bool {
+        match self {
+            SymbolKind::Value { mutable, .. } => *mutable,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SymbolData {
     pub name: String,
     pub kind: SymbolKind,
-    pub ty: types::TypeId,
     pub defined_at: Span<'static>,
     pub docs: Option<String>,
-    pub mutable: bool,
     pub reads: usize,
     pub writes: usize,
     pub mut_refs: usize,
@@ -32,17 +60,26 @@ impl SymbolData {
     pub fn has_ref(&self) -> bool {
         self.mut_refs + self.ro_refs > 0
     }
+
+    pub fn is_mutable(&self) -> bool {
+        self.kind.is_mutable()
+    }
+
+    pub fn get_type(&self) -> TypeId {
+        self.kind.get_type()
+    }
 }
 
 impl Default for SymbolData {
     fn default() -> Self {
         Self {
             name: "".into(),
-            kind: SymbolKind::Value,
-            ty: TypeStore::UNKNOWN,
+            kind: SymbolKind::Value {
+                ty: TypeStore::UNKNOWN,
+                mutable: false,
+            },
             defined_at: dummy_span(),
             docs: None,
-            mutable: false,
             reads: 0,
             writes: 0,
             mut_refs: 0,
@@ -61,8 +98,12 @@ impl SymbolHandle {
     }
 
     pub fn is_mutable(&self) -> bool {
-        self.0.borrow().mutable
+        match self.0.borrow().kind {
+            SymbolKind::Value { mutable, .. } => mutable,
+            _ => false,
+        }
     }
+
     pub fn add_read(&self) {
         self.0.borrow_mut().reads += 1;
     }

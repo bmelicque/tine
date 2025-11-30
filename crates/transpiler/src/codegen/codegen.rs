@@ -121,7 +121,7 @@ impl CodeGenerator {
             .filter(|dep| {
                 self.module
                     .metadata
-                    .resolve_type(dep.borrow().ty)
+                    .resolve_type(dep.borrow().get_type())
                     .is_reactive()
             })
             .cloned()

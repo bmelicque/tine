@@ -5,6 +5,7 @@ use crate::{
     },
     types::{DuckType, FunctionType, Type},
     utils::dummy_span,
+    SymbolKind,
 };
 
 pub fn dom_metadata(store: TypeStore) -> CheckResult {
@@ -36,7 +37,10 @@ In this example, the `<article>` element is rendered inside the document's body.
         "#
             .into(),
         ),
-        ty: render_type,
+        kind: SymbolKind::Function {
+            params: vec!["selector".into(), "element".into()],
+            ty: render_type,
+        },
         ..Default::default()
     });
 

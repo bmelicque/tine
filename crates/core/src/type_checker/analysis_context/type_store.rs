@@ -247,6 +247,10 @@ impl TypeStore {
         if let Some(name) = self.get_alias(ty) {
             return name.clone();
         }
+        self.display_raw_type(ty)
+    }
+
+    pub fn display_raw_type(&self, ty: TypeId) -> String {
         match &self.arena[ty as usize] {
             Type::Array(t) => {
                 format!("[]{}", self.display_type(t.element))

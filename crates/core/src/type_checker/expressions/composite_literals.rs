@@ -348,7 +348,7 @@ impl TypeChecker {
 mod tests {
     use super::*;
     use crate::types::{StructField, Type, Variant};
-    use crate::{ast, SymbolData};
+    use crate::{ast, SymbolData, SymbolKind};
 
     fn dummy_span() -> pest::Span<'static> {
         pest::Span::new("_", 0, 0).unwrap()
@@ -556,8 +556,7 @@ mod tests {
         let user_type_id = checker.analysis_context.type_store.add(user_type);
         checker.analysis_context.register_symbol(SymbolData {
             name: "User".into(),
-            kind: crate::SymbolKind::Type,
-            ty: user_type_id,
+            kind: SymbolKind::Type(user_type_id),
             ..Default::default()
         });
 
@@ -644,8 +643,7 @@ mod tests {
         let shape_type_id = checker.analysis_context.type_store.add(enum_type);
         checker.analysis_context.register_symbol(SymbolData {
             name: "Shape".into(),
-            kind: crate::SymbolKind::Type,
-            ty: shape_type_id,
+            kind: SymbolKind::Type(shape_type_id),
             ..Default::default()
         });
 

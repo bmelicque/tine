@@ -89,7 +89,7 @@ impl TypeChecker {
             self.error(format!("type '{}' not found", name), node.span);
             return TypeStore::UNKNOWN;
         };
-        let ty = type_ref.borrow().ty;
+        let ty = type_ref.borrow().get_type();
         let def = self.resolve(ty).clone();
         match def {
             Type::Generic(t) => self.visit_generic_instance(node, &t),
@@ -192,6 +192,7 @@ mod tests {
     use crate::types::StructType;
     use crate::types::Type;
     use crate::SymbolData;
+    use crate::SymbolKind;
 
     fn dummy_span() -> pest::Span<'static> {
         pest::Span::new("_", 0, 0).unwrap()
@@ -294,8 +295,7 @@ mod tests {
             }));
         checker.analysis_context.register_symbol(SymbolData {
             name: "Box".into(),
-            kind: crate::SymbolKind::Type,
-            ty: def,
+            kind: SymbolKind::Type(def),
             ..Default::default()
         });
 

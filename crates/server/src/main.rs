@@ -12,7 +12,7 @@ use tower_lsp::Client;
 use tower_lsp::{lsp_types::*, LspService, Server};
 use url::Url;
 
-use crate::tokens::ServerToken;
+use crate::tokens::{display_signature, ServerToken};
 use crate::utils::{normalize_file_url, position_in_range};
 
 #[derive(Debug, Clone)]
@@ -120,12 +120,16 @@ impl tower_lsp::LanguageServer for Backend {
             .find(|t| position_in_range(position, &t.range));
         let Some(token) = token else { return Ok(None) };
 
-        let type_display = self.type_store.lock().unwrap().display_type(token.ty);
+        let type_display = display_signature(
+            &self.type_store.lock().unwrap(),
+            &token.name,
+            token.kind.clone(),
+        );
 
         let docs = token.docs.clone().unwrap_or("".into());
 
         let contents = HoverContents::Scalar(MarkedString::String(format!(
-            r#"```mylang-types
+            r#"```mylang
 {}
 ```
 ---
@@ -261,20 +265,21 @@ fn error_to_lsp(e: &ParseError) -> Diagnostic {
 fn core_token_to_server(token: &Token) -> ServerToken {
     match token {
         Token::Member(token) => ServerToken {
+            name: token.span.as_str().into(),
             range: span_to_range(token.span),
-            ty: token.ty,
-            kind: mylang_core::SymbolKind::Value,
+            kind: mylang_core::SymbolKind::Value {
+                ty: token.ty,
+                mutable: true,
+            },
             docs: None,
-            mutable: true,
         },
         Token::Symbol(token) => {
             let symbol = token.symbol.borrow();
             ServerToken {
+                name: token.span.as_str().into(),
                 range: span_to_range(token.span),
-                ty: symbol.ty,
-                kind: symbol.kind,
+                kind: symbol.kind.clone(),
                 docs: symbol.docs.clone(),
-                mutable: symbol.mutable,
             }
         }
     }

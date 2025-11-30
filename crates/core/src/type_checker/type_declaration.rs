@@ -2,7 +2,7 @@ use crate::{
     ast,
     type_checker::analysis_context::type_store::TypeStore,
     types::{self, EnumType, GenericType, StructType, TupleType, Type, TypeId},
-    SymbolData,
+    SymbolData, SymbolKind,
 };
 
 use super::TypeChecker;
@@ -25,8 +25,7 @@ impl TypeChecker {
                 // FIXME: spans
                 checker.analysis_context.register_symbol(SymbolData {
                     name: param.clone(),
-                    kind: crate::SymbolKind::Type,
-                    ty,
+                    kind: SymbolKind::Type(ty),
                     defined_at: node.span,
                     ..Default::default()
                 });
@@ -51,8 +50,7 @@ impl TypeChecker {
         };
         self.analysis_context.register_symbol(SymbolData {
             name: name.clone(),
-            kind: crate::SymbolKind::Type,
-            ty,
+            kind: SymbolKind::Type(ty),
             defined_at: node.span,
             ..Default::default()
         });
@@ -164,7 +162,7 @@ mod tests {
         assert!(checker.errors.is_empty());
 
         let defined_type = checker.analysis_context.lookup("MyType").unwrap();
-        let defined_type = checker.resolve(defined_type.borrow().ty).clone();
+        let defined_type = checker.resolve(defined_type.borrow().get_type()).clone();
         assert_eq!(defined_type, types::Type::Number);
     }
 

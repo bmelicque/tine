@@ -77,11 +77,10 @@ impl TypeChecker {
         let symbol = metadata.exports.iter().find(|s| s.borrow().name == *name);
         match symbol {
             Some(symbol) => {
-                let ty = symbol.borrow().ty;
+                let ty = symbol.borrow().get_type();
                 let symbol = type_checker::SymbolData {
                     name: name.to_string(),
-                    kind: symbol.borrow().kind,
-                    ty,
+                    kind: symbol.borrow().kind.clone(),
                     docs: symbol.borrow().docs.clone(),
                     defined_at: path_element.span,
                     ..Default::default()

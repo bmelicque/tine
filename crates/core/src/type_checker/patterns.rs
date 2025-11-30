@@ -72,7 +72,7 @@ impl TypeChecker {
             );
             return;
         };
-        let Type::Struct(pattern_type) = self.resolve(ty.borrow().ty).clone() else {
+        let Type::Struct(pattern_type) = self.resolve(ty.borrow().get_type()).clone() else {
             self.error(
                 format!("type '{}' is not a structured type", &pattern.ty.name),
                 pattern.span,
@@ -168,7 +168,7 @@ impl TypeChecker {
             );
             return;
         };
-        let Type::Enum(pattern_type) = self.resolve(ty.borrow().ty).clone() else {
+        let Type::Enum(pattern_type) = self.resolve(ty.borrow().get_type()).clone() else {
             self.error(
                 format!("type '{}' is not an enum", &pattern.ty.name),
                 pattern.span,

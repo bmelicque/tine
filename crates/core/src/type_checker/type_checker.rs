@@ -149,7 +149,7 @@ impl TypeChecker {
     ) -> usize {
         let deps: Vec<SymbolRef> = deps
             .into_iter()
-            .filter(|dep| self.resolve(dep.borrow().ty).is_reactive())
+            .filter(|dep| self.resolve(dep.borrow().get_type()).is_reactive())
             .cloned()
             .collect();
         let len = deps.len();

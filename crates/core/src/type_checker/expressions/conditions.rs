@@ -2,7 +2,7 @@ use crate::{
     ast,
     type_checker::{analysis_context::type_store::TypeStore, patterns::TokenList, TypeChecker},
     types::{OptionType, Type, TypeId},
-    SymbolData,
+    SymbolData, SymbolKind,
 };
 
 impl TypeChecker {
@@ -44,7 +44,7 @@ impl TypeChecker {
             for (name, ty) in variables.0 {
                 let symbol = s.analysis_context.register_symbol(SymbolData {
                     name: name.as_str().into(),
-                    ty,
+                    kind: SymbolKind::constant(ty),
                     defined_at: node.pattern.as_span(),
                     dependencies: dependencies.clone(),
                     ..Default::default()

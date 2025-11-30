@@ -8,6 +8,7 @@ use crate::{
         TypeChecker,
     },
     types::{Type, TypeId, Variant},
+    SymbolKind,
 };
 
 impl TypeChecker {
@@ -39,7 +40,7 @@ impl TypeChecker {
             for (name, ty) in variables.0 {
                 let symbol = s.analysis_context.register_symbol(SymbolData {
                     name: name.as_str().into(),
-                    ty,
+                    kind: SymbolKind::constant(ty),
                     defined_at: arm.pattern.as_span(),
                     dependencies: deps.clone(),
                     ..Default::default()

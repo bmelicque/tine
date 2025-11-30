@@ -89,7 +89,7 @@ impl TypeChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ast, types::*, SymbolData};
+    use crate::{ast, types::*, SymbolData, SymbolKind};
 
     fn create_type_checker() -> TypeChecker {
         TypeChecker::dummy()
@@ -126,8 +126,7 @@ mod tests {
             }));
         checker.analysis_context.register_symbol(SymbolData {
             name: "User".into(),
-            kind: crate::SymbolKind::Type,
-            ty: id,
+            kind: SymbolKind::Type(id),
             ..Default::default()
         });
 
@@ -140,7 +139,7 @@ mod tests {
         };
         checker.analysis_context.register_symbol(SymbolData {
             name: "user".into(),
-            ty: id,
+            kind: SymbolKind::constant(id),
             ..Default::default()
         });
 
@@ -163,7 +162,7 @@ mod tests {
         let ty = checker.analysis_context.type_store.add(tuple_type);
         checker.analysis_context.register_symbol(SymbolData {
             name: "my_tuple".into(),
-            ty,
+            kind: SymbolKind::constant(ty),
             defined_at: span("my_tuple"),
             ..Default::default()
         });
@@ -189,7 +188,7 @@ mod tests {
         let mut checker = create_type_checker();
         checker.analysis_context.register_symbol(SymbolData {
             name: "not_a_tuple".into(),
-            ty: TypeStore::NUMBER,
+            kind: SymbolKind::constant(TypeStore::NUMBER),
             defined_at: span("not_a_tuple"),
             ..Default::default()
         });
@@ -219,7 +218,7 @@ mod tests {
         let tuple_type = checker.analysis_context.type_store.add(tuple_type);
         checker.analysis_context.register_symbol(SymbolData {
             name: "my_tuple".into(),
-            ty: tuple_type,
+            kind: SymbolKind::constant(tuple_type),
             defined_at: span("my_tuple"),
             ..Default::default()
         });
@@ -250,7 +249,7 @@ mod tests {
         let tuple_type = checker.analysis_context.type_store.add(tuple_type);
         checker.analysis_context.register_symbol(SymbolData {
             name: "my_tuple".into(),
-            ty: tuple_type,
+            kind: SymbolKind::constant(tuple_type),
             defined_at: span("my_tuple"),
             ..Default::default()
         });

@@ -8,6 +8,7 @@ use crate::{
         utils::normalize_doc_comment,
     },
     types::{Type, TypeId},
+    SymbolKind,
 };
 
 impl TypeChecker {
@@ -57,8 +58,8 @@ impl TypeChecker {
                 continue;
             };
             info.add_write();
-            self.check_assigned_type(info.borrow().ty, ty, pattern.as_span());
-            if !info.borrow().mutable {
+            self.check_assigned_type(info.borrow().get_type(), ty, pattern.as_span());
+            if !info.borrow().is_mutable() {
                 self.error(
                     "Cannot assign to immutable variable".to_string(),
                     pattern.as_span(),
@@ -91,11 +92,8 @@ impl TypeChecker {
         // visit expression at the beginning of the current scope adds a read
         // so we need to remove it here
         info.remove_read();
-        if !info.borrow().mutable {
-            self.errors.push(ParseError {
-                message: "Cannot assign to immutable variable".to_string(),
-                span: expr.span,
-            });
+        if !info.borrow().is_mutable() {
+            self.error("Cannot assign to immutable variable".to_string(), expr.span);
         }
     }
 
@@ -106,7 +104,7 @@ impl TypeChecker {
             return;
         };
         info.add_write();
-        let ty = info.borrow().ty.clone();
+        let ty = info.borrow().get_type();
         match self.resolve(ty).clone() {
             Type::Signal(t) => {
                 self.check_assigned_type(t.inner, against, node.span);
@@ -167,7 +165,7 @@ impl TypeChecker {
             let receiver = checker.visit_named_type(&node.receiver.ty);
             checker.analysis_context.register_symbol(SymbolData {
                 name: node.receiver.name.as_str().into(),
-                ty: receiver,
+                kind: SymbolKind::constant(receiver),
                 defined_at: node.receiver.span,
                 ..Default::default()
             });
@@ -209,9 +207,8 @@ impl TypeChecker {
                 }
                 None => self.analysis_context.register_symbol(SymbolData {
                     name: id.as_str().to_string(),
-                    ty,
+                    kind: SymbolKind::Value { ty, mutable },
                     docs: docs.clone(),
-                    mutable,
                     defined_at: node.pattern.as_span(),
                     dependencies: dependencies.clone(),
                     ..Default::default()

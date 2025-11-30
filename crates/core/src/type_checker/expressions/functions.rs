@@ -2,7 +2,7 @@ use crate::{
     ast,
     type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
     types::{FunctionType, Type, TypeId},
-    SymbolData,
+    SymbolData, SymbolKind,
 };
 
 impl TypeChecker {
@@ -29,7 +29,7 @@ impl TypeChecker {
             let ty = self.visit_type(&param.type_annotation);
             self.analysis_context.register_symbol(SymbolData {
                 name: param.name.as_str().into(),
-                ty,
+                kind: SymbolKind::constant(ty),
                 defined_at: param.name.span,
                 ..Default::default()
             });
