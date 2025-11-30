@@ -96,7 +96,7 @@ pub fn display_signature(store: &TypeStore, name: &String, signature: SymbolKind
                 .collect::<Vec<_>>()
                 .join(", ");
             match store.get(f.return_type) {
-                Type::Unit | Type::Void => format!("{}({})", name, params),
+                Type::Unit => format!("{}({})", name, params),
                 _ => format!(
                     "{}({}) => {}",
                     name,

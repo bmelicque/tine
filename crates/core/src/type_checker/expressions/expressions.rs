@@ -16,7 +16,7 @@ impl TypeChecker {
             ast::Expression::Call(node) => self.visit_call_expression(node),
             ast::Expression::CompositeLiteral(node) => self.visit_composite_literal(node),
             ast::Expression::Element(node) => self.visit_element_expression(node),
-            ast::Expression::Empty => TypeStore::VOID,
+            ast::Expression::Empty => TypeStore::UNIT,
             ast::Expression::Member(node) => self.visit_member_expression(node),
             ast::Expression::Function(node) => self.visit_function_expression(node).into(),
             ast::Expression::Identifier(node) => self.visit_identifier(node),
@@ -72,7 +72,7 @@ impl TypeChecker {
     pub fn visit_block_expression(&mut self, node: &ast::BlockExpression) -> TypeId {
         // TODO: handle diverging statements (return, break, continue)
         let ty = self.with_scope(node.span, |checker| {
-            let mut ty = TypeStore::VOID;
+            let mut ty = TypeStore::UNIT;
             for stmt in node.statements.iter() {
                 ty = checker.visit_statement(&stmt);
             }

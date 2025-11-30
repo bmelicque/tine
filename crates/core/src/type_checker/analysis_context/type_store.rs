@@ -28,13 +28,12 @@ pub struct TypeStore {
 
 impl TypeStore {
     pub const UNKNOWN: TypeId = 0;
-    pub const VOID: TypeId = 1;
-    pub const UNIT: TypeId = 2;
-    pub const DYNAMIC: TypeId = 3;
-    pub const BOOLEAN: TypeId = 4;
-    pub const STRING: TypeId = 5;
-    pub const NUMBER: TypeId = 6;
-    pub const ELEMENT: TypeId = 7;
+    pub const UNIT: TypeId = 1;
+    pub const DYNAMIC: TypeId = 2;
+    pub const BOOLEAN: TypeId = 3;
+    pub const STRING: TypeId = 4;
+    pub const NUMBER: TypeId = 5;
+    pub const ELEMENT: TypeId = 6;
 
     pub fn new() -> Self {
         let mut store = Self {
@@ -44,7 +43,6 @@ impl TypeStore {
             aliases: Vec::new(),
         };
         store.add(Type::Unknown);
-        store.add(Type::Void);
         store.add(Type::Unit);
         store.add(Type::Dynamic);
         store.add(Type::Boolean);
@@ -221,7 +219,6 @@ impl TypeStore {
             }
             Type::Unit => ty_id,
             Type::Unknown => ty_id,
-            Type::Void => ty_id,
         }
     }
 
@@ -335,7 +332,6 @@ impl TypeStore {
             }
             Type::Unit => "()".into(),
             Type::Unknown => "unknown".into(),
-            Type::Void => "void".into(),
         }
     }
 
@@ -440,7 +436,6 @@ impl TypeStore {
             }
             Type::Unit => TypeStore::UNIT,
             Type::Unknown => TypeStore::UNKNOWN,
-            Type::Void => TypeStore::VOID,
         };
         if let Some(alias) = from.get_alias(id) {
             self.add_alias(type_id, alias.clone());
@@ -457,7 +452,6 @@ mod tests {
     fn test_typestore_initialization() {
         let store = TypeStore::new();
         assert_eq!(store.get(TypeStore::UNKNOWN), &Type::Unknown);
-        assert_eq!(store.get(TypeStore::VOID), &Type::Void);
         assert_eq!(store.get(TypeStore::UNIT), &Type::Unit);
         assert_eq!(store.get(TypeStore::DYNAMIC), &Type::Dynamic);
         assert_eq!(store.get(TypeStore::BOOLEAN), &Type::Boolean);
@@ -514,7 +508,7 @@ mod tests {
 
         let fn_type = Type::Function(FunctionType {
             params: vec![],
-            return_type: TypeStore::VOID,
+            return_type: TypeStore::UNIT,
         });
         let fn_id = store.add(fn_type);
 
@@ -534,7 +528,7 @@ mod tests {
 
         let fn_type = Type::Function(FunctionType {
             params: vec![],
-            return_type: TypeStore::VOID,
+            return_type: TypeStore::UNIT,
         });
         let fn_id = store.add(fn_type);
 
@@ -732,7 +726,7 @@ mod tests {
         assert_eq!(store.display_type(TypeStore::NUMBER), "number");
         assert_eq!(store.display_type(TypeStore::STRING), "string");
         assert_eq!(store.display_type(TypeStore::BOOLEAN), "boolean");
-        assert_eq!(store.display_type(TypeStore::VOID), "void");
+        assert_eq!(store.display_type(TypeStore::UNIT), "void");
         assert_eq!(store.display_type(TypeStore::UNIT), "()");
     }
 

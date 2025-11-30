@@ -20,7 +20,7 @@ pub fn dom_metadata(store: TypeStore) -> CheckResult {
         .type_store
         .add(Type::Function(FunctionType {
             params: vec![TypeStore::STRING, element_trait],
-            return_type: TypeStore::VOID,
+            return_type: TypeStore::UNIT,
         }));
 
     analysis_context.register_symbol(SymbolData {

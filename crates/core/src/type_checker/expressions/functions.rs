@@ -47,7 +47,7 @@ impl TypeChecker {
         let ty = if let Some(ref type_annotation) = block.type_annotation {
             self.visit_type(type_annotation)
         } else {
-            TypeStore::VOID
+            TypeStore::UNIT
         };
         self.visit_block_expression(&block.block);
         self.check_returns(block, ty);
@@ -58,7 +58,7 @@ impl TypeChecker {
         let mut returns = Vec::<ast::ReturnStatement>::new();
         body.block.find_returns(&mut returns);
 
-        if returns.len() == 0 && expected != TypeStore::VOID {
+        if returns.len() == 0 && expected != TypeStore::UNIT {
             self.error(
                 "A function with return annotation needs a return value".into(),
                 body.block.span,
@@ -68,7 +68,7 @@ impl TypeChecker {
         for ret in returns {
             let ty = match ret.value {
                 Some(value) => self.get_type_at(value.as_span()).unwrap(),
-                None => TypeStore::VOID,
+                None => TypeStore::UNIT,
             };
             self.check_assigned_type(expected, ty, ret.span);
         }

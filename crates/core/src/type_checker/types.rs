@@ -82,7 +82,7 @@ impl TypeChecker {
             "string" => return TypeStore::STRING,
             "number" => return TypeStore::NUMBER,
             "boolean" => return TypeStore::BOOLEAN,
-            "void" => return TypeStore::VOID,
+            "void" => return TypeStore::UNIT,
             _ => {}
         }
         let Some(type_ref) = self.analysis_context.lookup(name) else {

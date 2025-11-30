@@ -15,7 +15,7 @@ impl TypeChecker {
     pub fn visit_statement(&mut self, node: &ast::Statement) -> TypeId {
         match node {
             ast::Statement::Assignment(node) => self.visit_assignment(node),
-            ast::Statement::Empty => TypeStore::VOID,
+            ast::Statement::Empty => TypeStore::UNIT,
             ast::Statement::Expression(node) => self.visit_expression(&node.expression),
             ast::Statement::Break(node) => self.visit_break_statement(node),
             ast::Statement::Invalid(_) => TypeStore::UNKNOWN,
@@ -33,7 +33,7 @@ impl TypeChecker {
         };
         self.visit_assignee(&node.pattern, value_type);
 
-        TypeStore::VOID
+        TypeStore::UNIT
     }
 
     /// Visit an assignee (i.e. the lhs of an assignment)
@@ -127,7 +127,7 @@ impl TypeChecker {
         if let Some(ref value) = node.value {
             self.visit_expression(value);
         }
-        TypeStore::VOID
+        TypeStore::UNIT
     }
 
     fn visit_method_definition(&mut self, node: &ast::MethodDefinition) -> TypeId {
@@ -136,7 +136,7 @@ impl TypeChecker {
         let method_name = node.name.as_str();
 
         if receiver == TypeStore::UNKNOWN {
-            return TypeStore::VOID;
+            return TypeStore::UNIT;
         }
 
         let field_exists = self
@@ -157,7 +157,7 @@ impl TypeChecker {
                 .define_method(receiver, method_name, function);
         }
 
-        TypeStore::VOID
+        TypeStore::UNIT
     }
 
     fn visit_method_expression(&mut self, node: &ast::MethodDefinition) -> (TypeId, TypeId) {
@@ -178,7 +178,7 @@ impl TypeChecker {
         if let Some(ref value) = node.value {
             self.visit_expression(value);
         }
-        TypeStore::VOID
+        TypeStore::UNIT
     }
 
     pub fn visit_variable_declaration(&mut self, node: &ast::VariableDeclaration) -> TypeId {
@@ -216,6 +216,6 @@ impl TypeChecker {
             };
             self.analysis_context.save_symbol_token(id, symbol);
         }
-        TypeStore::VOID
+        TypeStore::UNIT
     }
 }

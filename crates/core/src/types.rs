@@ -26,7 +26,6 @@ pub enum Type {
     Tuple(TupleType),
     Unit,
     Unknown,
-    Void,
 }
 
 impl Type {
@@ -316,7 +315,6 @@ impl fmt::Display for Type {
             }
             Type::Unknown => write!(f, "unknown"),
             Type::Unit => write!(f, "()"),
-            Type::Void => write!(f, "void"),
         }
     }
 }

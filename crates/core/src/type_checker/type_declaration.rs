@@ -36,7 +36,7 @@ impl TypeChecker {
         let name = &node.name;
         if self.analysis_context.find_in_current_scope(name).is_some() {
             self.error(format!("cannot redefine type '{}'", name), node.span);
-            return TypeStore::VOID;
+            return TypeStore::UNIT;
         }
         let ty = match params.len() {
             0 => ty,
@@ -58,7 +58,7 @@ impl TypeChecker {
             .type_store
             .add_alias(ty, name.to_string());
 
-        TypeStore::VOID
+        TypeStore::UNIT
     }
 
     fn visit_type_definition(&mut self, node: &ast::TypeDefinition) -> TypeId {
@@ -158,7 +158,7 @@ mod tests {
         };
 
         let result = checker.visit_type_declaration(&type_alias);
-        assert_eq!(result, TypeStore::VOID);
+        assert_eq!(result, TypeStore::UNIT);
         assert!(checker.errors.is_empty());
 
         let defined_type = checker.analysis_context.lookup("MyType").unwrap();
