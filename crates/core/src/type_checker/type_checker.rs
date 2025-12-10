@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use pest::Span;
-use swc_common::FileName;
 
+use crate::analyzer::ModulePath;
 use crate::parser::parser::ParseError;
 use crate::type_checker::analysis_context::{AnalysisContext, CheckData, SymbolRef};
 use crate::types::{Type, TypeId};
@@ -16,49 +15,27 @@ pub struct CheckResult {
 }
 
 pub struct TypeChecker {
-    file_name: Option<Rc<FileName>>,
-    project_modules: HashMap<Rc<FileName>, CheckData>,
+    file_name: Option<ModulePath>,
+    project_modules: HashMap<ModulePath, CheckData>,
     pub errors: Vec<ParseError>,
     pub analysis_context: AnalysisContext,
 }
 
 impl TypeChecker {
-    pub fn new(external: HashMap<Rc<FileName>, CheckData>) -> Self {
-        let mut analysis_context = AnalysisContext::new();
-        analysis_context.enter_scope(pest::Span::new("", 0, 0).unwrap());
-
-        Self {
-            file_name: None,
-            project_modules: external,
-            errors: Vec::new(),
-            analysis_context,
-        }
+    pub fn new(external: HashMap<ModulePath, CheckData>) -> Self {
+        TypeCheckerBuilder::new().with_modules(external).build()
     }
     pub fn dummy() -> Self {
-        let mut analysis_context = AnalysisContext::new();
-        analysis_context.enter_scope(pest::Span::new("", 0, 0).unwrap());
-
-        Self {
-            file_name: None,
-            project_modules: HashMap::new(),
-            errors: Vec::new(),
-            analysis_context,
-        }
+        TypeCheckerBuilder::new().build()
     }
-    pub fn with_store(external: HashMap<Rc<FileName>, CheckData>, store: TypeStore) -> Self {
-        let mut analysis_context = AnalysisContext::new();
-        analysis_context.type_store = store;
-        analysis_context.enter_scope(pest::Span::new("", 0, 0).unwrap());
-
-        Self {
-            file_name: None,
-            project_modules: external,
-            errors: Vec::new(),
-            analysis_context,
-        }
+    pub fn with_store(external: HashMap<ModulePath, CheckData>, store: TypeStore) -> Self {
+        TypeCheckerBuilder::new()
+            .with_modules(external)
+            .with_types(store)
+            .build()
     }
 
-    pub fn get_file_name(&self) -> Option<Rc<FileName>> {
+    pub fn get_file_name(&self) -> Option<ModulePath> {
         self.file_name.clone()
     }
 
@@ -163,7 +140,42 @@ impl TypeChecker {
         self.errors.push(ParseError { message, span });
     }
 
-    pub(super) fn get_module_data(&self, name: &FileName) -> Option<&CheckData> {
+    pub(super) fn get_module_data(&self, name: &ModulePath) -> Option<&CheckData> {
         self.project_modules.get(name)
+    }
+}
+
+#[derive(Debug)]
+pub struct TypeCheckerBuilder {
+    project_modules: HashMap<ModulePath, CheckData>,
+    type_store: Option<TypeStore>,
+}
+impl TypeCheckerBuilder {
+    pub fn new() -> Self {
+        Self {
+            project_modules: HashMap::new(),
+            type_store: None,
+        }
+    }
+    pub fn with_modules(mut self, modules: HashMap<ModulePath, CheckData>) -> Self {
+        self.project_modules = modules;
+        self
+    }
+    pub fn with_types(mut self, types: TypeStore) -> Self {
+        self.type_store = Some(types);
+        self
+    }
+    pub fn build(self) -> TypeChecker {
+        let mut analysis_context = AnalysisContext::new();
+        analysis_context.enter_scope(pest::Span::new("", 0, 0).unwrap());
+        if let Some(store) = self.type_store {
+            analysis_context.type_store = store;
+        };
+        TypeChecker {
+            file_name: None,
+            project_modules: self.project_modules,
+            errors: vec![],
+            analysis_context,
+        }
     }
 }

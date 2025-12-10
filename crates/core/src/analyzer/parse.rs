@@ -1,62 +1,62 @@
-use std::{path::PathBuf, rc::Rc};
+use std::path::PathBuf;
 
 use anyhow::bail;
-use swc_common::FileName;
 
 use super::graph::{ModuleGraph, ParsedModule};
 
-use crate::{ast, common::use_decl_to_paths, parser::ParserEngine};
+use crate::{
+    analyzer::graph::{ModuleId, ModulePath},
+    ast,
+    common::use_decl_to_paths,
+    parser::ParserEngine,
+};
 
 struct ProjectParser {
     graph: ModuleGraph,
 }
 
 impl ProjectParser {
-    fn parse_entry(mut self, entry: &FileName) -> Result<ModuleGraph, anyhow::Error> {
+    fn parse_entry(mut self, entry: &ModulePath) -> Result<ModuleGraph, anyhow::Error> {
         self.parse_file(entry)?;
         Ok(self.graph)
     }
 
-    fn parse_file(&mut self, file_name: &FileName) -> Result<&ParsedModule, anyhow::Error> {
+    fn parse_file(&mut self, file_name: &ModulePath) -> Result<ModuleId, anyhow::Error> {
         let module = match file_name {
-            FileName::Real(p) => parse_file(p)?,
-            FileName::Custom(c) => parse_virtual_module(c).unwrap(),
-            _ => panic!("Unexpected file name"),
+            ModulePath::Real(p) => parse_real_module(p)?,
+            ModulePath::Virtual(c) => parse_virtual_module(c).unwrap(),
         };
         let file_names = get_dependencies(&module);
 
-        let parsed_name = module.name.clone();
-        self.graph.add_module(module);
+        let module_id = self.graph.add_module(module);
 
         for dependency_name in file_names {
-            self.parse_dependency(dependency_name, parsed_name.clone());
+            self.parse_dependency(&dependency_name, module_id);
         }
 
-        Ok(self.graph.get_module(&parsed_name).unwrap())
+        Ok(module_id)
     }
 
-    fn parse_dependency(&mut self, dependency_name: FileName, dependant_name: Rc<FileName>) {
-        if let Some(dependency) = self.graph.get_module(&dependency_name) {
-            self.graph
-                .add_edge(dependency.name.clone(), dependant_name.clone());
+    fn parse_dependency(&mut self, dependency_name: &ModulePath, parent_id: ModuleId) {
+        if let Some(dependency_id) = self.graph.find_id(&dependency_name) {
+            self.graph.add_edge(dependency_id, parent_id.clone());
             return;
         }
         let Ok(dependency) = self.parse_file(&dependency_name) else {
             todo!()
         };
-        let dependency_name = dependency.name.clone();
-        self.graph.add_edge(dependency_name, dependant_name.clone());
+        self.graph.add_edge(dependency, parent_id);
     }
 }
 
-fn parse_file(path: &PathBuf) -> Result<ParsedModule, anyhow::Error> {
+fn parse_real_module(path: &PathBuf) -> anyhow::Result<ParsedModule> {
     let src = std::fs::read_to_string(path)?;
     let src = Box::leak(src.into_boxed_str());
     let mut parser = ParserEngine::new();
     let result = parser.parse(src);
 
     Ok(ParsedModule {
-        name: Rc::new(FileName::Real(path.clone())),
+        name: ModulePath::Real(path.clone()),
         ast: result.node,
         errors: result.errors,
     })
@@ -65,7 +65,7 @@ fn parse_file(path: &PathBuf) -> Result<ParsedModule, anyhow::Error> {
 fn parse_virtual_module(name: &String) -> anyhow::Result<ParsedModule> {
     match name.as_str() {
         "dom" => Ok(ParsedModule {
-            name: Rc::new(FileName::Custom(name.clone())),
+            name: ModulePath::Virtual(name.clone()),
             ast: ast::Program::dummy(),
             errors: Vec::new(),
         }),
@@ -73,8 +73,8 @@ fn parse_virtual_module(name: &String) -> anyhow::Result<ParsedModule> {
     }
 }
 
-fn get_dependencies(module: &ParsedModule) -> Vec<FileName> {
-    let mut file_names: Vec<FileName> = module
+fn get_dependencies(module: &ParsedModule) -> Vec<ModulePath> {
+    let mut file_names: Vec<ModulePath> = module
         .ast
         .items
         .iter()
@@ -87,9 +87,11 @@ fn get_dependencies(module: &ParsedModule) -> Vec<FileName> {
     file_names
 }
 
-/// Parse a package starting from the given entry point
+/// Parse a package starting from the given entry point, which should be the
+/// program's main entry.
 pub fn parse_package(entry: PathBuf) -> Result<ModuleGraph, anyhow::Error> {
-    let filename = FileName::Real(std::fs::canonicalize(entry)?);
+    debug_assert!(std::path::Path::is_absolute(&entry));
+    let filename = ModulePath::Real(std::fs::canonicalize(entry)?);
     let parser = ProjectParser {
         graph: ModuleGraph::new(),
     };

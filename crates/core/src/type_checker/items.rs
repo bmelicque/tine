@@ -1,6 +1,5 @@
-use swc_common::FileName;
-
 use crate::{
+    analyzer::ModulePath,
     ast,
     common::{use_decl_to_paths, ModuleImports},
     type_checker::{self, CheckData, TypeChecker},
@@ -28,7 +27,7 @@ impl TypeChecker {
     fn visit_use_virtual_module(&mut self, node: &ast::UseDeclaration) {
         assert_eq!(node.relative_count, 0);
         let module_name = node.tree.path[0].as_str();
-        let Some(metadata) = self.get_module_data(&FileName::Custom(module_name.into())) else {
+        let Some(metadata) = self.get_module_data(&ModulePath::Virtual(module_name.into())) else {
             panic!("Unexpected virtual module '{}'", module_name);
         };
         let metadata = metadata.clone();

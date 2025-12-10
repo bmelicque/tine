@@ -9,7 +9,6 @@ anyhow = "1.0.100"
 ordered-float = "5.0.0"
 pest = "2.7"
 pest_derive = "2.7"
-swc_common = "17.0.0"
 
 [build-dependencies]
 pest_generator = "2.7"

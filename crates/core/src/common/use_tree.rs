@@ -1,19 +1,20 @@
 use std::path::PathBuf;
 
-use swc_common::FileName;
-
-use crate::ast::{self, UseTree};
+use crate::{
+    analyzer::ModulePath,
+    ast::{self, UseTree},
+};
 
 #[derive(Debug, PartialEq)]
 pub struct ModuleImports {
-    /// The FileName corresponding the module form which names are imported.
-    pub module_name: FileName,
+    /// The ModulePath corresponding the module form which names are imported.
+    pub module_name: ModulePath,
     /// One or more trees of imported name from within the declared module.
     pub import_tree: Vec<ast::UseTree>,
 }
 
 /// Extract all the `FileName`s use in a `UseDeclaration`
-pub fn use_decl_to_paths(base_path: &FileName, decl: &ast::UseDeclaration) -> Vec<ModuleImports> {
+pub fn use_decl_to_paths(base_path: &ModulePath, decl: &ast::UseDeclaration) -> Vec<ModuleImports> {
     if decl.relative_count == 0 {
         use_virtual_module_imports(decl)
     } else {
@@ -22,7 +23,7 @@ pub fn use_decl_to_paths(base_path: &FileName, decl: &ast::UseDeclaration) -> Ve
 }
 
 fn use_virtual_module_imports(decl: &ast::UseDeclaration) -> Vec<ModuleImports> {
-    let module_name = FileName::Custom(decl.tree.path[0].as_str().to_string());
+    let module_name = ModulePath::Virtual(decl.tree.path[0].as_str().to_string());
     let import_tree = match decl.tree.path.get(1) {
         Some(_) => vec![UseTree {
             path: decl.tree.path.iter().skip(1).cloned().collect(),
@@ -36,8 +37,11 @@ fn use_virtual_module_imports(decl: &ast::UseDeclaration) -> Vec<ModuleImports> 
     }]
 }
 
-fn use_real_module_imports(base_path: &FileName, decl: &ast::UseDeclaration) -> Vec<ModuleImports> {
-    let FileName::Real(mut base) = base_path.clone() else {
+fn use_real_module_imports(
+    base_path: &ModulePath,
+    decl: &ast::UseDeclaration,
+) -> Vec<ModuleImports> {
+    let ModulePath::Real(mut base) = base_path.clone() else {
         panic!("expected real file name")
     };
     for _ in 0..decl.relative_count {
@@ -71,7 +75,7 @@ fn avorted_tree_imports(path: PathBuf, tree: &ast::UseTree, index: usize) -> Vec
         sub_trees: tree.sub_trees.clone(),
     };
     let imports = ModuleImports {
-        module_name: FileName::Real(path),
+        module_name: ModulePath::Real(path),
         import_tree: vec![sub_tree],
     };
     vec![imports]

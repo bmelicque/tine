@@ -2,11 +2,10 @@ mod tokens;
 mod utils;
 
 use dashmap::DashMap;
-use mylang_core::Token;
 use mylang_core::{analyze, CheckedModule, ParseError, TypeStore};
+use mylang_core::{ModulePath, Token};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use swc_common::FileName;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::Client;
 use tower_lsp::{lsp_types::*, LspService, Server};
@@ -218,7 +217,7 @@ fn get_summary(entry_point: PathBuf) -> anyhow::Result<ProjectSummary, anyhow::E
     let modules = analyzed_modules
         .modules
         .into_iter()
-        .filter(|m| matches!(*m.name, FileName::Real(_)))
+        .filter(|m| matches!(m.name, ModulePath::Real(_)))
         .map(|m| summarize_module(&m))
         .collect();
     Ok(ProjectSummary {
@@ -228,8 +227,8 @@ fn get_summary(entry_point: PathBuf) -> anyhow::Result<ProjectSummary, anyhow::E
 }
 
 fn summarize_module(m: &CheckedModule) -> ModuleSummary {
-    let uri: Url = match (*m.name).clone() {
-        FileName::Real(path) => Url::from_file_path(path).unwrap(),
+    let uri: Url = match &m.name {
+        ModulePath::Real(path) => Url::from_file_path(path).unwrap(),
         _ => unreachable!(),
     };
     let diagnostics = m.errors.iter().map(|e| error_to_lsp(e)).collect();

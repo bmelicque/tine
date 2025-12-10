@@ -1,10 +1,9 @@
 use std::{collections::HashMap, rc::Rc};
 
 use pest::Span;
-use swc_common::FileName;
 
 use crate::{
-    analyzer::graph::ParsedModule,
+    analyzer::{graph::ParsedModule, ModulePath},
     ast::Program,
     type_checker::{self, dom_metadata, CheckData, CheckResult, TypeChecker},
     types::{Type, TypeId},
@@ -28,7 +27,7 @@ impl ModuleTypeData {
 
 #[derive(Debug, Clone)]
 pub struct CheckedModule {
-    pub name: Rc<FileName>,
+    pub name: ModulePath,
     pub ast: Program,
     pub metadata: ModuleTypeData,
     pub errors: Vec<ParseError>,
@@ -37,7 +36,7 @@ pub struct CheckedModule {
 impl CheckedModule {
     pub fn dummy() -> Self {
         Self {
-            name: Rc::new(FileName::Custom("".into())),
+            name: ModulePath::Virtual("".into()),
             ast: Program::dummy(),
             metadata: ModuleTypeData {
                 type_store: Rc::new(TypeStore::new()),
@@ -83,17 +82,16 @@ pub fn type_check(mut modules: Vec<ParsedModule>) -> Vec<CheckedModule> {
 }
 
 fn type_check_module(
-    checked_modules: &HashMap<Rc<FileName>, CheckData>,
+    checked_modules: &HashMap<ModulePath, CheckData>,
     module: &ParsedModule,
     store: TypeStore,
 ) -> CheckResult {
-    match *module.name {
-        FileName::Real(_) => {
+    match module.name {
+        ModulePath::Real(_) => {
             let checker = TypeChecker::with_store(checked_modules.clone(), store);
             checker.check(&module)
         }
-        FileName::Custom(ref name) => type_check_virtual_module(name, store),
-        _ => unreachable!("unexpected FileName variant"),
+        ModulePath::Virtual(ref name) => type_check_virtual_module(name, store),
     }
 }
 

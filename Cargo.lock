@@ -769,7 +769,6 @@ dependencies = [
  "pest",
  "pest_derive",
  "pest_generator",
- "swc_common",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 use crate::{
     codegen::{utils::create_ident, CodeGenerator},
-    utils::make_relative,
+    utils::{filename_to_modulepath, make_relative, modulepath_to_filename},
 };
 
 use mylang_core::{ast, use_decl_to_paths, ModuleImports};
@@ -20,14 +20,15 @@ impl CodeGenerator {
     }
 
     fn use_decl_to_swc(&mut self, node: &ast::UseDeclaration) -> Vec<swc::ModuleItem> {
-        use_decl_to_paths(self.get_filename(), node)
+        use_decl_to_paths(&filename_to_modulepath(self.get_filename()), node)
             .into_iter()
             .map(|imports| self.imports_to_swc(imports))
             .collect()
     }
 
     fn imports_to_swc(&mut self, imports: ModuleImports) -> swc::ModuleItem {
-        let src = self.get_imports_src(imports.module_name);
+        let module_name = modulepath_to_filename(&imports.module_name);
+        let src = self.get_imports_src(module_name);
         let specifiers: Vec<_> = imports
             .import_tree
             .into_iter()
