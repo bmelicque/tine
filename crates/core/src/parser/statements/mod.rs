@@ -9,7 +9,7 @@ use crate::ast;
 use super::{parser::Rule, ParserEngine};
 
 impl ParserEngine {
-    pub fn parse_statement(&mut self, pair: Pair<'static, Rule>) -> ast::Statement {
+    pub fn parse_statement(&mut self, pair: Pair<'_, Rule>) -> ast::Statement {
         match pair.as_rule() {
             Rule::statement => {
                 let inner_pair = pair.into_inner().next().unwrap();
@@ -26,9 +26,9 @@ impl ParserEngine {
         }
     }
 
-    fn parse_break_statement(&mut self, pair: Pair<'static, Rule>) -> ast::BreakStatement {
+    fn parse_break_statement(&mut self, pair: Pair<'_, Rule>) -> ast::BreakStatement {
         assert_eq!(pair.as_rule(), Rule::break_statement);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let value = pair
             .into_inner()
             .next()
@@ -38,9 +38,9 @@ impl ParserEngine {
         ast::BreakStatement { span, value }
     }
 
-    fn parse_method_definition(&mut self, pair: Pair<'static, Rule>) -> ast::MethodDefinition {
+    fn parse_method_definition(&mut self, pair: Pair<'_, Rule>) -> ast::MethodDefinition {
         assert_eq!(pair.as_rule(), Rule::method_definition);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
         let receiver = self.parse_method_receiver(inner.next().unwrap());
         let name = inner.next().unwrap().as_span().into();
@@ -53,17 +53,17 @@ impl ParserEngine {
         }
     }
 
-    fn parse_method_receiver(&mut self, pair: Pair<'static, Rule>) -> ast::MethodReceiver {
+    fn parse_method_receiver(&mut self, pair: Pair<'_, Rule>) -> ast::MethodReceiver {
         assert_eq!(pair.as_rule(), Rule::method_receiver);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
         let name = inner.next().unwrap().as_span().into();
         let ty = self.parse_named_type(inner.next().unwrap());
         ast::MethodReceiver { span, name, ty }
     }
 
-    fn parse_return_statement(&mut self, pair: Pair<'static, Rule>) -> ast::ReturnStatement {
-        let span = pair.as_span();
+    fn parse_return_statement(&mut self, pair: Pair<'_, Rule>) -> ast::ReturnStatement {
+        let span = pair.as_span().into();
         let value = pair
             .into_inner()
             .next()
@@ -73,7 +73,7 @@ impl ParserEngine {
         ast::ReturnStatement { span, value }
     }
 
-    fn parse_expression_statement(&mut self, pair: Pair<'static, Rule>) -> ast::Statement {
+    fn parse_expression_statement(&mut self, pair: Pair<'_, Rule>) -> ast::Statement {
         let mut expression = ast::Expression::Empty;
         for pair in pair.into_inner() {
             match pair.as_rule() {

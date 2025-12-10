@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl ParserEngine {
-    pub fn parse_loop(&mut self, pair: Pair<'static, Rule>) -> ast::Loop {
+    pub fn parse_loop(&mut self, pair: Pair<'_, Rule>) -> ast::Loop {
         assert_eq!(pair.as_rule(), Rule::loop_expression);
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {
@@ -16,9 +16,9 @@ impl ParserEngine {
         }
     }
 
-    fn parse_for_expression(&mut self, pair: Pair<'static, Rule>) -> ast::ForExpression {
+    fn parse_for_expression(&mut self, pair: Pair<'_, Rule>) -> ast::ForExpression {
         assert_eq!(pair.as_rule(), Rule::for_expression);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
         let condition = Box::new(self.parse_expression(inner.next().unwrap()));
         let body = self.parse_block(inner.next().unwrap());
@@ -29,9 +29,9 @@ impl ParserEngine {
         }
     }
 
-    fn parse_for_in_expression(&mut self, pair: Pair<'static, Rule>) -> ast::ForInExpression {
+    fn parse_for_in_expression(&mut self, pair: Pair<'_, Rule>) -> ast::ForInExpression {
         assert_eq!(pair.as_rule(), Rule::for_in_expression);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
         let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
         let iterable = Box::new(self.parse_expression(inner.next().unwrap()));

@@ -130,14 +130,10 @@ impl TypeChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast;
+    use crate::{ast, locations::Span, type_checker::type_checker::TypeCheckerBuilder};
 
     fn create_type_checker() -> TypeChecker {
-        TypeChecker::dummy()
-    }
-
-    fn dummy_span() -> pest::Span<'static> {
-        pest::Span::new("_", 0, 0).unwrap()
+        TypeCheckerBuilder::new().build()
     }
 
     #[test]
@@ -151,10 +147,10 @@ mod tests {
                 ast::NamedType {
                     name: "number".to_string(),
                     args: None,
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 },
             ))),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_type_declaration(&type_alias);
@@ -173,7 +169,7 @@ mod tests {
             variants: vec![
                 ast::VariantDefinition::Unit(ast::UnitVariant {
                     name: "Variant1".to_string(),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
                 ast::VariantDefinition::Struct(ast::StructVariant {
                     name: "Variant2".to_string(),
@@ -184,17 +180,17 @@ mod tests {
                                 definition: ast::Type::Named(ast::NamedType {
                                     name: "number".to_string(),
                                     args: None,
-                                    span: dummy_span(),
+                                    span: Span::dummy(),
                                 }),
-                                span: dummy_span(),
+                                span: Span::dummy(),
                             },
                         )],
-                        span: dummy_span(),
+                        span: Span::dummy(),
                     },
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
             ],
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_enum_definition(&enum_definition);
@@ -213,20 +209,20 @@ mod tests {
                     definition: ast::Type::Named(ast::NamedType {
                         name: "number".to_string(),
                         args: None,
-                        span: dummy_span(),
+                        span: Span::dummy(),
                     }),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
                 ast::StructDefinitionField::Optional(ast::StructOptionalField {
                     name: "field2".to_string(),
                     default: ast::Expression::NumberLiteral(ast::NumberLiteral {
                         value: ordered_float::OrderedFloat(42.0),
-                        span: dummy_span(),
+                        span: Span::dummy(),
                     }),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
             ],
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_struct_definition(&struct_definition);
@@ -241,7 +237,7 @@ mod tests {
         let type_definition = ast::TypeDefinition::Type(ast::Type::Named(ast::NamedType {
             name: "string".to_string(),
             args: None,
-            span: dummy_span(),
+            span: Span::dummy(),
         }));
 
         let result = checker.visit_type_definition(&type_definition);

@@ -32,7 +32,7 @@ impl CodeGenerator {
 
             ast::Assignee::Pattern(pat) => match pat {
                 ast::Pattern::Identifier(id) => {
-                    swc::SimpleAssignTarget::Ident(create_ident(id.span.as_str()).into()).into()
+                    swc::SimpleAssignTarget::Ident(create_ident(id.as_str()).into()).into()
                 }
                 ast::Pattern::Literal(_) => unreachable!(),
                 ast::Pattern::Struct(pat) => {

@@ -1,17 +1,15 @@
-use pest::Span;
-
-use crate::ast::Item;
+use crate::{ast::Item, locations::Span};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
-    pub span: Span<'static>,
+    pub span: Span,
     pub items: Vec<Item>,
 }
 
 impl Program {
     pub fn dummy() -> Self {
         Self {
-            span: pest::Span::new("", 0, 0).unwrap(),
+            span: Span::dummy(),
             items: Vec::new(),
         }
     }

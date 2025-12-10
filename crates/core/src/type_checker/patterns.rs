@@ -1,5 +1,3 @@
-use pest::Span;
-
 use crate::{
     ast,
     type_checker::analysis_context::type_store::TypeStore,
@@ -9,14 +7,14 @@ use crate::{
 use super::TypeChecker;
 
 #[derive(Debug, Clone)]
-pub struct TokenList(pub Vec<(Span<'static>, TypeId)>);
+pub struct TokenList(pub Vec<(ast::Identifier, TypeId)>);
 impl TokenList {
     pub fn new() -> Self {
         Self(Vec::new())
     }
 
-    pub fn push(&mut self, span: Span<'static>, ty: TypeId) {
-        self.0.push((span, ty));
+    pub fn insert(&mut self, ident: ast::Identifier, ty: TypeId) {
+        self.0.push((ident, ty));
     }
 }
 
@@ -28,7 +26,7 @@ impl TypeChecker {
         variables: &mut TokenList,
     ) {
         match pattern {
-            ast::Pattern::Identifier(id) => variables.push(id.span, against),
+            ast::Pattern::Identifier(id) => variables.insert(id.clone().into(), against),
             ast::Pattern::Literal(l) => self.match_literal_pattern(l, against),
             ast::Pattern::Struct(pattern) => self.match_struct_pattern(pattern, against, variables),
             ast::Pattern::Tuple(pattern) => self.match_tuple_pattern(pattern, against, variables),
@@ -115,7 +113,7 @@ impl TypeChecker {
                 Some(ref sub_pattern) => {
                     self.match_pattern(sub_pattern, against.def.clone(), variables)
                 }
-                None => variables.0.push((field.identifier, against.def.clone())),
+                None => variables.insert(field.identifier.clone(), against.def.clone()),
             }
         }
     }

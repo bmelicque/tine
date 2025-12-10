@@ -38,7 +38,9 @@ impl TypeChecker {
                     dependencies: dependencies.clone(),
                     ..Default::default()
                 });
-                checker.analysis_context.save_symbol_token(name, symbol);
+                checker
+                    .analysis_context
+                    .save_symbol_token(name.span, symbol);
             }
             checker.visit_loop_body(&node.body)
         });

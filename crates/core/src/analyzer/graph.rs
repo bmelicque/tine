@@ -1,9 +1,6 @@
 use std::collections::{HashSet, VecDeque};
 
-use crate::{
-    analyzer::modules::{ModuleId, ModulePath, ParsedModule},
-    parser::parser::ParseError,
-};
+use crate::analyzer::modules::{ModuleId, ModulePath, ParsedModule};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GraphEdge {
@@ -19,7 +16,7 @@ pub struct ModuleSort {
 
 #[derive(Debug)]
 pub struct ModuleGraph {
-    nodes: Vec<ParsedModule>,
+    pub(super) nodes: Vec<ParsedModule>,
     pub(crate) edges: HashSet<GraphEdge>,
 }
 
@@ -47,10 +44,6 @@ impl ModuleGraph {
 
     pub fn find_id(&self, name: &ModulePath) -> Option<ModuleId> {
         self.nodes.iter().position(|m| m.name == *name)
-    }
-
-    pub fn errors<'a>(&'a self) -> impl Iterator<Item = &'a ParseError> {
-        self.nodes.iter().flat_map(|m| &m.errors)
     }
 
     /// Try a topological sort of the nodes contained in the graph.

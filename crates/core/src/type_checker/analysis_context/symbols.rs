@@ -3,9 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use pest::Span;
-
-use crate::{types::TypeId, utils::dummy_span, TypeStore};
+use crate::{locations::Span, types::TypeId, TypeStore};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SymbolKind {
@@ -47,7 +45,7 @@ impl SymbolKind {
 pub struct SymbolData {
     pub name: String,
     pub kind: SymbolKind,
-    pub defined_at: Span<'static>,
+    pub defined_at: Span,
     pub docs: Option<String>,
     pub reads: usize,
     pub writes: usize,
@@ -78,7 +76,7 @@ impl Default for SymbolData {
                 ty: TypeStore::UNKNOWN,
                 mutable: false,
             },
-            defined_at: dummy_span(),
+            defined_at: Span::dummy(),
             docs: None,
             reads: 0,
             writes: 0,

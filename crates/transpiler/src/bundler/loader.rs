@@ -15,6 +15,7 @@ impl SwcLoader {
         Self { modules }
     }
 
+    // TODO: avoid all this cloning
     fn load_real_module(&self, file: &FileName) -> anyhow::Result<swc_bundler::ModuleData> {
         let module = self.modules.iter().find(|m| match (&m.name, file) {
             (ModulePath::Real(a), FileName::Real(b)) => a == b,
@@ -28,7 +29,7 @@ impl SwcLoader {
         let cm = Arc::new(SourceMap::default());
         let fm = cm.new_source_file(
             swc_common::sync::Lrc::new(file.clone()),
-            module.ast.span.as_str(),
+            module.src.text().to_string(),
         );
 
         let mut code_generator = CodeGenerator::new(file.clone(), module.clone());

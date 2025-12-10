@@ -81,18 +81,18 @@ impl TypeChecker {
                     name: name.to_string(),
                     kind: symbol.borrow().kind.clone(),
                     docs: symbol.borrow().docs.clone(),
-                    defined_at: path_element.span,
+                    defined_at: path_element.as_span(),
                     ..Default::default()
                 };
                 let var = self.analysis_context.register_symbol(symbol);
                 self.analysis_context
-                    .save_expression_type(path_element.span, ty);
+                    .save_expression_type(path_element.as_span(), ty);
                 self.analysis_context
-                    .save_symbol_token(path_element.span, var);
+                    .save_symbol_token(path_element.as_span(), var);
             }
             None => self.error(
                 format!("This module has no exported element named '{}'", name),
-                path_element.span,
+                path_element.as_span(),
             ),
         };
         if tree.path.len() > 1 || tree.sub_trees.len() > 0 {

@@ -76,17 +76,13 @@ impl CodeGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mylang_core::{ast, CheckedModule};
+    use mylang_core::{ast, CheckedModule, Span};
     use swc_ecma_ast as swc;
-
-    fn dummy_span() -> pest::Span<'static> {
-        pest::Span::new("", 0, 0).unwrap()
-    }
 
     fn mock_expr() -> ast::Expression {
         ast::Expression::NumberLiteral(ast::NumberLiteral {
             value: 1.0.into(),
-            span: dummy_span(),
+            span: Span::dummy(),
         })
     }
 
@@ -95,7 +91,7 @@ mod tests {
             statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
                 expression: mock_expr().into(),
             })],
-            span: dummy_span(),
+            span: Span::dummy(),
         }
     }
 
@@ -108,7 +104,7 @@ mod tests {
             } else {
                 None
             },
-            span: dummy_span(),
+            span: Span::dummy(),
         }
     }
 
@@ -130,10 +126,10 @@ mod tests {
             condition: mock_expr().into(),
             consequent: Box::new(ast::BlockExpression {
                 statements: vec![],
-                span: dummy_span(),
+                span: Span::dummy(),
             }),
             alternate: None,
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = gen.if_to_swc_expr(&node);

@@ -5,7 +5,7 @@ use crate::ast;
 use super::{parser::Rule, ParserEngine};
 
 impl ParserEngine {
-    pub fn parse_pattern(&mut self, pair: Pair<'static, Rule>) -> ast::Pattern {
+    pub fn parse_pattern(&mut self, pair: Pair<'_, Rule>) -> ast::Pattern {
         match pair.as_rule() {
             Rule::pattern | Rule::grouped_pattern | Rule::pattern_element => {
                 self.parse_pattern(pair.into_inner().next().unwrap())
@@ -19,24 +19,27 @@ impl ParserEngine {
         }
     }
 
-    fn parse_identifier_pattern(&mut self, pair: Pair<'static, Rule>) -> ast::IdentifierPattern {
+    fn parse_identifier_pattern(&mut self, pair: Pair<'_, Rule>) -> ast::IdentifierPattern {
         match pair.as_str() {
             "break" | "continue" | "else" | "for" | "if" | "in" | "match" | "return" | "use" => {
                 self.error(
                     format!("invalid identifier: '{}' is a reserved name", pair.as_str()),
-                    pair.as_span(),
+                    pair.as_span().into(),
                 );
             }
             _ => {}
         }
 
-        ast::IdentifierPattern {
-            span: pair.as_span(),
-        }
+        let ident = ast::Identifier {
+            span: pair.as_span().into(),
+            text: pair.as_str().to_string(),
+        };
+        ast::IdentifierPattern(ident)
     }
 
-    fn parse_literal_pattern(&mut self, pair: Pair<'static, Rule>) -> ast::LiteralPattern {
-        let span = pair.as_span();
+    fn parse_literal_pattern(&mut self, pair: Pair<'_, Rule>) -> ast::LiteralPattern {
+        let span = pair.as_span().into();
+        let text = pair.as_str().to_string();
         let inner = pair.into_inner().next().unwrap();
         match inner.as_rule() {
             Rule::boolean_literal => ast::BooleanLiteral {
@@ -52,13 +55,13 @@ impl ParserEngine {
                     .unwrap_or(ordered_float::OrderedFloat(0.0)),
             }
             .into(),
-            Rule::string_literal => ast::StringLiteral { span }.into(),
+            Rule::string_literal => ast::StringLiteral { span, text }.into(),
             rule => unreachable!("unexpected rule {:?}", rule),
         }
     }
 
-    fn parse_struct_pattern(&mut self, pair: Pair<'static, Rule>) -> ast::StructPattern {
-        let span = pair.as_span();
+    fn parse_struct_pattern(&mut self, pair: Pair<'_, Rule>) -> ast::StructPattern {
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
         let ty = Box::new(self.parse_named_type(inner.next().unwrap()));
         let fields = self.parse_struct_pattern_fields(inner.next().unwrap());
@@ -67,7 +70,7 @@ impl ParserEngine {
 
     fn parse_struct_pattern_fields(
         &mut self,
-        pair: Pair<'static, Rule>,
+        pair: Pair<'_, Rule>,
     ) -> Vec<ast::StructPatternField> {
         assert!(pair.as_rule() == Rule::struct_pattern_elements);
         pair.into_inner()
@@ -75,11 +78,11 @@ impl ParserEngine {
             .collect()
     }
 
-    fn parse_struct_pattern_field(&mut self, pair: Pair<'static, Rule>) -> ast::StructPatternField {
+    fn parse_struct_pattern_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructPatternField {
         assert!(pair.as_rule() == Rule::struct_pattern_field);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
-        let identifier = inner.next().unwrap().as_span();
+        let identifier = self.parse_identifier(inner.next().unwrap());
         let pattern = inner.next().map(|pair| self.parse_pattern(pair));
         ast::StructPatternField {
             span,
@@ -88,8 +91,8 @@ impl ParserEngine {
         }
     }
 
-    fn parse_tuple_pattern(&mut self, pair: Pair<'static, Rule>) -> ast::TuplePattern {
-        let span = pair.as_span();
+    fn parse_tuple_pattern(&mut self, pair: Pair<'_, Rule>) -> ast::TuplePattern {
+        let span = pair.as_span().into();
         let elements = pair
             .into_inner()
             .map(|element| self.parse_pattern(element))
@@ -97,8 +100,8 @@ impl ParserEngine {
         ast::TuplePattern { span, elements }
     }
 
-    fn parse_variant_pattern(&mut self, pair: Pair<'static, Rule>) -> ast::VariantPattern {
-        let span = pair.as_span();
+    fn parse_variant_pattern(&mut self, pair: Pair<'_, Rule>) -> ast::VariantPattern {
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner().next().unwrap().into_inner();
         let ty = Box::new(self.parse_named_type(inner.next().unwrap()));
         let name = inner.next().unwrap().as_str().to_string();
@@ -114,7 +117,7 @@ impl ParserEngine {
 
     fn parse_variant_pattern_body(
         &mut self,
-        mut pairs: Pairs<'static, Rule>,
+        mut pairs: Pairs<'_, Rule>,
     ) -> Option<ast::VariantPatternBody> {
         let Some(next) = pairs.next() else {
             return None;
@@ -152,7 +155,7 @@ mod tests {
 
         match result {
             ast::Pattern::Identifier(identifier) => {
-                assert_eq!(identifier.span.as_str(), "username");
+                assert_eq!(identifier.as_str(), "username");
             }
             _ => panic!("Expected IdentifierPattern"),
         }
@@ -228,14 +231,14 @@ mod tests {
 
                 // Check the first element
                 if let ast::Pattern::Identifier(identifier) = &tuple_pattern.elements[0] {
-                    assert_eq!(identifier.span.as_str(), "username");
+                    assert_eq!(identifier.as_str(), "username");
                 } else {
                     panic!("Expected IdentifierPattern");
                 }
 
                 // Check the second element
                 if let ast::Pattern::Identifier(identifier) = &tuple_pattern.elements[1] {
-                    assert_eq!(identifier.span.as_str(), "age");
+                    assert_eq!(identifier.as_str(), "age");
                 } else {
                     panic!("Expected IdentifierPattern");
                 }
@@ -255,7 +258,7 @@ mod tests {
 
                 // Check the first element
                 if let ast::Pattern::Identifier(identifier) = &tuple_pattern.elements[0] {
-                    assert_eq!(identifier.span.as_str(), "username");
+                    assert_eq!(identifier.as_str(), "username");
                 } else {
                     panic!("Expected IdentifierPattern");
                 }
@@ -266,13 +269,13 @@ mod tests {
 
                     // Check the nested elements
                     if let ast::Pattern::Identifier(identifier) = &nested_tuple.elements[0] {
-                        assert_eq!(identifier.span.as_str(), "city");
+                        assert_eq!(identifier.as_str(), "city");
                     } else {
                         panic!("Expected IdentifierPattern");
                     }
 
                     if let ast::Pattern::Identifier(identifier) = &nested_tuple.elements[1] {
-                        assert_eq!(identifier.span.as_str(), "zip");
+                        assert_eq!(identifier.as_str(), "zip");
                     } else {
                         panic!("Expected IdentifierPattern");
                     }

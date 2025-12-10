@@ -2,15 +2,12 @@ use pest::iterators::Pair;
 
 use crate::{
     ast,
-    parser::{
-        parser::{ParseError, Rule},
-        ParserEngine,
-    },
+    parser::{parser::Rule, ParserEngine},
 };
 
 impl ParserEngine {
-    pub fn parse_binary_ltr_expression(&mut self, pair: Pair<'static, Rule>) -> ast::Expression {
-        let span = pair.as_span().to_owned();
+    pub fn parse_binary_ltr_expression(&mut self, pair: Pair<'_, Rule>) -> ast::Expression {
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
         let Some(next) = inner.next() else {
             return ast::Expression::Empty;
@@ -20,28 +17,19 @@ impl ParserEngine {
         let mut is_binary = false;
         while let Some(op_pair) = inner.next() {
             if !is_binary && left.is_empty() {
-                self.errors.push(ParseError {
-                    message: "Expression expected".to_string(),
-                    span: op_pair.as_span(),
-                });
+                self.error("Expression expected".to_string(), op_pair.as_span().into());
             }
             is_binary = true;
             let operator = op_pair.as_str().to_string();
 
             let Some(right_pair) = inner.next() else {
-                self.errors.push(ParseError {
-                    message: "Expression expected".to_string(),
-                    span: op_pair.as_span(),
-                });
+                self.error("Expression expected".to_string(), op_pair.as_span().into());
                 continue;
             };
 
             let right = self.parse_expression(right_pair);
             if right.is_empty() {
-                self.errors.push(ParseError {
-                    message: "Expression expected".to_string(),
-                    span: op_pair.as_span(),
-                });
+                self.error("Expression expected".to_string(), op_pair.as_span().into());
             }
 
             left = ast::BinaryExpression {

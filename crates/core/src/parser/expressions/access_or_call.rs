@@ -2,15 +2,12 @@ use pest::iterators::Pair;
 
 use crate::{
     ast,
-    parser::{
-        parser::Rule,
-        utils::{increment_span, merge_span},
-        ParserEngine,
-    },
+    locations::Span,
+    parser::{parser::Rule, ParserEngine},
 };
 
 impl ParserEngine {
-    pub fn parse_access_or_call(&mut self, pair: Pair<'static, Rule>) -> ast::Expression {
+    pub fn parse_access_or_call(&mut self, pair: Pair<'_, Rule>) -> ast::Expression {
         debug_assert_eq!(pair.as_rule(), Rule::access_or_call_expression);
         let mut inner = pair.into_inner();
         let mut node = self.parse_expression(inner.next().unwrap());
@@ -29,11 +26,11 @@ impl ParserEngine {
     fn parse_call(
         &mut self,
         root: ast::Expression,
-        right_pair: Pair<'static, Rule>,
+        right_pair: Pair<'_, Rule>,
     ) -> ast::CallExpression {
-        let right_span = right_pair.as_span();
+        let right_span = right_pair.as_span().into();
         let left_span = root.as_span();
-        let span = merge_span(left_span, right_span);
+        let span = Span::merge(left_span, right_span);
 
         let args = self.parse_call_arguments(right_pair);
         ast::CallExpression {
@@ -43,7 +40,7 @@ impl ParserEngine {
         }
     }
 
-    fn parse_call_arguments(&mut self, pair: Pair<'static, Rule>) -> Vec<ast::CallArgument> {
+    fn parse_call_arguments(&mut self, pair: Pair<'_, Rule>) -> Vec<ast::CallArgument> {
         assert_eq!(pair.as_rule(), Rule::call_arguments);
         pair.into_inner()
             .map(|sub_pair| self.parse_call_argument(sub_pair))
@@ -51,7 +48,7 @@ impl ParserEngine {
             .collect()
     }
 
-    fn parse_call_argument(&mut self, pair: Pair<'static, Rule>) -> ast::CallArgument {
+    fn parse_call_argument(&mut self, pair: Pair<'_, Rule>) -> ast::CallArgument {
         assert_eq!(pair.as_rule(), Rule::call_argument);
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {
@@ -64,17 +61,17 @@ impl ParserEngine {
     pub fn parse_member_expression(
         &mut self,
         root: ast::Expression,
-        right_pair: Pair<'static, Rule>,
+        right_pair: Pair<'_, Rule>,
     ) -> ast::MemberExpression {
         debug_assert_eq!(right_pair.as_rule(), Rule::member_suffix);
-        let right_span = right_pair.as_span();
+        let right_span = right_pair.as_span().into();
         let left_span = root.as_span();
-        let span = merge_span(left_span, right_span);
+        let span = Span::merge(left_span, right_span);
 
         let Some(right_pair) = right_pair.into_inner().next() else {
             self.error(
                 "expected field name or integer".into(),
-                increment_span(right_span),
+                right_span.increment(),
             );
             return ast::MemberExpression {
                 span,
@@ -157,9 +154,10 @@ mod tests {
         let ast::Expression::Member(expr) = result else {
             panic!("Expected FieldAccessExpression")
         };
-        assert_eq!(expr.object.as_span().as_str(), "object");
-        assert!(matches!(expr.prop, Some(ast::MemberProp::FieldName(_))));
-        assert_eq!(expr.prop.unwrap().as_span().as_str(), "property");
+        match expr.prop.unwrap() {
+            ast::MemberProp::FieldName(ident) if ident.as_str() == "property" => {}
+            node => panic!("expected FieldName with name 'property', got {:?}", node),
+        }
     }
 
     #[test]

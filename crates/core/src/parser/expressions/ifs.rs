@@ -6,9 +6,9 @@ use crate::{
 };
 
 impl ParserEngine {
-    pub fn parse_if_expression(&mut self, pair: Pair<'static, Rule>) -> ast::IfExpression {
+    pub fn parse_if_expression(&mut self, pair: Pair<'_, Rule>) -> ast::IfExpression {
         assert!(pair.as_rule() == Rule::if_expression);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
         let condition = Box::new(self.parse_expression(inner.next().unwrap()));
         let consequent = Box::new(self.parse_block(inner.next().unwrap()));
@@ -24,9 +24,9 @@ impl ParserEngine {
     }
 
     /// Parse if expressions that use pattern matching as their condition
-    pub fn parse_if_pat_expression(&mut self, pair: Pair<'static, Rule>) -> ast::IfPatExpression {
+    pub fn parse_if_pat_expression(&mut self, pair: Pair<'_, Rule>) -> ast::IfPatExpression {
         assert!(pair.as_rule() == Rule::if_decl_expression);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
         let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
         let scrutinee = Box::new(self.parse_expression(inner.next().unwrap()));
@@ -43,7 +43,7 @@ impl ParserEngine {
         }
     }
 
-    fn parse_alternate(&mut self, pair: Pair<'static, Rule>) -> ast::Alternate {
+    fn parse_alternate(&mut self, pair: Pair<'_, Rule>) -> ast::Alternate {
         assert!(pair.as_rule() == Rule::alternate);
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {

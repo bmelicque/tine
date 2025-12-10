@@ -49,7 +49,7 @@ impl TypeChecker {
                     dependencies: dependencies.clone(),
                     ..Default::default()
                 });
-                s.analysis_context.save_symbol_token(name, symbol);
+                s.analysis_context.save_symbol_token(name.span, symbol);
             }
             s.visit_block_expression(&node.consequent)
         });

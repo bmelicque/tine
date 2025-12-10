@@ -1,9 +1,7 @@
-use pest::Span;
-
-use crate::{type_checker::TypeChecker, types::TypeId};
+use crate::{locations::Span, type_checker::TypeChecker, types::TypeId};
 
 impl TypeChecker {
-    pub fn check_assigned_type(&mut self, expected: TypeId, got: TypeId, span: Span<'static>) {
+    pub fn check_assigned_type(&mut self, expected: TypeId, got: TypeId, span: Span) {
         if !self.can_be_assigned_to(got, expected) {
             let got = self.analysis_context.type_store.display_type(got);
             let expected = self.analysis_context.type_store.display_type(expected);

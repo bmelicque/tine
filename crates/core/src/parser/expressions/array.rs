@@ -6,9 +6,9 @@ use crate::{
 };
 
 impl ParserEngine {
-    pub fn parse_array_expression(&mut self, pair: Pair<'static, Rule>) -> ast::ArrayExpression {
+    pub fn parse_array_expression(&mut self, pair: Pair<'_, Rule>) -> ast::ArrayExpression {
         assert_eq!(pair.as_rule(), Rule::array_expression);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let elements = pair
             .into_inner()
             .map(|element| self.parse_expression(element))

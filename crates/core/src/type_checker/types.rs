@@ -189,25 +189,23 @@ impl TypeChecker {
 mod tests {
     use super::*;
     use crate::ast;
+    use crate::locations::Span;
+    use crate::type_checker::type_checker::TypeCheckerBuilder;
     use crate::types::StructType;
     use crate::types::Type;
     use crate::SymbolData;
     use crate::SymbolKind;
 
-    fn dummy_span() -> pest::Span<'static> {
-        pest::Span::new("_", 0, 0).unwrap()
-    }
-
     #[test]
     fn test_visit_array_type() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
         let array_type = ast::ArrayType {
             element: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "number".to_string(),
                 args: None,
-                span: dummy_span(),
+                span: Span::dummy(),
             }))),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_array_type(&array_type);
@@ -222,26 +220,26 @@ mod tests {
 
     #[test]
     fn test_visit_function_type() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
         let function_type = ast::FunctionType {
             params: vec![
                 ast::Type::Named(ast::NamedType {
                     name: "number".to_string(),
                     args: None,
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
                 ast::Type::Named(ast::NamedType {
                     name: "string".to_string(),
                     args: None,
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
             ],
             returned: Box::new(ast::Type::Named(ast::NamedType {
                 name: "boolean".to_string(),
                 args: None,
-                span: dummy_span(),
+                span: Span::dummy(),
             })),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_function_type(&function_type);
@@ -257,19 +255,19 @@ mod tests {
 
     #[test]
     fn test_visit_map_type() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
         let map_type = ast::MapType {
             key: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "string".to_string(),
                 args: None,
-                span: dummy_span(),
+                span: Span::dummy(),
             }))),
             value: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "number".to_string(),
                 args: None,
-                span: dummy_span(),
+                span: Span::dummy(),
             }))),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_map_type(&map_type);
@@ -285,7 +283,7 @@ mod tests {
 
     #[test]
     fn test_visit_named_type() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
         let def = checker
             .analysis_context
             .type_store
@@ -302,7 +300,7 @@ mod tests {
         let named_type = ast::NamedType {
             name: "Box".to_string(),
             args: None,
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_named_type(&named_type);
@@ -312,14 +310,14 @@ mod tests {
 
     #[test]
     fn test_visit_option_type() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
         let option_type = ast::OptionType {
             base: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "number".to_string(),
                 args: None,
-                span: dummy_span(),
+                span: Span::dummy(),
             }))),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_option_type(&option_type);
@@ -334,14 +332,14 @@ mod tests {
 
     #[test]
     fn test_visit_reference_type() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
         let reference_type = ast::ReferenceType {
             target: Box::new(ast::Type::Named(ast::NamedType {
                 name: "string".to_string(),
                 args: None,
-                span: dummy_span(),
+                span: Span::dummy(),
             })),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_reference_type(&reference_type);
@@ -357,19 +355,19 @@ mod tests {
 
     #[test]
     fn test_visit_result_type() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
         let result_type = ast::ResultType {
             ok: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "number".to_string(),
                 args: None,
-                span: dummy_span(),
+                span: Span::dummy(),
             }))),
             error: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "string".to_string(),
                 args: None,
-                span: dummy_span(),
+                span: Span::dummy(),
             }))),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_result_type(&result_type);
@@ -385,21 +383,21 @@ mod tests {
 
     #[test]
     fn test_visit_tuple_type() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
         let tuple_type = ast::TupleType {
             elements: vec![
                 ast::Type::Named(ast::NamedType {
                     name: "number".to_string(),
                     args: None,
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
                 ast::Type::Named(ast::NamedType {
                     name: "string".to_string(),
                     args: None,
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
             ],
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_tuple_type(&tuple_type);

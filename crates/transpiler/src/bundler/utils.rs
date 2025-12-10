@@ -11,7 +11,7 @@ where
     for module in modules {
         for e in &module.errors {
             has_errors = true;
-            pretty_print_error(&e);
+            pretty_print_error(&module.src, &e);
         }
     }
     has_errors

@@ -6,9 +6,9 @@ use crate::{
 };
 
 impl ParserEngine {
-    pub fn parse_tuple_expression(&mut self, pair: Pair<'static, Rule>) -> ast::TupleExpression {
+    pub fn parse_tuple_expression(&mut self, pair: Pair<'_, Rule>) -> ast::TupleExpression {
         assert_eq!(pair.as_rule(), Rule::tuple_expression);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let elements = pair
             .into_inner()
             .map(|pair| self.parse_expression(pair))
@@ -49,7 +49,7 @@ mod tests {
 
         assert!(matches!(
             result.elements[1],
-            ast::Expression::StringLiteral(ast::StringLiteral { ref span, .. }) if span.as_str() == "\"hello\""
+            ast::Expression::StringLiteral(ast::StringLiteral { ref text, .. }) if text.as_str() == "\"hello\""
         ));
 
         assert!(matches!(
@@ -80,7 +80,7 @@ mod tests {
 
         assert!(matches!(
             nested_tuple.elements[0],
-            ast::Expression::StringLiteral(ast::StringLiteral { ref span, .. }) if span.as_str() == "\"nested\""
+            ast::Expression::StringLiteral(ast::StringLiteral { ref text, .. }) if text.as_str() == "\"nested\""
         ));
 
         assert!(matches!(

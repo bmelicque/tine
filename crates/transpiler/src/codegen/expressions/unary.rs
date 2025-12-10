@@ -2,8 +2,7 @@ use crate::codegen::{
     utils::{create_ident, create_number, create_str},
     CodeGenerator,
 };
-use mylang_core::ast;
-use pest::Span;
+use mylang_core::{ast, Span};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
@@ -107,7 +106,7 @@ impl CodeGenerator {
         }
     }
 
-    pub fn listener_deps_to_swc_array(&mut self, listener_span: Span<'static>) -> swc::ArrayLit {
+    pub fn listener_deps_to_swc_array(&mut self, listener_span: Span) -> swc::ArrayLit {
         let reactive_dependencies: Vec<swc::Ident> = self
             .get_reactive_dependencies(listener_span)
             .into_iter()

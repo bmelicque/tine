@@ -1,4 +1,4 @@
-use pest::Span;
+use crate::locations::Span;
 
 use super::{
     expressions::Expression,
@@ -16,7 +16,7 @@ pub enum CompositeLiteral {
 }
 
 impl CompositeLiteral {
-    pub fn as_span(&self) -> Span<'static> {
+    pub fn as_span(&self) -> Span {
         match self {
             Self::AnonymousStruct(c) => c.span,
             Self::Array(c) => c.span,
@@ -30,7 +30,7 @@ impl CompositeLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MapLiteral {
-    pub span: Span<'static>,
+    pub span: Span,
     pub ty: MapType,
     pub entries: Vec<MapEntry>,
 }
@@ -43,14 +43,14 @@ impl Into<CompositeLiteral> for MapLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MapEntry {
-    pub span: Span<'static>,
+    pub span: Span,
     pub key: Box<Expression>,
     pub value: Box<ExpressionOrAnonymous>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ArrayLiteral {
-    pub span: Span<'static>,
+    pub span: Span,
     pub ty: ArrayType,
     pub elements: Vec<ExpressionOrAnonymous>,
 }
@@ -63,7 +63,7 @@ impl Into<CompositeLiteral> for ArrayLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OptionLiteral {
-    pub span: Span<'static>,
+    pub span: Span,
     pub ty: OptionType,
     pub value: Option<Box<ExpressionOrAnonymous>>,
 }
@@ -76,7 +76,7 @@ impl Into<CompositeLiteral> for OptionLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructLiteral {
-    pub span: Span<'static>,
+    pub span: Span,
     pub ty: NamedType,
     pub fields: Vec<StructLiteralField>,
 }
@@ -89,7 +89,7 @@ impl Into<CompositeLiteral> for StructLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AnonymousStructLiteral {
-    pub span: Span<'static>,
+    pub span: Span,
     pub fields: Vec<StructLiteralField>,
 }
 
@@ -101,14 +101,14 @@ impl Into<CompositeLiteral> for AnonymousStructLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructLiteralField {
-    pub span: Span<'static>,
+    pub span: Span,
     pub prop: String,
     pub value: Expression,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariantLiteral {
-    pub span: Span<'static>,
+    pub span: Span,
     pub ty: NamedType,
     pub name: String,
     pub body: Option<VariantLiteralBody>,
@@ -127,17 +127,17 @@ pub enum VariantLiteralBody {
 }
 
 impl VariantLiteralBody {
-    pub fn as_span(&self) -> Span<'static> {
+    pub fn as_span(&self) -> Span {
         match self {
             Self::Tuple(tuple) => {
                 let start_span = tuple.first().unwrap().as_span();
                 let end_span = tuple.last().unwrap().as_span();
-                Span::new(start_span.get_input(), start_span.start(), end_span.end()).unwrap()
+                Span::merge(start_span, end_span)
             }
             Self::Struct(st) => {
                 let start_span = st.first().unwrap().span;
                 let end_span = st.last().unwrap().span;
-                Span::new(start_span.get_input(), start_span.start(), end_span.end()).unwrap()
+                Span::merge(start_span, end_span)
             }
         }
     }
@@ -162,7 +162,7 @@ pub enum ExpressionOrAnonymous {
 }
 
 impl ExpressionOrAnonymous {
-    pub fn as_span(&self) -> Span<'static> {
+    pub fn as_span(&self) -> Span {
         match self {
             Self::Expression(expr) => expr.as_span(),
             Self::Struct(s) => s.span.clone(),

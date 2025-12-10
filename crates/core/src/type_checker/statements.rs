@@ -5,7 +5,6 @@ use crate::{
     type_checker::{
         analysis_context::{type_store::TypeStore, SymbolData},
         patterns::TokenList,
-        utils::normalize_doc_comment,
     },
     types::{Type, TypeId},
     SymbolKind,
@@ -66,7 +65,7 @@ impl TypeChecker {
                 );
             }
             self.analysis_context
-                .save_symbol_token(name, info.readonly());
+                .save_symbol_token(name.span, info.readonly());
         }
     }
 
@@ -193,7 +192,7 @@ impl TypeChecker {
             );
         }
         let mut variables = TokenList::new();
-        let docs = node.docs.map(|d| normalize_doc_comment(d.as_str()));
+        let docs = node.docs.clone().map(|d| d.text);
         self.match_pattern(&node.pattern, inferred_type, &mut variables);
         for (id, ty) in variables.0 {
             let symbol = match self.analysis_context.find_in_current_scope(id.as_str()) {
@@ -202,7 +201,7 @@ impl TypeChecker {
                         "variable '{}' already defined in current scope",
                         id.as_str()
                     );
-                    self.error(message, id);
+                    self.error(message, id.span);
                     symbol
                 }
                 None => self.analysis_context.register_symbol(SymbolData {
@@ -214,7 +213,7 @@ impl TypeChecker {
                     ..Default::default()
                 }),
             };
-            self.analysis_context.save_symbol_token(id, symbol);
+            self.analysis_context.save_symbol_token(id.span, symbol);
         }
         TypeStore::UNIT
     }

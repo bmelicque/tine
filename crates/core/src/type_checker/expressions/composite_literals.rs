@@ -347,16 +347,14 @@ impl TypeChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::locations::Span;
+    use crate::type_checker::type_checker::TypeCheckerBuilder;
     use crate::types::{StructField, Type, Variant};
     use crate::{ast, SymbolData, SymbolKind};
 
-    fn dummy_span() -> pest::Span<'static> {
-        pest::Span::new("_", 0, 0).unwrap()
-    }
-
     #[test]
     fn test_visit_anonymous_struct_literal() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
         let user_type = checker
             .analysis_context
             .type_store
@@ -380,20 +378,21 @@ mod tests {
                 ast::StructLiteralField {
                     prop: "name".to_string(),
                     value: ast::Expression::StringLiteral(ast::StringLiteral {
-                        span: pest::Span::new("John", 0, 4).unwrap(),
+                        span: Span::new(0, 4),
+                        text: "John".into(),
                     }),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 },
                 ast::StructLiteralField {
                     prop: "age".to_string(),
                     value: ast::Expression::NumberLiteral(ast::NumberLiteral {
                         value: ordered_float::OrderedFloat(30.0),
-                        span: dummy_span(),
+                        span: Span::dummy(),
                     }),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 },
             ],
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_anonymous_struct_literal(&struct_literal, user_type);
@@ -404,31 +403,31 @@ mod tests {
 
     #[test]
     fn test_visit_array_literal() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
         let array_literal = ast::ArrayLiteral {
             ty: ast::ArrayType {
                 element: Some(Box::new(ast::Type::Named(ast::NamedType {
                     name: "number".to_string(),
                     args: None,
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }))),
-                span: dummy_span(),
+                span: Span::dummy(),
             },
             elements: vec![
                 ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
                     ast::NumberLiteral {
                         value: ordered_float::OrderedFloat(1.0),
-                        span: dummy_span(),
+                        span: Span::dummy(),
                     },
                 )),
                 ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
                     ast::NumberLiteral {
                         value: ordered_float::OrderedFloat(2.0),
-                        span: dummy_span(),
+                        span: Span::dummy(),
                     },
                 )),
             ],
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_array_literal(&array_literal);
@@ -444,48 +443,50 @@ mod tests {
 
     #[test]
     fn test_visit_map_literal() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
         let map_literal = ast::MapLiteral {
             ty: ast::MapType {
                 key: Some(Box::new(ast::Type::Named(ast::NamedType {
                     name: "string".to_string(),
                     args: None,
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }))),
                 value: Some(Box::new(ast::Type::Named(ast::NamedType {
                     name: "number".to_string(),
                     args: None,
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }))),
-                span: dummy_span(),
+                span: Span::dummy(),
             },
             entries: vec![
                 ast::MapEntry {
                     key: Box::new(ast::Expression::StringLiteral(ast::StringLiteral {
-                        span: pest::Span::new("key1", 0, 1).unwrap(),
+                        span: Span::new(0, 1),
+                        text: "key1".into(),
                     })),
                     value: Box::new(ast::ExpressionOrAnonymous::Expression(
                         ast::Expression::NumberLiteral(ast::NumberLiteral {
                             value: ordered_float::OrderedFloat(42.0),
-                            span: dummy_span(),
+                            span: Span::dummy(),
                         }),
                     )),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 },
                 ast::MapEntry {
                     key: Box::new(ast::Expression::StringLiteral(ast::StringLiteral {
-                        span: pest::Span::new("key1", 0, 1).unwrap(),
+                        span: Span::new(0, 1),
+                        text: "key1".into(),
                     })),
                     value: Box::new(ast::ExpressionOrAnonymous::Expression(
                         ast::Expression::NumberLiteral(ast::NumberLiteral {
                             value: ordered_float::OrderedFloat(99.0),
-                            span: dummy_span(),
+                            span: Span::dummy(),
                         }),
                     )),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 },
             ],
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_map_literal(&map_literal);
@@ -502,23 +503,23 @@ mod tests {
 
     #[test]
     fn test_visit_option_literal() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
         let option_literal = ast::OptionLiteral {
             ty: ast::OptionType {
                 base: Some(Box::new(ast::Type::Named(ast::NamedType {
                     name: "number".to_string(),
                     args: None,
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }))),
-                span: dummy_span(),
+                span: Span::dummy(),
             },
             value: Some(Box::new(ast::ExpressionOrAnonymous::Expression(
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
                     value: ordered_float::OrderedFloat(42.0),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
             ))),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_option_literal(&option_literal);
@@ -534,7 +535,7 @@ mod tests {
 
     #[test]
     fn test_visit_struct_literal() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
 
         // Define the User struct type properly
         let user_type = types::Type::Struct(types::StructType {
@@ -564,26 +565,27 @@ mod tests {
             ty: ast::NamedType {
                 name: "User".to_string(),
                 args: None,
-                span: dummy_span(),
+                span: Span::dummy(),
             },
             fields: vec![
                 ast::StructLiteralField {
                     prop: "name".to_string(),
                     value: ast::Expression::StringLiteral(ast::StringLiteral {
-                        span: pest::Span::new("John", 0, 1).unwrap(),
+                        span: Span::new(0, 1),
+                        text: "John".into(),
                     }),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 },
                 ast::StructLiteralField {
                     prop: "age".to_string(),
                     value: ast::Expression::NumberLiteral(ast::NumberLiteral {
                         value: ordered_float::OrderedFloat(30.0),
-                        span: dummy_span(),
+                        span: Span::dummy(),
                     }),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 },
             ],
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_struct_literal(&struct_literal);
@@ -598,7 +600,7 @@ mod tests {
 
     #[test]
     fn test_visit_variant_literal_valid() {
-        let mut checker = TypeChecker::dummy();
+        let mut checker = TypeCheckerBuilder::new().build();
 
         // Define a sum type with variants
         let enum_type = types::Type::Enum(types::EnumType {
@@ -652,7 +654,7 @@ mod tests {
             ty: ast::NamedType {
                 name: "Shape".to_string(),
                 args: None,
-                span: dummy_span(),
+                span: Span::dummy(),
             },
             name: "Circle".to_string(),
             body: Some(ast::VariantLiteralBody::Struct(vec![
@@ -660,12 +662,12 @@ mod tests {
                     prop: "radius".to_string(),
                     value: ast::Expression::NumberLiteral(ast::NumberLiteral {
                         value: ordered_float::OrderedFloat(10.0),
-                        span: dummy_span(),
+                        span: Span::dummy(),
                     }),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 },
             ])),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_variant_literal(&variant_literal);

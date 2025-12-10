@@ -89,18 +89,24 @@ impl TypeChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ast, types::*, SymbolData, SymbolKind};
+    use crate::{
+        ast, locations::Span, type_checker::type_checker::TypeCheckerBuilder, types::*, SymbolData,
+        SymbolKind,
+    };
 
     fn create_type_checker() -> TypeChecker {
-        TypeChecker::dummy()
+        TypeCheckerBuilder::new().build()
     }
 
-    fn dummy_span() -> pest::Span<'static> {
-        pest::Span::new("_", 0, 0).unwrap()
+    fn span(text: &'static str) -> Span {
+        Span::new(0, text.len() as u32)
     }
 
-    fn span(text: &'static str) -> pest::Span<'static> {
-        pest::Span::new(text, 0, text.len()).unwrap()
+    fn ident(text: &str) -> ast::Identifier {
+        ast::Identifier {
+            span: Span::new(0, text.len() as u32),
+            text: text.to_string(),
+        }
     }
 
     #[test]
@@ -131,11 +137,9 @@ mod tests {
         });
 
         let field_access_expression = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ast::Identifier {
-                span: span("user"),
-            })),
-            prop: Some(ast::Identifier { span: span("name") }.into()),
-            span: dummy_span(),
+            object: Box::new(ast::Expression::Identifier(ident("user"))),
+            prop: Some(ident("name").into()),
+            span: Span::dummy(),
         };
         checker.analysis_context.register_symbol(SymbolData {
             name: "user".into(),
@@ -168,14 +172,12 @@ mod tests {
         });
 
         let tuple_indexing = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ast::Identifier {
-                span: span("my_tuple"),
-            })),
+            object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
             prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
                 value: ordered_float::OrderedFloat(1.0),
-                span: dummy_span(),
+                span: Span::dummy(),
             })),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_tuple_indexing(&tuple_indexing);
@@ -194,14 +196,12 @@ mod tests {
         });
 
         let tuple_indexing = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ast::Identifier {
-                span: span("not_a_tuple"),
-            })),
+            object: Box::new(ast::Expression::Identifier(ident("not_a_tuple"))),
             prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
                 value: ordered_float::OrderedFloat(0.0),
-                span: dummy_span(),
+                span: Span::dummy(),
             })),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_tuple_indexing(&tuple_indexing);
@@ -224,14 +224,12 @@ mod tests {
         });
 
         let tuple_indexing = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ast::Identifier {
-                span: span("my_tuple"),
-            })),
+            object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
             prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
                 value: ordered_float::OrderedFloat(2.0),
-                span: dummy_span(),
+                span: Span::dummy(),
             })),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_tuple_indexing(&tuple_indexing);
@@ -255,14 +253,12 @@ mod tests {
         });
 
         let tuple_indexing = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ast::Identifier {
-                span: span("my_tuple"),
-            })),
+            object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
             prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
                 value: ordered_float::OrderedFloat(-1.0),
-                span: dummy_span(),
+                span: Span::dummy(),
             })),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_tuple_indexing(&tuple_indexing);

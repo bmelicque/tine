@@ -106,7 +106,7 @@ impl CodeGenerator {
             ast::ElementChild::VoidElement(el) => self.void_element_to_swc(el),
             ast::ElementChild::Text(t) => swc::Expr::Lit(swc::Lit::Str(swc::Str {
                 span: DUMMY_SP,
-                value: t.span.as_str().into(),
+                value: t.text.clone().into(),
                 raw: None,
             })),
             ast::ElementChild::Expression(e) => self.expression_child_to_swc(e),

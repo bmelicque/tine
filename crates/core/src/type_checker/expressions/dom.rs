@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
-use pest::Span;
-
 use crate::{
     ast,
+    locations::Span,
     type_checker::TypeChecker,
     types::{DuckType, ListenerType, Type, TypeId},
     TypeStore,
@@ -36,7 +35,7 @@ impl TypeChecker {
     }
 
     fn report_duplicated_attributes(&mut self, attributes: &Vec<ast::Attribute>) {
-        let mut map = HashMap::<String, Vec<Span<'static>>>::new();
+        let mut map = HashMap::<String, Vec<Span>>::new();
         for attribute in attributes {
             match map.get_mut(&attribute.name) {
                 Some(spans) => spans.push(attribute.span),

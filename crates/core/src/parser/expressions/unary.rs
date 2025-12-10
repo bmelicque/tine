@@ -2,16 +2,13 @@ use pest::iterators::Pair;
 
 use crate::{
     ast,
-    parser::{
-        parser::{ParseError, Rule},
-        ParserEngine,
-    },
+    parser::{parser::Rule, ParserEngine},
 };
 
 impl ParserEngine {
-    pub fn parse_unary_expression(&mut self, pair: Pair<'static, Rule>) -> ast::UnaryExpression {
+    pub fn parse_unary_expression(&mut self, pair: Pair<'_, Rule>) -> ast::UnaryExpression {
         assert!(pair.as_rule() == Rule::unary);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
         let operator = self.parse_unary_operator(inner.next().unwrap());
         let operand = Box::new(self.parse_expression(inner.next().unwrap()));
@@ -22,7 +19,7 @@ impl ParserEngine {
         }
     }
 
-    fn parse_unary_operator(&mut self, pair: Pair<'static, Rule>) -> ast::UnaryOperator {
+    fn parse_unary_operator(&mut self, pair: Pair<'_, Rule>) -> ast::UnaryOperator {
         assert!(pair.as_rule() == Rule::unary_op);
         match pair.as_str() {
             "&" => ast::UnaryOperator::Ampersand,
@@ -32,10 +29,10 @@ impl ParserEngine {
             "-" => ast::UnaryOperator::Minus,
             "*" => ast::UnaryOperator::Star,
             op => {
-                self.errors.push(ParseError {
-                    message: format!("Unknown unary operator: {}", op),
-                    span: pair.as_span(),
-                });
+                self.error(
+                    format!("Unknown unary operator: {}", op),
+                    pair.as_span().into(),
+                );
                 ast::UnaryOperator::Star
             }
         }

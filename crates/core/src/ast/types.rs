@@ -1,4 +1,4 @@
-use pest::Span;
+use crate::locations::Span;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -16,7 +16,7 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn as_span(&self) -> Span<'static> {
+    pub fn as_span(&self) -> Span {
         match self {
             Self::Array(t) => t.span,
             Self::Duck(t) => t.span,
@@ -35,7 +35,7 @@ impl Type {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NamedType {
-    pub span: Span<'static>,
+    pub span: Span,
     pub name: String,
     pub args: Option<Vec<Type>>,
 }
@@ -48,7 +48,7 @@ impl Into<Type> for NamedType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OptionType {
-    pub span: Span<'static>,
+    pub span: Span,
     pub base: Option<Box<Type>>,
 }
 
@@ -60,7 +60,7 @@ impl Into<Type> for OptionType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ArrayType {
-    pub span: Span<'static>,
+    pub span: Span,
     pub element: Option<Box<Type>>,
 }
 
@@ -72,7 +72,7 @@ impl Into<Type> for ArrayType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SignalType {
-    pub span: Span<'static>,
+    pub span: Span,
     pub inner: Box<Type>,
 }
 
@@ -84,7 +84,7 @@ impl Into<Type> for SignalType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ListenerType {
-    pub span: Span<'static>,
+    pub span: Span,
     pub inner: Box<Type>,
 }
 
@@ -96,7 +96,7 @@ impl Into<Type> for ListenerType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReferenceType {
-    pub span: Span<'static>,
+    pub span: Span,
     pub target: Box<Type>,
 }
 
@@ -108,7 +108,7 @@ impl Into<Type> for ReferenceType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DuckType {
-    pub span: Span<'static>,
+    pub span: Span,
     pub like: Box<Type>,
 }
 
@@ -120,7 +120,7 @@ impl Into<Type> for DuckType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TupleType {
-    pub span: Span<'static>,
+    pub span: Span,
     pub elements: Vec<Type>,
 }
 
@@ -132,7 +132,7 @@ impl Into<Type> for TupleType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MapType {
-    pub span: Span<'static>,
+    pub span: Span,
     pub key: Option<Box<Type>>,
     pub value: Option<Box<Type>>,
 }
@@ -145,7 +145,7 @@ impl Into<Type> for MapType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ResultType {
-    pub span: Span<'static>,
+    pub span: Span,
     pub error: Option<Box<Type>>,
     pub ok: Option<Box<Type>>,
 }
@@ -158,7 +158,7 @@ impl Into<Type> for ResultType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionType {
-    pub span: Span<'static>,
+    pub span: Span,
     pub params: Vec<Type>,
     pub returned: Box<Type>,
 }

@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl ParserEngine {
-    pub fn parse_composite_literal(&mut self, pair: Pair<'static, Rule>) -> ast::CompositeLiteral {
+    pub fn parse_composite_literal(&mut self, pair: Pair<'_, Rule>) -> ast::CompositeLiteral {
         assert!(pair.as_rule() == Rule::composite_literal);
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {
@@ -19,9 +19,9 @@ impl ParserEngine {
         }
     }
 
-    fn parse_map_literal(&mut self, pair: Pair<'static, Rule>) -> ast::MapLiteral {
+    fn parse_map_literal(&mut self, pair: Pair<'_, Rule>) -> ast::MapLiteral {
         assert!(pair.as_rule() == Rule::map_literal);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
 
         let ty = self.parse_map_type(inner.next().unwrap());
@@ -36,9 +36,9 @@ impl ParserEngine {
         ast::MapLiteral { span, ty, entries }
     }
 
-    fn parse_map_entry(&mut self, pair: Pair<'static, Rule>) -> ast::MapEntry {
+    fn parse_map_entry(&mut self, pair: Pair<'_, Rule>) -> ast::MapEntry {
         assert!(pair.as_rule() == Rule::map_entry);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
 
         let key_pair = inner.next().unwrap().into_inner().next().unwrap();
@@ -48,9 +48,9 @@ impl ParserEngine {
         ast::MapEntry { span, key, value }
     }
 
-    fn parse_array_literal(&mut self, pair: Pair<'static, Rule>) -> ast::ArrayLiteral {
+    fn parse_array_literal(&mut self, pair: Pair<'_, Rule>) -> ast::ArrayLiteral {
         assert!(pair.as_rule() == Rule::array_literal);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
 
         let ty = self.parse_array_type(inner.next().unwrap());
@@ -60,19 +60,16 @@ impl ParserEngine {
         ast::ArrayLiteral { span, ty, elements }
     }
 
-    fn parse_array_literal_body(
-        &mut self,
-        pair: Pair<'static, Rule>,
-    ) -> Vec<ExpressionOrAnonymous> {
+    fn parse_array_literal_body(&mut self, pair: Pair<'_, Rule>) -> Vec<ExpressionOrAnonymous> {
         pair.into_inner()
             .map(|el_pair| self.parse_expression_or_anonymous(el_pair))
             .filter(|expr| !expr.is_empty())
             .collect()
     }
 
-    fn parse_option_literal(&mut self, pair: Pair<'static, Rule>) -> ast::OptionLiteral {
+    fn parse_option_literal(&mut self, pair: Pair<'_, Rule>) -> ast::OptionLiteral {
         assert!(pair.as_rule() == Rule::option_literal);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
 
         let ty = self.parse_option_type(inner.next().unwrap());
@@ -85,9 +82,9 @@ impl ParserEngine {
         ast::OptionLiteral { span, ty, value }
     }
 
-    fn parse_struct_literal(&mut self, pair: Pair<'static, Rule>) -> ast::StructLiteral {
+    fn parse_struct_literal(&mut self, pair: Pair<'_, Rule>) -> ast::StructLiteral {
         assert!(pair.as_rule() == Rule::struct_literal);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
 
         let ty = self.parse_named_type_with_args(inner.next().unwrap());
@@ -98,27 +95,24 @@ impl ParserEngine {
 
     pub fn parse_anonymous_struct_literal(
         &mut self,
-        pair: Pair<'static, Rule>,
+        pair: Pair<'_, Rule>,
     ) -> ast::AnonymousStructLiteral {
         assert!(pair.as_rule() == Rule::struct_literal_body);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let fields = self.parse_struct_literal_body(pair);
 
         ast::AnonymousStructLiteral { span, fields }
     }
 
-    fn parse_struct_literal_body(
-        &mut self,
-        pair: Pair<'static, Rule>,
-    ) -> Vec<ast::StructLiteralField> {
+    fn parse_struct_literal_body(&mut self, pair: Pair<'_, Rule>) -> Vec<ast::StructLiteralField> {
         assert!(pair.as_rule() == Rule::struct_literal_body);
         pair.into_inner()
             .map(|field| self.parse_struct_literal_field(field))
             .collect()
     }
 
-    fn parse_struct_literal_field(&mut self, pair: Pair<'static, Rule>) -> ast::StructLiteralField {
-        let span = pair.as_span();
+    fn parse_struct_literal_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructLiteralField {
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
 
         let prop = inner.next().unwrap().as_str().to_string();
@@ -127,8 +121,8 @@ impl ParserEngine {
         ast::StructLiteralField { span, prop, value }
     }
 
-    fn parse_variant_literal(&mut self, pair: Pair<'static, Rule>) -> ast::VariantLiteral {
-        let span = pair.as_span();
+    fn parse_variant_literal(&mut self, pair: Pair<'_, Rule>) -> ast::VariantLiteral {
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
 
         let ty = self.parse_variant_parent(inner.next().unwrap());
@@ -145,7 +139,7 @@ impl ParserEngine {
         }
     }
 
-    fn parse_variant_parent(&mut self, pair: Pair<'static, Rule>) -> ast::NamedType {
+    fn parse_variant_parent(&mut self, pair: Pair<'_, Rule>) -> ast::NamedType {
         match pair.as_rule() {
             Rule::generic_type => self.parse_named_type_with_args(pair),
             Rule::type_name => self.parse_named_type(pair),
@@ -153,7 +147,7 @@ impl ParserEngine {
         }
     }
 
-    fn parse_variant_literal_body(&mut self, pair: Pair<'static, Rule>) -> ast::VariantLiteralBody {
+    fn parse_variant_literal_body(&mut self, pair: Pair<'_, Rule>) -> ast::VariantLiteralBody {
         assert!(pair.as_rule() == Rule::variant_literal_body);
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {
@@ -333,7 +327,7 @@ mod tests {
                 assert!(
                     matches!(
                         field1.value,
-                        ast::Expression::StringLiteral(ast::StringLiteral { ref span, .. }) if span.as_str() == "\"value1\""
+                        ast::Expression::StringLiteral(ast::StringLiteral { ref text, .. }) if text.as_str() == "\"value1\""
                     ),
                     "got {:?}",
                     field1.value

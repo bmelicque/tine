@@ -8,9 +8,9 @@ use crate::{
 use super::ParserEngine;
 
 impl ParserEngine {
-    pub fn parse_type_alias(&mut self, pair: Pair<'static, Rule>) -> ast::TypeAlias {
+    pub fn parse_type_alias(&mut self, pair: Pair<'_, Rule>) -> ast::TypeAlias {
         assert!(pair.as_rule() == Rule::type_alias);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
 
         let name = inner.next().unwrap().as_str().to_string();
@@ -40,7 +40,7 @@ impl ParserEngine {
         }
     }
 
-    fn parse_type_params(&mut self, pair: Pair<'static, Rule>) -> Vec<String> {
+    fn parse_type_params(&mut self, pair: Pair<'_, Rule>) -> Vec<String> {
         assert_eq!(pair.as_rule(), Rule::type_params);
         let mut type_params = Vec::new();
         let mut type_param_names = std::collections::HashSet::new();
@@ -50,7 +50,7 @@ impl ParserEngine {
             if !type_param_names.insert(param_name.clone()) {
                 self.error(
                     format!("Duplicate type parameter name '{}'", param_name),
-                    param_pair.as_span(),
+                    param_pair.as_span().into(),
                 );
             }
             type_params.push(param_name);
@@ -58,7 +58,7 @@ impl ParserEngine {
         type_params
     }
 
-    fn parse_type_param(&mut self, pair: &Pair<'static, Rule>) -> String {
+    fn parse_type_param(&mut self, pair: &Pair<'_, Rule>) -> String {
         assert_eq!(pair.as_rule(), Rule::type_identifier);
         let param_name = pair.as_str().to_string();
         if !is_pascal_case(&param_name) {
@@ -66,12 +66,12 @@ impl ParserEngine {
                 "Type parameter name '{}' should be in Pascal case",
                 param_name
             );
-            self.error(message, pair.as_span());
+            self.error(message, pair.as_span().into());
         }
         param_name
     }
 
-    fn parse_type_definition(&mut self, pair: Pair<'static, Rule>) -> ast::TypeDefinition {
+    fn parse_type_definition(&mut self, pair: Pair<'_, Rule>) -> ast::TypeDefinition {
         assert_eq!(pair.as_rule(), Rule::type_def);
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {
@@ -81,9 +81,9 @@ impl ParserEngine {
         }
     }
 
-    fn parse_struct_body(&mut self, pair: Pair<'static, Rule>) -> ast::StructDefinition {
+    fn parse_struct_body(&mut self, pair: Pair<'_, Rule>) -> ast::StructDefinition {
         assert_eq!(pair.as_rule(), Rule::struct_body);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
 
         let fields: Vec<ast::StructDefinitionField> = pair
             .into_inner()
@@ -103,7 +103,7 @@ impl ParserEngine {
         ast::StructDefinition { span, fields }
     }
 
-    fn parse_struct_field(&mut self, pair: Pair<'static, Rule>) -> ast::StructDefinitionField {
+    fn parse_struct_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructDefinitionField {
         assert_eq!(pair.as_rule(), Rule::field_declaration);
         let inner = pair.into_inner().next().unwrap();
 
@@ -114,9 +114,9 @@ impl ParserEngine {
         }
     }
 
-    fn parse_mandatory_field(&mut self, pair: Pair<'static, Rule>) -> ast::StructMandatoryField {
+    fn parse_mandatory_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructMandatoryField {
         assert_eq!(pair.as_rule(), Rule::mandatory_field);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
 
         let name = inner.next().unwrap().as_str().to_string();
@@ -129,9 +129,9 @@ impl ParserEngine {
         }
     }
 
-    fn parse_optionnal_field(&mut self, pair: Pair<'static, Rule>) -> ast::StructOptionalField {
+    fn parse_optionnal_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructOptionalField {
         assert_eq!(pair.as_rule(), Rule::mandatory_field);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
 
         let name = inner.next().unwrap().as_str().to_string();
@@ -144,8 +144,8 @@ impl ParserEngine {
         }
     }
 
-    pub fn parse_enum_definition(&mut self, pair: Pair<'static, Rule>) -> EnumDefinition {
-        let span = pair.as_span();
+    pub fn parse_enum_definition(&mut self, pair: Pair<'_, Rule>) -> EnumDefinition {
+        let span = pair.as_span().into();
 
         let variants: Vec<ast::VariantDefinition> = pair
             .into_inner()
@@ -165,8 +165,8 @@ impl ParserEngine {
         ast::EnumDefinition { span, variants }
     }
 
-    fn parse_variant_definition(&mut self, pair: Pair<'static, Rule>) -> ast::VariantDefinition {
-        let span = pair.as_span();
+    fn parse_variant_definition(&mut self, pair: Pair<'_, Rule>) -> ast::VariantDefinition {
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
 
         let name = inner.next().unwrap().as_str().to_string();

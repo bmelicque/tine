@@ -7,7 +7,7 @@ use crate::ast;
 use super::{parser::Rule, ParserEngine};
 
 impl ParserEngine {
-    pub fn parse_type(&mut self, pair: Pair<'static, Rule>) -> ast::Type {
+    pub fn parse_type(&mut self, pair: Pair<'_, Rule>) -> ast::Type {
         match pair.as_rule() {
             Rule::type_annotation
             | Rule::type_element
@@ -26,9 +26,9 @@ impl ParserEngine {
         }
     }
 
-    fn parse_tuple_type(&mut self, pair: Pair<'static, Rule>) -> ast::TupleType {
+    fn parse_tuple_type(&mut self, pair: Pair<'_, Rule>) -> ast::TupleType {
         assert!(pair.as_rule() == Rule::tuple_type);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let elements = pair
             .into_inner()
             .map(|pair| self.parse_type(pair))
@@ -36,9 +36,9 @@ impl ParserEngine {
         return ast::TupleType { span, elements };
     }
 
-    pub fn parse_map_type(&mut self, pair: Pair<'static, Rule>) -> ast::MapType {
+    pub fn parse_map_type(&mut self, pair: Pair<'_, Rule>) -> ast::MapType {
         assert!(pair.as_rule() == Rule::map_type);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut key = None;
         let mut value = None;
 
@@ -61,9 +61,9 @@ impl ParserEngine {
         ast::MapType { span, key, value }
     }
 
-    fn parse_result_type(&mut self, pair: Pair<'static, Rule>) -> ast::ResultType {
+    fn parse_result_type(&mut self, pair: Pair<'_, Rule>) -> ast::ResultType {
         assert!(pair.as_rule() == Rule::result_type);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut ok = None;
         let mut error = None;
 
@@ -86,9 +86,9 @@ impl ParserEngine {
         ast::ResultType { span, error, ok }
     }
 
-    pub fn parse_named_type_with_args(&mut self, pair: Pair<'static, Rule>) -> ast::NamedType {
+    pub fn parse_named_type_with_args(&mut self, pair: Pair<'_, Rule>) -> ast::NamedType {
         assert!(pair.as_rule() == Rule::generic_type);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
 
         let mut inner = pair.into_inner();
         let name = inner.next().unwrap().as_str().into();
@@ -102,17 +102,17 @@ impl ParserEngine {
         ast::NamedType { span, name, args }
     }
 
-    pub fn parse_named_type(&mut self, pair: Pair<'static, Rule>) -> ast::NamedType {
+    pub fn parse_named_type(&mut self, pair: Pair<'_, Rule>) -> ast::NamedType {
         ast::NamedType {
-            span: pair.as_span(),
+            span: pair.as_span().into(),
             name: pair.as_str().into(),
             args: None,
         }
     }
 
-    fn parse_function_type(&mut self, pair: Pair<'static, Rule>) -> ast::FunctionType {
+    fn parse_function_type(&mut self, pair: Pair<'_, Rule>) -> ast::FunctionType {
         assert!(pair.as_rule() == Rule::function_type);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
 
         let params = inner

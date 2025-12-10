@@ -5,9 +5,9 @@ pub use symbols::{SymbolData, SymbolHandle, SymbolKind, SymbolRef};
 
 use std::collections::HashMap;
 
-use pest::Span;
-
-use crate::{type_checker::analysis_context::type_store::TypeStore, types::TypeId};
+use crate::{
+    locations::Span, type_checker::analysis_context::type_store::TypeStore, types::TypeId,
+};
 
 #[derive(Clone, Debug)]
 pub enum Token {
@@ -17,20 +17,20 @@ pub enum Token {
 
 #[derive(Clone, Debug)]
 pub struct SymbolToken {
-    pub span: Span<'static>,
+    pub span: Span,
     pub symbol: SymbolRef,
 }
 
 #[derive(Clone, Debug)]
 pub struct MemberToken {
-    pub span: Span<'static>,
+    pub span: Span,
     pub ty: TypeId,
 }
 
 #[derive(Clone)]
 pub struct Scope {
     pub bindings: Vec<SymbolRef>,
-    pub outer_id: Option<Span<'static>>,
+    pub outer_id: Option<Span>,
     /**
      * Lists symbols captured by the scope
      */
@@ -38,7 +38,7 @@ pub struct Scope {
 }
 
 impl Scope {
-    pub fn new(within: Option<Span<'static>>) -> Self {
+    pub fn new(within: Option<Span>) -> Self {
         Self {
             bindings: vec![],
             outer_id: within,
@@ -56,15 +56,15 @@ pub struct AnalysisContext {
     /** Map of existing symbols */
     pub symbols: Vec<SymbolHandle>,
 
-    pub scopes: HashMap<Span<'static>, Scope>,
-    current_scope: Option<Span<'static>>,
+    pub scopes: HashMap<Span, Scope>,
+    current_scope: Option<Span>,
 
     pub(crate) type_store: TypeStore,
-    pub expressions: HashMap<Span<'static>, TypeId>,
-    pub tokens: HashMap<Span<'static>, Token>,
+    pub expressions: HashMap<Span, TypeId>,
+    pub tokens: HashMap<Span, Token>,
 
     pub current_declaration_dependencies: Option<Vec<SymbolRef>>,
-    pub other_dependencies: HashMap<Span<'static>, Vec<SymbolRef>>,
+    pub other_dependencies: HashMap<Span, Vec<SymbolRef>>,
 }
 
 impl AnalysisContext {
@@ -81,7 +81,7 @@ impl AnalysisContext {
         }
     }
 
-    pub fn enter_scope(&mut self, span: Span<'static>) {
+    pub fn enter_scope(&mut self, span: Span) {
         self.scopes.insert(span, Scope::new(self.current_scope));
         self.current_scope = Some(span);
     }
@@ -91,7 +91,7 @@ impl AnalysisContext {
         self.current_scope = current.outer_id;
         current
     }
-    fn get_scope(&self, id: Span<'static>) -> &Scope {
+    fn get_scope(&self, id: Span) -> &Scope {
         self.scopes.iter().find(|(span, _)| **span == id).unwrap().1
     }
     fn get_current_scope(&self) -> &Scope {
@@ -101,7 +101,11 @@ impl AnalysisContext {
     pub fn register_symbol(&mut self, symbol: SymbolData) -> SymbolRef {
         let mut scope = self.get_current_scope().clone();
         for dep in &symbol.dependencies {
-            if !within(self.current_scope.unwrap(), dep.borrow().defined_at) {
+            let is_captured = !dep
+                .borrow()
+                .defined_at
+                .is_within(self.current_scope.unwrap());
+            if is_captured {
                 scope.captured.push(dep.clone());
             }
         }
@@ -114,15 +118,15 @@ impl AnalysisContext {
         handle.readonly()
     }
 
-    pub fn save_expression_type(&mut self, span: Span<'static>, ty: TypeId) -> TypeId {
+    pub fn save_expression_type(&mut self, span: Span, ty: TypeId) -> TypeId {
         self.expressions.insert(span, ty);
         ty
     }
-    pub fn save_symbol_token(&mut self, span: Span<'static>, symbol: SymbolRef) {
+    pub fn save_symbol_token(&mut self, span: Span, symbol: SymbolRef) {
         let token = Token::Symbol(SymbolToken { span, symbol });
         self.tokens.insert(span, token);
     }
-    pub fn save_member_token(&mut self, span: Span<'static>, type_id: TypeId) {
+    pub fn save_member_token(&mut self, span: Span, type_id: TypeId) {
         let token = Token::Member(MemberToken { span, ty: type_id });
         self.tokens.insert(span, token);
     }
@@ -166,14 +170,10 @@ impl AnalysisContext {
     }
 }
 
-fn within(outer: Span<'static>, inner: Span<'static>) -> bool {
-    inner.start() >= outer.start() && inner.end() <= outer.end()
-}
-
 #[derive(Clone, Debug)]
 pub struct CheckData {
     pub exports: Vec<SymbolRef>,
-    pub expressions: HashMap<Span<'static>, TypeId>,
-    pub tokens: HashMap<Span<'static>, Token>,
-    pub dependencies: HashMap<Span<'static>, Vec<SymbolRef>>,
+    pub expressions: HashMap<Span, TypeId>,
+    pub tokens: HashMap<Span, Token>,
+    pub dependencies: HashMap<Span, Vec<SymbolRef>>,
 }

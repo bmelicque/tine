@@ -1,4 +1,4 @@
-use crate::parser::utils::merge_span;
+use crate::{ast::Identifier, locations::Span};
 
 use super::{BooleanLiteral, NamedType, NumberLiteral, StringLiteral};
 
@@ -12,9 +12,9 @@ pub enum Pattern {
 }
 
 impl Pattern {
-    pub fn as_span(&self) -> pest::Span<'static> {
+    pub fn as_span(&self) -> Span {
         match self {
-            Pattern::Identifier(p) => p.span,
+            Pattern::Identifier(p) => p.0.span,
             Pattern::Literal(l) => l.as_span(),
             Pattern::Struct(p) => p.span,
             Pattern::Tuple(p) => p.span,
@@ -101,13 +101,27 @@ impl Pattern {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct IdentifierPattern {
-    pub span: pest::Span<'static>,
+pub struct IdentifierPattern(pub Identifier);
+
+impl IdentifierPattern {
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+
+    pub fn as_span(&self) -> Span {
+        self.0.span
+    }
 }
 
 impl Into<Pattern> for IdentifierPattern {
     fn into(self) -> Pattern {
         Pattern::Identifier(self)
+    }
+}
+
+impl Into<Identifier> for IdentifierPattern {
+    fn into(self) -> Identifier {
+        self.0
     }
 }
 
@@ -119,7 +133,7 @@ pub enum LiteralPattern {
 }
 
 impl LiteralPattern {
-    pub fn as_span(&self) -> pest::Span<'static> {
+    pub fn as_span(&self) -> Span {
         match self {
             LiteralPattern::Boolean(b) => b.span,
             LiteralPattern::Number(n) => n.span,
@@ -151,7 +165,7 @@ impl Into<Pattern> for LiteralPattern {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructPattern {
-    pub span: pest::Span<'static>,
+    pub span: Span,
     pub ty: Box<NamedType>,
     pub fields: Vec<StructPatternField>,
 }
@@ -164,14 +178,14 @@ impl Into<Pattern> for StructPattern {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructPatternField {
-    pub span: pest::Span<'static>,
-    pub identifier: pest::Span<'static>,
+    pub span: Span,
+    pub identifier: Identifier,
     pub pattern: Option<Pattern>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TuplePattern {
-    pub span: pest::Span<'static>,
+    pub span: Span,
     pub elements: Vec<Pattern>,
 }
 
@@ -182,7 +196,7 @@ impl Into<Pattern> for TuplePattern {
 }
 impl From<Vec<Pattern>> for TuplePattern {
     fn from(elements: Vec<Pattern>) -> Self {
-        let span = merge_span(
+        let span = Span::merge(
             elements.first().unwrap().as_span(),
             elements.last().unwrap().as_span(),
         );
@@ -192,7 +206,7 @@ impl From<Vec<Pattern>> for TuplePattern {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariantPattern {
-    pub span: pest::Span<'static>,
+    pub span: Span,
     pub ty: Box<NamedType>,
     pub name: String,
     pub body: Option<VariantPatternBody>,

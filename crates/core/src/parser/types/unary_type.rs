@@ -4,7 +4,7 @@ use super::ParserEngine;
 use crate::{ast, parser::parser::Rule};
 
 impl ParserEngine {
-    pub fn parse_unary_type(&mut self, pair: Pair<'static, Rule>) -> ast::Type {
+    pub fn parse_unary_type(&mut self, pair: Pair<'_, Rule>) -> ast::Type {
         assert_eq!(pair.as_rule(), Rule::unary_type);
         let inner = pair.into_inner().next().unwrap();
         match inner.as_rule() {
@@ -18,9 +18,9 @@ impl ParserEngine {
         }
     }
 
-    pub fn parse_array_type(&mut self, pair: Pair<'static, Rule>) -> ast::ArrayType {
+    pub fn parse_array_type(&mut self, pair: Pair<'_, Rule>) -> ast::ArrayType {
         assert!(pair.as_rule() == Rule::array_type);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let element = pair
             .into_inner()
             .next()
@@ -29,9 +29,9 @@ impl ParserEngine {
         ast::ArrayType { span, element }
     }
 
-    pub fn parse_duck_type(&mut self, pair: Pair<'static, Rule>) -> ast::DuckType {
+    pub fn parse_duck_type(&mut self, pair: Pair<'_, Rule>) -> ast::DuckType {
         assert!(pair.as_rule() == Rule::duck_type);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let like = pair
             .into_inner()
             .next()
@@ -40,17 +40,17 @@ impl ParserEngine {
         ast::DuckType { span, like }
     }
 
-    fn parse_listener_type(&mut self, pair: Pair<'static, Rule>) -> ast::ListenerType {
+    fn parse_listener_type(&mut self, pair: Pair<'_, Rule>) -> ast::ListenerType {
         assert!(pair.as_rule() == Rule::listener_type);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let inner_pair = pair.into_inner().next().unwrap();
         let inner = Box::new(self.parse_type(inner_pair));
         ast::ListenerType { span, inner }
     }
 
-    pub fn parse_option_type(&mut self, pair: Pair<'static, Rule>) -> ast::OptionType {
+    pub fn parse_option_type(&mut self, pair: Pair<'_, Rule>) -> ast::OptionType {
         assert!(pair.as_rule() == Rule::option_type);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let base = pair
             .into_inner()
             .next()
@@ -58,17 +58,17 @@ impl ParserEngine {
         ast::OptionType { span, base }
     }
 
-    fn parse_reference_type(&mut self, pair: Pair<'static, Rule>) -> ast::ReferenceType {
+    fn parse_reference_type(&mut self, pair: Pair<'_, Rule>) -> ast::ReferenceType {
         assert!(pair.as_rule() == Rule::reference_type);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let inner = pair.into_inner().next().unwrap();
         let target = Box::new(self.parse_type(inner));
         ast::ReferenceType { span, target }
     }
 
-    fn parse_signal_type(&mut self, pair: Pair<'static, Rule>) -> ast::SignalType {
+    fn parse_signal_type(&mut self, pair: Pair<'_, Rule>) -> ast::SignalType {
         assert!(pair.as_rule() == Rule::signal_type);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let inner_pair = pair.into_inner().next().unwrap();
         let inner = Box::new(self.parse_type(inner_pair));
         ast::SignalType { span, inner }

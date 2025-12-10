@@ -50,12 +50,12 @@ impl ProjectParser {
 
 fn parse_real_module(path: &PathBuf) -> anyhow::Result<ParsedModule> {
     let src = std::fs::read_to_string(path)?;
-    let src = Box::leak(src.into_boxed_str());
     let mut parser = ParserEngine::new();
-    let result = parser.parse(src);
+    let result = parser.parse(&src);
 
     Ok(ParsedModule::builder()
         .name(path)
+        .src(src.into())
         .ast(result.node)
         .errors(result.errors)
         .build())

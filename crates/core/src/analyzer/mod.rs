@@ -9,7 +9,7 @@ mod modules;
 mod parse;
 mod type_check;
 
-pub use modules::{ModuleId, ModulePath, ParsedModule};
+pub use modules::{ModuleId, ModulePath, ParsedModule, Source};
 pub use type_check::{CheckedModule, ModuleTypeData};
 
 pub struct AnalyzedModules {
@@ -29,7 +29,12 @@ pub fn analyze(entry_point: PathBuf) -> Result<AnalyzedModules, anyhow::Error> {
 
     let sort_result = graph.try_sorted_vec();
     if sort_result.unsorted.len() > 0 {
-        graph.errors().for_each(|e| pretty_print_error(&e));
+        for node in graph.nodes {
+            let src = node.src;
+            for error in node.errors {
+                pretty_print_error(&src, &error);
+            }
+        }
         return Err(anyhow!("cannot resolve module graph"));
     }
     let modules = graph.into_ordered_nodes(&sort_result.sorted);

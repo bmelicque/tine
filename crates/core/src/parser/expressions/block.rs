@@ -6,9 +6,9 @@ use crate::{
 };
 
 impl ParserEngine {
-    pub fn parse_block(&mut self, pair: Pair<'static, Rule>) -> ast::BlockExpression {
+    pub fn parse_block(&mut self, pair: Pair<'_, Rule>) -> ast::BlockExpression {
         assert_eq!(pair.as_rule(), Rule::block);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let statements = pair
             .into_inner()
             .map(|pair| self.parse_statement(pair))
@@ -54,7 +54,8 @@ mod tests {
             panic!("Expected VariableDeclaration")
         };
         match *var_decl.pattern {
-            ast::Pattern::Identifier(ast::IdentifierPattern { span }) if span.as_str() == "x" => {}
+            ast::Pattern::Identifier(ast::IdentifierPattern(ref ident))
+                if ident.as_str() == "x" => {}
             _ => panic!("Identifier pattern expected"),
         };
         match *var_decl.value.clone() {
@@ -69,7 +70,7 @@ mod tests {
             panic!("Expected Assignment")
         };
         match &assignment.pattern {
-            ast::Assignee::Pattern(ast::Pattern::Identifier(id)) if id.span.as_str() == "x" => {}
+            ast::Assignee::Pattern(ast::Pattern::Identifier(id)) if id.as_str() == "x" => {}
             _ => panic!("Expected 'x'"),
         }
         match &assignment.value {

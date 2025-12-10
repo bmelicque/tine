@@ -2,7 +2,7 @@ use ordered_float::OrderedFloat;
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
-use mylang_core::ast;
+use mylang_core::{ast, Span};
 
 use super::{
     utils::{create_ident, true_lit},
@@ -26,7 +26,7 @@ impl CodeGenerator {
 
     pub fn identifier_pattern_to_swc(&mut self, node: &ast::IdentifierPattern) -> swc::Pat {
         swc::Pat::Ident(swc::BindingIdent {
-            id: create_ident(node.span.as_str()),
+            id: create_ident(node.as_str()),
             type_ann: None,
         })
     }
@@ -158,9 +158,7 @@ impl CodeGenerator {
                 let against = ast::MemberExpression {
                     span: against.as_span(),
                     object: Box::new(against.clone()),
-                    prop: Some(ast::MemberProp::FieldName(ast::Identifier {
-                        span: field.identifier,
-                    })),
+                    prop: Some(ast::MemberProp::FieldName(field.identifier.clone())),
                 };
                 self.pattern_to_swc_test(&field.pattern.as_ref().unwrap(), &against.into())
             })
@@ -252,7 +250,8 @@ impl CodeGenerator {
                 span: against.as_span(),
                 object: Box::new(against.clone()),
                 prop: Some(ast::MemberProp::FieldName(ast::Identifier {
-                    span: pest::Span::new(leaked_id, 0, leaked_id.len()).unwrap(),
+                    span: Span::new(0, leaked_id.len() as u32),
+                    text: leaked_id.to_string(),
                 })),
             }
             .into()

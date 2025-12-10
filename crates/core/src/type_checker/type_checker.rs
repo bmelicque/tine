@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
-use pest::Span;
-
 use crate::analyzer::ModulePath;
+use crate::locations::Span;
 use crate::parser::parser::ParseError;
 use crate::type_checker::analysis_context::{AnalysisContext, CheckData, SymbolRef};
 use crate::types::{Type, TypeId};
@@ -22,12 +21,6 @@ pub struct TypeChecker {
 }
 
 impl TypeChecker {
-    pub fn new(external: HashMap<ModulePath, CheckData>) -> Self {
-        TypeCheckerBuilder::new().with_modules(external).build()
-    }
-    pub fn dummy() -> Self {
-        TypeCheckerBuilder::new().build()
-    }
     pub fn with_store(external: HashMap<ModulePath, CheckData>, store: TypeStore) -> Self {
         TypeCheckerBuilder::new()
             .with_modules(external)
@@ -71,7 +64,7 @@ impl TypeChecker {
         self.analysis_context.type_store.get(id)
     }
 
-    pub fn get_type_at(&mut self, span: Span<'static>) -> Option<TypeId> {
+    pub fn get_type_at(&mut self, span: Span) -> Option<TypeId> {
         self.analysis_context.expressions.get(&span).map(|ty| *ty)
     }
 
@@ -86,7 +79,7 @@ impl TypeChecker {
         }
     }
 
-    pub fn with_scope<F, T>(&mut self, scope_span: Span<'static>, mut predicate: F) -> T
+    pub fn with_scope<F, T>(&mut self, scope_span: Span, mut predicate: F) -> T
     where
         F: FnMut(&mut Self) -> T,
     {
@@ -119,11 +112,7 @@ impl TypeChecker {
     }
 
     /// Returns how many dependencies were actually reactive
-    pub fn save_reactive_dependencies(
-        &mut self,
-        deps: &Vec<SymbolRef>,
-        at: Span<'static>,
-    ) -> usize {
+    pub fn save_reactive_dependencies(&mut self, deps: &Vec<SymbolRef>, at: Span) -> usize {
         let deps: Vec<SymbolRef> = deps
             .into_iter()
             .filter(|dep| self.resolve(dep.borrow().get_type()).is_reactive())
@@ -136,7 +125,7 @@ impl TypeChecker {
         len
     }
 
-    pub fn error(&mut self, message: String, span: Span<'static>) {
+    pub fn error(&mut self, message: String, span: Span) {
         self.errors.push(ParseError { message, span });
     }
 
@@ -167,7 +156,7 @@ impl TypeCheckerBuilder {
     }
     pub fn build(self) -> TypeChecker {
         let mut analysis_context = AnalysisContext::new();
-        analysis_context.enter_scope(pest::Span::new("", 0, 0).unwrap());
+        analysis_context.enter_scope(Span::dummy());
         if let Some(store) = self.type_store {
             analysis_context.type_store = store;
         };

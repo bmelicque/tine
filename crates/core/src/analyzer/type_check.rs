@@ -1,10 +1,9 @@
 use std::{collections::HashMap, rc::Rc};
 
-use pest::Span;
-
 use crate::{
-    analyzer::{modules::ParsedModule, ModulePath},
+    analyzer::{modules::ParsedModule, ModulePath, Source},
     ast::Program,
+    locations::Span,
     type_checker::{self, dom_metadata, CheckData, CheckResult, TypeChecker},
     types::{Type, TypeId},
     ParseError, SymbolRef, Token, TypeStore,
@@ -14,9 +13,9 @@ use crate::{
 pub struct ModuleTypeData {
     pub type_store: Rc<TypeStore>,
     pub exports: Vec<SymbolRef>,
-    pub expressions: HashMap<Span<'static>, u32>,
-    pub tokens: HashMap<Span<'static>, Token>,
-    pub dependencies: HashMap<Span<'static>, Vec<SymbolRef>>,
+    pub expressions: HashMap<Span, u32>,
+    pub tokens: HashMap<Span, Token>,
+    pub dependencies: HashMap<Span, Vec<SymbolRef>>,
 }
 
 impl ModuleTypeData {
@@ -28,6 +27,7 @@ impl ModuleTypeData {
 #[derive(Debug, Clone)]
 pub struct CheckedModule {
     pub name: ModulePath,
+    pub src: Source,
     pub ast: Program,
     pub metadata: ModuleTypeData,
     pub errors: Vec<ParseError>,
@@ -37,6 +37,7 @@ impl CheckedModule {
     pub fn dummy() -> Self {
         Self {
             name: ModulePath::Virtual("".into()),
+            src: Source::new(""),
             ast: Program::dummy(),
             metadata: ModuleTypeData {
                 type_store: Rc::new(TypeStore::new()),
@@ -67,6 +68,7 @@ pub fn type_check(mut modules: Vec<ParsedModule>) -> Vec<CheckedModule> {
             let check_data = check_data.remove(&module.name).unwrap();
             CheckedModule {
                 name: module.name,
+                src: module.src,
                 ast: module.ast,
                 metadata: ModuleTypeData {
                     type_store: type_store.clone(),

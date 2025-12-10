@@ -117,20 +117,25 @@ impl TypeChecker {
 mod tests {
     use super::*;
     use crate::ast;
+    use crate::locations::Span;
+    use crate::type_checker::type_checker::TypeCheckerBuilder;
     use crate::types::*;
     use crate::SymbolData;
     use crate::SymbolKind;
 
     fn create_type_checker() -> TypeChecker {
-        TypeChecker::dummy()
+        TypeCheckerBuilder::new().build()
     }
 
-    fn dummy_span() -> pest::Span<'static> {
-        pest::Span::new("_", 0, 0).unwrap()
+    fn span(text: &'static str) -> Span {
+        Span::new(0, text.len() as u32)
     }
 
-    fn span(text: &'static str) -> pest::Span<'static> {
-        pest::Span::new(text, 0, text.len()).unwrap()
+    fn ident(text: &str) -> ast::Identifier {
+        ast::Identifier {
+            span: Span::new(0, text.len() as u32),
+            text: text.to_string(),
+        }
     }
 
     #[test]
@@ -138,7 +143,7 @@ mod tests {
         let mut checker = create_type_checker();
         let array_expression = ast::ArrayExpression {
             elements: vec![],
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_array_expression(&array_expression);
@@ -153,18 +158,18 @@ mod tests {
             elements: vec![
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
                     value: ordered_float::OrderedFloat(1.0),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
                     value: ordered_float::OrderedFloat(2.0),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
                     value: ordered_float::OrderedFloat(3.0),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
             ],
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_array_expression(&array_expression);
@@ -185,13 +190,14 @@ mod tests {
             elements: vec![
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
                     value: ordered_float::OrderedFloat(1.0),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
                 ast::Expression::StringLiteral(ast::StringLiteral {
-                    span: span("hello"),
+                    span: Span::new(0, 5),
+                    text: "hello".into(),
                 }),
             ],
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_array_expression(&array_expression);
@@ -211,14 +217,14 @@ mod tests {
         let binary_expression = ast::BinaryExpression {
             left: Box::new(ast::Expression::NumberLiteral(ast::NumberLiteral {
                 value: ordered_float::OrderedFloat(1.0),
-                span: dummy_span(),
+                span: Span::dummy(),
             })),
             right: Box::new(ast::Expression::NumberLiteral(ast::NumberLiteral {
                 value: ordered_float::OrderedFloat(2.0),
-                span: dummy_span(),
+                span: Span::dummy(),
             })),
             operator: ast::BinaryOperator::Add,
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_binary_expression(&binary_expression);
@@ -232,37 +238,33 @@ mod tests {
         let function_expression = ast::FunctionExpression {
             params: vec![
                 ast::FunctionParam {
-                    name: ast::Identifier { span: span("x") },
+                    name: ident("x"),
                     type_annotation: ast::Type::Named(ast::NamedType {
                         name: "number".to_string(),
                         args: None,
-                        span: dummy_span(),
+                        span: Span::dummy(),
                     }),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 },
                 ast::FunctionParam {
-                    name: ast::Identifier { span: span("y") },
+                    name: ident("y"),
                     type_annotation: ast::Type::Named(ast::NamedType {
                         name: "number".to_string(),
                         args: None,
-                        span: dummy_span(),
+                        span: Span::dummy(),
                     }),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 },
             ],
             body: ast::FunctionBody::Expression(Box::new(ast::Expression::Binary(
                 ast::BinaryExpression {
-                    left: Box::new(ast::Expression::Identifier(ast::Identifier {
-                        span: span("x"),
-                    })),
-                    right: Box::new(ast::Expression::Identifier(ast::Identifier {
-                        span: span("y"),
-                    })),
+                    left: Box::new(ast::Expression::Identifier(ident("x"))),
+                    right: Box::new(ast::Expression::Identifier(ident("y"))),
                     operator: ast::BinaryOperator::Add,
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 },
             ))),
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_function_expression(&function_expression);
@@ -287,7 +289,7 @@ mod tests {
             ..Default::default()
         });
 
-        let identifier = ast::Identifier { span: span("x") };
+        let identifier = ident("x");
 
         let result = checker.visit_identifier(&identifier);
         assert_eq!(result, TypeStore::NUMBER);
@@ -299,7 +301,7 @@ mod tests {
         let mut checker = create_type_checker();
         let tuple_expression = ast::TupleExpression {
             elements: vec![],
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_tuple_expression(&tuple_expression);
@@ -315,15 +317,18 @@ mod tests {
             elements: vec![
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
                     value: ordered_float::OrderedFloat(42.0),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
-                ast::Expression::StringLiteral(ast::StringLiteral { span: dummy_span() }),
+                ast::Expression::StringLiteral(ast::StringLiteral {
+                    span: Span::dummy(),
+                    text: "".into(),
+                }),
                 ast::Expression::BooleanLiteral(ast::BooleanLiteral {
                     value: true,
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
             ],
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_tuple_expression(&tuple_expression);
@@ -344,20 +349,23 @@ mod tests {
             elements: vec![
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
                     value: ordered_float::OrderedFloat(42.0),
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
                 ast::Expression::Tuple(ast::TupleExpression {
                     elements: vec![
-                        ast::Expression::StringLiteral(ast::StringLiteral { span: dummy_span() }),
+                        ast::Expression::StringLiteral(ast::StringLiteral {
+                            span: Span::dummy(),
+                            text: "".into(),
+                        }),
                         ast::Expression::BooleanLiteral(ast::BooleanLiteral {
                             value: false,
-                            span: dummy_span(),
+                            span: Span::dummy(),
                         }),
                     ],
-                    span: dummy_span(),
+                    span: Span::dummy(),
                 }),
             ],
-            span: dummy_span(),
+            span: Span::dummy(),
         };
 
         let result = checker.visit_tuple_expression(&tuple_expression);

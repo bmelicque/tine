@@ -1,17 +1,17 @@
 use crate::{
+    locations::Span,
     type_checker::{
         analysis_context::{type_store::TypeStore, AnalysisContext},
         CheckData, CheckResult, SymbolData,
     },
     types::{DuckType, FunctionType, Type},
-    utils::dummy_span,
     SymbolKind,
 };
 
 pub fn dom_metadata(store: TypeStore) -> CheckResult {
     let mut analysis_context = AnalysisContext::new();
     analysis_context.type_store = store;
-    analysis_context.enter_scope(dummy_span());
+    analysis_context.enter_scope(Span::dummy());
 
     let element_trait = analysis_context.type_store.add(Type::Duck(DuckType {
         like: TypeStore::ELEMENT,

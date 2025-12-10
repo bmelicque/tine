@@ -8,26 +8,26 @@ use crate::{
 impl ParserEngine {
     pub fn parse_function_expression(
         &mut self,
-        pair: Pair<'static, Rule>,
+        pair: Pair<'_, Rule>,
     ) -> ast::FunctionExpression {
         assert_eq!(pair.as_rule(), Rule::function_expression);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
         let params = self.parse_function_params(inner.next().unwrap());
         let body = self.parse_function_body(inner.next().unwrap());
         ast::FunctionExpression { span, params, body }
     }
 
-    fn parse_function_params(&mut self, pair: Pair<'static, Rule>) -> Vec<ast::FunctionParam> {
+    fn parse_function_params(&mut self, pair: Pair<'_, Rule>) -> Vec<ast::FunctionParam> {
         assert_eq!(pair.as_rule(), Rule::parameter_list);
         pair.into_inner()
             .map(|param_pair| self.parse_function_param(param_pair))
             .collect()
     }
 
-    fn parse_function_param(&mut self, pair: Pair<'static, Rule>) -> ast::FunctionParam {
+    fn parse_function_param(&mut self, pair: Pair<'_, Rule>) -> ast::FunctionParam {
         assert_eq!(pair.as_rule(), Rule::parameter);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
         let name = self.parse_identifier(inner.next().unwrap());
         let type_annotation = self.parse_type(inner.next().unwrap());
@@ -38,7 +38,7 @@ impl ParserEngine {
         }
     }
 
-    fn parse_function_body(&mut self, pair: Pair<'static, Rule>) -> ast::FunctionBody {
+    fn parse_function_body(&mut self, pair: Pair<'_, Rule>) -> ast::FunctionBody {
         match pair.as_rule() {
             Rule::typed_block => self.parse_typed_block(pair).into(),
             Rule::expression => self.parse_expression(pair).into(),
@@ -46,9 +46,9 @@ impl ParserEngine {
         }
     }
 
-    fn parse_typed_block(&mut self, pair: Pair<'static, Rule>) -> ast::TypedBlock {
+    fn parse_typed_block(&mut self, pair: Pair<'_, Rule>) -> ast::TypedBlock {
         assert_eq!(pair.as_rule(), Rule::typed_block);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
         let mut type_annotation = None;
         let mut block = ast::BlockExpression {
@@ -68,23 +68,23 @@ impl ParserEngine {
         }
     }
 
-    pub fn parse_predicate(&mut self, pair: Pair<'static, Rule>) -> ast::Predicate {
+    pub fn parse_predicate(&mut self, pair: Pair<'_, Rule>) -> ast::Predicate {
         assert_eq!(pair.as_rule(), Rule::predicate);
-        let span = pair.as_span();
+        let span = pair.as_span().into();
         let mut inner = pair.into_inner();
         let params = self.parse_predicate_params(inner.next().unwrap());
         let body = self.parse_function_body(inner.next().unwrap());
         ast::Predicate { span, params, body }
     }
 
-    fn parse_predicate_params(&mut self, pair: Pair<'static, Rule>) -> Vec<ast::PredicateParam> {
+    fn parse_predicate_params(&mut self, pair: Pair<'_, Rule>) -> Vec<ast::PredicateParam> {
         assert_eq!(pair.as_rule(), Rule::predicate_parameters);
         pair.into_inner()
             .map(|param_pair| self.parse_predicate_param(param_pair))
             .collect()
     }
 
-    fn parse_predicate_param(&mut self, pair: Pair<'static, Rule>) -> ast::PredicateParam {
+    fn parse_predicate_param(&mut self, pair: Pair<'_, Rule>) -> ast::PredicateParam {
         assert_eq!(pair.as_rule(), Rule::predicate_param);
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {

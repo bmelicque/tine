@@ -1,7 +1,6 @@
-use pest::Span;
-
 use crate::{
     ast,
+    locations::Span,
     type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
     types::TypeId,
 };
@@ -55,7 +54,7 @@ impl TypeChecker {
             .save_expression_type(node.span, get_binary_expression_type(node.operator))
     }
 
-    fn push_binary_error(&mut self, op: ast::BinaryOperator, ty: TypeId, span: Span<'static>) {
+    fn push_binary_error(&mut self, op: ast::BinaryOperator, ty: TypeId, span: Span) {
         let ty = self.analysis_context.type_store.get(ty);
         self.error(
             format!("Operator '{}' cannot be applied to type '{}'", op, ty),
