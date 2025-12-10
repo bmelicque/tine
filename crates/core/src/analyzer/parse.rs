@@ -2,11 +2,10 @@ use std::path::PathBuf;
 
 use anyhow::bail;
 
-use super::graph::{ModuleGraph, ParsedModule};
+use super::graph::ModuleGraph;
 
 use crate::{
-    analyzer::graph::{ModuleId, ModulePath},
-    ast,
+    analyzer::modules::{ModuleId, ModulePath, ParsedModule},
     common::use_decl_to_paths,
     parser::ParserEngine,
 };
@@ -24,7 +23,7 @@ impl ProjectParser {
     fn parse_file(&mut self, file_name: &ModulePath) -> Result<ModuleId, anyhow::Error> {
         let module = match file_name {
             ModulePath::Real(p) => parse_real_module(p)?,
-            ModulePath::Virtual(c) => parse_virtual_module(c).unwrap(),
+            ModulePath::Virtual(c) => parse_virtual_module(c)?,
         };
         let file_names = get_dependencies(&module);
 
@@ -55,20 +54,16 @@ fn parse_real_module(path: &PathBuf) -> anyhow::Result<ParsedModule> {
     let mut parser = ParserEngine::new();
     let result = parser.parse(src);
 
-    Ok(ParsedModule {
-        name: ModulePath::Real(path.clone()),
-        ast: result.node,
-        errors: result.errors,
-    })
+    Ok(ParsedModule::builder()
+        .name(path)
+        .ast(result.node)
+        .errors(result.errors)
+        .build())
 }
 
 fn parse_virtual_module(name: &String) -> anyhow::Result<ParsedModule> {
     match name.as_str() {
-        "dom" => Ok(ParsedModule {
-            name: ModulePath::Virtual(name.clone()),
-            ast: ast::Program::dummy(),
-            errors: Vec::new(),
-        }),
+        "dom" => Ok(ParsedModule::builder().name("dom").build()),
         name => bail!("Cannot find module '{}'", name),
     }
 }

@@ -1,48 +1,9 @@
 use std::collections::{HashSet, VecDeque};
 
-use crate::{ast, parser::parser::ParseError};
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum ModulePath {
-    /// A file path to a file in the project.
-    ///
-    /// This is expected to be an absolute, canonical path.
-    Real(std::path::PathBuf),
-    /// The name of another module, usually from the standard library or a
-    /// project dependency
-    Virtual(String),
-}
-impl From<std::path::PathBuf> for ModulePath {
-    fn from(value: std::path::PathBuf) -> Self {
-        Self::Real(value)
-    }
-}
-impl From<String> for ModulePath {
-    fn from(value: String) -> Self {
-        Self::Virtual(value)
-    }
-}
-impl From<&str> for ModulePath {
-    fn from(value: &str) -> Self {
-        Self::Virtual(value.to_string())
-    }
-}
-impl std::fmt::Display for ModulePath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ModulePath::Real(p) => write!(f, "{}", p.display()),
-            ModulePath::Virtual(c) => write!(f, "{}", c),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ParsedModule {
-    pub name: ModulePath,
-    pub ast: ast::Program,
-    pub errors: Vec<ParseError>,
-}
-pub type ModuleId = usize;
+use crate::{
+    analyzer::modules::{ModuleId, ModulePath, ParsedModule},
+    parser::parser::ParseError,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GraphEdge {
@@ -70,9 +31,11 @@ impl ModuleGraph {
         }
     }
 
-    pub fn add_module(&mut self, module: ParsedModule) -> ModuleId {
+    pub fn add_module(&mut self, mut module: ParsedModule) -> ModuleId {
+        let id = self.nodes.len();
+        module.id = id;
         self.nodes.push(module);
-        self.nodes.len() - 1
+        id
     }
 
     pub fn add_edge(&mut self, dependency: ModuleId, dependent: ModuleId) {

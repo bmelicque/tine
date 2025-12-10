@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc};
 use pest::Span;
 
 use crate::{
-    analyzer::{graph::ParsedModule, ModulePath},
+    analyzer::{modules::ParsedModule, ModulePath},
     ast::Program,
     type_checker::{self, dom_metadata, CheckData, CheckResult, TypeChecker},
     types::{Type, TypeId},

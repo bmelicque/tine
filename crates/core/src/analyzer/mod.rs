@@ -5,10 +5,11 @@ use anyhow::anyhow;
 use crate::utils::pretty_print_error;
 
 mod graph;
+mod modules;
 mod parse;
 mod type_check;
 
-pub use graph::{ModulePath, ParsedModule};
+pub use modules::{ModuleId, ModulePath, ParsedModule};
 pub use type_check::{CheckedModule, ModuleTypeData};
 
 pub struct AnalyzedModules {
