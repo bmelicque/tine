@@ -7,26 +7,27 @@ use crate::{
 
 use super::TypeChecker;
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_type_declaration(&mut self, node: &ast::TypeAlias) -> TypeId {
         let params = match node.params {
             Some(ref params) => params,
             None => &vec![],
         };
-        let (ty, params) = self.with_scope(node.definition.as_span(), |checker| {
+        let (ty, params) = self.with_scope(|checker| {
             let mut param_types = Vec::new();
             for (i, param) in params.iter().enumerate() {
                 let ty = types::TypeParam {
                     name: param.clone(),
                     idx: i,
                 };
-                let ty = checker.analysis_context.type_store.add(ty.into());
+                let ty = checker.ctx.type_store.add(ty.into());
                 param_types.push(ty);
                 // FIXME: spans
-                checker.analysis_context.register_symbol(SymbolData {
+                checker.ctx.register_symbol(SymbolData {
                     name: param.clone(),
-                    kind: SymbolKind::Type(ty),
-                    defined_at: node.span,
+                    ty,
+                    kind: SymbolKind::Type { members: vec![] },
+                    defined_at: node.loc,
                     ..Default::default()
                 });
             }
@@ -34,29 +35,25 @@ impl TypeChecker {
         });
 
         let name = &node.name;
-        if self.analysis_context.find_in_current_scope(name).is_some() {
-            self.error(format!("cannot redefine type '{}'", name), node.span);
+        if self.ctx.find_in_current_scope(name).is_some() {
+            self.error(format!("cannot redefine type '{}'", name), node.loc);
             return TypeStore::UNIT;
         }
         let ty = match params.len() {
             0 => ty,
-            _ => self
-                .analysis_context
-                .type_store
-                .add(Type::Generic(GenericType {
-                    params,
-                    definition: ty,
-                })),
+            _ => self.ctx.type_store.add(Type::Generic(GenericType {
+                params,
+                definition: ty,
+            })),
         };
-        self.analysis_context.register_symbol(SymbolData {
+        self.ctx.register_symbol(SymbolData {
             name: name.clone(),
-            kind: SymbolKind::Type(ty),
-            defined_at: node.span,
+            ty,
+            kind: SymbolKind::Type { members: vec![] },
+            defined_at: node.loc,
             ..Default::default()
         });
-        self.analysis_context
-            .type_store
-            .add_alias(ty, name.to_string());
+        self.ctx.type_store.add_alias(ty, name.to_string());
 
         TypeStore::UNIT
     }
@@ -75,8 +72,8 @@ impl TypeChecker {
             .iter()
             .map(|variant| self.visit_variant_definition(variant))
             .collect();
-        let id = self.analysis_context.type_store.get_next_id();
-        self.analysis_context
+        let id = self.ctx.type_store.get_next_id();
+        self.ctx
             .type_store
             .add(Type::Enum(EnumType { id, variants }))
     }
@@ -86,9 +83,7 @@ impl TypeChecker {
             ast::VariantDefinition::Struct(s) => self.visit_struct_definition(&s.def),
             ast::VariantDefinition::Tuple(t) => {
                 let elements = t.elements.iter().map(|el| self.visit_type(el)).collect();
-                self.analysis_context
-                    .type_store
-                    .add(Type::Tuple(TupleType { elements }))
+                self.ctx.type_store.add(Type::Tuple(TupleType { elements }))
             }
             ast::VariantDefinition::Unit(_) => TypeStore::UNIT,
         };
@@ -104,8 +99,8 @@ impl TypeChecker {
             .iter()
             .map(|field| self.visit_struct_definition_field(field))
             .collect();
-        let id = self.analysis_context.type_store.get_next_id();
-        self.analysis_context
+        let id = self.ctx.type_store.get_next_id();
+        self.ctx
             .type_store
             .add(Type::Struct(StructType { id, fields }))
     }
@@ -130,10 +125,11 @@ impl TypeChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ast, locations::Span, type_checker::type_checker::TypeCheckerBuilder};
+    use crate::{analyzer::session::Session, ast, Location};
 
-    fn create_type_checker() -> TypeChecker {
-        TypeCheckerBuilder::new().build()
+    fn create_type_checker() -> TypeChecker<'static> {
+        let session = Box::leak(Box::new(Session::new()));
+        TypeChecker::new(session, 0)
     }
 
     #[test]
@@ -147,17 +143,17 @@ mod tests {
                 ast::NamedType {
                     name: "number".to_string(),
                     args: None,
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 },
             ))),
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_type_declaration(&type_alias);
         assert_eq!(result, TypeStore::UNIT);
         assert!(checker.errors.is_empty());
 
-        let defined_type = checker.analysis_context.lookup("MyType").unwrap();
+        let defined_type = checker.ctx.lookup("MyType").unwrap();
         let defined_type = checker.resolve(defined_type.borrow().get_type()).clone();
         assert_eq!(defined_type, types::Type::Number);
     }
@@ -169,7 +165,7 @@ mod tests {
             variants: vec![
                 ast::VariantDefinition::Unit(ast::UnitVariant {
                     name: "Variant1".to_string(),
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 }),
                 ast::VariantDefinition::Struct(ast::StructVariant {
                     name: "Variant2".to_string(),
@@ -180,17 +176,17 @@ mod tests {
                                 definition: ast::Type::Named(ast::NamedType {
                                     name: "number".to_string(),
                                     args: None,
-                                    span: Span::dummy(),
+                                    loc: Location::dummy(),
                                 }),
-                                span: Span::dummy(),
+                                loc: Location::dummy(),
                             },
                         )],
-                        span: Span::dummy(),
+                        loc: Location::dummy(),
                     },
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 }),
             ],
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_enum_definition(&enum_definition);
@@ -209,20 +205,20 @@ mod tests {
                     definition: ast::Type::Named(ast::NamedType {
                         name: "number".to_string(),
                         args: None,
-                        span: Span::dummy(),
+                        loc: Location::dummy(),
                     }),
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 }),
                 ast::StructDefinitionField::Optional(ast::StructOptionalField {
                     name: "field2".to_string(),
                     default: ast::Expression::NumberLiteral(ast::NumberLiteral {
                         value: ordered_float::OrderedFloat(42.0),
-                        span: Span::dummy(),
+                        loc: Location::dummy(),
                     }),
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 }),
             ],
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_struct_definition(&struct_definition);
@@ -237,7 +233,7 @@ mod tests {
         let type_definition = ast::TypeDefinition::Type(ast::Type::Named(ast::NamedType {
             name: "string".to_string(),
             args: None,
-            span: Span::dummy(),
+            loc: Location::dummy(),
         }));
 
         let result = checker.visit_type_definition(&type_definition);

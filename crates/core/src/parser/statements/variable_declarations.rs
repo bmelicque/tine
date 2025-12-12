@@ -4,6 +4,7 @@ use crate::{
     ast,
     locations::Span,
     parser::{parser::Rule, utils::normalize_doc_comment, ParserEngine},
+    Location,
 };
 
 impl ParserEngine {
@@ -12,10 +13,7 @@ impl ParserEngine {
     /// Expected pairs:
     /// `pattern ~ declaration_operator ~ expression`
     /// with `declaration_operator` being either `:=` (mutable) or `::` (constant)
-    pub fn parse_variable_declaration(
-        &mut self,
-        pair: Pair<'_, Rule>,
-    ) -> ast::VariableDeclaration {
+    pub fn parse_variable_declaration(&mut self, pair: Pair<'_, Rule>) -> ast::VariableDeclaration {
         let whole_span = Span::from(pair.as_span());
         let mut inner = pair.into_inner();
 
@@ -26,18 +24,20 @@ impl ParserEngine {
             next => (None, next),
         };
         let span = Span::new(next.as_span().start() as u32, whole_span.end());
+        let loc = Location::new(self.module, span);
         let pattern = Box::new(self.parse_pattern(next));
         let op_pair = inner.next().unwrap();
         let op = op_pair.as_str().to_string().into();
 
         let value = Box::new(self.parse_expression(inner.next().unwrap()));
         if value.is_empty() {
-            self.error("expected expression".into(), op_pair.as_span().into());
+            let loc = self.localize(op_pair.as_span());
+            self.error("expected expression".into(), loc);
         }
 
         ast::VariableDeclaration {
             docs,
-            span,
+            loc,
             pattern,
             op,
             value,
@@ -50,11 +50,9 @@ impl ParserEngine {
         let line_count = docs_span.lines_span().count();
         let last = docs_span.lines_span().take(line_count - 1).last().unwrap();
         let span = pest::Span::new(docs_span.get_input(), docs_span.start(), last.end()).unwrap();
+        let loc = self.localize(span);
         let text = normalize_doc_comment(span.as_str());
-        ast::Docs {
-            span: span.into(),
-            text,
-        }
+        ast::Docs { loc, text }
     }
 }
 
@@ -72,7 +70,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         let stmt = parser_engine.parse_statement(pair);
         (stmt, parser_engine.errors)
     }

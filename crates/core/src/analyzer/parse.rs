@@ -2,32 +2,36 @@ use std::path::PathBuf;
 
 use anyhow::bail;
 
-use super::graph::ModuleGraph;
-
 use crate::{
-    analyzer::modules::{ModuleId, ModulePath, ParsedModule},
+    analyzer::{
+        modules::{Module, ModuleId, ModulePath},
+        session::Session,
+        Source,
+    },
+    ast::Program,
     common::use_decl_to_paths,
-    parser::ParserEngine,
+    parser::{parser::ParseResult, ParserEngine},
 };
 
-struct ProjectParser {
-    graph: ModuleGraph,
-}
-
-impl ProjectParser {
-    fn parse_entry(mut self, entry: &ModulePath) -> Result<ModuleGraph, anyhow::Error> {
-        self.parse_file(entry)?;
-        Ok(self.graph)
+impl Session {
+    /// Parse a package starting from the given entry point, which should be
+    /// the program's main entry.
+    pub fn parse_project(&mut self, entry_point: PathBuf) -> anyhow::Result<()> {
+        debug_assert!(std::path::Path::is_absolute(&entry_point));
+        let filename = ModulePath::Real(std::fs::canonicalize(entry_point)?);
+        self.parse_module(&filename)?;
+        Ok(())
     }
 
-    fn parse_file(&mut self, file_name: &ModulePath) -> Result<ModuleId, anyhow::Error> {
-        let module = match file_name {
-            ModulePath::Real(p) => parse_real_module(p)?,
-            ModulePath::Virtual(c) => parse_virtual_module(c)?,
+    fn parse_module(&mut self, path: &ModulePath) -> anyhow::Result<ModuleId> {
+        let (module_id, result) = match path {
+            ModulePath::Real(p) => self.parse_real_module(p)?,
+            ModulePath::Virtual(c) => self.parse_virtual_module(c)?,
         };
-        let file_names = get_dependencies(&module);
+        let file_names = get_dependencies(&self.entry_point, &result.node);
 
-        let module_id = self.graph.add_module(module);
+        self.parsed.insert(module_id, result.node);
+        self.diagnostics.insert(module_id, result.errors);
 
         for dependency_name in file_names {
             self.parse_dependency(&dependency_name, module_id);
@@ -37,58 +41,57 @@ impl ProjectParser {
     }
 
     fn parse_dependency(&mut self, dependency_name: &ModulePath, parent_id: ModuleId) {
-        if let Some(dependency_id) = self.graph.find_id(&dependency_name) {
-            self.graph.add_edge(dependency_id, parent_id.clone());
+        if let Some(dependency_id) = self.module_graph.find_id(&dependency_name) {
+            self.module_graph.add_edge(dependency_id, parent_id.clone());
             return;
         }
-        let Ok(dependency) = self.parse_file(&dependency_name) else {
+        let Ok(dependency) = self.parse_module(&dependency_name) else {
             todo!()
         };
-        self.graph.add_edge(dependency, parent_id);
+        self.module_graph.add_edge(dependency, parent_id);
+    }
+
+    fn parse_real_module(&mut self, path: &PathBuf) -> anyhow::Result<(ModuleId, ParseResult)> {
+        let src = std::fs::read_to_string(path)?;
+        let module_id = self.module_graph.next_id();
+        let mut parser = ParserEngine::new(module_id);
+        let result = parser.parse(&src);
+        let module = Module {
+            name: path.into(),
+            src: src.into(),
+        };
+        self.module_graph.add_module(module);
+
+        Ok((module_id, result))
+    }
+
+    fn parse_virtual_module(&mut self, name: &String) -> anyhow::Result<(ModuleId, ParseResult)> {
+        let src = Source::new("");
+        let module = match name.as_str() {
+            "dom" => Module {
+                src,
+                name: ModulePath::Virtual(name.to_string()),
+            },
+            name => bail!("Cannot find module '{}'", name),
+        };
+        let module_id = self.module_graph.add_module(module);
+        let result = ParseResult {
+            node: Program::dummy(),
+            errors: vec![],
+        };
+        Ok((module_id, result))
     }
 }
 
-fn parse_real_module(path: &PathBuf) -> anyhow::Result<ParsedModule> {
-    let src = std::fs::read_to_string(path)?;
-    let mut parser = ParserEngine::new();
-    let result = parser.parse(&src);
-
-    Ok(ParsedModule::builder()
-        .name(path)
-        .src(src.into())
-        .ast(result.node)
-        .errors(result.errors)
-        .build())
-}
-
-fn parse_virtual_module(name: &String) -> anyhow::Result<ParsedModule> {
-    match name.as_str() {
-        "dom" => Ok(ParsedModule::builder().name("dom").build()),
-        name => bail!("Cannot find module '{}'", name),
-    }
-}
-
-fn get_dependencies(module: &ParsedModule) -> Vec<ModulePath> {
-    let mut file_names: Vec<ModulePath> = module
-        .ast
+fn get_dependencies(root_path: &ModulePath, ast: &Program) -> Vec<ModulePath> {
+    let mut file_names: Vec<ModulePath> = ast
         .items
         .iter()
         .filter_map(|item| item.as_use_declaration_ref())
-        .flat_map(|decl| use_decl_to_paths(&module.name, decl))
+        .flat_map(|decl| use_decl_to_paths(root_path, decl))
         .map(|imports| imports.module_name)
         .collect();
     file_names.sort();
     file_names.dedup();
     file_names
-}
-
-/// Parse a package starting from the given entry point, which should be the
-/// program's main entry.
-pub fn parse_package(entry: PathBuf) -> Result<ModuleGraph, anyhow::Error> {
-    debug_assert!(std::path::Path::is_absolute(&entry));
-    let filename = ModulePath::Real(std::fs::canonicalize(entry)?);
-    let parser = ProjectParser {
-        graph: ModuleGraph::new(),
-    };
-    parser.parse_entry(&filename)
 }

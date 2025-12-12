@@ -20,52 +20,53 @@ impl ParserEngine {
     }
 
     fn parse_identifier_pattern(&mut self, pair: Pair<'_, Rule>) -> ast::IdentifierPattern {
+        let loc = self.localize(pair.as_span());
         match pair.as_str() {
             "break" | "continue" | "else" | "for" | "if" | "in" | "match" | "return" | "use" => {
                 self.error(
                     format!("invalid identifier: '{}' is a reserved name", pair.as_str()),
-                    pair.as_span().into(),
+                    loc,
                 );
             }
             _ => {}
         }
 
         let ident = ast::Identifier {
-            span: pair.as_span().into(),
+            loc,
             text: pair.as_str().to_string(),
         };
         ast::IdentifierPattern(ident)
     }
 
     fn parse_literal_pattern(&mut self, pair: Pair<'_, Rule>) -> ast::LiteralPattern {
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let text = pair.as_str().to_string();
         let inner = pair.into_inner().next().unwrap();
         match inner.as_rule() {
             Rule::boolean_literal => ast::BooleanLiteral {
-                span,
+                loc,
                 value: inner.as_str() == "true",
             }
             .into(),
             Rule::number_literal => ast::NumberLiteral {
-                span,
+                loc,
                 value: inner
                     .as_str()
                     .parse()
                     .unwrap_or(ordered_float::OrderedFloat(0.0)),
             }
             .into(),
-            Rule::string_literal => ast::StringLiteral { span, text }.into(),
+            Rule::string_literal => ast::StringLiteral { loc, text }.into(),
             rule => unreachable!("unexpected rule {:?}", rule),
         }
     }
 
     fn parse_struct_pattern(&mut self, pair: Pair<'_, Rule>) -> ast::StructPattern {
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let ty = Box::new(self.parse_named_type(inner.next().unwrap()));
         let fields = self.parse_struct_pattern_fields(inner.next().unwrap());
-        ast::StructPattern { span, ty, fields }
+        ast::StructPattern { loc, ty, fields }
     }
 
     fn parse_struct_pattern_fields(
@@ -80,35 +81,35 @@ impl ParserEngine {
 
     fn parse_struct_pattern_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructPatternField {
         assert!(pair.as_rule() == Rule::struct_pattern_field);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let identifier = self.parse_identifier(inner.next().unwrap());
         let pattern = inner.next().map(|pair| self.parse_pattern(pair));
         ast::StructPatternField {
-            span,
+            loc,
             identifier,
             pattern,
         }
     }
 
     fn parse_tuple_pattern(&mut self, pair: Pair<'_, Rule>) -> ast::TuplePattern {
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let elements = pair
             .into_inner()
             .map(|element| self.parse_pattern(element))
             .collect();
-        ast::TuplePattern { span, elements }
+        ast::TuplePattern { loc, elements }
     }
 
     fn parse_variant_pattern(&mut self, pair: Pair<'_, Rule>) -> ast::VariantPattern {
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner().next().unwrap().into_inner();
         let ty = Box::new(self.parse_named_type(inner.next().unwrap()));
         let name = inner.next().unwrap().as_str().to_string();
         let body = self.parse_variant_pattern_body(inner);
 
         ast::VariantPattern {
-            span,
+            loc,
             ty,
             name,
             body,
@@ -144,7 +145,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_pattern(pair)
     }
 

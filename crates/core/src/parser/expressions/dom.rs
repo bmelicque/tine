@@ -17,7 +17,7 @@ impl ParserEngine {
 
     fn parse_element(&mut self, pair: Pair<'_, Rule>) -> ast::Element {
         assert_eq!(pair.as_rule(), Rule::dom_element);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let start_tag = inner.next().unwrap();
         let (tag_name, attributes) = self.parse_start_tag(start_tag);
@@ -34,7 +34,7 @@ impl ParserEngine {
             }
         }
         ast::Element {
-            span,
+            loc,
             tag_name,
             attributes,
             children,
@@ -43,12 +43,12 @@ impl ParserEngine {
 
     fn parse_void_element(&mut self, pair: Pair<'_, Rule>) -> ast::VoidElement {
         assert_eq!(pair.as_rule(), Rule::void_element);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let tag_name = inner.next().unwrap().as_str().to_string();
         let attributes = inner.map(|attr| self.parse_attribute(attr)).collect();
         ast::VoidElement {
-            span,
+            loc,
             tag_name,
             attributes,
         }
@@ -64,11 +64,11 @@ impl ParserEngine {
 
     fn parse_attribute(&mut self, pair: Pair<'_, Rule>) -> ast::Attribute {
         assert_eq!(pair.as_rule(), Rule::attribute);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let name = inner.next().unwrap().as_str().to_string();
         let value = inner.next().map(|v| self.parse_attribute_value(v));
-        ast::Attribute { span, name, value }
+        ast::Attribute { loc, name, value }
     }
 
     fn parse_attribute_value(&mut self, pair: Pair<'_, Rule>) -> ast::AttributeValue {
@@ -88,9 +88,9 @@ impl ParserEngine {
             Rule::dom_element => self.parse_element(inner).into(),
             Rule::void_element => self.parse_void_element(inner).into(),
             Rule::text => {
-                let span = inner.as_span().into();
+                let loc = self.localize(inner.as_span());
                 let text = inner.as_str().to_string();
-                ast::TextNode { span, text }.into()
+                ast::TextNode { loc, text }.into()
             }
             Rule::code => self
                 .parse_expression(inner.into_inner().next().unwrap())
@@ -102,14 +102,14 @@ impl ParserEngine {
     /** Parse the end tag to make sure it matches the opening tag */
     fn check_end_tag(&mut self, pair: Pair<'_, Rule>, expected: &str) {
         assert_eq!(pair.as_rule(), Rule::end_tag);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let found = pair.into_inner().next().unwrap().as_str().to_string();
         if found != expected {
             let message = format!(
                 "Mismatched end tag: expected </{}>, got </{}>",
                 found, expected
             );
-            self.error(message, span);
+            self.error(message, loc);
         }
     }
 }

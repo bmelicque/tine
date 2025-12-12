@@ -21,7 +21,7 @@ impl ParserEngine {
 
     fn parse_map_literal(&mut self, pair: Pair<'_, Rule>) -> ast::MapLiteral {
         assert!(pair.as_rule() == Rule::map_literal);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let ty = self.parse_map_type(inner.next().unwrap());
@@ -33,31 +33,31 @@ impl ParserEngine {
             .map(|entry_pair| self.parse_map_entry(entry_pair))
             .collect();
 
-        ast::MapLiteral { span, ty, entries }
+        ast::MapLiteral { loc, ty, entries }
     }
 
     fn parse_map_entry(&mut self, pair: Pair<'_, Rule>) -> ast::MapEntry {
         assert!(pair.as_rule() == Rule::map_entry);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let key_pair = inner.next().unwrap().into_inner().next().unwrap();
         let key = Box::new(self.parse_expression(key_pair));
         let value = Box::new(self.parse_expression_or_anonymous(inner.next().unwrap()));
 
-        ast::MapEntry { span, key, value }
+        ast::MapEntry { loc, key, value }
     }
 
     fn parse_array_literal(&mut self, pair: Pair<'_, Rule>) -> ast::ArrayLiteral {
         assert!(pair.as_rule() == Rule::array_literal);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let ty = self.parse_array_type(inner.next().unwrap());
 
         let elements = self.parse_array_literal_body(inner.next().unwrap());
 
-        ast::ArrayLiteral { span, ty, elements }
+        ast::ArrayLiteral { loc, ty, elements }
     }
 
     fn parse_array_literal_body(&mut self, pair: Pair<'_, Rule>) -> Vec<ExpressionOrAnonymous> {
@@ -69,7 +69,7 @@ impl ParserEngine {
 
     fn parse_option_literal(&mut self, pair: Pair<'_, Rule>) -> ast::OptionLiteral {
         assert!(pair.as_rule() == Rule::option_literal);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let ty = self.parse_option_type(inner.next().unwrap());
@@ -79,18 +79,18 @@ impl ParserEngine {
             .and_then(|pair| Some(self.parse_expression_or_anonymous(pair)))
             .map(Box::new);
 
-        ast::OptionLiteral { span, ty, value }
+        ast::OptionLiteral { loc, ty, value }
     }
 
     fn parse_struct_literal(&mut self, pair: Pair<'_, Rule>) -> ast::StructLiteral {
         assert!(pair.as_rule() == Rule::struct_literal);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let ty = self.parse_named_type_with_args(inner.next().unwrap());
         let fields = self.parse_struct_literal_body(inner.next().unwrap());
 
-        ast::StructLiteral { span, ty, fields }
+        ast::StructLiteral { loc, ty, fields }
     }
 
     pub fn parse_anonymous_struct_literal(
@@ -98,10 +98,10 @@ impl ParserEngine {
         pair: Pair<'_, Rule>,
     ) -> ast::AnonymousStructLiteral {
         assert!(pair.as_rule() == Rule::struct_literal_body);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let fields = self.parse_struct_literal_body(pair);
 
-        ast::AnonymousStructLiteral { span, fields }
+        ast::AnonymousStructLiteral { loc, fields }
     }
 
     fn parse_struct_literal_body(&mut self, pair: Pair<'_, Rule>) -> Vec<ast::StructLiteralField> {
@@ -112,17 +112,17 @@ impl ParserEngine {
     }
 
     fn parse_struct_literal_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructLiteralField {
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let prop = inner.next().unwrap().as_str().to_string();
         let value = self.parse_expression(inner.next().unwrap());
 
-        ast::StructLiteralField { span, prop, value }
+        ast::StructLiteralField { loc, prop, value }
     }
 
     fn parse_variant_literal(&mut self, pair: Pair<'_, Rule>) -> ast::VariantLiteral {
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let ty = self.parse_variant_parent(inner.next().unwrap());
@@ -132,7 +132,7 @@ impl ParserEngine {
             .map(|pair| self.parse_variant_literal_body(pair));
 
         ast::VariantLiteral {
-            span,
+            loc,
             ty,
             name,
             body,
@@ -169,7 +169,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_composite_literal(pair)
     }
 
@@ -291,7 +291,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         let result = parser_engine.parse_anonymous_struct_literal(pair);
 
         assert_eq!(result.fields.len(), 2);
@@ -352,7 +352,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         let result = parser_engine.parse_variant_literal(pair);
 
         assert_eq!(result.name, "Variant");
@@ -392,7 +392,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         let result = parser_engine.parse_variant_literal(pair);
 
         assert_eq!(result.name, "Variant");

@@ -2,13 +2,12 @@ use std::collections::HashMap;
 
 use crate::{
     ast,
-    locations::Span,
     type_checker::TypeChecker,
     types::{DuckType, ListenerType, Type, TypeId},
-    TypeStore,
+    Location, TypeStore,
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_element_expression(&mut self, node: &ast::ElementExpression) -> TypeId {
         match node {
             ast::ElementExpression::Element(e) => self.visit_element_with_children(e),
@@ -20,13 +19,13 @@ impl TypeChecker {
         self.visit_attributes(&node.attributes);
         self.visit_children(&node.children);
         let t = self.element_type();
-        self.analysis_context.save_expression_type(node.span, t)
+        self.ctx.save_expression_type(node.loc, t)
     }
 
     fn visit_void_element(&mut self, node: &ast::VoidElement) -> TypeId {
         self.visit_attributes(&node.attributes);
         let t = self.element_type();
-        self.analysis_context.save_expression_type(node.span, t)
+        self.ctx.save_expression_type(node.loc, t)
     }
 
     fn visit_attributes(&mut self, attributes: &Vec<ast::Attribute>) {
@@ -35,22 +34,22 @@ impl TypeChecker {
     }
 
     fn report_duplicated_attributes(&mut self, attributes: &Vec<ast::Attribute>) {
-        let mut map = HashMap::<String, Vec<Span>>::new();
+        let mut map = HashMap::<String, Vec<Location>>::new();
         for attribute in attributes {
             match map.get_mut(&attribute.name) {
-                Some(spans) => spans.push(attribute.span),
+                Some(locs) => locs.push(attribute.loc),
                 None => {
-                    map.insert(attribute.name.clone(), vec![attribute.span]);
+                    map.insert(attribute.name.clone(), vec![attribute.loc]);
                 }
             };
         }
-        for (name, spans) in map {
-            if spans.len() == 1 {
+        for (name, locs) in map {
+            if locs.len() == 1 {
                 continue;
             }
             let message = format!("Duplicated attribute {}", name);
-            for span in spans {
-                self.error(message.clone(), span);
+            for loc in locs {
+                self.error(message.clone(), loc);
             }
         }
     }
@@ -82,20 +81,20 @@ impl TypeChecker {
 
     fn visit_dom_expression(&mut self, expr: &ast::Expression) -> TypeId {
         let (mut expr_type, deps) = self.with_dependencies(|s| s.visit_expression(expr));
-        let count = self.save_reactive_dependencies(&deps, expr.as_span());
+        let count = self.save_reactive_dependencies(&deps, expr.loc());
         let is_reactive = self.resolve(expr_type).is_reactive();
         if count > 0 && !is_reactive {
             expr_type = self
-                .analysis_context
+                .ctx
                 .type_store
                 .add(Type::Listener(ListenerType { inner: expr_type }));
         }
-        self.analysis_context.add_dependencies(deps);
+        self.ctx.add_dependencies(deps);
         return expr_type;
     }
 
     pub fn element_type(&mut self) -> TypeId {
-        self.analysis_context.type_store.add(Type::Duck(DuckType {
+        self.ctx.type_store.add(Type::Duck(DuckType {
             like: TypeStore::ELEMENT,
         }))
     }

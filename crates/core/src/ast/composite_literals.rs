@@ -1,4 +1,4 @@
-use crate::locations::Span;
+use crate::Location;
 
 use super::{
     expressions::Expression,
@@ -16,21 +16,21 @@ pub enum CompositeLiteral {
 }
 
 impl CompositeLiteral {
-    pub fn as_span(&self) -> Span {
+    pub fn loc(&self) -> Location {
         match self {
-            Self::AnonymousStruct(c) => c.span,
-            Self::Array(c) => c.span,
-            Self::Map(c) => c.span,
-            Self::Option(c) => c.span,
-            Self::Struct(c) => c.span,
-            Self::Variant(c) => c.span,
+            Self::AnonymousStruct(c) => c.loc,
+            Self::Array(c) => c.loc,
+            Self::Map(c) => c.loc,
+            Self::Option(c) => c.loc,
+            Self::Struct(c) => c.loc,
+            Self::Variant(c) => c.loc,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MapLiteral {
-    pub span: Span,
+    pub loc: Location,
     pub ty: MapType,
     pub entries: Vec<MapEntry>,
 }
@@ -43,14 +43,14 @@ impl Into<CompositeLiteral> for MapLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MapEntry {
-    pub span: Span,
+    pub loc: Location,
     pub key: Box<Expression>,
     pub value: Box<ExpressionOrAnonymous>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ArrayLiteral {
-    pub span: Span,
+    pub loc: Location,
     pub ty: ArrayType,
     pub elements: Vec<ExpressionOrAnonymous>,
 }
@@ -63,7 +63,7 @@ impl Into<CompositeLiteral> for ArrayLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OptionLiteral {
-    pub span: Span,
+    pub loc: Location,
     pub ty: OptionType,
     pub value: Option<Box<ExpressionOrAnonymous>>,
 }
@@ -76,7 +76,7 @@ impl Into<CompositeLiteral> for OptionLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructLiteral {
-    pub span: Span,
+    pub loc: Location,
     pub ty: NamedType,
     pub fields: Vec<StructLiteralField>,
 }
@@ -89,7 +89,7 @@ impl Into<CompositeLiteral> for StructLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AnonymousStructLiteral {
-    pub span: Span,
+    pub loc: Location,
     pub fields: Vec<StructLiteralField>,
 }
 
@@ -101,14 +101,14 @@ impl Into<CompositeLiteral> for AnonymousStructLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructLiteralField {
-    pub span: Span,
+    pub loc: Location,
     pub prop: String,
     pub value: Expression,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariantLiteral {
-    pub span: Span,
+    pub loc: Location,
     pub ty: NamedType,
     pub name: String,
     pub body: Option<VariantLiteralBody>,
@@ -127,17 +127,17 @@ pub enum VariantLiteralBody {
 }
 
 impl VariantLiteralBody {
-    pub fn as_span(&self) -> Span {
+    pub fn loc(&self) -> Location {
         match self {
             Self::Tuple(tuple) => {
-                let start_span = tuple.first().unwrap().as_span();
-                let end_span = tuple.last().unwrap().as_span();
-                Span::merge(start_span, end_span)
+                let start = tuple.first().unwrap().loc();
+                let end = tuple.last().unwrap().loc();
+                Location::merge(start, end)
             }
             Self::Struct(st) => {
-                let start_span = st.first().unwrap().span;
-                let end_span = st.last().unwrap().span;
-                Span::merge(start_span, end_span)
+                let start = st.first().unwrap().loc;
+                let end = st.last().unwrap().loc;
+                Location::merge(start, end)
             }
         }
     }
@@ -162,10 +162,10 @@ pub enum ExpressionOrAnonymous {
 }
 
 impl ExpressionOrAnonymous {
-    pub fn as_span(&self) -> Span {
+    pub fn loc(&self) -> Location {
         match self {
-            Self::Expression(expr) => expr.as_span(),
-            Self::Struct(s) => s.span.clone(),
+            Self::Expression(expr) => expr.loc(),
+            Self::Struct(s) => s.loc,
         }
     }
 

@@ -1,6 +1,6 @@
 use std::collections::{HashSet, VecDeque};
 
-use crate::analyzer::modules::{ModuleId, ModulePath, ParsedModule};
+use crate::analyzer::modules::{Module, ModuleId, ModulePath};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GraphEdge {
@@ -16,7 +16,7 @@ pub struct ModuleSort {
 
 #[derive(Debug)]
 pub struct ModuleGraph {
-    pub(super) nodes: Vec<ParsedModule>,
+    pub(super) nodes: Vec<Module>,
     pub(crate) edges: HashSet<GraphEdge>,
 }
 
@@ -28,9 +28,12 @@ impl ModuleGraph {
         }
     }
 
-    pub fn add_module(&mut self, mut module: ParsedModule) -> ModuleId {
+    pub fn next_id(&self) -> ModuleId {
+        self.nodes.len()
+    }
+
+    pub fn add_module(&mut self, module: Module) -> ModuleId {
         let id = self.nodes.len();
-        module.id = id;
         self.nodes.push(module);
         id
     }
@@ -89,14 +92,5 @@ impl ModuleGraph {
             sorted,
             unsorted: edges,
         }
-    }
-
-    pub fn into_ordered_nodes(self, order: &[ModuleId]) -> Vec<ParsedModule> {
-        let mut nodes = self.nodes.into_iter().map(Some).collect::<Vec<_>>();
-
-        order
-            .iter()
-            .map(|&id| nodes[id as usize].take().expect("duplicate or invalid id"))
-            .collect()
     }
 }

@@ -273,7 +273,7 @@ impl CodeGenerator {
         alternate: Option<Box<ast::IfPatExpression>>,
     ) -> ast::IfPatExpression {
         let consequent = Box::new(ast::BlockExpression {
-            span: node.expression.as_span(),
+            span: node.expression.loc(),
             statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
                 expression: node.expression.clone(),
             })],

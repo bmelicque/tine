@@ -2,24 +2,23 @@ use pest::iterators::Pair;
 
 use crate::{
     ast,
-    locations::Span,
     parser::{parser::Rule, ParserEngine},
 };
 
 impl ParserEngine {
     pub fn parse_assignment(&mut self, pair: Pair<'_, Rule>) -> ast::Assignment {
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let pattern = self.parse_assignee(inner.next().unwrap());
-        let op_span = Span::from(inner.next().unwrap().as_span());
+        let op_loc = self.localize(inner.next().unwrap().as_span());
         let value = self.parse_expression(inner.next().unwrap());
         if value.is_empty() {
-            self.error("expected expression".into(), op_span.increment());
+            self.error("expected expression".into(), op_loc.increment());
         }
 
         ast::Assignment {
-            span,
+            loc,
             pattern,
             value,
         }
@@ -47,14 +46,11 @@ impl ParserEngine {
         node
     }
 
-    fn parse_indirection_assignee(
-        &mut self,
-        pair: Pair<'_, Rule>,
-    ) -> ast::IndirectionAssignee {
+    fn parse_indirection_assignee(&mut self, pair: Pair<'_, Rule>) -> ast::IndirectionAssignee {
         assert_eq!(pair.as_rule(), Rule::indirection);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let identifier = self.parse_identifier(pair.into_inner().next().unwrap());
-        ast::IndirectionAssignee { span, identifier }
+        ast::IndirectionAssignee { loc, identifier }
     }
 }
 
@@ -72,7 +68,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         let stmt = parser_engine.parse_statement(pair);
         (stmt, parser_engine.errors)
     }

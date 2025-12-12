@@ -254,7 +254,7 @@ fn summarize_module(m: &CheckedModule) -> ModuleSummary {
 
 fn error_to_lsp(e: &ParseError) -> Diagnostic {
     Diagnostic {
-        range: span_to_range(e.span.clone()),
+        range: span_to_range(e.loc.clone()),
         message: e.message.clone(),
         severity: Some(DiagnosticSeverity::ERROR),
         ..Default::default()

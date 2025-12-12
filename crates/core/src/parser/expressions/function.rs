@@ -6,16 +6,13 @@ use crate::{
 };
 
 impl ParserEngine {
-    pub fn parse_function_expression(
-        &mut self,
-        pair: Pair<'_, Rule>,
-    ) -> ast::FunctionExpression {
+    pub fn parse_function_expression(&mut self, pair: Pair<'_, Rule>) -> ast::FunctionExpression {
         assert_eq!(pair.as_rule(), Rule::function_expression);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let params = self.parse_function_params(inner.next().unwrap());
         let body = self.parse_function_body(inner.next().unwrap());
-        ast::FunctionExpression { span, params, body }
+        ast::FunctionExpression { loc, params, body }
     }
 
     fn parse_function_params(&mut self, pair: Pair<'_, Rule>) -> Vec<ast::FunctionParam> {
@@ -27,12 +24,12 @@ impl ParserEngine {
 
     fn parse_function_param(&mut self, pair: Pair<'_, Rule>) -> ast::FunctionParam {
         assert_eq!(pair.as_rule(), Rule::parameter);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let name = self.parse_identifier(inner.next().unwrap());
         let type_annotation = self.parse_type(inner.next().unwrap());
         ast::FunctionParam {
-            span,
+            loc,
             name,
             type_annotation,
         }
@@ -48,11 +45,11 @@ impl ParserEngine {
 
     fn parse_typed_block(&mut self, pair: Pair<'_, Rule>) -> ast::TypedBlock {
         assert_eq!(pair.as_rule(), Rule::typed_block);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let mut type_annotation = None;
         let mut block = ast::BlockExpression {
-            span,
+            loc,
             statements: vec![],
         };
         while let Some(next) = inner.next() {
@@ -70,11 +67,11 @@ impl ParserEngine {
 
     pub fn parse_predicate(&mut self, pair: Pair<'_, Rule>) -> ast::Predicate {
         assert_eq!(pair.as_rule(), Rule::predicate);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let params = self.parse_predicate_params(inner.next().unwrap());
         let body = self.parse_function_body(inner.next().unwrap());
-        ast::Predicate { span, params, body }
+        ast::Predicate { loc, params, body }
     }
 
     fn parse_predicate_params(&mut self, pair: Pair<'_, Rule>) -> Vec<ast::PredicateParam> {
@@ -106,7 +103,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 

@@ -8,14 +8,14 @@ use crate::{
 impl ParserEngine {
     pub fn parse_block(&mut self, pair: Pair<'_, Rule>) -> ast::BlockExpression {
         assert_eq!(pair.as_rule(), Rule::block);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let statements = pair
             .into_inner()
             .map(|pair| self.parse_statement(pair))
             .filter(|stmt| !stmt.is_empty())
             .collect();
 
-        ast::BlockExpression { span, statements }
+        ast::BlockExpression { loc, statements }
     }
 }
 
@@ -30,7 +30,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 

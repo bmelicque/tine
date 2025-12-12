@@ -18,14 +18,14 @@ impl ParserEngine {
 
     fn parse_use_declaration(&mut self, pair: Pair<'_, Rule>) -> ast::UseDeclaration {
         assert_eq!(pair.as_rule(), Rule::use_declaration);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let tree = self.parse_use_tree(inner.next_back().unwrap());
         let relative_count = self.parse_relative_count(inner.next());
 
         ast::UseDeclaration {
-            span,
+            loc,
             relative_count,
             tree,
         }
@@ -53,8 +53,9 @@ impl ParserEngine {
 
     fn parse_file_name(&mut self, pair: Pair<'_, Rule>) -> ast::PathElement {
         assert_eq!(pair.as_rule(), Rule::file_name);
+        let loc = self.localize(pair.as_span());
         let ident = ast::Identifier {
-            span: pair.as_span().into(),
+            loc,
             text: pair.as_str().to_string(),
         };
         ast::PathElement(ident)

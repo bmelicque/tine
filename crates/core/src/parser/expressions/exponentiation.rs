@@ -2,14 +2,14 @@ use pest::iterators::Pair;
 
 use crate::{
     ast,
-    locations::Span,
     parser::{parser::Rule, ParserEngine},
+    Location,
 };
 
 impl ParserEngine {
     pub fn parse_exponentiation(&mut self, pair: Pair<'_, Rule>) -> ast::Expression {
         assert!(pair.as_rule() == Rule::exponentiation);
-        let mut span = pair.as_span().into();
+        let mut loc = self.localize(pair.as_span());
         let mut node = ast::Expression::Empty;
         for sub_pair in pair.into_inner().rev() {
             let left = self.parse_expression(sub_pair);
@@ -17,12 +17,12 @@ impl ParserEngine {
                 node = left;
                 continue;
             }
-            span = Span::merge(left.as_span(), span);
+            loc = Location::merge(left.loc(), loc);
             node = ast::BinaryExpression {
                 left: Box::new(left),
                 operator: ast::BinaryOperator::Pow,
                 right: Box::new(node),
-                span,
+                loc,
             }
             .into();
         }
@@ -41,7 +41,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 

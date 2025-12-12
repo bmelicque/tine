@@ -1,4 +1,4 @@
-use crate::{ast::Identifier, locations::Span};
+use crate::{ast::Identifier, Location};
 
 use super::{BooleanLiteral, NamedType, NumberLiteral, StringLiteral};
 
@@ -12,13 +12,13 @@ pub enum Pattern {
 }
 
 impl Pattern {
-    pub fn as_span(&self) -> Span {
+    pub fn loc(&self) -> Location {
         match self {
-            Pattern::Identifier(p) => p.0.span,
-            Pattern::Literal(l) => l.as_span(),
-            Pattern::Struct(p) => p.span,
-            Pattern::Tuple(p) => p.span,
-            Pattern::Variant(p) => p.span,
+            Pattern::Identifier(p) => p.0.loc,
+            Pattern::Literal(l) => l.loc(),
+            Pattern::Struct(p) => p.loc,
+            Pattern::Tuple(p) => p.loc,
+            Pattern::Variant(p) => p.loc,
         }
     }
 
@@ -108,8 +108,8 @@ impl IdentifierPattern {
         self.0.as_str()
     }
 
-    pub fn as_span(&self) -> Span {
-        self.0.span
+    pub fn loc(&self) -> Location {
+        self.0.loc
     }
 }
 
@@ -133,11 +133,11 @@ pub enum LiteralPattern {
 }
 
 impl LiteralPattern {
-    pub fn as_span(&self) -> Span {
+    pub fn loc(&self) -> Location {
         match self {
-            LiteralPattern::Boolean(b) => b.span,
-            LiteralPattern::Number(n) => n.span,
-            LiteralPattern::String(s) => s.span,
+            LiteralPattern::Boolean(b) => b.loc,
+            LiteralPattern::Number(n) => n.loc,
+            LiteralPattern::String(s) => s.loc,
         }
     }
 }
@@ -165,7 +165,7 @@ impl Into<Pattern> for LiteralPattern {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructPattern {
-    pub span: Span,
+    pub loc: Location,
     pub ty: Box<NamedType>,
     pub fields: Vec<StructPatternField>,
 }
@@ -178,14 +178,14 @@ impl Into<Pattern> for StructPattern {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructPatternField {
-    pub span: Span,
+    pub loc: Location,
     pub identifier: Identifier,
     pub pattern: Option<Pattern>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TuplePattern {
-    pub span: Span,
+    pub loc: Location,
     pub elements: Vec<Pattern>,
 }
 
@@ -196,17 +196,17 @@ impl Into<Pattern> for TuplePattern {
 }
 impl From<Vec<Pattern>> for TuplePattern {
     fn from(elements: Vec<Pattern>) -> Self {
-        let span = Span::merge(
-            elements.first().unwrap().as_span(),
-            elements.last().unwrap().as_span(),
+        let loc = Location::merge(
+            elements.first().unwrap().loc(),
+            elements.last().unwrap().loc(),
         );
-        Self { span, elements }
+        Self { loc, elements }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariantPattern {
-    pub span: Span,
+    pub loc: Location,
     pub ty: Box<NamedType>,
     pub name: String,
     pub body: Option<VariantPatternBody>,

@@ -1,6 +1,6 @@
 use crate::{
     ast::{Identifier, InvalidStatement, Statement},
-    locations::Span,
+    Location,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -27,7 +27,7 @@ impl From<Statement> for Item {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InvalidItem {
-    pub span: Span,
+    pub loc: Location,
 }
 impl Into<Item> for InvalidItem {
     fn into(self) -> Item {
@@ -36,13 +36,13 @@ impl Into<Item> for InvalidItem {
 }
 impl From<InvalidStatement> for InvalidItem {
     fn from(value: InvalidStatement) -> Self {
-        InvalidItem { span: value.span }
+        InvalidItem { loc: value.loc }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UseDeclaration {
-    pub span: Span,
+    pub loc: Location,
     pub relative_count: usize,
     pub tree: UseTree,
 }
@@ -60,16 +60,16 @@ pub struct UseTree {
 }
 
 impl UseTree {
-    pub fn as_span(&self) -> Span {
+    pub fn loc(&self) -> Location {
         let start = self.span_start();
         let end = self.end();
-        Span::merge(start, end)
+        Location::merge(start, end)
     }
 
     /// Find the span of the first element of the tree
-    fn span_start(&self) -> Span {
+    fn span_start(&self) -> Location {
         if let Some(element) = self.path.get(0) {
-            return element.0.span;
+            return element.0.loc;
         }
         if let Some(subtree) = self.sub_trees.get(0) {
             return subtree.span_start();
@@ -77,12 +77,12 @@ impl UseTree {
         panic!("cannot get span of empty UseTree")
     }
 
-    fn end(&self) -> Span {
+    fn end(&self) -> Location {
         if let Some(last) = self.sub_trees.last() {
             return last.end();
         }
         if let Some(last) = self.path.last() {
-            return last.0.span;
+            return last.0.loc;
         }
         panic!("cannot get span of empty UseTree")
     }
@@ -96,7 +96,7 @@ impl PathElement {
         self.0.as_str()
     }
 
-    pub fn as_span(&self) -> Span {
-        self.0.span
+    pub fn loc(&self) -> Location {
+        self.0.loc
     }
 }

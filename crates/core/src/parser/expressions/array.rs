@@ -8,13 +8,13 @@ use crate::{
 impl ParserEngine {
     pub fn parse_array_expression(&mut self, pair: Pair<'_, Rule>) -> ast::ArrayExpression {
         assert_eq!(pair.as_rule(), Rule::array_expression);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let elements = pair
             .into_inner()
             .map(|element| self.parse_expression(element))
             .filter(|expr| !matches!(expr, ast::Expression::Empty))
             .collect();
-        ast::ArrayExpression { span, elements }
+        ast::ArrayExpression { loc, elements }
     }
 }
 
@@ -29,7 +29,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 

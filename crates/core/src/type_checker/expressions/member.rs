@@ -4,7 +4,7 @@ use crate::{
     types::{Type, TypeId},
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_member_expression(&mut self, expr: &ast::MemberExpression) -> TypeId {
         let Some(ref member) = expr.prop else {
             self.visit_expression(&expr.object);
@@ -29,7 +29,7 @@ impl TypeChecker {
         let Type::Struct(ty) = self.resolve(root_type).clone() else {
             self.error(
                 format!("Property '{}' does not exist on type '{}'", prop, type_str),
-                field_name.span,
+                field_name.loc,
             );
             return self.save_member_type(expr, TypeStore::UNKNOWN);
         };
@@ -38,7 +38,7 @@ impl TypeChecker {
             None => {
                 self.error(
                     format!("Property '{}' does not exist on type '{}'", prop, type_str),
-                    expr.span,
+                    expr.loc,
                 );
                 TypeStore::UNKNOWN
             }
@@ -51,7 +51,7 @@ impl TypeChecker {
         let Type::Tuple(tuple) = self.resolve(root_type) else {
             self.error(
                 format!("Expected tuple type, got {}", root_type),
-                expr.object.as_span(),
+                expr.object.loc(),
             );
             return self.save_member_type(expr, TypeStore::UNKNOWN);
         };
@@ -61,17 +61,17 @@ impl TypeChecker {
         };
         let value = index.value;
         if value != value.round() {
-            self.error("Integer expected".into(), index.span);
+            self.error("Integer expected".into(), index.loc);
             return self.save_member_type(expr, TypeStore::UNKNOWN);
         }
         let value = *value as isize;
         if value < 0 {
-            self.error("Index out of range".into(), index.span);
+            self.error("Index out of range".into(), index.loc);
             return self.save_member_type(expr, TypeStore::UNKNOWN);
         }
         let value = value as usize;
         if value >= tuple.elements.len() {
-            self.error("Index out of range".into(), index.span);
+            self.error("Index out of range".into(), index.loc);
             return self.save_member_type(expr, TypeStore::UNKNOWN);
         } else {
             return self.save_member_type(expr, tuple.elements[value]);
@@ -79,9 +79,7 @@ impl TypeChecker {
     }
 
     fn save_member_type(&mut self, expr: &ast::MemberExpression, ty: TypeId) -> TypeId {
-        self.analysis_context
-            .save_member_token(expr.prop.as_ref().unwrap().as_span(), ty);
-        self.analysis_context.save_expression_type(expr.span, ty);
+        self.ctx.save_expression_type(expr.loc, ty);
         ty
     }
 }
@@ -90,21 +88,23 @@ impl TypeChecker {
 mod tests {
     use super::*;
     use crate::{
-        ast, locations::Span, type_checker::type_checker::TypeCheckerBuilder, types::*, SymbolData,
+        analyzer::session::Session, ast, locations::Span, types::*, Location, SymbolData,
         SymbolKind,
     };
 
-    fn create_type_checker() -> TypeChecker {
-        TypeCheckerBuilder::new().build()
+    fn create_type_checker() -> TypeChecker<'static> {
+        let session = Box::leak(Box::new(Session::new()));
+        TypeChecker::new(session, 0)
     }
 
-    fn span(text: &'static str) -> Span {
-        Span::new(0, text.len() as u32)
+    fn loc(text: &'static str) -> Location {
+        let span = Span::new(0, text.len() as u32);
+        Location::new(0, span)
     }
 
     fn ident(text: &str) -> ast::Identifier {
         ast::Identifier {
-            span: Span::new(0, text.len() as u32),
+            loc: Location::new(0, Span::new(0, text.len() as u32)),
             text: text.to_string(),
         }
     }
@@ -112,38 +112,37 @@ mod tests {
     #[test]
     fn test_visit_field_access_expression() {
         let mut checker = create_type_checker();
-        let id = checker
-            .analysis_context
-            .type_store
-            .add(Type::Struct(StructType {
-                id: checker.analysis_context.type_store.get_next_id(),
-                fields: vec![
-                    StructField {
-                        name: "name".to_string(),
-                        def: TypeStore::STRING,
-                        optional: false,
-                    },
-                    StructField {
-                        name: "age".to_string(),
-                        def: TypeStore::NUMBER,
-                        optional: false,
-                    },
-                ],
-            }));
-        checker.analysis_context.register_symbol(SymbolData {
+        let id = checker.ctx.type_store.add(Type::Struct(StructType {
+            id: checker.ctx.type_store.get_next_id(),
+            fields: vec![
+                StructField {
+                    name: "name".to_string(),
+                    def: TypeStore::STRING,
+                    optional: false,
+                },
+                StructField {
+                    name: "age".to_string(),
+                    def: TypeStore::NUMBER,
+                    optional: false,
+                },
+            ],
+        }));
+        checker.ctx.register_symbol(SymbolData {
             name: "User".into(),
-            kind: SymbolKind::Type(id),
+            ty: id,
+            kind: SymbolKind::Type { members: vec![] },
             ..Default::default()
         });
 
         let field_access_expression = ast::MemberExpression {
             object: Box::new(ast::Expression::Identifier(ident("user"))),
             prop: Some(ident("name").into()),
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
-        checker.analysis_context.register_symbol(SymbolData {
+        checker.ctx.register_symbol(SymbolData {
             name: "user".into(),
-            kind: SymbolKind::constant(id),
+            ty: id,
+            kind: SymbolKind::constant(),
             ..Default::default()
         });
 
@@ -163,11 +162,12 @@ mod tests {
             elements: vec![TypeStore::NUMBER, TypeStore::STRING, TypeStore::BOOLEAN],
         });
 
-        let ty = checker.analysis_context.type_store.add(tuple_type);
-        checker.analysis_context.register_symbol(SymbolData {
+        let ty = checker.ctx.type_store.add(tuple_type);
+        checker.ctx.register_symbol(SymbolData {
             name: "my_tuple".into(),
-            kind: SymbolKind::constant(ty),
-            defined_at: span("my_tuple"),
+            ty,
+            kind: SymbolKind::constant(),
+            defined_at: loc("my_tuple"),
             ..Default::default()
         });
 
@@ -175,9 +175,9 @@ mod tests {
             object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
             prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
                 value: ordered_float::OrderedFloat(1.0),
-                span: Span::dummy(),
+                loc: Location::dummy(),
             })),
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_tuple_indexing(&tuple_indexing);
@@ -188,10 +188,11 @@ mod tests {
     #[test]
     fn test_visit_tuple_indexing_invalid_type() {
         let mut checker = create_type_checker();
-        checker.analysis_context.register_symbol(SymbolData {
+        checker.ctx.register_symbol(SymbolData {
             name: "not_a_tuple".into(),
-            kind: SymbolKind::constant(TypeStore::NUMBER),
-            defined_at: span("not_a_tuple"),
+            ty: TypeStore::NUMBER,
+            kind: SymbolKind::constant(),
+            defined_at: loc("not_a_tuple"),
             ..Default::default()
         });
 
@@ -199,9 +200,9 @@ mod tests {
             object: Box::new(ast::Expression::Identifier(ident("not_a_tuple"))),
             prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
                 value: ordered_float::OrderedFloat(0.0),
-                span: Span::dummy(),
+                loc: Location::dummy(),
             })),
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_tuple_indexing(&tuple_indexing);
@@ -215,11 +216,12 @@ mod tests {
         let tuple_type = Type::Tuple(TupleType {
             elements: vec![TypeStore::NUMBER, TypeStore::STRING],
         });
-        let tuple_type = checker.analysis_context.type_store.add(tuple_type);
-        checker.analysis_context.register_symbol(SymbolData {
+        let tuple_type = checker.ctx.type_store.add(tuple_type);
+        checker.ctx.register_symbol(SymbolData {
             name: "my_tuple".into(),
-            kind: SymbolKind::constant(tuple_type),
-            defined_at: span("my_tuple"),
+            ty: tuple_type,
+            kind: SymbolKind::constant(),
+            defined_at: loc("my_tuple"),
             ..Default::default()
         });
 
@@ -227,9 +229,9 @@ mod tests {
             object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
             prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
                 value: ordered_float::OrderedFloat(2.0),
-                span: Span::dummy(),
+                loc: Location::dummy(),
             })),
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_tuple_indexing(&tuple_indexing);
@@ -244,11 +246,12 @@ mod tests {
         let tuple_type = Type::Tuple(TupleType {
             elements: vec![TypeStore::NUMBER, TypeStore::STRING],
         });
-        let tuple_type = checker.analysis_context.type_store.add(tuple_type);
-        checker.analysis_context.register_symbol(SymbolData {
+        let tuple_type = checker.ctx.type_store.add(tuple_type);
+        checker.ctx.register_symbol(SymbolData {
             name: "my_tuple".into(),
-            kind: SymbolKind::constant(tuple_type),
-            defined_at: span("my_tuple"),
+            ty: tuple_type,
+            kind: SymbolKind::constant(),
+            defined_at: loc("my_tuple"),
             ..Default::default()
         });
 
@@ -256,9 +259,9 @@ mod tests {
             object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
             prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
                 value: ordered_float::OrderedFloat(-1.0),
-                span: Span::dummy(),
+                loc: Location::dummy(),
             })),
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_tuple_indexing(&tuple_indexing);

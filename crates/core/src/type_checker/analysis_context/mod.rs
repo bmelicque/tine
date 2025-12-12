@@ -6,7 +6,7 @@ pub use symbols::{SymbolData, SymbolHandle, SymbolKind, SymbolRef};
 use std::collections::HashMap;
 
 use crate::{
-    locations::Span, type_checker::analysis_context::type_store::TypeStore, types::TypeId,
+    locations::Span, type_checker::analysis_context::type_store::TypeStore, types::TypeId, Location,
 };
 
 #[derive(Clone, Debug)]
@@ -30,7 +30,6 @@ pub struct MemberToken {
 #[derive(Clone)]
 pub struct Scope {
     pub bindings: Vec<SymbolRef>,
-    pub outer_id: Option<Span>,
     /**
      * Lists symbols captured by the scope
      */
@@ -38,111 +37,106 @@ pub struct Scope {
 }
 
 impl Scope {
-    pub fn new(within: Option<Span>) -> Self {
+    pub fn new() -> Self {
         Self {
             bindings: vec![],
-            outer_id: within,
             captured: vec![],
         }
+    }
+
+    pub fn has(&self, symbol: &SymbolRef) -> bool {
+        self.bindings.iter().find(|b| b.is(symbol)).is_some()
+    }
+
+    pub fn capture(&mut self, symbol: SymbolRef) {
+        self.captured.push(symbol);
     }
 
     pub fn captured(&self) -> Vec<SymbolRef> {
         self.captured.clone()
     }
+
+    pub fn find(&self, name: &str) -> Option<SymbolRef> {
+        self.bindings
+            .iter()
+            .find(|s| s.borrow().name == name)
+            .cloned()
+    }
 }
 
 #[derive(Clone)]
-pub struct AnalysisContext {
+pub struct LocalContext {
     /** Map of existing symbols */
     pub symbols: Vec<SymbolHandle>,
 
-    pub scopes: HashMap<Span, Scope>,
-    current_scope: Option<Span>,
+    pub(crate) scopes: Vec<Scope>,
 
     pub(crate) type_store: TypeStore,
-    pub expressions: HashMap<Span, TypeId>,
-    pub tokens: HashMap<Span, Token>,
+    pub expressions: HashMap<Location, TypeId>,
 
     pub current_declaration_dependencies: Option<Vec<SymbolRef>>,
-    pub other_dependencies: HashMap<Span, Vec<SymbolRef>>,
+    pub other_dependencies: HashMap<Location, Vec<SymbolRef>>,
 }
 
-impl AnalysisContext {
+impl LocalContext {
     pub fn new() -> Self {
         Self {
             symbols: Vec::<SymbolHandle>::new(),
-            scopes: HashMap::new(),
-            current_scope: None,
+            scopes: vec![],
             type_store: TypeStore::new(),
             expressions: HashMap::new(),
-            tokens: HashMap::new(),
             current_declaration_dependencies: None,
             other_dependencies: HashMap::new(),
         }
     }
 
-    pub fn enter_scope(&mut self, span: Span) {
-        self.scopes.insert(span, Scope::new(self.current_scope));
-        self.current_scope = Some(span);
+    pub fn enter_scope(&mut self) {
+        self.scopes.push(Scope::new());
     }
-    pub fn exit_scope(&mut self) -> &Scope {
-        let current_scope = self.current_scope;
-        let current = &self.scopes[&current_scope.expect("Cannot pop global scope")];
-        self.current_scope = current.outer_id;
-        current
+    pub fn pop_scope(&mut self) -> Scope {
+        if self.scopes.len() <= 1 {
+            panic!("Cannot pop module scope");
+        }
+        self.scopes.pop().unwrap()
     }
-    fn get_scope(&self, id: Span) -> &Scope {
-        self.scopes.iter().find(|(span, _)| **span == id).unwrap().1
+    fn current_scope(&self) -> &Scope {
+        self.scopes.last().unwrap()
     }
-    fn get_current_scope(&self) -> &Scope {
-        self.get_scope(self.current_scope.unwrap())
+    fn current_scope_mut(&mut self) -> &mut Scope {
+        self.scopes.last_mut().unwrap()
     }
 
     pub fn register_symbol(&mut self, symbol: SymbolData) -> SymbolRef {
-        let mut scope = self.get_current_scope().clone();
         for dep in &symbol.dependencies {
-            let is_captured = !dep
-                .borrow()
-                .defined_at
-                .is_within(self.current_scope.unwrap());
-            if is_captured {
-                scope.captured.push(dep.clone());
+            if !self.current_scope().has(dep) {
+                self.current_scope_mut().capture(dep.clone());
             }
         }
 
         let handle = SymbolHandle::new(symbol);
-        scope.bindings.push(handle.readonly());
-
-        self.scopes.insert(self.current_scope.unwrap(), scope);
-        self.symbols.push(handle.clone());
-        handle.readonly()
+        self.current_scope_mut().bindings.push(handle.readonly());
+        let r = handle.readonly();
+        self.symbols.push(handle);
+        r
     }
 
-    pub fn save_expression_type(&mut self, span: Span, ty: TypeId) -> TypeId {
-        self.expressions.insert(span, ty);
+    pub fn import(&mut self, symbol: SymbolRef) {
+        let current_scope = self.current_scope_mut();
+        current_scope.bindings.push(symbol.clone());
+    }
+
+    pub fn save_expression_type(&mut self, loc: Location, ty: TypeId) -> TypeId {
+        self.expressions.insert(loc, ty);
         ty
-    }
-    pub fn save_symbol_token(&mut self, span: Span, symbol: SymbolRef) {
-        let token = Token::Symbol(SymbolToken { span, symbol });
-        self.tokens.insert(span, token);
-    }
-    pub fn save_member_token(&mut self, span: Span, type_id: TypeId) {
-        let token = Token::Member(MemberToken { span, ty: type_id });
-        self.tokens.insert(span, token);
     }
 
     pub fn lookup(&self, name: &str) -> Option<SymbolRef> {
-        let mut scope = self.get_current_scope();
-        loop {
-            let var = scope.bindings.iter().find(|b| b.borrow().name == *name);
-            if var.is_some() {
-                return var.cloned();
-            }
-            match scope.outer_id {
-                Some(span) => scope = self.get_scope(span),
-                None => return None,
+        for scope in self.scopes.iter().rev() {
+            if let Some(var) = scope.find(name) {
+                return Some(var);
             }
         }
+        None
     }
     pub fn lookup_mut(&self, name: &str) -> Option<SymbolHandle> {
         match self.lookup(name) {
@@ -155,7 +149,7 @@ impl AnalysisContext {
     }
 
     pub fn find_in_current_scope(&self, name: &str) -> Option<SymbolRef> {
-        self.get_current_scope()
+        self.current_scope()
             .bindings
             .iter()
             .find(|b| b.borrow().name == *name)
@@ -168,12 +162,4 @@ impl AnalysisContext {
         };
         current_dependencies.extend(deps);
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct CheckData {
-    pub exports: Vec<SymbolRef>,
-    pub expressions: HashMap<Span, TypeId>,
-    pub tokens: HashMap<Span, Token>,
-    pub dependencies: HashMap<Span, Vec<SymbolRef>>,
 }

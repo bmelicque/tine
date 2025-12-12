@@ -11,13 +11,13 @@ use crate::{
 
 use super::super::TypeChecker;
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_composite_literal(&mut self, node: &ast::CompositeLiteral) -> TypeId {
         match node {
             ast::CompositeLiteral::AnonymousStruct(node) => {
                 self.error(
                     "missing type constructor in composite literal".into(),
-                    node.span,
+                    node.loc,
                 );
                 TypeStore::UNKNOWN
             }
@@ -48,14 +48,14 @@ impl TypeChecker {
             })
             .collect();
         let Type::Struct(st) = self.resolve(expected_type) else {
-            self.error(format!("type mismatch"), node.span);
+            self.error(format!("type mismatch"), node.loc);
             return TypeStore::UNKNOWN;
         };
         let ty = self
-            .analysis_context
+            .ctx
             .type_store
             .add(Type::Struct(StructType { id: st.id, fields }));
-        self.analysis_context.save_expression_type(node.span, ty)
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     pub fn visit_array_literal(&mut self, node: &ast::ArrayLiteral) -> TypeId {
@@ -70,19 +70,19 @@ impl TypeChecker {
             if self.resolve(expected_element_type).is_unresolved() {
                 expected_element_type = element_type
             } else {
-                self.check_assigned_type(expected_element_type, element_type, element.as_span());
+                self.check_assigned_type(expected_element_type, element_type, element.loc());
             }
         }
 
         if self.resolve(expected_element_type).is_unresolved() {
-            self.error("cannot infer element type".to_string(), node.span);
+            self.error("cannot infer element type".to_string(), node.loc);
             expected_element_type = TypeStore::UNKNOWN;
         }
 
-        let ty = self.analysis_context.type_store.add(Type::Array(ArrayType {
+        let ty = self.ctx.type_store.add(Type::Array(ArrayType {
             element: expected_element_type,
         }));
-        self.analysis_context.save_expression_type(node.span, ty)
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     pub fn visit_map_literal(&mut self, node: &ast::MapLiteral) -> TypeId {
@@ -100,30 +100,27 @@ impl TypeChecker {
             if self.resolve(key).is_unresolved() {
                 key = entry_key
             } else {
-                self.check_assigned_type(key, entry_key, entry.key.as_span());
+                self.check_assigned_type(key, entry_key, entry.key.loc());
             }
 
             if self.resolve(value).is_unresolved() {
                 value = entry_value
             } else {
-                self.check_assigned_type(value, entry_value, entry.value.as_span());
+                self.check_assigned_type(value, entry_value, entry.value.loc());
             }
         }
 
         if self.resolve(key).is_unresolved() {
-            self.error("cannot infer key type".to_string(), node.span);
+            self.error("cannot infer key type".to_string(), node.loc);
             key = TypeStore::UNKNOWN;
         }
         if self.resolve(value).is_unresolved() {
-            self.error("cannot infer value type".to_string(), node.span);
+            self.error("cannot infer value type".to_string(), node.loc);
             value = TypeStore::UNKNOWN;
         }
 
-        let ty = self
-            .analysis_context
-            .type_store
-            .add(Type::Map(MapType { key, value }));
-        self.analysis_context.save_expression_type(node.span, ty)
+        let ty = self.ctx.type_store.add(Type::Map(MapType { key, value }));
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     pub fn visit_option_literal(&mut self, node: &ast::OptionLiteral) -> TypeId {
@@ -138,20 +135,17 @@ impl TypeChecker {
             if self.resolve(some).is_unresolved() {
                 some = value_ty
             } else {
-                self.check_assigned_type(some, value_ty, value.as_span());
+                self.check_assigned_type(some, value_ty, value.loc());
             }
         }
 
         if self.resolve(some).is_unresolved() {
-            self.error("Cannot infer type".to_string(), node.span);
+            self.error("Cannot infer type".to_string(), node.loc);
             some = TypeStore::UNKNOWN;
         }
 
-        let ty = self
-            .analysis_context
-            .type_store
-            .add(Type::Option(OptionType { some }));
-        self.analysis_context.save_expression_type(node.span, ty)
+        let ty = self.ctx.type_store.add(Type::Option(OptionType { some }));
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     pub fn visit_struct_literal(&mut self, node: &ast::StructLiteral) -> TypeId {
@@ -163,19 +157,17 @@ impl TypeChecker {
                 node.fields.iter().for_each(|f| {
                     self.visit_expression(&f.value);
                 });
-                return self
-                    .analysis_context
-                    .save_expression_type(node.span, TypeStore::UNKNOWN);
+                return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
             }
             _ => panic!("Expected a named type"),
         };
         let st_id = st.id;
         let fields = self.visit_struct_body(&node.fields, st);
         let ty = self
-            .analysis_context
+            .ctx
             .type_store
             .add(Type::Struct(StructType { id: st_id, fields }));
-        self.analysis_context.save_expression_type(node.span, ty)
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_struct_body(
@@ -193,14 +185,14 @@ impl TypeChecker {
             let Some(mut expected) = expected else {
                 self.error(
                     format!("property '{}' does not exist in this type", name),
-                    field.span,
+                    field.loc,
                 );
                 continue;
             };
             if self.resolve(expected).is_unresolved() {
                 expected = match substitutions.get(&expected) {
                     Some(e) => {
-                        self.check_assigned_type(*e, value, field.value.as_span());
+                        self.check_assigned_type(*e, value, field.value.loc());
                         *e
                     }
                     None => {
@@ -226,18 +218,14 @@ impl TypeChecker {
                 if let Some(body) = &node.body {
                     self.visit_variant_body(body, TypeStore::UNKNOWN);
                 }
-                return self
-                    .analysis_context
-                    .save_expression_type(node.span, TypeStore::UNKNOWN);
+                return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
             }
             _ => {
                 self.error(
                     format!("enum expected, got '{}'", node.ty.name),
-                    node.ty.span,
+                    node.ty.loc,
                 );
-                return self
-                    .analysis_context
-                    .save_expression_type(node.span, TypeStore::UNKNOWN);
+                return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
             }
         };
 
@@ -248,11 +236,9 @@ impl TypeChecker {
         else {
             self.error(
                 format!("Variant '{}' does not exist on type {}", node.name, ty),
-                node.span,
+                node.loc,
             );
-            return self
-                .analysis_context
-                .save_expression_type(node.span, TypeStore::UNKNOWN);
+            return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
         };
         match &node.body {
             Some(body) => self.visit_variant_body(body, variant.def),
@@ -260,7 +246,7 @@ impl TypeChecker {
                 if variant.def != TypeStore::UNIT && variant.def != TypeStore::UNKNOWN {
                     self.error(
                         "expected structured or tuple variant, got unit".into(),
-                        node.span,
+                        node.loc,
                     );
                     TypeStore::UNKNOWN
                 } else {
@@ -269,7 +255,7 @@ impl TypeChecker {
             }
         };
 
-        self.analysis_context.save_expression_type(node.span, ty)
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_variant_body(&mut self, body: &ast::VariantLiteralBody, expected: TypeId) -> TypeId {
@@ -279,13 +265,13 @@ impl TypeChecker {
                 let Type::Struct(st) = self.resolve(expected).clone() else {
                     self.error(
                         "expected tuple or unit variant, got a structured type".into(),
-                        body.as_span(),
+                        body.loc(),
                     );
                     return TypeStore::UNKNOWN;
                 };
                 let id = st.id;
                 let fields = self.visit_struct_body(fields, st);
-                self.analysis_context
+                self.ctx
                     .type_store
                     .add(Type::Struct(StructType { id, fields }))
             }
@@ -297,7 +283,7 @@ impl TypeChecker {
         got: &ast::VariantLiteralBody,
         expected: TypeId,
     ) -> TypeId {
-        let span = got.as_span();
+        let span = got.loc();
         let ast::VariantLiteralBody::Tuple(got_tuple) = got else {
             panic!()
         };
@@ -326,7 +312,7 @@ impl TypeChecker {
             if self.resolve(expected_tuple.elements[i]).is_unresolved() {
                 expected_type = match substitutions.get(&expected_type) {
                     Some(e) => {
-                        self.check_assigned_type(*e, got_type, got.as_span());
+                        self.check_assigned_type(*e, got_type, got.loc());
                         *e
                     }
                     None => {
@@ -338,61 +324,56 @@ impl TypeChecker {
             elements.push(expected_type);
         }
 
-        self.analysis_context
-            .type_store
-            .add(Type::Tuple(TupleType { elements }))
+        self.ctx.type_store.add(Type::Tuple(TupleType { elements }))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::locations::Span;
-    use crate::type_checker::type_checker::TypeCheckerBuilder;
+    use crate::analyzer::session::Session;
     use crate::types::{StructField, Type, Variant};
-    use crate::{ast, SymbolData, SymbolKind};
+    use crate::{ast, Location, SymbolData, SymbolKind};
 
     #[test]
     fn test_visit_anonymous_struct_literal() {
-        let mut checker = TypeCheckerBuilder::new().build();
-        let user_type = checker
-            .analysis_context
-            .type_store
-            .add(Type::Struct(StructType {
-                id: checker.analysis_context.type_store.get_next_id(),
-                fields: vec![
-                    StructField {
-                        name: "name".to_string(),
-                        def: TypeStore::STRING,
-                        optional: false,
-                    },
-                    StructField {
-                        name: "age".to_string(),
-                        def: TypeStore::NUMBER,
-                        optional: false,
-                    },
-                ],
-            }));
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
+        let user_type = checker.ctx.type_store.add(Type::Struct(StructType {
+            id: checker.ctx.type_store.get_next_id(),
+            fields: vec![
+                StructField {
+                    name: "name".to_string(),
+                    def: TypeStore::STRING,
+                    optional: false,
+                },
+                StructField {
+                    name: "age".to_string(),
+                    def: TypeStore::NUMBER,
+                    optional: false,
+                },
+            ],
+        }));
         let struct_literal = ast::AnonymousStructLiteral {
             fields: vec![
                 ast::StructLiteralField {
                     prop: "name".to_string(),
                     value: ast::Expression::StringLiteral(ast::StringLiteral {
-                        span: Span::new(0, 4),
+                        loc: Location::dummy(),
                         text: "John".into(),
                     }),
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 },
                 ast::StructLiteralField {
                     prop: "age".to_string(),
                     value: ast::Expression::NumberLiteral(ast::NumberLiteral {
                         value: ordered_float::OrderedFloat(30.0),
-                        span: Span::dummy(),
+                        loc: Location::dummy(),
                     }),
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 },
             ],
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_anonymous_struct_literal(&struct_literal, user_type);
@@ -403,31 +384,32 @@ mod tests {
 
     #[test]
     fn test_visit_array_literal() {
-        let mut checker = TypeCheckerBuilder::new().build();
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
         let array_literal = ast::ArrayLiteral {
             ty: ast::ArrayType {
                 element: Some(Box::new(ast::Type::Named(ast::NamedType {
                     name: "number".to_string(),
                     args: None,
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 }))),
-                span: Span::dummy(),
+                loc: Location::dummy(),
             },
             elements: vec![
                 ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
                     ast::NumberLiteral {
                         value: ordered_float::OrderedFloat(1.0),
-                        span: Span::dummy(),
+                        loc: Location::dummy(),
                     },
                 )),
                 ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
                     ast::NumberLiteral {
                         value: ordered_float::OrderedFloat(2.0),
-                        span: Span::dummy(),
+                        loc: Location::dummy(),
                     },
                 )),
             ],
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_array_literal(&array_literal);
@@ -443,50 +425,51 @@ mod tests {
 
     #[test]
     fn test_visit_map_literal() {
-        let mut checker = TypeCheckerBuilder::new().build();
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
         let map_literal = ast::MapLiteral {
             ty: ast::MapType {
                 key: Some(Box::new(ast::Type::Named(ast::NamedType {
                     name: "string".to_string(),
                     args: None,
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 }))),
                 value: Some(Box::new(ast::Type::Named(ast::NamedType {
                     name: "number".to_string(),
                     args: None,
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 }))),
-                span: Span::dummy(),
+                loc: Location::dummy(),
             },
             entries: vec![
                 ast::MapEntry {
                     key: Box::new(ast::Expression::StringLiteral(ast::StringLiteral {
-                        span: Span::new(0, 1),
+                        loc: Location::dummy(),
                         text: "key1".into(),
                     })),
                     value: Box::new(ast::ExpressionOrAnonymous::Expression(
                         ast::Expression::NumberLiteral(ast::NumberLiteral {
                             value: ordered_float::OrderedFloat(42.0),
-                            span: Span::dummy(),
+                            loc: Location::dummy(),
                         }),
                     )),
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 },
                 ast::MapEntry {
                     key: Box::new(ast::Expression::StringLiteral(ast::StringLiteral {
-                        span: Span::new(0, 1),
+                        loc: Location::dummy(),
                         text: "key1".into(),
                     })),
                     value: Box::new(ast::ExpressionOrAnonymous::Expression(
                         ast::Expression::NumberLiteral(ast::NumberLiteral {
                             value: ordered_float::OrderedFloat(99.0),
-                            span: Span::dummy(),
+                            loc: Location::dummy(),
                         }),
                     )),
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 },
             ],
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_map_literal(&map_literal);
@@ -503,23 +486,24 @@ mod tests {
 
     #[test]
     fn test_visit_option_literal() {
-        let mut checker = TypeCheckerBuilder::new().build();
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
         let option_literal = ast::OptionLiteral {
             ty: ast::OptionType {
                 base: Some(Box::new(ast::Type::Named(ast::NamedType {
                     name: "number".to_string(),
                     args: None,
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 }))),
-                span: Span::dummy(),
+                loc: Location::dummy(),
             },
             value: Some(Box::new(ast::ExpressionOrAnonymous::Expression(
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
                     value: ordered_float::OrderedFloat(42.0),
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 }),
             ))),
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_option_literal(&option_literal);
@@ -535,11 +519,11 @@ mod tests {
 
     #[test]
     fn test_visit_struct_literal() {
-        let mut checker = TypeCheckerBuilder::new().build();
-
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
         // Define the User struct type properly
         let user_type = types::Type::Struct(types::StructType {
-            id: checker.analysis_context.type_store.get_next_id(),
+            id: checker.ctx.type_store.get_next_id(),
             fields: vec![
                 StructField {
                     name: "name".to_string(),
@@ -554,10 +538,11 @@ mod tests {
             ],
         });
 
-        let user_type_id = checker.analysis_context.type_store.add(user_type);
-        checker.analysis_context.register_symbol(SymbolData {
+        let user_type_id = checker.ctx.type_store.add(user_type);
+        checker.ctx.register_symbol(SymbolData {
             name: "User".into(),
-            kind: SymbolKind::Type(user_type_id),
+            ty: user_type_id,
+            kind: SymbolKind::Type { members: vec![] },
             ..Default::default()
         });
 
@@ -565,34 +550,34 @@ mod tests {
             ty: ast::NamedType {
                 name: "User".to_string(),
                 args: None,
-                span: Span::dummy(),
+                loc: Location::dummy(),
             },
             fields: vec![
                 ast::StructLiteralField {
                     prop: "name".to_string(),
                     value: ast::Expression::StringLiteral(ast::StringLiteral {
-                        span: Span::new(0, 1),
+                        loc: Location::dummy(),
                         text: "John".into(),
                     }),
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 },
                 ast::StructLiteralField {
                     prop: "age".to_string(),
                     value: ast::Expression::NumberLiteral(ast::NumberLiteral {
                         value: ordered_float::OrderedFloat(30.0),
-                        span: Span::dummy(),
+                        loc: Location::dummy(),
                     }),
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 },
             ],
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_struct_literal(&struct_literal);
         let result_resolved = checker.resolve(result);
 
         assert!(matches!(
-            *result_resolved,
+            result_resolved,
             types::Type::Struct(types::StructType { .. })
         ));
         assert!(checker.errors.is_empty());
@@ -600,30 +585,33 @@ mod tests {
 
     #[test]
     fn test_visit_variant_literal_valid() {
-        let mut checker = TypeCheckerBuilder::new().build();
-
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
         // Define a sum type with variants
         let enum_type = types::Type::Enum(types::EnumType {
-            id: checker.analysis_context.type_store.get_next_id(),
+            id: checker.ctx.type_store.get_next_id(),
             variants: vec![
                 Variant {
                     name: "Circle".to_string(),
-                    def: checker.analysis_context.type_store.add(types::Type::Struct(
-                        types::StructType {
-                            id: checker.analysis_context.type_store.get_next_id(),
+                    def: checker
+                        .ctx
+                        .type_store
+                        .add(types::Type::Struct(types::StructType {
+                            id: checker.ctx.type_store.get_next_id(),
                             fields: vec![StructField {
                                 name: "radius".to_string(),
                                 def: TypeStore::NUMBER,
                                 optional: false,
                             }],
-                        },
-                    )),
+                        })),
                 },
                 Variant {
                     name: "Rectangle".to_string(),
-                    def: checker.analysis_context.type_store.add(types::Type::Struct(
-                        types::StructType {
-                            id: checker.analysis_context.type_store.get_next_id(),
+                    def: checker
+                        .ctx
+                        .type_store
+                        .add(types::Type::Struct(types::StructType {
+                            id: checker.ctx.type_store.get_next_id(),
                             fields: vec![
                                 StructField {
                                     name: "width".to_string(),
@@ -636,16 +624,16 @@ mod tests {
                                     optional: false,
                                 },
                             ],
-                        },
-                    )),
+                        })),
                 },
             ],
         });
 
-        let shape_type_id = checker.analysis_context.type_store.add(enum_type);
-        checker.analysis_context.register_symbol(SymbolData {
+        let shape_type_id = checker.ctx.type_store.add(enum_type);
+        checker.ctx.register_symbol(SymbolData {
             name: "Shape".into(),
-            kind: SymbolKind::Type(shape_type_id),
+            ty: shape_type_id,
+            kind: SymbolKind::Type { members: vec![] },
             ..Default::default()
         });
 
@@ -654,7 +642,7 @@ mod tests {
             ty: ast::NamedType {
                 name: "Shape".to_string(),
                 args: None,
-                span: Span::dummy(),
+                loc: Location::dummy(),
             },
             name: "Circle".to_string(),
             body: Some(ast::VariantLiteralBody::Struct(vec![
@@ -662,12 +650,12 @@ mod tests {
                     prop: "radius".to_string(),
                     value: ast::Expression::NumberLiteral(ast::NumberLiteral {
                         value: ordered_float::OrderedFloat(10.0),
-                        span: Span::dummy(),
+                        loc: Location::dummy(),
                     }),
-                    span: Span::dummy(),
+                    loc: Location::dummy(),
                 },
             ])),
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_variant_literal(&variant_literal);

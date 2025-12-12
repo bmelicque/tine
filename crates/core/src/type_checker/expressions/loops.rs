@@ -10,7 +10,7 @@ use crate::{
 
 use super::TypeChecker;
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_loop(&mut self, node: &ast::Loop) -> TypeId {
         match node {
             ast::Loop::For(node) => self.visit_for_expression(node),
@@ -20,32 +20,30 @@ impl TypeChecker {
 
     fn visit_for_expression(&mut self, node: &ast::ForExpression) -> TypeId {
         self.visit_condition(&node.condition);
-        let ty = self.with_scope(node.span, |checker| checker.visit_loop_body(&node.body));
+        let ty = self.with_scope(|checker| checker.visit_loop_body(&node.body));
 
-        self.analysis_context.save_expression_type(node.span, ty)
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_for_in_expression(&mut self, node: &ast::ForInExpression) -> TypeId {
         let (inferred_type, dependencies) = self.visit_for_in_iterable(&node.iterable);
-        let ty = self.with_scope(node.span, |checker| {
+        let ty = self.with_scope(|checker| {
             let mut variables = TokenList::new();
             checker.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
             for (name, ty) in variables.0 {
-                let symbol = checker.analysis_context.register_symbol(SymbolData {
+                checker.ctx.register_symbol(SymbolData {
                     name: name.as_str().into(),
-                    kind: SymbolKind::constant(ty),
-                    defined_at: node.pattern.as_span(),
+                    ty,
+                    kind: SymbolKind::constant(),
+                    defined_at: node.pattern.loc(),
                     dependencies: dependencies.clone(),
                     ..Default::default()
                 });
-                checker
-                    .analysis_context
-                    .save_symbol_token(name.span, symbol);
             }
             checker.visit_loop_body(&node.body)
         });
 
-        self.analysis_context.save_expression_type(node.span, ty)
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_for_in_iterable(&mut self, iterable: &ast::Expression) -> (TypeId, Vec<SymbolRef>) {
@@ -54,7 +52,7 @@ impl TypeChecker {
             match checker.resolve(ty) {
                 types::Type::Array(ty) => ty.element,
                 ty => {
-                    checker.error(format!("Type {} is not iterable", ty), iterable.as_span());
+                    checker.error(format!("Type {} is not iterable", ty), iterable.loc());
                     TypeStore::UNKNOWN
                 }
             }
@@ -74,10 +72,10 @@ impl TypeChecker {
 
         for stmt in breaks.iter().skip(1) {
             let curr = self.break_type(stmt);
-            self.check_assigned_type(ty, curr, stmt.span);
+            self.check_assigned_type(ty, curr, stmt.loc);
         }
 
-        self.analysis_context
+        self.ctx
             .type_store
             .add(Type::Option(OptionType { some: ty }))
     }
@@ -85,7 +83,7 @@ impl TypeChecker {
     fn break_type(&mut self, stmt: &ast::BreakStatement) -> TypeId {
         stmt.value
             .as_ref()
-            .map(|expr| self.get_type_at(expr.as_span()).unwrap())
+            .map(|expr| self.get_type_at(expr.loc()).unwrap())
             .unwrap_or(TypeStore::UNIT)
     }
 }

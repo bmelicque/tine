@@ -7,7 +7,7 @@ use crate::{
 
 impl ParserEngine {
     pub fn parse_binary_ltr_expression(&mut self, pair: Pair<'_, Rule>) -> ast::Expression {
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let Some(next) = inner.next() else {
             return ast::Expression::Empty;
@@ -17,23 +17,26 @@ impl ParserEngine {
         let mut is_binary = false;
         while let Some(op_pair) = inner.next() {
             if !is_binary && left.is_empty() {
-                self.error("Expression expected".to_string(), op_pair.as_span().into());
+                let loc = self.localize(op_pair.as_span());
+                self.error("Expression expected".to_string(), loc);
             }
             is_binary = true;
             let operator = op_pair.as_str().to_string();
 
             let Some(right_pair) = inner.next() else {
-                self.error("Expression expected".to_string(), op_pair.as_span().into());
+                let loc = self.localize(op_pair.as_span());
+                self.error("Expression expected".to_string(), loc);
                 continue;
             };
 
             let right = self.parse_expression(right_pair);
             if right.is_empty() {
-                self.error("Expression expected".to_string(), op_pair.as_span().into());
+                let loc = self.localize(op_pair.as_span());
+                self.error("Expression expected".to_string(), loc);
             }
 
             left = ast::BinaryExpression {
-                span,
+                loc,
                 left: Box::new(left),
                 operator: operator.into(),
                 right: Box::new(right),
@@ -56,7 +59,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 

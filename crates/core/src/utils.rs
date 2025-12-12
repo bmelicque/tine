@@ -1,9 +1,9 @@
 use crate::{analyzer::Source, parser::parser::ParseError};
 
 pub fn pretty_print_error(src: &Source, error: &ParseError) {
-    let span = &error.span;
-    let start_pos = span.start();
-    let end_pos = span.end();
+    let loc = &error.loc;
+    let start_pos = loc.span().start();
+    let end_pos = loc.span().end();
 
     let (start_line, start_col) = src.line_col(start_pos);
     let line_text = src.read_line(start_line);

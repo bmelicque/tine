@@ -4,7 +4,7 @@ use crate::{
     types::{ListenerType, ReferenceType, SignalType, Type, TypeId},
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_unary_expression(&mut self, node: &ast::UnaryExpression) -> TypeId {
         match node.operator {
             ast::UnaryOperator::Ampersand => self.visit_reference(node),
@@ -24,80 +24,74 @@ impl TypeChecker {
             Type::Signal(s) => s.inner,
             Type::Unknown => TypeStore::UNKNOWN,
             ty => {
-                self.error(format!("Cannot dereference type {}", *ty), node.span);
+                self.error(format!("Cannot dereference type {}", ty), node.loc);
                 TypeStore::UNKNOWN
             }
         };
-        self.analysis_context.save_expression_type(node.span, ty)
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_signal_expression(&mut self, node: &ast::UnaryExpression) -> TypeId {
         let inner = self.visit_expression(&node.operand);
-        let ty = self
-            .analysis_context
-            .type_store
-            .add(Type::Signal(SignalType { inner }));
-        self.analysis_context.save_expression_type(node.span, ty)
+        let ty = self.ctx.type_store.add(Type::Signal(SignalType { inner }));
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_listener(&mut self, node: &ast::UnaryExpression) -> TypeId {
         let (expr_type, deps) = self.with_dependencies(|s| s.visit_expression(&node.operand));
-        let count = self.save_reactive_dependencies(&deps, node.span);
+        let count = self.save_reactive_dependencies(&deps, node.loc);
         if count == 0 {
             self.error(
                 "Expected reactive values in listened expression".to_string(),
-                node.operand.as_span(),
+                node.operand.loc(),
             );
         }
-        self.analysis_context.add_dependencies(deps);
+        self.ctx.add_dependencies(deps);
         if let ast::Expression::Identifier(id) = node.operand.as_ref() {
-            if let Some(info) = self.analysis_context.lookup_mut(&id.as_str()) {
-                info.add_readonly_ref();
-                info.remove_read(); // previous visit_expression added a read
+            if let Some(info) = self.ctx.lookup_mut(&id.as_str()) {
+                info.reference(id.loc);
             };
         }
 
         let ty = self
-            .analysis_context
+            .ctx
             .type_store
             .add(Type::Listener(ListenerType { inner: expr_type }));
-        self.analysis_context.save_expression_type(node.span, ty)
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_reference(&mut self, node: &ast::UnaryExpression) -> TypeId {
         let expr_type = self.visit_expression(&node.operand);
         if let ast::Expression::Identifier(id) = node.operand.as_ref() {
-            if let Some(info) = self.analysis_context.lookup_mut(&id.as_str()) {
+            if let Some(info) = self.ctx.lookup_mut(&id.as_str()) {
                 if !info.is_mutable() {
                     let error_message = format!(
                         "Cannot take mutable reference of immutable variable '{}'",
                         id.as_str()
                     );
-                    self.error(error_message, node.span);
+                    self.error(error_message, node.loc);
                 } else {
-                    info.add_mutable_ref();
-                    info.remove_read(); // previous visit_expression added a read
+                    info.read_to_mutable_ref(id.loc);
                 }
             };
         } else if let Some(id) = root_identifier(&node.operand) {
-            if let Some(info) = self.analysis_context.lookup_mut(&id.as_str()) {
+            if let Some(info) = self.ctx.lookup_mut(&id.as_str()) {
                 if !info.is_mutable() {
                     self.error(
                         format!("Cannot assign to immutable variable '{}'", id.as_str()),
-                        node.span,
+                        node.loc,
                     );
                 } else {
-                    info.add_write();
-                    info.remove_read(); // previous visit_expression added a read
+                    info.read_to_write(id.loc);
                 }
             };
         };
 
         let ty = self
-            .analysis_context
+            .ctx
             .type_store
             .add(Type::Reference(ReferenceType { target: expr_type }));
-        self.analysis_context.save_expression_type(node.span, ty)
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_negate_expresion(&mut self, node: &ast::UnaryExpression) -> TypeId {
@@ -106,13 +100,10 @@ impl TypeChecker {
             operand => self.visit_expression(operand),
         };
         if expr_type != TypeStore::NUMBER && expr_type != TypeStore::UNKNOWN {
-            self.error("expected number".into(), node.operand.as_span());
-            return self
-                .analysis_context
-                .save_expression_type(node.span, TypeStore::UNKNOWN);
+            self.error("expected number".into(), node.operand.loc());
+            return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
         }
-        self.analysis_context
-            .save_expression_type(node.span, TypeStore::NUMBER)
+        self.ctx.save_expression_type(node.loc, TypeStore::NUMBER)
     }
 
     fn visit_logical_not_expresion(&mut self, node: &ast::UnaryExpression) -> TypeId {
@@ -121,12 +112,9 @@ impl TypeChecker {
             operand => self.visit_expression(operand),
         };
         if expr_type != TypeStore::BOOLEAN && expr_type != TypeStore::UNKNOWN {
-            self.error("expected boolean".into(), node.operand.as_span());
-            return self
-                .analysis_context
-                .save_expression_type(node.span, TypeStore::UNKNOWN);
+            self.error("expected boolean".into(), node.operand.loc());
+            return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
         }
-        self.analysis_context
-            .save_expression_type(node.span, TypeStore::BOOLEAN)
+        self.ctx.save_expression_type(node.loc, TypeStore::BOOLEAN)
     }
 }

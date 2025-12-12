@@ -58,3 +58,43 @@ pub struct Location {
     module: ModuleId,
     span: Span,
 }
+
+impl Location {
+    pub fn new(module: ModuleId, span: Span) -> Self {
+        Self { module, span }
+    }
+
+    pub fn dummy() -> Self {
+        Self {
+            module: 0,
+            span: Span::dummy(),
+        }
+    }
+
+    pub fn merge(first: Self, second: Self) -> Self {
+        if first.module != second.module {
+            panic!()
+        }
+        let span = Span::merge(first.span, second.span);
+        Self {
+            module: first.module,
+            span,
+        }
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
+    pub fn is_within(&self, test: Self) -> bool {
+        self.module == test.module && self.span.is_within(test.span)
+    }
+
+    pub fn increment(&self) -> Location {
+        let span = self.span.increment();
+        Location {
+            module: self.module,
+            span,
+        }
+    }
+}

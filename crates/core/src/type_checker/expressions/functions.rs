@@ -5,32 +5,30 @@ use crate::{
     SymbolData, SymbolKind,
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_function_expression(&mut self, node: &ast::FunctionExpression) -> TypeId {
-        let (params, return_type) = self.with_scope(node.span, |s| {
+        let (params, return_type) = self.with_scope(|s| {
             let param_types = s.visit_function_params(&node);
             let body_type = s.visit_function_body(&node.body);
             (param_types, body_type)
         });
 
-        let ty = self
-            .analysis_context
-            .type_store
-            .add(Type::Function(FunctionType {
-                params,
-                return_type,
-            }));
-        self.analysis_context.save_expression_type(node.span, ty)
+        let ty = self.ctx.type_store.add(Type::Function(FunctionType {
+            params,
+            return_type,
+        }));
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_function_params(&mut self, node: &ast::FunctionExpression) -> Vec<TypeId> {
         let mut param_types = Vec::with_capacity(node.params.len());
         for param in node.params.iter() {
             let ty = self.visit_type(&param.type_annotation);
-            self.analysis_context.register_symbol(SymbolData {
+            self.ctx.register_symbol(SymbolData {
                 name: param.name.as_str().into(),
-                kind: SymbolKind::constant(ty),
-                defined_at: param.name.span,
+                ty,
+                kind: SymbolKind::constant(),
+                defined_at: param.name.loc,
                 ..Default::default()
             });
             param_types.push(ty);
@@ -61,16 +59,16 @@ impl TypeChecker {
         if returns.len() == 0 && expected != TypeStore::UNIT {
             self.error(
                 "A function with return annotation needs a return value".into(),
-                body.block.span,
+                body.block.loc,
             );
         }
 
         for ret in returns {
             let ty = match ret.value {
-                Some(value) => self.get_type_at(value.as_span()).unwrap(),
+                Some(value) => self.get_type_at(value.loc()).unwrap(),
                 None => TypeStore::UNIT,
             };
-            self.check_assigned_type(expected, ty, ret.span);
+            self.check_assigned_type(expected, ty, ret.loc);
         }
     }
 }

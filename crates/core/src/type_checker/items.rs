@@ -1,11 +1,11 @@
 use crate::{
-    analyzer::ModulePath,
-    ast,
+    analyzer::ModuleId,
+    ast::{self, UseTree},
     common::{use_decl_to_paths, ModuleImports},
-    type_checker::{self, CheckData, TypeChecker},
+    type_checker::TypeChecker,
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_item(&mut self, node: &ast::Item) {
         match node {
             ast::Item::Invalid(_) => {}
@@ -27,26 +27,26 @@ impl TypeChecker {
     fn visit_use_virtual_module(&mut self, node: &ast::UseDeclaration) {
         assert_eq!(node.relative_count, 0);
         let module_name = node.tree.path[0].as_str();
-        let Some(metadata) = self.get_module_data(&ModulePath::Virtual(module_name.into())) else {
-            panic!("Unexpected virtual module '{}'", module_name);
+        let Some(module_id) = self.session.get_module_id(module_name.into()) else {
+            self.error(format!("Cannot find module '{}'", module_name), node.loc);
+            return;
         };
-        let metadata = metadata.clone();
         let subtree = ast::UseTree {
             path: node.tree.path.iter().skip(1).cloned().collect(),
             sub_trees: node.tree.sub_trees.clone(),
         };
         if subtree.path.len() > 0 {
-            self.visit_imported_name(&subtree, &metadata);
+            self.visit_imported_name(module_id, &subtree);
         } else {
-            for tree in subtree.sub_trees {
-                self.visit_imported_name(&tree, &metadata);
+            for tree in &subtree.sub_trees {
+                self.visit_imported_name(module_id, tree);
             }
         }
     }
 
     fn visit_use_real_modules(&mut self, node: &ast::UseDeclaration) {
         assert_eq!(node.relative_count, 0);
-        let base_path = self.get_file_name().unwrap();
+        let base_path = self.get_file_name();
         let imports = use_decl_to_paths(&base_path, node);
         for import in imports {
             self.visit_module_imports(import);
@@ -58,48 +58,33 @@ impl TypeChecker {
     /// For example, `use Module.(a, b.c)` will visit import trees `a` and `b.c` from module `Module`
     fn visit_module_imports(&mut self, imports: ModuleImports) {
         let module_name = imports.module_name;
-        let Some(check_data) = self.get_module_data(&module_name) else {
+        let Some(module_id) = self.session.get_module_id(module_name.clone()) else {
             panic!("Cannot find module '{}' within parsed modules", module_name)
         };
-        let check_data = check_data.clone();
         for subtree in &imports.import_tree {
-            self.visit_imported_name(&subtree, &check_data);
+            self.visit_imported_name(module_id, subtree);
         }
     }
 
     /// Visit an imported element.
     ///
     /// Subvalue imports (like `use Module.value.subvalue`) are not permitted (yet?).
-    fn visit_imported_name(&mut self, tree: &ast::UseTree, metadata: &CheckData) {
+    fn visit_imported_name(&mut self, module: ModuleId, tree: &UseTree) {
         let path_element = &tree.path[0];
         let name = path_element.as_str();
-        let symbol = metadata.exports.iter().find(|s| s.borrow().name == *name);
-        match symbol {
+        match self.session.find_export(module, name) {
             Some(symbol) => {
                 let ty = symbol.borrow().get_type();
-                let symbol = type_checker::SymbolData {
-                    name: name.to_string(),
-                    kind: symbol.borrow().kind.clone(),
-                    docs: symbol.borrow().docs.clone(),
-                    defined_at: path_element.as_span(),
-                    ..Default::default()
-                };
-                let var = self.analysis_context.register_symbol(symbol);
-                self.analysis_context
-                    .save_expression_type(path_element.as_span(), ty);
-                self.analysis_context
-                    .save_symbol_token(path_element.as_span(), var);
+                self.ctx.import(symbol);
+                self.ctx.save_expression_type(path_element.loc(), ty);
             }
             None => self.error(
                 format!("This module has no exported element named '{}'", name),
-                path_element.as_span(),
+                path_element.loc(),
             ),
         };
         if tree.path.len() > 1 || tree.sub_trees.len() > 0 {
-            self.error(
-                "Cannot import subvalues (not implemented yet)".to_string(),
-                tree.as_span(),
-            );
+            self.error("Cannot import subvalues".to_string(), tree.loc());
         }
     }
 }

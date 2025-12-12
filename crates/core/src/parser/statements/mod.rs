@@ -28,25 +28,29 @@ impl ParserEngine {
 
     fn parse_break_statement(&mut self, pair: Pair<'_, Rule>) -> ast::BreakStatement {
         assert_eq!(pair.as_rule(), Rule::break_statement);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let value = pair
             .into_inner()
             .next()
             .map(|inner| self.parse_expression(inner))
             .map(Box::new);
 
-        ast::BreakStatement { span, value }
+        ast::BreakStatement { loc, value }
     }
 
     fn parse_method_definition(&mut self, pair: Pair<'_, Rule>) -> ast::MethodDefinition {
         assert_eq!(pair.as_rule(), Rule::method_definition);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let receiver = self.parse_method_receiver(inner.next().unwrap());
-        let name = inner.next().unwrap().as_span().into();
+        let next = inner.next().unwrap();
+        let name = ast::Identifier {
+            loc: self.localize(next.as_span()),
+            text: next.as_str().to_string(),
+        };
         let definition = self.parse_function_expression(inner.next().unwrap());
         ast::MethodDefinition {
-            span,
+            loc,
             receiver,
             name,
             definition,
@@ -55,22 +59,26 @@ impl ParserEngine {
 
     fn parse_method_receiver(&mut self, pair: Pair<'_, Rule>) -> ast::MethodReceiver {
         assert_eq!(pair.as_rule(), Rule::method_receiver);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
-        let name = inner.next().unwrap().as_span().into();
+        let next = inner.next().unwrap();
+        let name = ast::Identifier {
+            loc: self.localize(next.as_span()),
+            text: next.as_str().to_string(),
+        };
         let ty = self.parse_named_type(inner.next().unwrap());
-        ast::MethodReceiver { span, name, ty }
+        ast::MethodReceiver { loc, name, ty }
     }
 
     fn parse_return_statement(&mut self, pair: Pair<'_, Rule>) -> ast::ReturnStatement {
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let value = pair
             .into_inner()
             .next()
             .map(|inner| self.parse_expression(inner))
             .map(Box::new);
 
-        ast::ReturnStatement { span, value }
+        ast::ReturnStatement { loc, value }
     }
 
     fn parse_expression_statement(&mut self, pair: Pair<'_, Rule>) -> ast::Statement {
@@ -102,7 +110,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_statement(pair)
     }
 

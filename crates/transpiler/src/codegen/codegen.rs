@@ -128,7 +128,7 @@ impl CodeGenerator {
     }
 
     pub fn get_expr_type(&self, node: &ast::Expression) -> Option<types::Type> {
-        let type_id = self.module.metadata.expressions.get(&node.as_span());
+        let type_id = self.module.metadata.expressions.get(&node.loc());
         type_id
             .map(|id| self.module.metadata.type_store.get(*id))
             .cloned()

@@ -18,12 +18,12 @@ impl ParserEngine {
 
     fn parse_for_expression(&mut self, pair: Pair<'_, Rule>) -> ast::ForExpression {
         assert_eq!(pair.as_rule(), Rule::for_expression);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let condition = Box::new(self.parse_expression(inner.next().unwrap()));
         let body = self.parse_block(inner.next().unwrap());
         ast::ForExpression {
-            span,
+            loc,
             condition,
             body,
         }
@@ -31,13 +31,13 @@ impl ParserEngine {
 
     fn parse_for_in_expression(&mut self, pair: Pair<'_, Rule>) -> ast::ForInExpression {
         assert_eq!(pair.as_rule(), Rule::for_in_expression);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
         let iterable = Box::new(self.parse_expression(inner.next().unwrap()));
         let body = self.parse_block(inner.next().unwrap());
         ast::ForInExpression {
-            span,
+            loc,
             pattern,
             iterable,
             body,

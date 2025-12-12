@@ -8,12 +8,12 @@ use crate::{
 impl ParserEngine {
     pub fn parse_tuple_expression(&mut self, pair: Pair<'_, Rule>) -> ast::TupleExpression {
         assert_eq!(pair.as_rule(), Rule::tuple_expression);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let elements = pair
             .into_inner()
             .map(|pair| self.parse_expression(pair))
             .collect();
-        ast::TupleExpression { span, elements }
+        ast::TupleExpression { loc, elements }
     }
 }
 
@@ -28,7 +28,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 

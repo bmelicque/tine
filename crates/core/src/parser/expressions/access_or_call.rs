@@ -2,8 +2,8 @@ use pest::iterators::Pair;
 
 use crate::{
     ast,
-    locations::Span,
     parser::{parser::Rule, ParserEngine},
+    Location,
 };
 
 impl ParserEngine {
@@ -28,13 +28,13 @@ impl ParserEngine {
         root: ast::Expression,
         right_pair: Pair<'_, Rule>,
     ) -> ast::CallExpression {
-        let right_span = right_pair.as_span().into();
-        let left_span = root.as_span();
-        let span = Span::merge(left_span, right_span);
+        let right_loc = self.localize(right_pair.as_span());
+        let left_loc = root.loc();
+        let loc = Location::merge(left_loc, right_loc);
 
         let args = self.parse_call_arguments(right_pair);
         ast::CallExpression {
-            span,
+            loc,
             callee: Box::new(root),
             args,
         }
@@ -64,17 +64,17 @@ impl ParserEngine {
         right_pair: Pair<'_, Rule>,
     ) -> ast::MemberExpression {
         debug_assert_eq!(right_pair.as_rule(), Rule::member_suffix);
-        let right_span = right_pair.as_span().into();
-        let left_span = root.as_span();
-        let span = Span::merge(left_span, right_span);
+        let right_loc = self.localize(right_pair.as_span());
+        let left_loc = root.loc();
+        let loc = Location::merge(left_loc, right_loc);
 
         let Some(right_pair) = right_pair.into_inner().next() else {
             self.error(
                 "expected field name or integer".into(),
-                right_span.increment(),
+                right_loc.increment(),
             );
             return ast::MemberExpression {
-                span,
+                loc,
                 object: Box::new(root),
                 prop: None,
             };
@@ -82,12 +82,12 @@ impl ParserEngine {
 
         match right_pair.as_rule() {
             Rule::value_identifier => ast::MemberExpression {
-                span,
+                loc,
                 object: Box::new(root),
                 prop: Some(self.parse_identifier(right_pair).into()),
             },
             Rule::integer => ast::MemberExpression {
-                span,
+                loc,
                 object: Box::new(root),
                 prop: Some(self.parse_number_literal(right_pair).into()),
             },
@@ -107,7 +107,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 

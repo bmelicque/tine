@@ -8,8 +8,9 @@ use crate::{
 impl ParserEngine {
     pub fn parse_identifier(&mut self, pair: Pair<'_, Rule>) -> ast::Identifier {
         assert_eq!(pair.as_rule(), Rule::value_identifier);
+        let loc = self.localize(pair.as_span());
         ast::Identifier {
-            span: pair.as_span().into(),
+            loc,
             text: pair.as_str().to_string(),
         }
     }
@@ -26,7 +27,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 

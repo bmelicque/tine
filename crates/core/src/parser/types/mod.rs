@@ -28,17 +28,17 @@ impl ParserEngine {
 
     fn parse_tuple_type(&mut self, pair: Pair<'_, Rule>) -> ast::TupleType {
         assert!(pair.as_rule() == Rule::tuple_type);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let elements = pair
             .into_inner()
             .map(|pair| self.parse_type(pair))
             .collect();
-        return ast::TupleType { span, elements };
+        return ast::TupleType { loc, elements };
     }
 
     pub fn parse_map_type(&mut self, pair: Pair<'_, Rule>) -> ast::MapType {
         assert!(pair.as_rule() == Rule::map_type);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut key = None;
         let mut value = None;
 
@@ -58,12 +58,12 @@ impl ParserEngine {
             }
         }
 
-        ast::MapType { span, key, value }
+        ast::MapType { loc, key, value }
     }
 
     fn parse_result_type(&mut self, pair: Pair<'_, Rule>) -> ast::ResultType {
         assert!(pair.as_rule() == Rule::result_type);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut ok = None;
         let mut error = None;
 
@@ -83,12 +83,12 @@ impl ParserEngine {
             }
         }
 
-        ast::ResultType { span, error, ok }
+        ast::ResultType { loc, error, ok }
     }
 
     pub fn parse_named_type_with_args(&mut self, pair: Pair<'_, Rule>) -> ast::NamedType {
         assert!(pair.as_rule() == Rule::generic_type);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
 
         let mut inner = pair.into_inner();
         let name = inner.next().unwrap().as_str().into();
@@ -99,12 +99,13 @@ impl ParserEngine {
         }
         let args = if args.len() > 0 { Some(args) } else { None };
 
-        ast::NamedType { span, name, args }
+        ast::NamedType { loc, name, args }
     }
 
     pub fn parse_named_type(&mut self, pair: Pair<'_, Rule>) -> ast::NamedType {
+        let loc = self.localize(pair.as_span());
         ast::NamedType {
-            span: pair.as_span().into(),
+            loc,
             name: pair.as_str().into(),
             args: None,
         }
@@ -112,7 +113,7 @@ impl ParserEngine {
 
     fn parse_function_type(&mut self, pair: Pair<'_, Rule>) -> ast::FunctionType {
         assert!(pair.as_rule() == Rule::function_type);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let params = inner
@@ -125,7 +126,7 @@ impl ParserEngine {
         let returned = Box::new(self.parse_type(inner.next().unwrap()));
 
         ast::FunctionType {
-            span,
+            loc,
             params,
             returned,
         }
@@ -143,7 +144,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_type(pair)
     }
 

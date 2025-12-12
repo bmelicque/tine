@@ -121,7 +121,7 @@ impl CodeGenerator {
             return self.expr_to_swc(child);
         }
 
-        let dependencies = swc::Expr::Array(self.listener_deps_to_swc_array(child.as_span()));
+        let dependencies = swc::Expr::Array(self.listener_deps_to_swc_array(child.loc()));
         let getter = self.reactive_to_swc_getter(child);
 
         swc::Expr::New(swc::NewExpr {

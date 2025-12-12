@@ -8,12 +8,12 @@ use crate::{
 impl ParserEngine {
     pub fn parse_unary_expression(&mut self, pair: Pair<'_, Rule>) -> ast::UnaryExpression {
         assert!(pair.as_rule() == Rule::unary);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let operator = self.parse_unary_operator(inner.next().unwrap());
         let operand = Box::new(self.parse_expression(inner.next().unwrap()));
         ast::UnaryExpression {
-            span,
+            loc,
             operator,
             operand,
         }
@@ -31,7 +31,7 @@ impl ParserEngine {
             op => {
                 self.error(
                     format!("Unknown unary operator: {}", op),
-                    pair.as_span().into(),
+                    self.localize(pair.as_span()),
                 );
                 ast::UnaryOperator::Star
             }
@@ -50,7 +50,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 

@@ -51,13 +51,13 @@ impl ParserEngine {
             Rule::tuple_expression => self.parse_tuple_expression(pair).into(),
             Rule::unary => self.parse_unary_expression(pair).into(),
             Rule::string_literal => ast::StringLiteral {
-                span: pair.as_span().into(),
+                loc: self.localize(pair.as_span()),
                 text: pair.as_str().to_string(),
             }
             .into(),
             Rule::number_literal => self.parse_number_literal(pair).into(),
             Rule::boolean_literal => ast::BooleanLiteral {
-                span: pair.as_span().into(),
+                loc: self.localize(pair.as_span()),
                 value: pair.as_str() == "true",
             }
             .into(),
@@ -80,8 +80,9 @@ impl ParserEngine {
     }
 
     fn parse_number_literal(&mut self, pair: Pair<'_, Rule>) -> ast::NumberLiteral {
+        let loc = self.localize(pair.as_span());
         ast::NumberLiteral {
-            span: pair.as_span().into(),
+            loc,
             value: pair
                 .as_str()
                 .parse()
@@ -91,7 +92,7 @@ impl ParserEngine {
 
     fn parse_match_expression(&mut self, pair: Pair<'_, Rule>) -> ast::MatchExpression {
         assert!(pair.as_rule() == Rule::match_expression);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let scrutinee = Box::new(self.parse_expression(inner.next().unwrap()));
         let arms = inner
@@ -101,7 +102,7 @@ impl ParserEngine {
             .map(|arm| self.parse_match_arm(arm))
             .collect();
         ast::MatchExpression {
-            span,
+            loc,
             scrutinee,
             arms,
         }
@@ -109,12 +110,12 @@ impl ParserEngine {
 
     fn parse_match_arm(&mut self, pair: Pair<'_, Rule>) -> ast::MatchArm {
         assert!(pair.as_rule() == Rule::match_arm);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
         let expression = Box::new(self.parse_expression(inner.next().unwrap()));
         ast::MatchArm {
-            span,
+            loc,
             pattern,
             expression,
         }
@@ -132,7 +133,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 

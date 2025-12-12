@@ -10,7 +10,7 @@ use super::ParserEngine;
 impl ParserEngine {
     pub fn parse_type_alias(&mut self, pair: Pair<'_, Rule>) -> ast::TypeAlias {
         assert!(pair.as_rule() == Rule::type_alias);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let name = inner.next().unwrap().as_str().to_string();
@@ -32,7 +32,7 @@ impl ParserEngine {
         }
 
         ast::TypeAlias {
-            span,
+            loc,
             name,
             params,
             op: op.unwrap(),
@@ -48,10 +48,9 @@ impl ParserEngine {
         for param_pair in inner {
             let param_name = self.parse_type_param(&param_pair);
             if !type_param_names.insert(param_name.clone()) {
-                self.error(
-                    format!("Duplicate type parameter name '{}'", param_name),
-                    param_pair.as_span().into(),
-                );
+                let message = format!("Duplicate type parameter name '{}'", param_name);
+                let loc = self.localize(param_pair.as_span());
+                self.error(message, loc);
             }
             type_params.push(param_name);
         }
@@ -66,7 +65,8 @@ impl ParserEngine {
                 "Type parameter name '{}' should be in Pascal case",
                 param_name
             );
-            self.error(message, pair.as_span().into());
+            let loc = self.localize(pair.as_span());
+            self.error(message, loc);
         }
         param_name
     }
@@ -83,7 +83,7 @@ impl ParserEngine {
 
     fn parse_struct_body(&mut self, pair: Pair<'_, Rule>) -> ast::StructDefinition {
         assert_eq!(pair.as_rule(), Rule::struct_body);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
 
         let fields: Vec<ast::StructDefinitionField> = pair
             .into_inner()
@@ -95,12 +95,12 @@ impl ParserEngine {
             if !field_names.insert(field.as_name()) {
                 self.error(
                     format!("Duplicate field name '{}'", field.as_name()),
-                    field.as_span(),
+                    field.loc(),
                 );
             }
         });
 
-        ast::StructDefinition { span, fields }
+        ast::StructDefinition { loc, fields }
     }
 
     fn parse_struct_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructDefinitionField {
@@ -116,14 +116,14 @@ impl ParserEngine {
 
     fn parse_mandatory_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructMandatoryField {
         assert_eq!(pair.as_rule(), Rule::mandatory_field);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let name = inner.next().unwrap().as_str().to_string();
         let definition = self.parse_type(inner.next().unwrap());
 
         ast::StructMandatoryField {
-            span,
+            loc,
             name,
             definition,
         }
@@ -131,21 +131,17 @@ impl ParserEngine {
 
     fn parse_optionnal_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructOptionalField {
         assert_eq!(pair.as_rule(), Rule::mandatory_field);
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let name = inner.next().unwrap().as_str().to_string();
         let default = self.parse_expression(inner.next().unwrap());
 
-        ast::StructOptionalField {
-            span,
-            name,
-            default,
-        }
+        ast::StructOptionalField { loc, name, default }
     }
 
     pub fn parse_enum_definition(&mut self, pair: Pair<'_, Rule>) -> EnumDefinition {
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
 
         let variants: Vec<ast::VariantDefinition> = pair
             .into_inner()
@@ -157,34 +153,34 @@ impl ParserEngine {
             if !variant_names.insert(variant.as_name()) {
                 self.error(
                     format!("Duplicate constructor name '{}'", variant.as_name()),
-                    span,
+                    loc,
                 );
             }
         }
 
-        ast::EnumDefinition { span, variants }
+        ast::EnumDefinition { loc, variants }
     }
 
     fn parse_variant_definition(&mut self, pair: Pair<'_, Rule>) -> ast::VariantDefinition {
-        let span = pair.as_span().into();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let name = inner.next().unwrap().as_str().to_string();
 
         let Some(body) = inner.next() else {
-            return ast::UnitVariant { span, name }.into();
+            return ast::UnitVariant { loc, name }.into();
         };
 
         match body.as_rule() {
             // TODO: parse multiple elements
             Rule::sum_param => ast::TupleVariant {
-                span,
+                loc,
                 name,
                 elements: vec![self.parse_type(body)],
             }
             .into(),
             Rule::struct_body => ast::StructVariant {
-                span,
+                loc,
                 name,
                 def: self.parse_struct_body(body),
             }
@@ -208,7 +204,7 @@ mod tests {
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         (parser_engine.parse_type_alias(pair), parser_engine.errors)
     }
 

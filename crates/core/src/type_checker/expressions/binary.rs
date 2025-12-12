@@ -1,11 +1,11 @@
 use crate::{
     ast,
-    locations::Span,
     type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
     types::TypeId,
+    Location,
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_binary_expression(&mut self, node: &ast::BinaryExpression) -> TypeId {
         let left_type = self.visit_expression(&node.left);
         let right_type = self.visit_expression(&node.right);
@@ -22,10 +22,10 @@ impl TypeChecker {
             | ast::BinaryOperator::Leq
             | ast::BinaryOperator::Less => {
                 if left_type != TypeStore::UNKNOWN && left_type != TypeStore::NUMBER {
-                    self.push_binary_error(node.operator, left_type, node.span);
+                    self.push_binary_error(node.operator, left_type, node.loc);
                 };
                 if right_type != TypeStore::UNKNOWN && right_type != TypeStore::NUMBER {
-                    self.push_binary_error(node.operator, right_type, node.span);
+                    self.push_binary_error(node.operator, right_type, node.loc);
                 };
             }
             ast::BinaryOperator::EqEq | ast::BinaryOperator::Neq => {
@@ -37,28 +37,28 @@ impl TypeChecker {
                         "Types '{}' and '{}' cannot be compared",
                         left_type, right_type
                     );
-                    self.error(error, node.span);
+                    self.error(error, node.loc);
                 }
             }
             ast::BinaryOperator::LAnd | ast::BinaryOperator::LOr => {
                 if left_type != TypeStore::UNKNOWN && left_type != TypeStore::BOOLEAN {
-                    self.push_binary_error(node.operator, left_type, node.span);
+                    self.push_binary_error(node.operator, left_type, node.loc);
                 };
                 if right_type != TypeStore::UNKNOWN && right_type != TypeStore::BOOLEAN {
-                    self.push_binary_error(node.operator, right_type, node.span);
+                    self.push_binary_error(node.operator, right_type, node.loc);
                 };
             }
         };
 
-        self.analysis_context
-            .save_expression_type(node.span, get_binary_expression_type(node.operator))
+        self.ctx
+            .save_expression_type(node.loc, get_binary_expression_type(node.operator))
     }
 
-    fn push_binary_error(&mut self, op: ast::BinaryOperator, ty: TypeId, span: Span) {
-        let ty = self.analysis_context.type_store.get(ty);
+    fn push_binary_error(&mut self, op: ast::BinaryOperator, ty: TypeId, loc: Location) {
+        let ty = self.ctx.type_store.get(ty);
         self.error(
             format!("Operator '{}' cannot be applied to type '{}'", op, ty),
-            span,
+            loc,
         )
     }
 }

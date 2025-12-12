@@ -5,51 +5,52 @@ use crate::{
     SymbolData, SymbolKind,
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_if_expression(&mut self, node: &ast::IfExpression) -> TypeId {
         self.visit_condition(&node.condition);
-        let ty = self.with_scope(node.span, |s| s.visit_block_expression(&node.consequent));
+        let ty = self.with_scope(|s| s.visit_block_expression(&node.consequent));
         let ty = if let Some(ref alternate) = node.alternate {
             self.visit_alternate(alternate, ty);
             ty
         } else {
-            self.analysis_context
+            self.ctx
                 .type_store
                 .add(Type::Option(OptionType { some: ty }))
         };
-        self.analysis_context.save_expression_type(node.span, ty)
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     pub fn visit_condition(&mut self, node: &ast::Expression) {
         let condition = self.visit_expression(node);
         if condition != TypeStore::BOOLEAN {
-            let condition = self.analysis_context.type_store.get(condition);
+            let condition = self.ctx.type_store.get(condition);
             self.error(
                 format!("Condition must evaluate to a boolean, got {}", *condition),
-                node.as_span(),
+                node.loc(),
             );
         }
     }
 
     pub fn visit_if_decl_expression(&mut self, node: &ast::IfPatExpression) -> TypeId {
         if !node.pattern.is_refutable() {
-            self.error("Refutable pattern expected".into(), node.pattern.as_span());
+            self.error("Refutable pattern expected".into(), node.pattern.loc());
         };
 
-        let ty = self.with_scope(node.span, |s| {
+        let ty = self.with_scope(|s| {
             let (inferred_type, dependencies) =
                 s.with_dependencies(|s| s.visit_expression(&node.scrutinee));
             let mut variables = TokenList::new();
             s.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
             for (name, ty) in variables.0 {
-                let symbol = s.analysis_context.register_symbol(SymbolData {
+                s.ctx.register_symbol(SymbolData {
                     name: name.as_str().into(),
-                    kind: SymbolKind::constant(ty),
-                    defined_at: node.pattern.as_span(),
+                    ty,
+                    kind: SymbolKind::constant(),
+                    defined_at: node.pattern.loc(),
                     dependencies: dependencies.clone(),
                     ..Default::default()
                 });
-                s.analysis_context.save_symbol_token(name.span, symbol);
+                s.ctx.save_expression_type(name.loc, ty);
             }
             s.visit_block_expression(&node.consequent)
         });
@@ -58,11 +59,11 @@ impl TypeChecker {
             self.visit_alternate(alternate, ty);
             ty
         } else {
-            self.analysis_context
+            self.ctx
                 .type_store
                 .add(Type::Option(OptionType { some: ty }))
         };
-        self.analysis_context.save_expression_type(node.span, ty)
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_alternate(&mut self, alternate: &ast::Alternate, expected: TypeId) {
@@ -72,13 +73,13 @@ impl TypeChecker {
             ast::Alternate::IfDecl(i) => self.visit_if_decl_expression(i),
         };
         if !self.can_be_assigned_to(alt_ty, expected) {
-            let expected = self.analysis_context.type_store.get(expected);
-            let alt_ty = self.analysis_context.type_store.get(alt_ty);
+            let expected = self.ctx.type_store.get(expected);
+            let alt_ty = self.ctx.type_store.get(alt_ty);
             let error = format!(
                 "Branches' types don't match: expected {}, got {}",
                 expected, alt_ty
             );
-            self.error(error, alternate.as_span())
+            self.error(error, alternate.loc())
         }
     }
 }

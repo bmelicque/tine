@@ -7,7 +7,7 @@ mod type_checker;
 pub mod types;
 mod utils;
 
-pub use analyzer::{analyze, CheckedModule, ModulePath, ModuleTypeData, ParsedModule};
+pub use analyzer::{analyze, CheckedModule, ModulePath, ModuleTypeData};
 pub use common::{use_decl_to_paths, ModuleImports};
 pub use locations::{Location, Span};
 pub use parser::ParseError;

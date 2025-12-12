@@ -18,7 +18,7 @@ impl TokenList {
     }
 }
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn match_pattern(
         &mut self,
         pattern: &ast::Pattern,
@@ -37,7 +37,7 @@ impl TypeChecker {
     }
 
     fn match_literal_pattern(&mut self, pattern: &ast::LiteralPattern, against: TypeId) {
-        let against = self.analysis_context.type_store.get(against);
+        let against = self.ctx.type_store.get(against);
         let got = match pattern {
             ast::LiteralPattern::Boolean(_) => types::Type::Boolean,
             ast::LiteralPattern::Number(_) => types::Type::Number,
@@ -46,7 +46,7 @@ impl TypeChecker {
         if *against != types::Type::Unknown && *against != got {
             self.error(
                 format!("Cannot match {} literal against {}", got, *against),
-                pattern.as_span(),
+                pattern.loc(),
             );
         }
     }
@@ -63,17 +63,17 @@ impl TypeChecker {
         against: TypeId,
         variables: &mut TokenList,
     ) {
-        let Some(ty) = self.analysis_context.lookup(&pattern.ty.name) else {
+        let Some(ty) = self.ctx.lookup(&pattern.ty.name) else {
             self.error(
                 format!("cannot find type '{}'", &pattern.ty.name),
-                pattern.ty.span,
+                pattern.ty.loc,
             );
             return;
         };
         let Type::Struct(pattern_type) = self.resolve(ty.borrow().get_type()).clone() else {
             self.error(
                 format!("type '{}' is not a structured type", &pattern.ty.name),
-                pattern.span,
+                pattern.loc,
             );
             return;
         };
@@ -81,7 +81,7 @@ impl TypeChecker {
         let ty = match self.resolve(against) {
             Type::Struct(st) if st.id == pattern_type.id => st.clone(),
             _ => {
-                self.error("pattern doesn't match expected type".into(), pattern.span);
+                self.error("pattern doesn't match expected type".into(), pattern.loc);
                 return;
             }
         };
@@ -106,7 +106,7 @@ impl TypeChecker {
                     field.identifier.as_str(),
                     type_name
                 );
-                self.error(error, field.span);
+                self.error(error, field.loc);
                 continue;
             };
             match field.pattern {
@@ -125,7 +125,7 @@ impl TypeChecker {
         variables: &mut TokenList,
     ) {
         let types::Type::Tuple(ty) = self.resolve(against).clone() else {
-            self.error("Expected tuple type".into(), pattern.span);
+            self.error("Expected tuple type".into(), pattern.loc);
             return;
         };
 
@@ -136,7 +136,7 @@ impl TypeChecker {
                     ty.elements.len(),
                     pattern.elements.len()
                 ),
-                pattern.span,
+                pattern.loc,
             );
         }
 
@@ -159,17 +159,17 @@ impl TypeChecker {
         against: TypeId,
         variables: &mut TokenList,
     ) {
-        let Some(ty) = self.analysis_context.lookup(&pattern.ty.name) else {
+        let Some(ty) = self.ctx.lookup(&pattern.ty.name) else {
             self.error(
                 format!("cannot find type '{}'", &pattern.ty.name),
-                pattern.ty.span,
+                pattern.ty.loc,
             );
             return;
         };
         let Type::Enum(pattern_type) = self.resolve(ty.borrow().get_type()).clone() else {
             self.error(
                 format!("type '{}' is not an enum", &pattern.ty.name),
-                pattern.span,
+                pattern.loc,
             );
             return;
         };
@@ -177,7 +177,7 @@ impl TypeChecker {
         let ty = match self.resolve(against) {
             Type::Enum(e) if e.id == pattern_type.id => e.clone(),
             _ => {
-                self.error("pattern doesn't match expected type".into(), pattern.span);
+                self.error("pattern doesn't match expected type".into(), pattern.loc);
                 return;
             }
         };
@@ -188,7 +188,7 @@ impl TypeChecker {
                     "Variant '{}' does not exist on type {}",
                     pattern.name, pattern.ty.name,
                 ),
-                pattern.span,
+                pattern.loc,
             );
             return;
         };
@@ -196,11 +196,7 @@ impl TypeChecker {
         match self.resolve(variant.def).clone() {
             Type::Struct(ty) => self.match_struct_variant(pattern, &ty.fields, variables),
             Type::Tuple(def) => {
-                let id = self
-                    .analysis_context
-                    .type_store
-                    .find_id(&def.into())
-                    .unwrap();
+                let id = self.ctx.type_store.find_id(&def.into()).unwrap();
                 self.match_tuple_variant(pattern, id, variables)
             }
             Type::Unit => self.match_unit_variant(pattern),
@@ -215,7 +211,7 @@ impl TypeChecker {
         variables: &mut TokenList,
     ) {
         let Some(ast::VariantPatternBody::Struct(body)) = &pattern.body else {
-            self.error("Structured variant expected".to_string(), pattern.span);
+            self.error("Structured variant expected".to_string(), pattern.loc);
             return;
         };
         self.match_struct_pattern_fields(
@@ -233,7 +229,7 @@ impl TypeChecker {
         variables: &mut TokenList,
     ) {
         let Some(ast::VariantPatternBody::Tuple(ref body)) = pattern.body else {
-            self.error("Tuple variant expected".to_string(), pattern.span);
+            self.error("Tuple variant expected".to_string(), pattern.loc);
             return;
         };
         self.match_tuple_pattern(body, def, variables);
@@ -241,10 +237,7 @@ impl TypeChecker {
 
     fn match_unit_variant(&mut self, pattern: &ast::VariantPattern) {
         if pattern.body.is_some() {
-            self.error(
-                "No body expected for unit variant".to_string(),
-                pattern.span,
-            );
+            self.error("No body expected for unit variant".to_string(), pattern.loc);
         }
     }
 }

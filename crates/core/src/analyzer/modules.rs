@@ -1,4 +1,4 @@
-use crate::{ast, locations::Span, ParseError};
+use crate::locations::Span;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ModulePath {
@@ -42,63 +42,9 @@ impl std::fmt::Display for ModulePath {
 pub type ModuleId = usize;
 
 #[derive(Debug, Clone)]
-pub struct ParsedModule {
-    pub(super) id: ModuleId,
+pub struct Module {
     pub name: ModulePath,
     pub src: Source,
-    pub ast: ast::Program,
-    pub errors: Vec<ParseError>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ModuleBuilder {
-    name: Option<ModulePath>,
-    src: Option<Source>,
-    ast: Option<ast::Program>,
-    errors: Vec<ParseError>,
-}
-
-impl ParsedModule {
-    pub(super) fn builder() -> ModuleBuilder {
-        ModuleBuilder {
-            name: None,
-            src: None,
-            ast: None,
-            errors: vec![],
-        }
-    }
-}
-
-impl ModuleBuilder {
-    pub(super) fn name(mut self, path: impl Into<ModulePath>) -> Self {
-        self.name = Some(path.into());
-        self
-    }
-
-    pub(super) fn src(mut self, src: Source) -> Self {
-        self.src = Some(src);
-        self
-    }
-
-    pub(super) fn ast(mut self, program: ast::Program) -> Self {
-        self.ast = Some(program);
-        self
-    }
-
-    pub(super) fn errors(mut self, errors: Vec<ParseError>) -> Self {
-        self.errors.extend(errors);
-        self
-    }
-
-    pub(super) fn build(self) -> ParsedModule {
-        ParsedModule {
-            id: 0,
-            name: self.name.unwrap(),
-            src: self.src.unwrap_or(Source::new("")),
-            ast: self.ast.unwrap_or(ast::Program::dummy()),
-            errors: self.errors,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
