@@ -6,7 +6,7 @@ mod type_check;
 
 use std::path::PathBuf;
 
-pub use modules::{ModuleId, ModulePath, Source};
+pub use modules::{Module, ModuleId, ModulePath, Source};
 pub use type_check::{CheckedModule, ModuleTypeData};
 
 use crate::analyzer::session::Session;

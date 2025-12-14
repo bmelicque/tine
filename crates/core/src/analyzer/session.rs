@@ -1,4 +1,8 @@
-use std::{cell::RefCell, collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Mutex, MutexGuard},
+};
 
 use anyhow::anyhow;
 
@@ -17,7 +21,7 @@ pub struct Session {
     pub(super) module_graph: ModuleGraph,
     /// The parsed AST for each module.
     pub(super) parsed: HashMap<ModuleId, Program>,
-    pub(super) types: RefCell<TypeStore>,
+    pub(super) types: Mutex<TypeStore>,
     pub(super) symbols: Vec<SymbolHandle>,
     /// All symbols exported by each module.
     pub(super) exports: HashMap<ModuleId, Vec<SymbolRef>>,
@@ -36,7 +40,7 @@ impl Session {
             entry_point: ModulePath::Virtual("".into()),
             module_graph: ModuleGraph::new(),
             parsed: HashMap::new(),
-            types: RefCell::new(TypeStore::new()),
+            types: Mutex::new(TypeStore::new()),
             symbols: Vec::new(),
             exports: HashMap::new(),
             expressions: HashMap::new(),
@@ -97,11 +101,11 @@ impl Session {
     }
 
     pub fn intern(&self, ty: Type) -> TypeId {
-        self.types.borrow_mut().add(ty)
+        self.types.lock().unwrap().add(ty)
     }
 
     pub fn get_type(&self, id: TypeId) -> Type {
-        self.types.borrow().get(id).clone()
+        self.types.lock().unwrap().get(id).clone()
     }
 
     pub(super) fn add_expressions(&mut self, exprs: HashMap<Location, TypeId>) {
@@ -116,5 +120,21 @@ impl Session {
         for (loc, deps) in deps {
             self.dependencies.insert(loc, deps);
         }
+    }
+
+    pub fn modules(&self) -> Vec<&Module> {
+        self.module_graph.nodes.iter().collect()
+    }
+
+    pub fn types(&self) -> MutexGuard<'_, TypeStore> {
+        self.types.lock().unwrap()
+    }
+
+    pub fn symbols(&self) -> Vec<SymbolRef> {
+        self.symbols.iter().map(|s| s.readonly()).collect()
+    }
+
+    pub fn diagnostics(&self) -> &HashMap<ModuleId, Vec<ParseError>> {
+        &self.diagnostics
     }
 }

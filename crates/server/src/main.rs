@@ -1,31 +1,29 @@
 mod tokens;
 mod utils;
 
-use dashmap::DashMap;
-use mylang_core::{analyze, CheckedModule, ParseError, TypeStore};
-use mylang_core::{ModulePath, Token};
+use mylang_core::ModulePath;
+use mylang_core::{analyze, ModuleId, ParseError, Session, Source, Span};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::Client;
 use tower_lsp::{lsp_types::*, LspService, Server};
 use url::Url;
 
-use crate::tokens::{display_signature, ServerToken};
-use crate::utils::{normalize_file_url, position_in_range};
+use crate::utils::normalize_file_url;
 
 #[derive(Debug, Clone)]
 pub struct ModuleSummary {
+    pub id: ModuleId,
     pub uri: Url,
-    pub diagnostics: Vec<Diagnostic>,
-    pub tokens: Vec<ServerToken>,
+    pub src: Source,
+    pub diagnostics: Vec<ParseError>,
 }
 
 #[derive(Clone)]
 struct Backend {
     client: Client,
-    type_store: Arc<Mutex<TypeStore>>,
-    analyzed: Arc<DashMap<Url, ModuleSummary>>,
+    session: Arc<RwLock<Session>>,
     semantic_legend: SemanticTokensLegend,
 }
 
@@ -93,11 +91,12 @@ impl tower_lsp::LanguageServer for Backend {
         params: SemanticTokensParams,
     ) -> Result<Option<SemanticTokensResult>> {
         let uri = normalize_file_url(&params.text_document.uri).unwrap();
-        let Some(summary) = self.analyzed.get(&uri) else {
+        let Some(module_id) = self.find_module(&uri) else {
             return Ok(None);
         };
-
-        let data = self.tokens_to_semantic(&summary);
+        let session = self.session.read().unwrap();
+        let src = &session.read_module(module_id).src;
+        let data = self.tokens_to_semantic(module_id, src);
 
         Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
             result_id: None,
@@ -108,40 +107,40 @@ impl tower_lsp::LanguageServer for Backend {
     async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
         let uri = &params.text_document_position_params.text_document.uri;
         let uri = normalize_file_url(uri).unwrap();
-        let Some(summary) = self.analyzed.get(&uri) else {
+        let Some(module_id) = self.find_module(&uri) else {
             return Ok(None);
         };
 
+        let session = self.session.read().unwrap();
+        let src = &session.read_module(module_id).src;
+
         let position = params.text_document_position_params.position;
-        let token = summary
-            .tokens
-            .iter()
-            .find(|t| position_in_range(position, &t.range));
-        let Some(token) = token else { return Ok(None) };
+        for symbol in &session.symbols() {
+            for loc in symbol.uses().iter().filter(|l| l.module() == module_id) {
+                if position_in_span(src, loc.span(), position) {
+                    let type_display = self.display_signature(&symbol.into());
 
-        let type_display = display_signature(
-            &self.type_store.lock().unwrap(),
-            &token.name,
-            token.kind.clone(),
-        );
+                    let docs = symbol.borrow().docs.clone().unwrap_or("".into());
 
-        let docs = token.docs.clone().unwrap_or("".into());
-
-        let contents = HoverContents::Scalar(MarkedString::String(format!(
-            r#"```mylang
+                    let contents = HoverContents::Scalar(MarkedString::String(format!(
+                        r#"```mylang
 {}
 ```
 ---
 
 {}
 "#,
-            type_display, docs
-        )));
+                        type_display, docs
+                    )));
 
-        Ok(Some(Hover {
-            contents,
-            range: Some(token.range),
-        }))
+                    return Ok(Some(Hover {
+                        contents,
+                        range: Some(span_to_range(src, loc.span())),
+                    }));
+                }
+            }
+        }
+        return Ok(None);
     }
 
     async fn shutdown(&self) -> Result<()> {
@@ -157,136 +156,107 @@ impl Backend {
                 SemanticTokenType::TYPE,
                 SemanticTokenType::VARIABLE,
                 SemanticTokenType::FUNCTION,
+                SemanticTokenType::METHOD,
+                SemanticTokenType::ENUM_MEMBER,
+                SemanticTokenType::PROPERTY,
             ],
             token_modifiers: vec![SemanticTokenModifier::READONLY],
         };
         Self {
             semantic_legend,
             client,
-            type_store: Arc::new(Mutex::new(TypeStore::new())),
-            analyzed: Arc::new(DashMap::new()),
+            session: Arc::new(RwLock::new(Session::new())),
         }
     }
 
     async fn run_project_analysis(&self, entry_path: PathBuf) {
         let client = self.client.clone();
-        match get_summary(entry_path) {
-            Ok(summary) => {
-                if let Ok(mut guard) = self.type_store.lock() {
-                    *guard = summary.type_store;
-                }
-                for module in &summary.modules {
-                    self.analyzed
-                        .insert(normalize_file_url(&module.uri).unwrap(), module.clone());
-                    client
-                        .publish_diagnostics(module.uri.clone(), module.diagnostics.clone(), None)
-                        .await;
-                    client
-                        .log_message(
-                            MessageType::INFO,
-                            format!(
-                                "Analysis complete for entry {}, found {} error(s)",
-                                module.uri,
-                                module.diagnostics.len()
-                            ),
-                        )
-                        .await;
-                    let _ = self.client.semantic_tokens_refresh().await;
-                }
-            }
-            Err(err) => {
-                client
-                    .log_message(
-                        MessageType::ERROR,
-                        format!("Analysis task failed: {:?}", err),
-                    )
-                    .await;
-            }
+
+        {
+            let mut session = self.session.write().unwrap();
+            *session = analyze(entry_path);
         }
+
+        let diagnostics = self.get_diagnostics();
+        for (uri, diags, len) in diagnostics {
+            client.publish_diagnostics(uri.clone(), diags, None).await;
+            client
+                .log_message(
+                    MessageType::INFO,
+                    format!(
+                        "Analysis complete for entry {}, found {} error(s)",
+                        uri, len
+                    ),
+                )
+                .await;
+        }
+
+        let _ = client.semantic_tokens_refresh().await;
+    }
+
+    fn get_diagnostics(&self) -> Vec<(Url, Vec<Diagnostic>, usize)> {
+        let session = self.session.read().unwrap();
+        session
+            .diagnostics()
+            .iter()
+            .map(|(&m, diags)| {
+                let module = session.read_module(m);
+                let ModulePath::Real(name) = &module.name else {
+                    return None;
+                };
+
+                let uri = Url::from_file_path(name).unwrap();
+                let len = diags.len();
+                let diags = diags
+                    .iter()
+                    .map(|diag| error_to_lsp(&module.src, diag))
+                    .collect::<Vec<_>>();
+
+                Some((uri, diags, len))
+            })
+            .flatten()
+            .collect::<Vec<_>>()
+    }
+
+    fn find_module(&self, uri: &Url) -> Option<ModuleId> {
+        let session = self.session.read().unwrap();
+        session.modules().iter().position(|m| match &m.name {
+            ModulePath::Real(path) => Url::from_file_path(path).unwrap() == *uri,
+            _ => false,
+        })
     }
 }
 
-pub struct ProjectSummary {
-    pub modules: Vec<ModuleSummary>,
-    pub type_store: TypeStore,
-}
-
-fn get_summary(entry_point: PathBuf) -> anyhow::Result<ProjectSummary, anyhow::Error> {
-    let analyzed_modules = analyze(entry_point)?;
-    let type_store = (*analyzed_modules.modules.last().unwrap().metadata.type_store).clone();
-    let modules = analyzed_modules
-        .modules
-        .into_iter()
-        .filter(|m| matches!(m.name, ModulePath::Real(_)))
-        .map(|m| summarize_module(&m))
-        .collect();
-    Ok(ProjectSummary {
-        modules,
-        type_store,
-    })
-}
-
-fn summarize_module(m: &CheckedModule) -> ModuleSummary {
-    let uri: Url = match &m.name {
-        ModulePath::Real(path) => Url::from_file_path(path).unwrap(),
-        _ => unreachable!(),
-    };
-    let diagnostics = m.errors.iter().map(|e| error_to_lsp(e)).collect();
-
-    let mut tokens = m
-        .metadata
-        .tokens
-        .values()
-        .map(|t| core_token_to_server(t))
-        .collect::<Vec<_>>();
-    tokens.sort_by(|a, b| {
-        let a = a.range.start;
-        let b = b.range.start;
-        (a.line, a.character).cmp(&(b.line, b.character))
-    });
-
-    ModuleSummary {
-        uri,
-        diagnostics,
-        tokens,
+fn position_in_span(src: &Source, span: Span, pos: Position) -> bool {
+    let (start_line, start_col) = src.line_col(span.start());
+    let (start_line, start_col) = (start_line as u32, start_col as u32);
+    let (end_line, end_col) = src.line_col(span.end());
+    let (end_line, end_col) = (end_line as u32, end_col as u32);
+    if start_line > pos.line || end_line < pos.line {
+        return false;
+    }
+    if start_line < pos.line && end_line > pos.line {
+        return false;
+    }
+    if start_line == pos.line {
+        return pos.character >= start_col;
+    } else {
+        return pos.character < end_col;
     }
 }
 
-fn error_to_lsp(e: &ParseError) -> Diagnostic {
+fn error_to_lsp(src: &Source, e: &ParseError) -> Diagnostic {
     Diagnostic {
-        range: span_to_range(e.loc.clone()),
+        range: span_to_range(src, e.loc.span()),
         message: e.message.clone(),
         severity: Some(DiagnosticSeverity::ERROR),
         ..Default::default()
     }
 }
 
-fn core_token_to_server(token: &Token) -> ServerToken {
-    match token {
-        Token::Member(token) => ServerToken {
-            name: token.span.as_str().into(),
-            range: span_to_range(token.span),
-            kind: mylang_core::SymbolKind::Value {
-                ty: token.ty,
-                mutable: true,
-            },
-            docs: None,
-        },
-        Token::Symbol(token) => {
-            let symbol = token.symbol.borrow();
-            ServerToken {
-                name: token.span.as_str().into(),
-                range: span_to_range(token.span),
-                kind: symbol.kind.clone(),
-                docs: symbol.docs.clone(),
-            }
-        }
-    }
-}
-
-fn span_to_range(span: pest::Span) -> Range {
-    let (start_line, start_col) = span.start_pos().line_col();
-    let (end_line, end_col) = span.end_pos().line_col();
+fn span_to_range(src: &Source, span: Span) -> Range {
+    let (start_line, start_col) = src.line_col(span.start());
+    let (end_line, end_col) = src.line_col(span.end());
     Range {
         start: Position::new((start_line - 1) as u32, (start_col - 1) as u32),
         end: Position::new((end_line - 1) as u32, (end_col - 1) as u32),

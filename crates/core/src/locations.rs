@@ -1,6 +1,6 @@
 use crate::analyzer::ModuleId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Span {
     start: u32,
     end: u32,
@@ -42,6 +42,10 @@ impl Span {
     pub fn is_within(&self, test: Self) -> bool {
         self.start >= test.start && self.end <= test.end
     }
+
+    pub fn contains(&self, test: u32) -> bool {
+        self.start <= test && self.end >= test
+    }
 }
 
 impl From<pest::Span<'_>> for Span {
@@ -80,6 +84,10 @@ impl Location {
             module: first.module,
             span,
         }
+    }
+
+    pub fn module(&self) -> ModuleId {
+        self.module
     }
 
     pub fn span(&self) -> Span {
