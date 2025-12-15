@@ -112,7 +112,7 @@ mod tests {
     #[test]
     fn test_visit_field_access_expression() {
         let mut checker = create_type_checker();
-        let id = checker.ctx.type_store.add(Type::Struct(StructType {
+        let id = checker.intern(Type::Struct(StructType {
             id: checker.ctx.type_store.get_next_id(),
             fields: vec![
                 StructField {
@@ -162,7 +162,7 @@ mod tests {
             elements: vec![TypeStore::NUMBER, TypeStore::STRING, TypeStore::BOOLEAN],
         });
 
-        let ty = checker.ctx.type_store.add(tuple_type);
+        let ty = checker.intern(tuple_type);
         checker.ctx.register_symbol(SymbolData {
             name: "my_tuple".into(),
             ty,
@@ -216,7 +216,7 @@ mod tests {
         let tuple_type = Type::Tuple(TupleType {
             elements: vec![TypeStore::NUMBER, TypeStore::STRING],
         });
-        let tuple_type = checker.ctx.type_store.add(tuple_type);
+        let tuple_type = checker.intern(tuple_type);
         checker.ctx.register_symbol(SymbolData {
             name: "my_tuple".into(),
             ty: tuple_type,
@@ -246,7 +246,7 @@ mod tests {
         let tuple_type = Type::Tuple(TupleType {
             elements: vec![TypeStore::NUMBER, TypeStore::STRING],
         });
-        let tuple_type = checker.ctx.type_store.add(tuple_type);
+        let tuple_type = checker.intern(tuple_type);
         checker.ctx.register_symbol(SymbolData {
             name: "my_tuple".into(),
             ty: tuple_type,

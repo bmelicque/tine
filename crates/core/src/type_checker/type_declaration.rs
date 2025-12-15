@@ -20,7 +20,7 @@ impl TypeChecker<'_> {
                     name: param.clone(),
                     idx: i,
                 };
-                let ty = checker.ctx.type_store.add(ty.into());
+                let ty = checker.intern(ty.into());
                 param_types.push(ty);
                 // FIXME: spans
                 checker.ctx.register_symbol(SymbolData {
@@ -41,7 +41,7 @@ impl TypeChecker<'_> {
         }
         let ty = match params.len() {
             0 => ty,
-            _ => self.ctx.type_store.add(Type::Generic(GenericType {
+            _ => self.intern_unique(Type::Generic(GenericType {
                 params,
                 definition: ty,
             })),
@@ -73,9 +73,7 @@ impl TypeChecker<'_> {
             .map(|variant| self.visit_variant_definition(variant))
             .collect();
         let id = self.ctx.type_store.get_next_id();
-        self.ctx
-            .type_store
-            .add(Type::Enum(EnumType { id, variants }))
+        self.intern_unique(Type::Enum(EnumType { id, variants }))
     }
 
     fn visit_variant_definition(&mut self, node: &ast::VariantDefinition) -> types::Variant {
@@ -83,7 +81,7 @@ impl TypeChecker<'_> {
             ast::VariantDefinition::Struct(s) => self.visit_struct_definition(&s.def),
             ast::VariantDefinition::Tuple(t) => {
                 let elements = t.elements.iter().map(|el| self.visit_type(el)).collect();
-                self.ctx.type_store.add(Type::Tuple(TupleType { elements }))
+                self.intern(Type::Tuple(TupleType { elements }))
             }
             ast::VariantDefinition::Unit(_) => TypeStore::UNIT,
         };
@@ -100,9 +98,7 @@ impl TypeChecker<'_> {
             .map(|field| self.visit_struct_definition_field(field))
             .collect();
         let id = self.ctx.type_store.get_next_id();
-        self.ctx
-            .type_store
-            .add(Type::Struct(StructType { id, fields }))
+        self.intern_unique(Type::Struct(StructType { id, fields }))
     }
 
     fn visit_struct_definition_field(

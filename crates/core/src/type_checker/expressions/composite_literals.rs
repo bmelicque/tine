@@ -79,7 +79,7 @@ impl TypeChecker<'_> {
             expected_element_type = TypeStore::UNKNOWN;
         }
 
-        let ty = self.ctx.type_store.add(Type::Array(ArrayType {
+        let ty = self.intern(Type::Array(ArrayType {
             element: expected_element_type,
         }));
         self.ctx.save_expression_type(node.loc, ty)
@@ -119,7 +119,7 @@ impl TypeChecker<'_> {
             value = TypeStore::UNKNOWN;
         }
 
-        let ty = self.ctx.type_store.add(Type::Map(MapType { key, value }));
+        let ty = self.intern(Type::Map(MapType { key, value }));
         self.ctx.save_expression_type(node.loc, ty)
     }
 
@@ -144,7 +144,7 @@ impl TypeChecker<'_> {
             some = TypeStore::UNKNOWN;
         }
 
-        let ty = self.ctx.type_store.add(Type::Option(OptionType { some }));
+        let ty = self.intern(Type::Option(OptionType { some }));
         self.ctx.save_expression_type(node.loc, ty)
     }
 
@@ -324,7 +324,7 @@ impl TypeChecker<'_> {
             elements.push(expected_type);
         }
 
-        self.ctx.type_store.add(Type::Tuple(TupleType { elements }))
+        self.intern(Type::Tuple(TupleType { elements }))
     }
 }
 
@@ -339,7 +339,7 @@ mod tests {
     fn test_visit_anonymous_struct_literal() {
         let session = Session::new();
         let mut checker = TypeChecker::new(&session, 0);
-        let user_type = checker.ctx.type_store.add(Type::Struct(StructType {
+        let user_type = checker.intern(Type::Struct(StructType {
             id: checker.ctx.type_store.get_next_id(),
             fields: vec![
                 StructField {
@@ -538,7 +538,7 @@ mod tests {
             ],
         });
 
-        let user_type_id = checker.ctx.type_store.add(user_type);
+        let user_type_id = checker.intern_unique(user_type);
         checker.ctx.register_symbol(SymbolData {
             name: "User".into(),
             ty: user_type_id,
@@ -593,43 +593,37 @@ mod tests {
             variants: vec![
                 Variant {
                     name: "Circle".to_string(),
-                    def: checker
-                        .ctx
-                        .type_store
-                        .add(types::Type::Struct(types::StructType {
-                            id: checker.ctx.type_store.get_next_id(),
-                            fields: vec![StructField {
-                                name: "radius".to_string(),
-                                def: TypeStore::NUMBER,
-                                optional: false,
-                            }],
-                        })),
+                    def: checker.intern_unique(types::Type::Struct(types::StructType {
+                        id: checker.ctx.type_store.get_next_id(),
+                        fields: vec![StructField {
+                            name: "radius".to_string(),
+                            def: TypeStore::NUMBER,
+                            optional: false,
+                        }],
+                    })),
                 },
                 Variant {
                     name: "Rectangle".to_string(),
-                    def: checker
-                        .ctx
-                        .type_store
-                        .add(types::Type::Struct(types::StructType {
-                            id: checker.ctx.type_store.get_next_id(),
-                            fields: vec![
-                                StructField {
-                                    name: "width".to_string(),
-                                    def: TypeStore::NUMBER,
-                                    optional: false,
-                                },
-                                StructField {
-                                    name: "height".to_string(),
-                                    def: TypeStore::NUMBER,
-                                    optional: false,
-                                },
-                            ],
-                        })),
+                    def: checker.intern_unique(types::Type::Struct(types::StructType {
+                        id: checker.ctx.type_store.get_next_id(),
+                        fields: vec![
+                            StructField {
+                                name: "width".to_string(),
+                                def: TypeStore::NUMBER,
+                                optional: false,
+                            },
+                            StructField {
+                                name: "height".to_string(),
+                                def: TypeStore::NUMBER,
+                                optional: false,
+                            },
+                        ],
+                    })),
                 },
             ],
         });
 
-        let shape_type_id = checker.ctx.type_store.add(enum_type);
+        let shape_type_id = checker.intern_unique(enum_type);
         checker.ctx.register_symbol(SymbolData {
             name: "Shape".into(),
             ty: shape_type_id,
@@ -665,6 +659,10 @@ mod tests {
             "expected enum type, got {:?}",
             result
         );
-        assert!(checker.errors.is_empty());
+        assert!(
+            checker.errors.is_empty(),
+            "expected no errors, got {:?}",
+            checker.errors
+        );
     }
 }

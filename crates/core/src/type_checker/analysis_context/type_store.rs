@@ -71,6 +71,21 @@ impl TypeStore {
             }
         }
     }
+    pub fn add_unique(&mut self, ty: Type) -> TypeId {
+        let ty = match ty {
+            Type::Struct(mut st) => {
+                st.id = self.get_next_id();
+                Type::Struct(st)
+            }
+            Type::Enum(mut e) => {
+                e.id = self.get_next_id();
+                Type::Enum(e)
+            }
+            ty => ty,
+        };
+        self.arena.push(ty);
+        (self.arena.len() - 1) as TypeId
+    }
     pub fn add_alias(&mut self, ty: TypeId, name: String) {
         self.aliases.push((ty, name));
     }
@@ -726,7 +741,6 @@ mod tests {
         assert_eq!(store.display_type(TypeStore::NUMBER), "number");
         assert_eq!(store.display_type(TypeStore::STRING), "string");
         assert_eq!(store.display_type(TypeStore::BOOLEAN), "boolean");
-        assert_eq!(store.display_type(TypeStore::UNIT), "void");
         assert_eq!(store.display_type(TypeStore::UNIT), "()");
     }
 

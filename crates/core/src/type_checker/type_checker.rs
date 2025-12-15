@@ -55,6 +55,9 @@ impl TypeChecker<'_> {
     pub fn intern(&self, ty: Type) -> TypeId {
         self.session.intern(ty)
     }
+    pub fn intern_unique(&self, ty: Type) -> TypeId {
+        self.session.intern_unique(ty)
+    }
 
     pub fn resolve(&self, id: TypeId) -> Type {
         self.session.get_type(id)

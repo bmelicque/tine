@@ -1,3 +1,5 @@
+use std::cmp::min;
+
 use crate::analyzer::ModuleId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -16,13 +18,9 @@ impl Span {
     }
 
     pub fn merge(first: Self, second: Self) -> Self {
-        if first.start > second.start || first.end < second.end {
-            panic!()
-        }
-        Self {
-            start: first.start,
-            end: second.end,
-        }
+        let start = min(first.start, second.start);
+        let end = min(first.end, second.end);
+        Self { start, end }
     }
 
     pub fn start(&self) -> u32 {

@@ -13,7 +13,7 @@ impl TypeChecker<'_> {
             (param_types, body_type)
         });
 
-        let ty = self.ctx.type_store.add(Type::Function(FunctionType {
+        let ty = self.intern(Type::Function(FunctionType {
             params,
             return_type,
         }));

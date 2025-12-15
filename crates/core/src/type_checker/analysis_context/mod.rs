@@ -82,7 +82,7 @@ impl LocalContext {
     pub fn new() -> Self {
         Self {
             symbols: Vec::<SymbolHandle>::new(),
-            scopes: vec![],
+            scopes: vec![Scope::new()],
             type_store: TypeStore::new(),
             expressions: HashMap::new(),
             current_declaration_dependencies: None,

@@ -94,7 +94,7 @@ impl TypeChecker<'_> {
     }
 
     pub fn element_type(&mut self) -> TypeId {
-        self.ctx.type_store.add(Type::Duck(DuckType {
+        self.intern(Type::Duck(DuckType {
             like: TypeStore::ELEMENT,
         }))
     }

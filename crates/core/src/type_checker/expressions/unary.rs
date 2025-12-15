@@ -33,7 +33,7 @@ impl TypeChecker<'_> {
 
     fn visit_signal_expression(&mut self, node: &ast::UnaryExpression) -> TypeId {
         let inner = self.visit_expression(&node.operand);
-        let ty = self.ctx.type_store.add(Type::Signal(SignalType { inner }));
+        let ty = self.intern(Type::Signal(SignalType { inner }));
         self.ctx.save_expression_type(node.loc, ty)
     }
 

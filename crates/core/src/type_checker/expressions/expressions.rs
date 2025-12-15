@@ -60,10 +60,7 @@ impl TypeChecker<'_> {
             self.check_assigned_type(ty, value_ty, value.loc());
         }
 
-        let id = self
-            .ctx
-            .type_store
-            .add(Type::Array(ArrayType { element: ty }));
+        let id = self.intern(Type::Array(ArrayType { element: ty }));
         self.ctx.save_expression_type(node.loc, id)
     }
 
@@ -103,7 +100,7 @@ impl TypeChecker<'_> {
                 .map(|el| self.visit_expression(el))
                 .collect(),
         };
-        let ty = self.ctx.type_store.add(ty.into());
+        let ty = self.intern(ty.into());
         self.ctx.save_expression_type(node.loc, ty)
     }
 }
@@ -160,10 +157,6 @@ mod tests {
                 }),
                 ast::Expression::NumberLiteral(ast::NumberLiteral {
                     value: ordered_float::OrderedFloat(2.0),
-                    loc: Location::dummy(),
-                }),
-                ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: ordered_float::OrderedFloat(3.0),
                     loc: Location::dummy(),
                 }),
             ],

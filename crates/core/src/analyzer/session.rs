@@ -103,6 +103,9 @@ impl Session {
     pub fn intern(&self, ty: Type) -> TypeId {
         self.types.lock().unwrap().add(ty)
     }
+    pub fn intern_unique(&self, ty: Type) -> TypeId {
+        self.types.lock().unwrap().add_unique(ty)
+    }
 
     pub fn get_type(&self, id: TypeId) -> Type {
         self.types.lock().unwrap().get(id).clone()

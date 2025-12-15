@@ -31,7 +31,7 @@ impl TypeChecker<'_> {
             Some(ref element) => self.visit_type(element),
             None => TypeStore::DYNAMIC,
         };
-        self.ctx.type_store.add(Type::Array(ArrayType { element }))
+        self.intern(Type::Array(ArrayType { element }))
     }
 
     pub(super) fn visit_function_type(&mut self, node: &ast::FunctionType) -> TypeId {
@@ -43,7 +43,7 @@ impl TypeChecker<'_> {
 
         let return_type = self.visit_type(&node.returned);
 
-        self.ctx.type_store.add(Type::Function(FunctionType {
+        self.intern(Type::Function(FunctionType {
             params,
             return_type,
         }))
@@ -66,7 +66,7 @@ impl TypeChecker<'_> {
             None => TypeStore::DYNAMIC,
         };
 
-        self.ctx.type_store.add(Type::Map(MapType {
+        self.intern(Type::Map(MapType {
             key: key_type,
             value: value_type,
         }))
@@ -112,7 +112,7 @@ impl TypeChecker<'_> {
             .map(|arg| self.visit_type(arg))
             .collect();
         while arg_types.len() < arity {
-            let dynamic = self.ctx.type_store.add(Type::Dynamic);
+            let dynamic = self.intern(Type::Dynamic);
             arg_types.push(dynamic);
         }
 
@@ -122,27 +122,25 @@ impl TypeChecker<'_> {
     pub fn visit_option_type(&mut self, node: &ast::OptionType) -> TypeId {
         let some = match node.base {
             Some(ref base) => self.visit_type(base),
-            None => self.ctx.type_store.add(Type::Dynamic),
+            None => self.intern(Type::Dynamic),
         };
 
-        self.ctx.type_store.add(Type::Option(OptionType { some }))
+        self.intern(Type::Option(OptionType { some }))
     }
 
     fn visit_signal_type(&mut self, node: &ast::SignalType) -> TypeId {
         let inner = self.visit_type(&node.inner);
-        self.ctx.type_store.add(Type::Signal(SignalType { inner }))
+        self.intern(Type::Signal(SignalType { inner }))
     }
 
     pub fn visit_reference_type(&mut self, node: &ast::ReferenceType) -> TypeId {
         let target = self.visit_type(&node.target);
-        self.ctx
-            .type_store
-            .add(Type::Reference(ReferenceType { target }))
+        self.intern(Type::Reference(ReferenceType { target }))
     }
 
     pub fn visit_duck_type(&mut self, node: &ast::DuckType) -> TypeId {
         let like = self.visit_type(&node.like);
-        self.ctx.type_store.add(Type::Duck(DuckType { like }))
+        self.intern(Type::Duck(DuckType { like }))
     }
 
     pub fn visit_result_type(&mut self, node: &ast::ResultType) -> TypeId {
@@ -155,7 +153,7 @@ impl TypeChecker<'_> {
             None => TypeStore::DYNAMIC,
         };
 
-        self.ctx.type_store.add(Type::Result(ResultType {
+        self.intern(Type::Result(ResultType {
             error: Some(err_type),
             ok: ok_type,
         }))
@@ -163,7 +161,7 @@ impl TypeChecker<'_> {
 
     pub fn visit_tuple_type(&mut self, node: &ast::TupleType) -> TypeId {
         let elements: Vec<TypeId> = node.elements.iter().map(|ty| self.visit_type(ty)).collect();
-        self.ctx.type_store.add(Type::Tuple(TupleType { elements }))
+        self.intern(Type::Tuple(TupleType { elements }))
     }
 }
 
@@ -270,7 +268,7 @@ mod tests {
     fn test_visit_named_type() {
         let session = Session::new();
         let mut checker = TypeChecker::new(&session, 0);
-        let def = checker.ctx.type_store.add(Type::Struct(StructType {
+        let def = checker.intern(Type::Struct(StructType {
             id: 7,
             fields: vec![],
         }));

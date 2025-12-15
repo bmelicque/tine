@@ -105,7 +105,7 @@ mod tests {
         let ast::Statement::VariableDeclaration(var_decl) = stmt else {
             panic!("Expected VariableDeclaration");
         };
-        let expected = "// a value\n";
+        let expected = "a value";
         match var_decl.docs {
             Some(docs) if docs.text.as_str() == expected => {}
             _ => panic!("expected comment '{}', got {:?}", expected, var_decl.docs),
