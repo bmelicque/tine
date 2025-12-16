@@ -3,7 +3,7 @@ use mylang_core::ast;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn declaration_to_swc(&mut self, node: &ast::VariableDeclaration) -> Vec<swc::Stmt> {
         if let ast::Pattern::Identifier(_) = *node.pattern {
             return vec![self.identifier_declaration_to_swc(node).into()];
@@ -13,7 +13,7 @@ impl CodeGenerator {
             .pattern
             .list_identifiers()
             .into_iter()
-            .filter_map(|id| self.get_info(id.loc()))
+            .filter_map(|id| self.find_symbol(id.loc()))
             .filter(|var| var.borrow().has_ref())
             .map(|var| wrap_identifier(&var.borrow().name).into())
             .collect();
@@ -31,7 +31,7 @@ impl CodeGenerator {
         };
 
         let mut init = self.expr_to_swc(&node.value);
-        let info = self.get_info(id.loc()).unwrap();
+        let info = self.find_symbol(id.loc()).unwrap();
         if info.borrow().has_ref() {
             init = swc::Expr::Array(swc::ArrayLit {
                 span: DUMMY_SP,

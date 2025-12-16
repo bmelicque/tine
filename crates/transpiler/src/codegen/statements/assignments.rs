@@ -3,7 +3,7 @@ use mylang_core::ast;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn assignment_to_swc(&mut self, node: &ast::Assignment) -> swc::ExprStmt {
         if let ast::Assignee::Indirection(_) = node.pattern {
             return swc::ExprStmt {

@@ -5,7 +5,7 @@ use crate::codegen::{utils::create_ident, CodeGenerator};
 
 use mylang_core::ast;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn element_expression_to_swc(&mut self, node: &ast::ElementExpression) -> swc::Expr {
         match node {
             ast::ElementExpression::Element(el) => self.element_to_swc(el),

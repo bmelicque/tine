@@ -6,7 +6,7 @@ use mylang_core::ast;
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn if_to_swc_expr(&mut self, node: &ast::IfExpression) -> swc::Expr {
         if node.consequent.statements.len() == 0 && node.alternate.is_none() {
             undefined()
@@ -76,13 +76,13 @@ impl CodeGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mylang_core::{ast, CheckedModule, Span};
+    use mylang_core::{ast, Location, Session};
     use swc_ecma_ast as swc;
 
     fn mock_expr() -> ast::Expression {
         ast::Expression::NumberLiteral(ast::NumberLiteral {
             value: 1.0.into(),
-            span: Span::dummy(),
+            loc: Location::dummy(),
         })
     }
 
@@ -91,7 +91,7 @@ mod tests {
             statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
                 expression: mock_expr().into(),
             })],
-            span: Span::dummy(),
+            loc: Location::dummy(),
         }
     }
 
@@ -104,16 +104,14 @@ mod tests {
             } else {
                 None
             },
-            span: Span::dummy(),
+            loc: Location::dummy(),
         }
     }
 
-    impl CodeGenerator {
+    impl CodeGenerator<'_> {
         fn new_for_test() -> Self {
-            let mut gen = CodeGenerator::new(
-                swc_common::FileName::Custom("".into()),
-                CheckedModule::dummy(),
-            );
+            let session = Box::leak(Box::new(Session::new()));
+            let mut gen = CodeGenerator::new(session, 0);
             gen.enter_block();
             gen
         }
@@ -126,10 +124,10 @@ mod tests {
             condition: mock_expr().into(),
             consequent: Box::new(ast::BlockExpression {
                 statements: vec![],
-                span: Span::dummy(),
+                loc: Location::dummy(),
             }),
             alternate: None,
-            span: Span::dummy(),
+            loc: Location::dummy(),
         };
 
         let result = gen.if_to_swc_expr(&node);

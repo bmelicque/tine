@@ -26,13 +26,6 @@ pub fn make_relative(base: &Path, path: &Path) -> PathBuf {
     rel
 }
 
-pub fn filename_to_modulepath(name: &FileName) -> ModulePath {
-    match name {
-        FileName::Real(path) => ModulePath::Real(path.clone()),
-        FileName::Custom(name) => ModulePath::Virtual(name.clone()),
-        _ => unreachable!(),
-    }
-}
 pub fn modulepath_to_filename(name: &ModulePath) -> FileName {
     match name {
         ModulePath::Real(path) => FileName::Real(path.clone()),

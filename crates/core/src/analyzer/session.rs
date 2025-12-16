@@ -137,7 +137,15 @@ impl Session {
         self.symbols.iter().map(|s| s.readonly()).collect()
     }
 
+    pub fn get_type_at(&self, loc: Location) -> Option<Type> {
+        self.expressions.get(&loc).map(|t| self.get_type(*t))
+    }
+
     pub fn diagnostics(&self) -> &HashMap<ModuleId, Vec<ParseError>> {
         &self.diagnostics
+    }
+
+    pub fn get_dependencies(&self, loc: Location) -> Option<&Vec<SymbolRef>> {
+        self.dependencies.get(&loc)
     }
 }

@@ -1,14 +1,14 @@
 use crate::{
     codegen::{utils::create_ident, CodeGenerator},
-    utils::{filename_to_modulepath, make_relative, modulepath_to_filename},
+    utils::{make_relative, modulepath_to_filename},
 };
 
-use mylang_core::{ast, use_decl_to_paths, ModuleImports};
+use mylang_core::{ast, use_decl_to_paths, ModuleImports, ModulePath};
 
 use swc_common::{FileName, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn item_to_swc(&mut self, node: &ast::Item) -> Vec<swc::ModuleItem> {
         match node {
             ast::Item::Invalid(_) => {
@@ -20,7 +20,7 @@ impl CodeGenerator {
     }
 
     fn use_decl_to_swc(&mut self, node: &ast::UseDeclaration) -> Vec<swc::ModuleItem> {
-        use_decl_to_paths(&filename_to_modulepath(self.get_filename()), node)
+        use_decl_to_paths(self.get_filename(), node)
             .into_iter()
             .map(|imports| self.imports_to_swc(imports))
             .collect()
@@ -48,7 +48,7 @@ impl CodeGenerator {
     fn get_imports_src(&self, name: FileName) -> Box<swc::Str> {
         match name {
             FileName::Real(filename) => {
-                let FileName::Real(current) = self.get_filename() else {
+                let ModulePath::Real(current) = self.get_filename() else {
                     panic!("unexpected filename variant")
                 };
                 let relative = make_relative(current, &filename);

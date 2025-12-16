@@ -161,7 +161,7 @@ pub fn true_lit() -> swc::Expr {
     }))
 }
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn into_option(&mut self, identifier: &String) -> swc::Stmt {
         // identifier !== undefined ? new __Option("Some", identifier) : new __Option("None")
 

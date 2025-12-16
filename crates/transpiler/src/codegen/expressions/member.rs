@@ -3,7 +3,7 @@ use mylang_core::ast;
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn member_expr_to_swc(&mut self, node: &ast::MemberExpression) -> swc::MemberExpr {
         let prop = match node.prop.clone().unwrap() {
             ast::MemberProp::FieldName(i) => {

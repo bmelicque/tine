@@ -7,7 +7,7 @@ use mylang_core::ast;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn stmt_to_swc(&mut self, node: &ast::Statement) -> Vec<swc::Stmt> {
         match node {
             ast::Statement::Assignment(node) => vec![self.assignment_to_swc(node).into()],
@@ -273,13 +273,13 @@ impl CodeGenerator {
         alternate: Option<Box<ast::IfPatExpression>>,
     ) -> ast::IfPatExpression {
         let consequent = Box::new(ast::BlockExpression {
-            span: node.expression.loc(),
+            loc: node.expression.loc(),
             statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
                 expression: node.expression.clone(),
             })],
         });
         ast::IfPatExpression {
-            span: node.span,
+            loc: node.loc,
             pattern: node.pattern.clone(),
             scrutinee: scrutinee.clone(),
             consequent,

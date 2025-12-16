@@ -12,7 +12,7 @@ use rand::{distr::Alphanumeric, Rng};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn expr_or_an_to_swc(&mut self, node: &ast::ExpressionOrAnonymous) -> swc::Expr {
         match node {
             ast::ExpressionOrAnonymous::Expression(node) => self.expr_to_swc(node),
@@ -271,7 +271,7 @@ impl CodeGenerator {
     /// Create code for identifiers.
     /// Identifiers that have references are declared wrapped in an array (like `let identifier = [value]`), so their reads are generated like `identifier[0]`
     pub fn ident_to_swc(&mut self, node: &ast::Identifier) -> swc::Expr {
-        let info = self.get_info(node.span).unwrap();
+        let info = self.find_symbol(node.loc).unwrap();
 
         if info.borrow().has_ref() {
             swc::Expr::Member(swc::MemberExpr {

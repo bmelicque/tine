@@ -2,14 +2,14 @@ use ordered_float::OrderedFloat;
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
-use mylang_core::{ast, Span};
+use mylang_core::{ast, Location, Span};
 
 use super::{
     utils::{create_ident, true_lit},
     CodeGenerator,
 };
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     /// Used to build a destructuring expression, like the `{ name }` part of `const { name } = user;`
     pub fn pattern_to_swc(&mut self, node: &ast::Pattern) -> swc::Pat {
         match node {
@@ -156,7 +156,7 @@ impl CodeGenerator {
             .filter(|field| field.pattern.is_some())
             .map(|field| {
                 let against = ast::MemberExpression {
-                    span: against.loc(),
+                    loc: against.loc(),
                     object: Box::new(against.clone()),
                     prop: Some(ast::MemberProp::FieldName(field.identifier.clone())),
                 };
@@ -185,10 +185,10 @@ impl CodeGenerator {
     ) -> swc::Expr {
         self.tuple_to_swc_test_helper(pattern, |i| {
             ast::MemberExpression {
-                span: against.loc(),
+                loc: against.loc(),
                 object: Box::new(against.clone()),
                 prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
-                    span: against.loc(),
+                    loc: against.loc(),
                     value: OrderedFloat(i as f64),
                 })),
             }
@@ -243,14 +243,15 @@ impl CodeGenerator {
         pattern: &ast::TuplePattern,
         against: &ast::Expression,
     ) -> swc::Expr {
+        let module = self.module;
         self.tuple_to_swc_test_helper(pattern, |i| {
             let id = format!("_{}", i);
             let leaked_id: &'static str = Box::leak(id.into_boxed_str());
             ast::MemberExpression {
-                span: against.loc(),
+                loc: against.loc(),
                 object: Box::new(against.clone()),
                 prop: Some(ast::MemberProp::FieldName(ast::Identifier {
-                    span: Span::new(0, leaked_id.len() as u32),
+                    loc: Location::new(module, Span::new(0, leaked_id.len() as u32)),
                     text: leaked_id.to_string(),
                 })),
             }

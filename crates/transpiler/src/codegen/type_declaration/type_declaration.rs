@@ -7,7 +7,7 @@ use swc_ecma_ast as swc;
 
 use super::{enums::enum_def_to_swc_constructor, literal_alias::literal_alias_to_swc_constructor};
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn alias_to_swc(&mut self, node: &ast::TypeAlias) -> Vec<swc::Stmt> {
         let mut super_class = None;
         let body: Vec<swc::ClassMember> = match node.definition.as_ref() {

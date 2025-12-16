@@ -8,7 +8,7 @@ use swc_ecma_ast as swc;
 
 use super::utils::this_assignment;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn struct_to_swc_constructor(&mut self, node: &ast::StructDefinition) -> swc::Constructor {
         let mandatory_fields: Vec<&ast::StructDefinitionField> = node
             .fields
@@ -39,10 +39,11 @@ impl CodeGenerator {
         }
     }
 
-    fn struct_field_to_swc_param<'a>(
-        &'a mut self,
-    ) -> impl FnMut(&&'a ast::StructDefinitionField) -> swc::ParamOrTsParamProp + 'a {
-        move |field| {
+    fn struct_field_to_swc_param(
+        &mut self,
+    ) -> Box<dyn for<'b> FnMut(&'b &ast::StructDefinitionField) -> swc::ParamOrTsParamProp + '_>
+    {
+        Box::new(move |field| {
             let pattern = match field {
                 ast::StructDefinitionField::Mandatory(field) => {
                     swc::Pat::Ident(swc::BindingIdent {
@@ -65,7 +66,7 @@ impl CodeGenerator {
                 decorators: vec![],
                 pat: pattern,
             })
-        }
+        })
     }
 }
 

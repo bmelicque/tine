@@ -1,12 +1,11 @@
 use std::{collections::HashMap, rc::Rc};
 
 use crate::{
-    analyzer::{session::Session, ModuleId, ModulePath, Source},
-    ast::Program,
+    analyzer::{session::Session, ModuleId, ModulePath},
     locations::Span,
     type_checker::{CheckResult, TypeChecker},
     types::{DuckType, FunctionType, Type, TypeId},
-    ParseError, SymbolData, SymbolKind, SymbolRef, Token, TypeStore,
+    SymbolData, SymbolKind, SymbolRef, Token, TypeStore,
 };
 
 #[derive(Debug, Clone)]
@@ -21,33 +20,6 @@ pub struct ModuleTypeData {
 impl ModuleTypeData {
     pub fn resolve_type(&self, id: TypeId) -> &Type {
         self.type_store.get(id)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct CheckedModule {
-    pub name: ModulePath,
-    pub src: Source,
-    pub ast: Program,
-    pub metadata: ModuleTypeData,
-    pub errors: Vec<ParseError>,
-}
-
-impl CheckedModule {
-    pub fn dummy() -> Self {
-        Self {
-            name: ModulePath::Virtual("".into()),
-            src: Source::new(""),
-            ast: Program::dummy(),
-            metadata: ModuleTypeData {
-                type_store: Rc::new(TypeStore::new()),
-                exports: vec![],
-                expressions: HashMap::new(),
-                tokens: HashMap::new(),
-                dependencies: HashMap::new(),
-            },
-            errors: vec![],
-        }
     }
 }
 
