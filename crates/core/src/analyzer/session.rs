@@ -16,12 +16,16 @@ use crate::{
 };
 
 pub struct Session {
-    /// The entry point of the project. It should be a `Real` path.
+    /// The entry point of the project. It should be a `ModulePath::Real`.
     pub(super) entry_point: ModulePath,
     pub(super) module_graph: ModuleGraph,
     /// The parsed AST for each module.
     pub(super) parsed: HashMap<ModuleId, Program>,
+    /// The global type store, that can be read and written through each
+    /// module's type checker.
     pub(super) types: Mutex<TypeStore>,
+    /// An arena for all the symbols (i.e. names) declared and defined accross
+    /// the project. See `SymbolHandle` for more details.
     pub(super) symbols: Vec<SymbolHandle>,
     /// All symbols exported by each module.
     pub(super) exports: HashMap<ModuleId, Vec<SymbolRef>>,
