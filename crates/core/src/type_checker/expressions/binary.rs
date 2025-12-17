@@ -55,7 +55,7 @@ impl TypeChecker<'_> {
     }
 
     fn push_binary_error(&mut self, op: ast::BinaryOperator, ty: TypeId, loc: Location) {
-        let ty = self.ctx.type_store.get(ty);
+        let ty = self.resolve(ty);
         self.error(
             format!("Operator '{}' cannot be applied to type '{}'", op, ty),
             loc,

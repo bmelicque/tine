@@ -58,7 +58,7 @@ impl ModuleGraph {
         let mut queue = VecDeque::<ModuleId>::new();
         // List all nodes without dependencies
         for id in 0..self.nodes.len() {
-            if self.edges.iter().find(|e| e.dependency == id).is_none() {
+            if self.edges.iter().find(|e| e.dependent == id).is_none() {
                 queue.push_back(id);
             }
         }

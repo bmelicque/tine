@@ -176,6 +176,10 @@ impl SymbolRef {
     }
 
     pub fn uses(&self) -> Vec<Location> {
-        self.0.lock().unwrap().access.uses().collect()
+        let symbol = self.0.lock().unwrap();
+        vec![symbol.defined_at]
+            .into_iter()
+            .chain(symbol.access.uses())
+            .collect::<Vec<_>>()
     }
 }

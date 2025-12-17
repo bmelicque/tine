@@ -141,8 +141,21 @@ impl Session {
         self.symbols.iter().map(|s| s.readonly()).collect()
     }
 
+    pub fn get_handle(&self, symbol: SymbolRef) -> Option<SymbolHandle> {
+        self.symbols.iter().find(|s| s.has_ref(&symbol)).cloned()
+    }
+
     pub fn get_type_at(&self, loc: Location) -> Option<Type> {
         self.expressions.get(&loc).map(|t| self.get_type(*t))
+    }
+    pub fn find_type(&self, ty: &Type) -> Option<TypeId> {
+        self.types.lock().unwrap().find_id(ty)
+    }
+    pub fn display_type(&self, id: TypeId) -> String {
+        self.types.lock().unwrap().display_type(id)
+    }
+    pub fn display_raw_type(&self, id: TypeId) -> String {
+        self.types.lock().unwrap().display_raw_type(id)
     }
 
     pub fn diagnostics(&self) -> &HashMap<ModuleId, Vec<ParseError>> {

@@ -37,15 +37,15 @@ impl TypeChecker<'_> {
     }
 
     fn match_literal_pattern(&mut self, pattern: &ast::LiteralPattern, against: TypeId) {
-        let against = self.ctx.type_store.get(against);
+        let against = self.resolve(against);
         let got = match pattern {
             ast::LiteralPattern::Boolean(_) => types::Type::Boolean,
             ast::LiteralPattern::Number(_) => types::Type::Number,
             ast::LiteralPattern::String(_) => types::Type::String,
         };
-        if *against != types::Type::Unknown && *against != got {
+        if against != types::Type::Unknown && against != got {
             self.error(
-                format!("Cannot match {} literal against {}", got, *against),
+                format!("Cannot match {} literal against {}", got, against),
                 pattern.loc(),
             );
         }
@@ -196,7 +196,7 @@ impl TypeChecker<'_> {
         match self.resolve(variant.def).clone() {
             Type::Struct(ty) => self.match_struct_variant(pattern, &ty.fields, variables),
             Type::Tuple(def) => {
-                let id = self.ctx.type_store.find_id(&def.into()).unwrap();
+                let id = self.session.find_type(&def.into()).unwrap();
                 self.match_tuple_variant(pattern, id, variables)
             }
             Type::Unit => self.match_unit_variant(pattern),

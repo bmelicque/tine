@@ -13,9 +13,7 @@ impl TypeChecker<'_> {
             self.visit_alternate(alternate, ty);
             ty
         } else {
-            self.ctx
-                .type_store
-                .add(Type::Option(OptionType { some: ty }))
+            self.intern(Type::Option(OptionType { some: ty }))
         };
         self.ctx.save_expression_type(node.loc, ty)
     }
@@ -23,9 +21,9 @@ impl TypeChecker<'_> {
     pub fn visit_condition(&mut self, node: &ast::Expression) {
         let condition = self.visit_expression(node);
         if condition != TypeStore::BOOLEAN {
-            let condition = self.ctx.type_store.get(condition);
+            let condition = self.resolve(condition);
             self.error(
-                format!("Condition must evaluate to a boolean, got {}", *condition),
+                format!("Condition must evaluate to a boolean, got {}", condition),
                 node.loc(),
             );
         }
@@ -59,9 +57,7 @@ impl TypeChecker<'_> {
             self.visit_alternate(alternate, ty);
             ty
         } else {
-            self.ctx
-                .type_store
-                .add(Type::Option(OptionType { some: ty }))
+            self.intern(Type::Option(OptionType { some: ty }))
         };
         self.ctx.save_expression_type(node.loc, ty)
     }
@@ -73,8 +69,8 @@ impl TypeChecker<'_> {
             ast::Alternate::IfDecl(i) => self.visit_if_decl_expression(i),
         };
         if !self.can_be_assigned_to(alt_ty, expected) {
-            let expected = self.ctx.type_store.get(expected);
-            let alt_ty = self.ctx.type_store.get(alt_ty);
+            let expected = self.resolve(expected);
+            let alt_ty = self.resolve(alt_ty);
             let error = format!(
                 "Branches' types don't match: expected {}, got {}",
                 expected, alt_ty

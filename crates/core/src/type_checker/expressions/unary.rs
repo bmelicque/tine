@@ -48,22 +48,19 @@ impl TypeChecker<'_> {
         }
         self.ctx.add_dependencies(deps);
         if let ast::Expression::Identifier(id) = node.operand.as_ref() {
-            if let Some(info) = self.ctx.lookup_mut(&id.as_str()) {
+            if let Some(info) = self.lookup_mut(&id.as_str()) {
                 info.reference(id.loc);
             };
         }
 
-        let ty = self
-            .ctx
-            .type_store
-            .add(Type::Listener(ListenerType { inner: expr_type }));
+        let ty = self.intern(Type::Listener(ListenerType { inner: expr_type }));
         self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_reference(&mut self, node: &ast::UnaryExpression) -> TypeId {
         let expr_type = self.visit_expression(&node.operand);
         if let ast::Expression::Identifier(id) = node.operand.as_ref() {
-            if let Some(info) = self.ctx.lookup_mut(&id.as_str()) {
+            if let Some(info) = self.lookup_mut(&id.as_str()) {
                 if !info.is_mutable() {
                     let error_message = format!(
                         "Cannot take mutable reference of immutable variable '{}'",
@@ -75,7 +72,7 @@ impl TypeChecker<'_> {
                 }
             };
         } else if let Some(id) = root_identifier(&node.operand) {
-            if let Some(info) = self.ctx.lookup_mut(&id.as_str()) {
+            if let Some(info) = self.lookup_mut(&id.as_str()) {
                 if !info.is_mutable() {
                     self.error(
                         format!("Cannot assign to immutable variable '{}'", id.as_str()),
@@ -87,10 +84,7 @@ impl TypeChecker<'_> {
             };
         };
 
-        let ty = self
-            .ctx
-            .type_store
-            .add(Type::Reference(ReferenceType { target: expr_type }));
+        let ty = self.intern(Type::Reference(ReferenceType { target: expr_type }));
         self.ctx.save_expression_type(node.loc, ty)
     }
 

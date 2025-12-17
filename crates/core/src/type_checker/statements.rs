@@ -49,7 +49,7 @@ impl TypeChecker<'_> {
         let mut variables = TokenList::new();
         self.match_pattern(pattern, against, &mut variables);
         for (name, ty) in variables.0 {
-            let Some(info) = self.ctx.lookup_mut(name.as_str()) else {
+            let Some(info) = self.lookup_mut(name.as_str()) else {
                 self.error(
                     format!("Cannot find name '{}'", name.as_str()),
                     pattern.loc(),
@@ -78,7 +78,7 @@ impl TypeChecker<'_> {
             });
             return;
         };
-        let Some(info) = self.ctx.lookup_mut(root.as_str()) else {
+        let Some(info) = self.lookup_mut(root.as_str()) else {
             self.error(format!("Cannot find name '{}'", root.as_str()), root.loc);
             return;
         };
@@ -92,7 +92,7 @@ impl TypeChecker<'_> {
 
     fn visit_indirect_assignee(&mut self, node: &ast::IndirectionAssignee, against: TypeId) {
         let name = node.identifier.as_str();
-        let Some(info) = self.ctx.lookup_mut(&name) else {
+        let Some(info) = self.lookup_mut(&name) else {
             self.error(format!("Cannot find name '{}'", name), node.identifier.loc);
             return;
         };
@@ -130,7 +130,7 @@ impl TypeChecker<'_> {
             return TypeStore::UNIT;
         }
 
-        let field_exists = self.ctx.type_store.has_property(receiver, method_name);
+        let field_exists = self.session.types().has_property(receiver, method_name);
         if field_exists {
             self.error(
                 format!(
@@ -140,8 +140,8 @@ impl TypeChecker<'_> {
                 node.loc,
             );
         } else {
-            self.ctx
-                .type_store
+            self.session
+                .types()
                 .define_method(receiver, method_name, function);
         }
 

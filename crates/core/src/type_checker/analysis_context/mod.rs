@@ -5,9 +5,7 @@ pub use symbols::{SymbolData, SymbolHandle, SymbolKind, SymbolRef};
 
 use std::collections::HashMap;
 
-use crate::{
-    locations::Span, type_checker::analysis_context::type_store::TypeStore, types::TypeId, Location,
-};
+use crate::{locations::Span, types::TypeId, Location};
 
 #[derive(Clone, Debug)]
 pub enum Token {
@@ -27,7 +25,7 @@ pub struct MemberToken {
     pub ty: TypeId,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Scope {
     pub bindings: Vec<SymbolRef>,
     /**
@@ -71,7 +69,6 @@ pub struct LocalContext {
 
     pub(crate) scopes: Vec<Scope>,
 
-    pub(crate) type_store: TypeStore,
     pub expressions: HashMap<Location, TypeId>,
 
     pub current_declaration_dependencies: Option<Vec<SymbolRef>>,
@@ -83,7 +80,6 @@ impl LocalContext {
         Self {
             symbols: Vec::<SymbolHandle>::new(),
             scopes: vec![Scope::new()],
-            type_store: TypeStore::new(),
             expressions: HashMap::new(),
             current_declaration_dependencies: None,
             other_dependencies: HashMap::new(),
@@ -137,15 +133,6 @@ impl LocalContext {
             }
         }
         None
-    }
-    pub fn lookup_mut(&self, name: &str) -> Option<SymbolHandle> {
-        match self.lookup(name) {
-            Some(var) => self.get_handle(&var),
-            None => None,
-        }
-    }
-    fn get_handle(&self, var: &SymbolRef) -> Option<SymbolHandle> {
-        self.symbols.iter().find(|s| s.has_ref(var)).cloned()
     }
 
     pub fn find_in_current_scope(&self, name: &str) -> Option<SymbolRef> {

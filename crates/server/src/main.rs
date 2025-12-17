@@ -258,8 +258,8 @@ fn span_to_range(src: &Source, span: Span) -> Range {
     let (start_line, start_col) = src.line_col(span.start());
     let (end_line, end_col) = src.line_col(span.end());
     Range {
-        start: Position::new((start_line - 1) as u32, (start_col - 1) as u32),
-        end: Position::new((end_line - 1) as u32, (end_col - 1) as u32),
+        start: Position::new(start_line as u32, start_col as u32),
+        end: Position::new(end_line as u32, end_col as u32),
     }
 }
 

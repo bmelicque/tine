@@ -31,7 +31,13 @@ impl CodeGenerator<'_> {
         };
 
         let mut init = self.expr_to_swc(&node.value);
-        let info = self.find_symbol(id.loc()).unwrap();
+        let Some(info) = self.find_symbol(id.loc()) else {
+            panic!(
+                "expected to find symbol with name '{}' at location {:?}",
+                id.as_str(),
+                id.loc()
+            )
+        };
         if info.borrow().has_ref() {
             init = swc::Expr::Array(swc::ArrayLit {
                 span: DUMMY_SP,

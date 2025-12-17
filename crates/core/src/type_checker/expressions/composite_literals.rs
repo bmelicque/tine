@@ -51,10 +51,7 @@ impl TypeChecker<'_> {
             self.error(format!("type mismatch"), node.loc);
             return TypeStore::UNKNOWN;
         };
-        let ty = self
-            .ctx
-            .type_store
-            .add(Type::Struct(StructType { id: st.id, fields }));
+        let ty = self.intern_unique(Type::Struct(StructType { id: st.id, fields }));
         self.ctx.save_expression_type(node.loc, ty)
     }
 
@@ -163,10 +160,7 @@ impl TypeChecker<'_> {
         };
         let st_id = st.id;
         let fields = self.visit_struct_body(&node.fields, st);
-        let ty = self
-            .ctx
-            .type_store
-            .add(Type::Struct(StructType { id: st_id, fields }));
+        let ty = self.intern_unique(Type::Struct(StructType { id: st_id, fields }));
         self.ctx.save_expression_type(node.loc, ty)
     }
 
@@ -271,9 +265,7 @@ impl TypeChecker<'_> {
                 };
                 let id = st.id;
                 let fields = self.visit_struct_body(fields, st);
-                self.ctx
-                    .type_store
-                    .add(Type::Struct(StructType { id, fields }))
+                self.intern_unique(Type::Struct(StructType { id, fields }))
             }
         }
     }
@@ -340,7 +332,7 @@ mod tests {
         let session = Session::new();
         let mut checker = TypeChecker::new(&session, 0);
         let user_type = checker.intern(Type::Struct(StructType {
-            id: checker.ctx.type_store.get_next_id(),
+            id: 0,
             fields: vec![
                 StructField {
                     name: "name".to_string(),
@@ -523,7 +515,7 @@ mod tests {
         let mut checker = TypeChecker::new(&session, 0);
         // Define the User struct type properly
         let user_type = types::Type::Struct(types::StructType {
-            id: checker.ctx.type_store.get_next_id(),
+            id: 0,
             fields: vec![
                 StructField {
                     name: "name".to_string(),
@@ -589,12 +581,12 @@ mod tests {
         let mut checker = TypeChecker::new(&session, 0);
         // Define a sum type with variants
         let enum_type = types::Type::Enum(types::EnumType {
-            id: checker.ctx.type_store.get_next_id(),
+            id: 0,
             variants: vec![
                 Variant {
                     name: "Circle".to_string(),
                     def: checker.intern_unique(types::Type::Struct(types::StructType {
-                        id: checker.ctx.type_store.get_next_id(),
+                        id: 0,
                         fields: vec![StructField {
                             name: "radius".to_string(),
                             def: TypeStore::NUMBER,
@@ -605,7 +597,7 @@ mod tests {
                 Variant {
                     name: "Rectangle".to_string(),
                     def: checker.intern_unique(types::Type::Struct(types::StructType {
-                        id: checker.ctx.type_store.get_next_id(),
+                        id: 0,
                         fields: vec![
                             StructField {
                                 name: "width".to_string(),

@@ -68,12 +68,12 @@ impl TypeChecker<'_> {
     }
 
     pub fn can_be_assigned_to(&self, test_id: TypeId, against: TypeId) -> bool {
-        let test = self.ctx.type_store.get(test_id);
-        let against = self.ctx.type_store.get(against);
-        match (test, against) {
+        let test = self.resolve(test_id);
+        let against = self.resolve(against);
+        match (&test, &against) {
             (Type::Unknown, _) => true,
             (_, Type::Unknown) => true,
-            (_, Type::Duck(duck)) => self.ctx.type_store.implements(test_id, duck),
+            (_, Type::Duck(duck)) => self.session.types().implements(test_id, duck),
             (_, _) => test == against,
         }
     }
@@ -118,5 +118,26 @@ impl TypeChecker<'_> {
 
     pub fn error(&mut self, message: String, loc: Location) {
         self.errors.push(ParseError { message, loc });
+    }
+
+    pub fn lookup(&self, name: &str) -> Option<SymbolRef> {
+        self.ctx.lookup(name)
+    }
+
+    pub fn lookup_mut(&self, name: &str) -> Option<SymbolHandle> {
+        let Some(symbol) = self.lookup(name) else {
+            return None;
+        };
+        let local_symbol = self
+            .ctx
+            .symbols
+            .iter()
+            .find(|s| s.has_ref(&symbol))
+            .cloned();
+        if local_symbol.is_some() {
+            local_symbol
+        } else {
+            self.session.get_handle(symbol)
+        }
     }
 }

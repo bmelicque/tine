@@ -112,8 +112,8 @@ mod tests {
     #[test]
     fn test_visit_field_access_expression() {
         let mut checker = create_type_checker();
-        let id = checker.intern(Type::Struct(StructType {
-            id: checker.ctx.type_store.get_next_id(),
+        let id = checker.intern_unique(Type::Struct(StructType {
+            id: 0,
             fields: vec![
                 StructField {
                     name: "name".to_string(),

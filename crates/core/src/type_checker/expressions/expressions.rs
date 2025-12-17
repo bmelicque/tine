@@ -77,7 +77,7 @@ impl TypeChecker<'_> {
     }
 
     fn visit_identifier(&mut self, node: &ast::Identifier) -> TypeId {
-        let var = self.ctx.lookup_mut(node.as_str());
+        let var = self.lookup_mut(node.as_str());
         let ty = match var {
             Some(handle) => {
                 handle.read(node.loc);

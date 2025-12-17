@@ -53,7 +53,7 @@ impl TypeChecker<'_> {
             defined_at: node.loc,
             ..Default::default()
         });
-        self.ctx.type_store.add_alias(ty, name.to_string());
+        self.session.types().add_alias(ty, name.to_string());
 
         TypeStore::UNIT
     }
@@ -72,7 +72,7 @@ impl TypeChecker<'_> {
             .iter()
             .map(|variant| self.visit_variant_definition(variant))
             .collect();
-        let id = self.ctx.type_store.get_next_id();
+        let id = 0;
         self.intern_unique(Type::Enum(EnumType { id, variants }))
     }
 
@@ -97,7 +97,7 @@ impl TypeChecker<'_> {
             .iter()
             .map(|field| self.visit_struct_definition_field(field))
             .collect();
-        let id = self.ctx.type_store.get_next_id();
+        let id = 0;
         self.intern_unique(Type::Struct(StructType { id, fields }))
     }
 

@@ -51,9 +51,7 @@ impl TypeChecker<'_> {
 
     fn visit_listener_type(&mut self, node: &ast::ListenerType) -> TypeId {
         let inner = self.visit_type(&node.inner);
-        self.ctx
-            .type_store
-            .add(Type::Listener(ListenerType { inner }))
+        self.intern(Type::Listener(ListenerType { inner }))
     }
 
     pub fn visit_map_type(&mut self, node: &ast::MapType) -> TypeId {
@@ -116,7 +114,7 @@ impl TypeChecker<'_> {
             arg_types.push(dynamic);
         }
 
-        self.ctx.type_store.substitute(ty.definition, &arg_types)
+        self.session.types().substitute(ty.definition, &arg_types)
     }
 
     pub fn visit_option_type(&mut self, node: &ast::OptionType) -> TypeId {

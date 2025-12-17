@@ -11,7 +11,7 @@ use crate::{
 impl TypeChecker<'_> {
     pub fn visit_call_expression(&mut self, node: &ast::CallExpression) -> TypeId {
         let callee_type = self.visit_expression(&node.callee);
-        let callee_type = match self.ctx.type_store.get(callee_type) {
+        let callee_type = match self.resolve(callee_type) {
             types::Type::Function(t) => t.clone(),
             types::Type::Unknown => {
                 return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);

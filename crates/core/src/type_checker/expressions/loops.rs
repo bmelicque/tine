@@ -75,9 +75,7 @@ impl TypeChecker<'_> {
             self.check_assigned_type(ty, curr, stmt.loc);
         }
 
-        self.ctx
-            .type_store
-            .add(Type::Option(OptionType { some: ty }))
+        self.intern(Type::Option(OptionType { some: ty }))
     }
 
     fn break_type(&mut self, stmt: &ast::BreakStatement) -> TypeId {

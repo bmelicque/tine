@@ -84,10 +84,7 @@ impl TypeChecker<'_> {
         let count = self.save_reactive_dependencies(&deps, expr.loc());
         let is_reactive = self.resolve(expr_type).is_reactive();
         if count > 0 && !is_reactive {
-            expr_type = self
-                .ctx
-                .type_store
-                .add(Type::Listener(ListenerType { inner: expr_type }));
+            expr_type = self.intern(Type::Listener(ListenerType { inner: expr_type }));
         }
         self.ctx.add_dependencies(deps);
         return expr_type;
