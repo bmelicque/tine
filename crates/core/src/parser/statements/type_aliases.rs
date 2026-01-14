@@ -193,14 +193,14 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{MyLanguageParser, ParseError, Rule};
+    use crate::parser::parser::{TineParser, ParseError, Rule};
     use pest::Parser;
 
     fn parse_type_alias_input(
         input: &'static str,
         rule: Rule,
     ) -> (ast::TypeAlias, Vec<ParseError>) {
-        let pair = MyLanguageParser::parse(rule, input)
+        let pair = TineParser::parse(rule, input)
             .unwrap()
             .next()
             .unwrap();

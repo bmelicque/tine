@@ -161,11 +161,11 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{MyLanguageParser, Rule};
+    use crate::parser::parser::{TineParser, Rule};
     use pest::Parser;
 
     fn parse_composite_literal_input(input: &'static str, rule: Rule) -> ast::CompositeLiteral {
-        let pair = MyLanguageParser::parse(rule, input)
+        let pair = TineParser::parse(rule, input)
             .unwrap()
             .next()
             .unwrap();
@@ -287,7 +287,7 @@ mod tests {
     #[test]
     fn test_parse_anonymous_struct_literal() {
         let input = r#"(name: "John", age: 30)"#;
-        let pair = MyLanguageParser::parse(Rule::struct_literal_body, input)
+        let pair = TineParser::parse(Rule::struct_literal_body, input)
             .unwrap()
             .next()
             .unwrap();
@@ -348,7 +348,7 @@ mod tests {
     #[test]
     fn test_parse_variant_literal_with_array_body() {
         let input = r#"MyEnum.Variant(1, 2, 3)"#;
-        let pair = MyLanguageParser::parse(Rule::variant_literal, input)
+        let pair = TineParser::parse(Rule::variant_literal, input)
             .unwrap()
             .next()
             .unwrap();
@@ -388,7 +388,7 @@ mod tests {
     #[test]
     fn test_parse_variant_literal_without_body() {
         let input = r#"MyEnum.Variant"#;
-        let pair = MyLanguageParser::parse(Rule::variant_literal, input)
+        let pair = TineParser::parse(Rule::variant_literal, input)
             .unwrap()
             .next()
             .unwrap();

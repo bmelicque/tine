@@ -1,10 +1,10 @@
 mod tokens;
 mod utils;
 
-use mylang_core::ModulePath;
-use mylang_core::{analyze, ModuleId, ParseError, Session, Source, Span};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
+use tine_core::ModulePath;
+use tine_core::{analyze, ModuleId, ParseError, Session, Source, Span};
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::Client;
 use tower_lsp::{lsp_types::*, LspService, Server};
@@ -44,7 +44,7 @@ impl tower_lsp::LanguageServer for Backend {
                         SemanticTokensRegistrationOptions {
                             text_document_registration_options: TextDocumentRegistrationOptions {
                                 document_selector: Some(vec![DocumentFilter {
-                                    language: Some("my-lang".into()),
+                                    language: Some("tine".into()),
                                     scheme: None,
                                     pattern: None,
                                 }]),
@@ -123,7 +123,7 @@ impl tower_lsp::LanguageServer for Backend {
                     let docs = symbol.borrow().docs.clone().unwrap_or("".into());
 
                     let contents = HoverContents::Scalar(MarkedString::String(format!(
-                        r#"```mylang
+                        r#"```tine
 {}
 ```
 ---

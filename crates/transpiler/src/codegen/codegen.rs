@@ -1,6 +1,6 @@
 use super::sort::Scope;
 use crate::codegen::utils::create_ident;
-use mylang_core::{ast, types, Location, ModuleId, ModulePath, Session, SymbolRef};
+use tine_core::{ast, types, Location, ModuleId, ModulePath, Session, SymbolRef};
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
 

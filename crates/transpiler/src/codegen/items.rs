@@ -3,7 +3,7 @@ use crate::{
     utils::{make_relative, modulepath_to_filename},
 };
 
-use mylang_core::{ast, use_decl_to_paths, ModuleImports, ModulePath};
+use tine_core::{ast, use_decl_to_paths, ModuleImports, ModulePath};
 
 use swc_common::{FileName, DUMMY_SP};
 use swc_ecma_ast as swc;

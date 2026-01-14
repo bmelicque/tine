@@ -72,7 +72,7 @@ impl Session {
                 r#"Renders a UI element into a target container in the DOM
 
 # Example
-```my-lang
+```tine
 render("body", <article>Content</article>)
 ```
 

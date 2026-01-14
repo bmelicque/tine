@@ -2,7 +2,7 @@ use ordered_float::OrderedFloat;
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
-use mylang_core::{ast, Location, Span};
+use tine_core::{ast, Location, Span};
 
 use super::{
     utils::{create_ident, true_lit},

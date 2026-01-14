@@ -3,7 +3,7 @@ use swc_ecma_ast as swc;
 
 use crate::codegen::{utils::create_ident, CodeGenerator};
 
-use mylang_core::ast;
+use tine_core::ast;
 
 impl CodeGenerator<'_> {
     pub fn element_expression_to_swc(&mut self, node: &ast::ElementExpression) -> swc::Expr {

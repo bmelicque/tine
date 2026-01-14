@@ -2,7 +2,7 @@ use crate::codegen::{
     utils::{create_ident, create_number, create_str},
     CodeGenerator,
 };
-use mylang_core::{ast, Location};
+use tine_core::{ast, Location};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 

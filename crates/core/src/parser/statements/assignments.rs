@@ -58,13 +58,13 @@ impl ParserEngine {
 mod tests {
     use super::*;
     use crate::{
-        parser::parser::{MyLanguageParser, Rule},
+        parser::parser::{TineParser, Rule},
         ParseError,
     };
     use pest::Parser;
 
     fn parse_statement_input(input: &'static str, rule: Rule) -> (ast::Statement, Vec<ParseError>) {
-        let pair = MyLanguageParser::parse(rule, input)
+        let pair = TineParser::parse(rule, input)
             .unwrap()
             .next()
             .unwrap();

@@ -78,11 +78,11 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{MyLanguageParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_type_input(input: &'static str) -> ast::Type {
-        let pair = MyLanguageParser::parse(Rule::unary_type, input)
+        let pair = TineParser::parse(Rule::unary_type, input)
             .unwrap()
             .next()
             .unwrap();

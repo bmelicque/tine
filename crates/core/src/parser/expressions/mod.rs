@@ -125,11 +125,11 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{MyLanguageParser, Rule};
+    use crate::parser::parser::{TineParser, Rule};
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str, rule: Rule) -> ast::Expression {
-        let pair = MyLanguageParser::parse(rule, input)
+        let pair = TineParser::parse(rule, input)
             .unwrap()
             .next()
             .unwrap();

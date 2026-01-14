@@ -2,7 +2,7 @@ use crate::{
     bundler::internals::{parse_dom, parse_internals},
     codegen::CodeGenerator,
 };
-use mylang_core::{ModulePath, Session};
+use tine_core::{ModulePath, Session};
 use std::sync::Arc;
 use swc_common::{FileName, SourceMap};
 

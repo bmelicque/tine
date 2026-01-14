@@ -2,7 +2,7 @@ use crate::codegen::{
     utils::{can_ifexpr_be_inlined, create_ident, undefined, AssignTo},
     CodeGenerator,
 };
-use mylang_core::ast;
+use tine_core::ast;
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
@@ -76,7 +76,7 @@ impl CodeGenerator<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mylang_core::{ast, Location, Session};
+    use tine_core::{ast, Location, Session};
     use swc_ecma_ast as swc;
 
     fn mock_expr() -> ast::Expression {

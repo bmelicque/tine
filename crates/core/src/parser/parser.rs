@@ -8,7 +8,7 @@ use crate::{ast, Location};
 
 #[derive(Parser)]
 #[grammar = "parser/grammar.pest"]
-pub struct MyLanguageParser;
+pub struct TineParser;
 
 #[derive(Debug, Clone)]
 pub struct ParseError {
@@ -35,7 +35,7 @@ impl ParserEngine {
     }
 
     pub fn parse(&mut self, input: &str) -> ParseResult {
-        match MyLanguageParser::parse(Rule::program, input) {
+        match TineParser::parse(Rule::program, input) {
             Ok(pairs) => self.build_ast(input, pairs),
             Err(err) => self.make_invalid_program(input, err),
         }

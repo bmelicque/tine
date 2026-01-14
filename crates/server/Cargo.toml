@@ -1,12 +1,12 @@
 [package]
-name = "mylang_server"
+name = "tine_server"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 anyhow = "1.0.100"
 dashmap = "6.1.0"
-mylang_core = { path = "../core" }
+tine_core = { path = "../core" }
 swc_common = "17.0.0"
 tokio = { version = "1.48.0", features = ["full"] }
 tower-lsp = "0.20.0"

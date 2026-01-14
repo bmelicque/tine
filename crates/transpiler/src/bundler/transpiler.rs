@@ -1,5 +1,5 @@
 use crate::bundler::{bundler::bundle_entry, loader::SwcLoader, resolver::SwcResolver};
-use mylang_core::{analyze, pretty_print_error};
+use tine_core::{analyze, pretty_print_error};
 use std::path::PathBuf;
 
 pub fn transpile(entry_point: PathBuf, out: &str) {

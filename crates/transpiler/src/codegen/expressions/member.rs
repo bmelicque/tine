@@ -1,5 +1,5 @@
 use crate::codegen::{utils::create_ident, CodeGenerator};
-use mylang_core::ast;
+use tine_core::ast;
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 

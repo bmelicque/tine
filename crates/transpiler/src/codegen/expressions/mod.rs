@@ -7,7 +7,7 @@ use super::{
     CodeGenerator,
 };
 use crate::codegen::utils::{can_block_be_inlined, create_block_stmt, create_number, AssignTo};
-use mylang_core::ast;
+use tine_core::ast;
 use rand::{distr::Alphanumeric, Rng};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;

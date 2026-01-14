@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use mylang_core::ast;
+use tine_core::ast;
 
 use super::CodeGenerator;
 

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use mylang_core::{
+use tine_core::{
     types::{FunctionType, Type, TypeId},
     ModuleId, Source, SymbolData, SymbolKind, SymbolRef,
 };

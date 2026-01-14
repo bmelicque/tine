@@ -3,7 +3,7 @@ use swc_ecma_ast as swc;
 
 use crate::codegen::{utils::create_str, CodeGenerator};
 
-use mylang_core::ast;
+use tine_core::ast;
 
 use super::utils::create_ident;
 

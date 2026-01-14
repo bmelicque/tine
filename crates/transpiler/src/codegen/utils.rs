@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-use mylang_core::ast;
+use tine_core::ast;
 
 use super::CodeGenerator;
 
