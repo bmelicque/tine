@@ -39,22 +39,22 @@ pub struct VariableDeclaration {
     pub docs: Option<Docs>,
     /// This is the span of the actual declaration, and does not include the `docs` (if any)
     pub loc: Location,
+    pub keyword: DeclarationKeyword,
     pub pattern: Box<Pattern>,
-    pub op: DeclarationOp,
     pub value: Box<Expression>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum DeclarationOp {
-    Mut,
+pub enum DeclarationKeyword {
     Const,
+    Var,
 }
 
-impl From<String> for DeclarationOp {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            ":=" => Self::Mut,
-            "::" => Self::Const,
+impl From<&str> for DeclarationKeyword {
+    fn from(value: &str) -> Self {
+        match value {
+            "const" => Self::Const,
+            "var" => Self::Var,
             _ => panic!(),
         }
     }

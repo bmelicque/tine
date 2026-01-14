@@ -2,9 +2,9 @@ use crate::codegen::{
     utils::{can_ifexpr_be_inlined, create_ident, undefined, AssignTo},
     CodeGenerator,
 };
-use tine_core::ast;
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
+use tine_core::ast;
 
 impl CodeGenerator<'_> {
     pub fn if_to_swc_expr(&mut self, node: &ast::IfExpression) -> swc::Expr {
@@ -76,8 +76,8 @@ impl CodeGenerator<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tine_core::{ast, Location, Session};
     use swc_ecma_ast as swc;
+    use tine_core::{ast, Location, Session};
 
     fn mock_expr() -> ast::Expression {
         ast::Expression::NumberLiteral(ast::NumberLiteral {
@@ -165,7 +165,7 @@ mod tests {
         let result = gen.if_to_swc_inlined(&node);
         match result {
             swc::Expr::Cond(cond) => {
-                assert!(matches!(*cond.alt, swc::Expr::Cond(_) | swc::Expr::Call(_)));
+                assert!(matches!(*cond.alt, swc::Expr::Lit(_)), "got {:?}", cond.alt);
             }
             _ => panic!("Expected CondExpr, got {:?}", result),
         }

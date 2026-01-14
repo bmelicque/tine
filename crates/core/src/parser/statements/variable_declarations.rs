@@ -11,7 +11,7 @@ impl ParserEngine {
     /// Parse a variable declaration.
     ///
     /// Expected pairs:
-    /// `pattern ~ declaration_operator ~ expression`
+    /// `doc_comment? ~ declaration_operator ~ pattern ~ "=" ~ expression`
     /// with `declaration_operator` being either `:=` (mutable) or `::` (constant)
     pub fn parse_variable_declaration(&mut self, pair: Pair<'_, Rule>) -> ast::VariableDeclaration {
         let whole_span = Span::from(pair.as_span());
@@ -25,21 +25,19 @@ impl ParserEngine {
         };
         let span = Span::new(next.as_span().start() as u32, whole_span.end());
         let loc = Location::new(self.module, span);
-        let pattern = Box::new(self.parse_pattern(next));
-        let op_pair = inner.next().unwrap();
-        let op = op_pair.as_str().to_string().into();
 
+        let keyword = next.as_str().into();
+        let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
         let value = Box::new(self.parse_expression(inner.next().unwrap()));
         if value.is_empty() {
-            let loc = self.localize(op_pair.as_span());
-            self.error("expected expression".into(), loc);
+            self.error("expected expression".into(), loc.increment());
         }
 
         ast::VariableDeclaration {
             docs,
             loc,
+            keyword,
             pattern,
-            op,
             value,
         }
     }
@@ -60,16 +58,13 @@ impl ParserEngine {
 mod tests {
     use super::*;
     use crate::{
-        parser::parser::{TineParser, Rule},
+        parser::parser::{Rule, TineParser},
         ParseError,
     };
     use pest::Parser;
 
     fn parse_statement_input(input: &'static str, rule: Rule) -> (ast::Statement, Vec<ParseError>) {
-        let pair = TineParser::parse(rule, input)
-            .unwrap()
-            .next()
-            .unwrap();
+        let pair = TineParser::parse(rule, input).unwrap().next().unwrap();
         let mut parser_engine = ParserEngine::new(0);
         let stmt = parser_engine.parse_statement(pair);
         (stmt, parser_engine.errors)
@@ -77,7 +72,7 @@ mod tests {
 
     #[test]
     fn test_parse_variable_declaration() {
-        let input = "x := 42";
+        let input = "var x = 42";
         let (stmt, errors) = parse_statement_input(input, Rule::variable_declaration);
 
         assert_eq!(errors.len(), 0);
@@ -88,7 +83,7 @@ mod tests {
             ast::Pattern::Identifier(ident) if ident.as_str() == "x" => {}
             _ => panic!("Identifier pattern expected"),
         };
-        assert_eq!(var_decl.op, ast::DeclarationOp::Mut);
+        assert_eq!(var_decl.keyword, ast::DeclarationKeyword::Var);
         match *var_decl.value {
             ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
             _ => panic!("Expected NumberLiteral as variable value"),
@@ -98,7 +93,7 @@ mod tests {
     #[test]
     fn test_parse_variable_declaration_with_single_doc() {
         let input = r#"// a value
-        x := 42"#;
+        var x = 42"#;
         let (stmt, errors) = parse_statement_input(input, Rule::variable_declaration);
 
         assert_eq!(errors.len(), 0);
@@ -116,7 +111,7 @@ mod tests {
     fn test_parse_variable_declaration_with_docs() {
         let input = r#"// docs
         // over several lines
-        x := 42"#;
+        var x = 42"#;
         let (stmt, errors) = parse_statement_input(input, Rule::variable_declaration);
 
         assert_eq!(errors.len(), 0);
@@ -128,7 +123,7 @@ mod tests {
 
     #[test]
     fn test_parse_variable_declaration_missing_value() {
-        let input = "x := ";
+        let input = "var x = ";
         let (stmt, errors) = parse_statement_input(input, Rule::variable_declaration);
 
         assert_eq!(errors.len(), 1);
@@ -139,7 +134,7 @@ mod tests {
             ast::Pattern::Identifier(ident) if ident.as_str() == "x" => {}
             _ => panic!("Identifier pattern expected"),
         };
-        assert_eq!(var_decl.op, ast::DeclarationOp::Mut);
+        assert_eq!(var_decl.keyword, ast::DeclarationKeyword::Var);
         assert_eq!(*var_decl.value, ast::Expression::Empty);
     }
 }

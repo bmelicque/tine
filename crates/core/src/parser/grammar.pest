@@ -133,9 +133,9 @@ literal_pattern = { string_literal | number_literal | boolean_literal }
 statement = { type_alias | method_definition | assignment | break_statement | return_statement | variable_declaration | expression_statement }
 method_definition = { "(" ~ method_receiver ~ ")" ~ value_identifier ~ "::" ~ function_expression }
 method_receiver = { value_identifier ~ type_identifier } // TODO: type_identifier -> include reference_type
-variable_declaration = { doc_comment? ~ pattern ~ decl_op ~ expression }
+variable_declaration = { doc_comment? ~ declaration_keyword ~ pattern ~ "=" ~ expression }
 doc_comment = { comment+ }
-decl_op = { ":=" | "::" }
+declaration_keyword = { "const" | "var" }
 assignment = { assignee ~ assign_op ~ expression }
 assign_op = { "=" }
 assignee = { indirection | member_assignee | pattern }

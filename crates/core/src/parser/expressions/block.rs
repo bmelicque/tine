@@ -22,7 +22,7 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{TineParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str) -> ast::Expression {
@@ -37,7 +37,7 @@ mod tests {
     #[test]
     fn test_parse_block_expression() {
         let input = r#"{
-            x := 42
+            var x = 42
             x = 43
         }
         "#;

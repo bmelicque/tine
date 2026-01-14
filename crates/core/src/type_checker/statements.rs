@@ -174,7 +174,7 @@ impl TypeChecker<'_> {
         let (inferred_type, dependencies) =
             self.with_dependencies(|s| s.visit_expression(&node.value));
 
-        let mutable = node.op == ast::DeclarationOp::Mut;
+        let mutable = node.keyword == ast::DeclarationKeyword::Var;
         if node.pattern.is_refutable() {
             self.error("Irrefutable pattern expected".into(), node.pattern.loc());
         }

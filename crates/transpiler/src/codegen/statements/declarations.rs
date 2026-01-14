@@ -1,7 +1,7 @@
 use crate::codegen::{utils::create_ident, CodeGenerator};
-use tine_core::ast;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
+use tine_core::ast;
 
 impl CodeGenerator<'_> {
     pub fn declaration_to_swc(&mut self, node: &ast::VariableDeclaration) -> Vec<swc::Stmt> {
@@ -45,9 +45,9 @@ impl CodeGenerator<'_> {
             })
         }
 
-        let kind = match node.op {
-            ast::DeclarationOp::Const => swc::VarDeclKind::Const,
-            ast::DeclarationOp::Mut => swc::VarDeclKind::Let,
+        let kind = match node.keyword {
+            ast::DeclarationKeyword::Const => swc::VarDeclKind::Const,
+            ast::DeclarationKeyword::Var => swc::VarDeclKind::Let,
         };
 
         let name = swc::Pat::Ident(swc::BindingIdent {

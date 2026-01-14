@@ -99,6 +99,10 @@
                 {
                     "name": "keyword.control.tine",
                     "match": "\\b(if|else|for|in|return|break|continue|match|use)\\b"
+                },
+                {
+                    "name": "keyword.declaration.variable.tine",
+                    "match": "\\b(const|var)\\b"
                 }
             ]
         },
