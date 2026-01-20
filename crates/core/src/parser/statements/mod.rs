@@ -1,5 +1,5 @@
 mod assignments;
-mod type_aliases;
+mod type_definitions;
 mod variable_declarations;
 
 use pest::iterators::Pair;
@@ -17,6 +17,8 @@ impl ParserEngine {
             }
             Rule::variable_declaration => self.parse_variable_declaration(pair).into(),
             Rule::assignment => self.parse_assignment(pair).into(),
+            Rule::enum_definition => self.parse_enum_definition(pair).into(),
+            Rule::struct_definition => self.parse_struct_definition(pair).into(),
             Rule::type_alias => self.parse_type_alias(pair).into(),
             Rule::break_statement => self.parse_break_statement(pair).into(),
             Rule::method_definition => self.parse_method_definition(pair).into(),
@@ -102,14 +104,11 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{TineParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_statement_input(input: &'static str, rule: Rule) -> ast::Statement {
-        let pair = TineParser::parse(rule, input)
-            .unwrap()
-            .next()
-            .unwrap();
+        let pair = TineParser::parse(rule, input).unwrap().next().unwrap();
         let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_statement(pair)
     }

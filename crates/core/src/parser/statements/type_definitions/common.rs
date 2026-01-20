@@ -1,0 +1,108 @@
+use pest::iterators::Pair;
+
+use crate::{
+    ast,
+    parser::{parser::Rule, utils::is_pascal_case, ParserEngine},
+};
+
+impl ParserEngine {
+    pub(super) fn parse_type_params(&mut self, pair: Pair<'_, Rule>) -> Vec<String> {
+        debug_assert_eq!(pair.as_rule(), Rule::type_params);
+        let mut type_params = Vec::new();
+        let mut type_param_names = std::collections::HashSet::new();
+        let inner = pair.into_inner();
+        for param_pair in inner {
+            let param_name = self.parse_type_param(&param_pair);
+            if !type_param_names.insert(param_name.clone()) {
+                let message = format!("Duplicate type parameter name '{}'", param_name);
+                let loc = self.localize(param_pair.as_span());
+                self.error(message, loc);
+            }
+            type_params.push(param_name);
+        }
+        type_params
+    }
+
+    fn parse_type_param(&mut self, pair: &Pair<'_, Rule>) -> String {
+        debug_assert_eq!(pair.as_rule(), Rule::type_identifier);
+        let param_name = pair.as_str().to_string();
+        if !is_pascal_case(&param_name) {
+            let message = format!(
+                "Type parameter name '{}' should be in Pascal case",
+                param_name
+            );
+            let loc = self.localize(pair.as_span());
+            self.error(message, loc);
+        }
+        param_name
+    }
+
+    pub(super) fn parse_type_body(&mut self, pair: Pair<'_, Rule>) -> ast::TypeBody {
+        debug_assert_eq!(pair.as_rule(), Rule::type_body);
+        let inner = pair.into_inner().next().unwrap();
+        match inner.as_rule() {
+            Rule::struct_body => self.parse_struct_body(inner).into(),
+            Rule::tuple_type => self.parse_tuple_type(inner).into(),
+            _ => unreachable!(),
+        }
+    }
+
+    fn parse_struct_body(&mut self, pair: Pair<'_, Rule>) -> ast::StructBody {
+        debug_assert_eq!(pair.as_rule(), Rule::struct_body);
+        let loc = self.localize(pair.as_span());
+
+        let fields: Vec<ast::StructDefinitionField> = pair
+            .into_inner()
+            .map(|pair| self.parse_struct_field(pair))
+            .collect();
+
+        let mut field_names = std::collections::HashSet::new();
+        fields.iter().for_each(|field| {
+            if !field_names.insert(field.as_name()) {
+                self.error(
+                    format!("Duplicate field name '{}'", field.as_name()),
+                    field.loc(),
+                );
+            }
+        });
+
+        ast::StructBody { loc, fields }
+    }
+
+    fn parse_struct_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructDefinitionField {
+        assert_eq!(pair.as_rule(), Rule::field_declaration);
+        let inner = pair.into_inner().next().unwrap();
+
+        match inner.as_rule() {
+            Rule::mandatory_field => self.parse_mandatory_field(inner).into(),
+            Rule::optional_field => self.parse_optionnal_field(inner).into(),
+            _ => unreachable!(),
+        }
+    }
+
+    fn parse_mandatory_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructMandatoryField {
+        assert_eq!(pair.as_rule(), Rule::mandatory_field);
+        let loc = self.localize(pair.as_span());
+        let mut inner = pair.into_inner();
+
+        let name = inner.next().unwrap().as_str().to_string();
+        let definition = self.parse_type(inner.next().unwrap());
+
+        ast::StructMandatoryField {
+            loc,
+            name,
+            definition,
+        }
+    }
+
+    fn parse_optionnal_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructOptionalField {
+        assert_eq!(pair.as_rule(), Rule::mandatory_field);
+        let loc = self.localize(pair.as_span());
+        let mut inner = pair.into_inner();
+
+        let name = inner.next().unwrap().as_str().to_string();
+        let default = self.parse_expression(inner.next().unwrap());
+
+        ast::StructOptionalField { loc, name, default }
+    }
+}

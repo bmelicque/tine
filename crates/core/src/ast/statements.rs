@@ -1,5 +1,5 @@
 use crate::{
-    ast::{InvalidExpression, MemberExpression},
+    ast::{InvalidExpression, MemberExpression, TupleType},
     Location,
 };
 
@@ -18,6 +18,8 @@ pub enum Statement {
     Invalid(InvalidStatement),
     MethodDefinition(MethodDefinition),
     Return(ReturnStatement),
+    Enum(EnumDefinition),
+    StructDefinition(StructDefinition),
     TypeAlias(TypeAlias),
     VariableDeclaration(VariableDeclaration),
 }
@@ -92,8 +94,7 @@ pub struct TypeAlias {
     pub loc: Location,
     pub name: String,
     pub params: Option<Vec<String>>,
-    pub op: DefinitionOp,
-    pub definition: Box<TypeDefinition>,
+    pub definition: Box<Type>,
 }
 
 impl Into<Statement> for TypeAlias {
@@ -103,54 +104,40 @@ impl Into<Statement> for TypeAlias {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum DefinitionOp {
-    Strict,
-    Like,
-}
-
-impl From<String> for DefinitionOp {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "::" => Self::Strict,
-            ":~" => Self::Like,
-            _ => panic!(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TypeDefinition {
-    Struct(StructDefinition),
-    Enum(EnumDefinition),
-    Type(Type),
-}
-
-impl TypeDefinition {
-    pub fn loc(&self) -> Location {
-        match self {
-            Self::Struct(s) => s.loc,
-            Self::Enum(e) => e.loc,
-            Self::Type(t) => t.loc(),
-        }
-    }
-}
-
-impl From<Type> for TypeDefinition {
-    fn from(value: Type) -> Self {
-        TypeDefinition::Type(value)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructDefinition {
     pub loc: Location,
-    pub fields: Vec<StructDefinitionField>,
+    pub name: String,
+    pub params: Option<Vec<String>>,
+    pub body: TypeBody,
 }
 
-impl Into<TypeDefinition> for StructDefinition {
-    fn into(self) -> TypeDefinition {
-        TypeDefinition::Struct(self)
+impl Into<Statement> for StructDefinition {
+    fn into(self) -> Statement {
+        Statement::StructDefinition(self)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TypeBody {
+    Struct(StructBody),
+    Tuple(TupleType),
+}
+
+impl From<StructBody> for TypeBody {
+    fn from(value: StructBody) -> Self {
+        Self::Struct(value)
+    }
+}
+impl From<TupleType> for TypeBody {
+    fn from(value: TupleType) -> Self {
+        Self::Tuple(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StructBody {
+    pub loc: Location,
+    pub fields: Vec<StructDefinitionField>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -208,71 +195,27 @@ impl Into<StructDefinitionField> for StructOptionalField {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
     pub loc: Location,
+    pub name: String,
+    pub params: Option<Vec<String>>,
     pub variants: Vec<VariantDefinition>,
 }
 
-impl Into<TypeDefinition> for EnumDefinition {
-    fn into(self) -> TypeDefinition {
-        TypeDefinition::Enum(self)
+impl Into<Statement> for EnumDefinition {
+    fn into(self) -> Statement {
+        Statement::Enum(self)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum VariantDefinition {
-    Unit(UnitVariant),
-    Tuple(TupleVariant),
-    Struct(StructVariant),
+pub struct VariantDefinition {
+    pub loc: Location,
+    pub name: String,
+    pub body: Option<TypeBody>,
 }
 
 impl VariantDefinition {
-    pub fn as_name(&self) -> String {
-        match self {
-            Self::Unit(unit) => unit.name.clone(),
-            Self::Tuple(tuple) => tuple.name.clone(),
-            Self::Struct(struc) => struc.name.clone(),
-        }
-    }
-
     pub fn is_unit(&self) -> bool {
-        matches!(self, Self::Unit(_))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct UnitVariant {
-    pub loc: Location,
-    pub name: String,
-}
-
-impl Into<VariantDefinition> for UnitVariant {
-    fn into(self) -> VariantDefinition {
-        VariantDefinition::Unit(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TupleVariant {
-    pub loc: Location,
-    pub name: String,
-    pub elements: Vec<Type>,
-}
-
-impl Into<VariantDefinition> for TupleVariant {
-    fn into(self) -> VariantDefinition {
-        VariantDefinition::Tuple(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StructVariant {
-    pub loc: Location,
-    pub name: String,
-    pub def: StructDefinition,
-}
-
-impl Into<VariantDefinition> for StructVariant {
-    fn into(self) -> VariantDefinition {
-        VariantDefinition::Struct(self)
+        self.body.is_none()
     }
 }
 

@@ -26,7 +26,7 @@ impl ParserEngine {
         }
     }
 
-    fn parse_tuple_type(&mut self, pair: Pair<'_, Rule>) -> ast::TupleType {
+    pub fn parse_tuple_type(&mut self, pair: Pair<'_, Rule>) -> ast::TupleType {
         assert!(pair.as_rule() == Rule::tuple_type);
         let loc = self.localize(pair.as_span());
         let elements = pair
@@ -136,14 +136,11 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{TineParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_type_input(input: &'static str, rule: Rule) -> ast::Type {
-        let pair = TineParser::parse(rule, input)
-            .unwrap()
-            .next()
-            .unwrap();
+        let pair = TineParser::parse(rule, input).unwrap().next().unwrap();
         let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_type(pair)
     }

@@ -161,21 +161,18 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{TineParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_composite_literal_input(input: &'static str, rule: Rule) -> ast::CompositeLiteral {
-        let pair = TineParser::parse(rule, input)
-            .unwrap()
-            .next()
-            .unwrap();
+        let pair = TineParser::parse(rule, input).unwrap().next().unwrap();
         let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_composite_literal(pair)
     }
 
     #[test]
     fn test_parse_map_literal() {
-        let input = r#"string#number("key": 42, "another_key": 99)"#;
+        let input = r#"string#number{"key": 42, "another_key": 99}"#;
         let result = parse_composite_literal_input(input, Rule::composite_literal);
 
         match result {

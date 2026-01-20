@@ -36,7 +36,7 @@ grouped_type = { "(" ~ type_annotation ~ ")" }
 generic_type = { type_identifier ~ ("[" ~ type_element ~ ("," ~ type_element)* ~ "]")? } // e.g., List[number]
 type_name = { primitive_type | type_identifier }
 type_identifier = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_")* }
-primitive_type = @{ "number" | "boolean" | "string" }
+primitive_type = @{ "int" | "float" | "bool" | "str" }
 type_element = { function_type | binary_type | unary_type | primary_type }
 
 // Composite literals
@@ -130,7 +130,7 @@ tuple_variant_pattern = { type_identifier ~ "." ~ type_identifier ~ "(" ~ patter
 literal_pattern = { string_literal | number_literal | boolean_literal }
 
 // Statements
-statement = { type_alias | method_definition | assignment | break_statement | return_statement | variable_declaration | expression_statement }
+statement = { method_definition | assignment | break_statement | return_statement | variable_declaration | struct_definition | enum_definition | type_alias | expression_statement }
 method_definition = { "(" ~ method_receiver ~ ")" ~ value_identifier ~ "::" ~ function_expression }
 method_receiver = { value_identifier ~ type_identifier } // TODO: type_identifier -> include reference_type
 variable_declaration = { doc_comment? ~ declaration_keyword ~ pattern ~ "=" ~ expression }
@@ -145,18 +145,19 @@ break_statement = { "break" ~ expression? }
 return_statement = { "return" ~ expression? }
 expression_statement = { comment* ~ expression }
 
-type_alias = { type_identifier ~ type_params? ~ type_def_op ~ type_def }
-type_def_op = { "::" | ":~" }
-type_params = { "[" ~ type_identifier ~ ("," ~ type_identifier)* ~ "]" }
-type_def = { "("~NEWLINE?~sum_type~NEWLINE?~")" | struct_body | sum_type }
-struct_body = { "(" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ ")" }
+struct_definition = { "struct" ~ type_identifier ~ type_params? ~ type_body }
+enum_definition = { "enum" ~ type_identifier ~ type_params? ~ enum_body }
+enum_body = { "{" ~ NEWLINE? ~ (enum_variant ~ ((NEWLINE|",") ~ enum_variant)* ~ NEWLINE?)? ~ "}" }
+enum_variant = { type_identifier ~ type_body? }
+
+type_params = { "<" ~ type_identifier ~ ("," ~ type_identifier)* ~ ">" }
+type_body = { struct_body | tuple_type }
+struct_body = { "{" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ "}" }
 field_declaration = { mandatory_field | optional_field  }
-embedded_field = { type_identifier }
 mandatory_field = { value_identifier ~ type_element }
-optional_field = { value_identifier ~ ":" ~ expression }
-sum_type = { (NEWLINE? ~ "|")? ~ sum_constructor ~ (NEWLINE? ~ "|" ~ sum_constructor)+ }
-sum_constructor = { type_identifier ~ (struct_body | sum_param)? }
-sum_param = { "(" ~ type_annotation ~ ")" }
+optional_field = { value_identifier ~ "=" ~ expression }
+
+type_alias = { "type" ~ type_identifier ~ type_params? ~ "=" ~ type_annotation }
 
 // Items
 item = { use_declaration | statement }

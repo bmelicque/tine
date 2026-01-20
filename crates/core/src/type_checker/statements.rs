@@ -15,12 +15,14 @@ impl TypeChecker<'_> {
         match node {
             ast::Statement::Assignment(node) => self.visit_assignment(node),
             ast::Statement::Empty => TypeStore::UNIT,
+            ast::Statement::Enum(node) => self.visit_enum_definition(node),
             ast::Statement::Expression(node) => self.visit_expression(&node.expression),
             ast::Statement::Break(node) => self.visit_break_statement(node),
             ast::Statement::Invalid(_) => TypeStore::UNKNOWN,
             ast::Statement::MethodDefinition(node) => self.visit_method_definition(node),
             ast::Statement::Return(node) => self.visit_return_statement(node),
-            ast::Statement::TypeAlias(node) => self.visit_type_declaration(node),
+            ast::Statement::StructDefinition(node) => self.visit_struct_definition(node),
+            ast::Statement::TypeAlias(node) => self.visit_type_alias(node),
             ast::Statement::VariableDeclaration(node) => self.visit_variable_declaration(node),
         }
     }
