@@ -44,8 +44,11 @@ mod tests {
     use pest::Parser;
 
     fn parse_struct_input(input: &'static str) -> (ast::StructDefinition, Vec<ParseError>) {
-        let pair = TineParser::parse(Rule::struct_definition, input)
-            .unwrap()
+        let result = TineParser::parse(Rule::struct_definition, input);
+        let Ok(mut pair) = result else {
+            panic!("Failed to parse input: {:?}", result.err().unwrap());
+        };
+        let pair = pair
             .next()
             .unwrap();
         let mut parser_engine = ParserEngine::new(0);
@@ -120,7 +123,7 @@ mod tests {
 
         // Check for errors
         assert!(!errors.is_empty());
-        assert_eq!(errors.len(), 2);
+        assert_eq!(errors.len(), 1, "expected 1 error, got {}", errors.len());
     }
 
     #[test]
@@ -129,6 +132,6 @@ mod tests {
         let (_, errors) = parse_struct_input(input);
 
         assert!(!errors.is_empty());
-        assert_eq!(errors.len(), 2);
+        assert_eq!(errors.len(), 1);
     }
 }

@@ -11,6 +11,7 @@ impl ParserEngine {
         match pair.as_rule() {
             Rule::type_annotation
             | Rule::type_element
+            | Rule::type_body_element
             | Rule::binary_type
             | Rule::primary_type
             | Rule::grouped_type
@@ -147,12 +148,12 @@ mod tests {
 
     #[test]
     fn test_parse_named_type() {
-        let input = "number";
+        let input = "int";
         let result = parse_type_input(input, Rule::primitive_type);
 
         match result {
             ast::Type::Named(named) => {
-                assert_eq!(named.name, "number");
+                assert_eq!(named.name, "int");
                 assert!(named.args.is_none());
             }
             _ => panic!("Expected NamedType"),
@@ -161,7 +162,7 @@ mod tests {
 
     #[test]
     fn test_parse_generic_type() {
-        let input = "Box[number]";
+        let input = "Box<int>";
         let result = parse_type_input(input, Rule::generic_type);
 
         match result {
@@ -171,7 +172,7 @@ mod tests {
                 let args = named.args.unwrap();
                 assert_eq!(args.len(), 1);
                 match &args[0] {
-                    ast::Type::Named(arg_named) => assert_eq!(arg_named.name, "number"),
+                    ast::Type::Named(arg_named) => assert_eq!(arg_named.name, "int"),
                     _ => panic!("Expected NamedType as generic argument"),
                 }
             }
@@ -181,17 +182,17 @@ mod tests {
 
     #[test]
     fn test_parse_map_type() {
-        let input = "string#number";
+        let input = "str#int";
         let result = parse_type_input(input, Rule::map_type);
 
         match result {
             ast::Type::Map(map) => {
                 match *map.key.unwrap() {
-                    ast::Type::Named(named) => assert_eq!(named.name, "string"),
+                    ast::Type::Named(named) => assert_eq!(named.name, "str"),
                     _ => panic!("Expected NamedType as map key"),
                 }
                 match *map.value.unwrap() {
-                    ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                    ast::Type::Named(named) => assert_eq!(named.name, "int"),
                     _ => panic!("Expected NamedType as map value"),
                 }
             }
@@ -201,18 +202,18 @@ mod tests {
 
     #[test]
     fn test_parse_tuple_type() {
-        let input = "(number, string)";
+        let input = "(int, str)";
         let result = parse_type_input(input, Rule::type_annotation);
 
         match result {
             ast::Type::Tuple(tuple) => {
                 assert_eq!(tuple.elements.len(), 2);
                 match &tuple.elements[0] {
-                    ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                    ast::Type::Named(named) => assert_eq!(named.name, "int"),
                     _ => panic!("Expected NamedType as first tuple element"),
                 }
                 match &tuple.elements[1] {
-                    ast::Type::Named(named) => assert_eq!(named.name, "string"),
+                    ast::Type::Named(named) => assert_eq!(named.name, "str"),
                     _ => panic!("Expected NamedType as second tuple element"),
                 }
             }
@@ -222,22 +223,22 @@ mod tests {
 
     #[test]
     fn test_parse_function_type() {
-        let input = "(number, string) -> boolean";
+        let input = "(int, str) -> bool";
         let result = parse_type_input(input, Rule::function_type);
 
         match result {
             ast::Type::Function(function) => {
                 assert_eq!(function.params.len(), 2);
                 match &function.params[0] {
-                    ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                    ast::Type::Named(named) => assert_eq!(named.name, "int"),
                     _ => panic!("Expected NamedType as first function parameter"),
                 }
                 match &function.params[1] {
-                    ast::Type::Named(named) => assert_eq!(named.name, "string"),
+                    ast::Type::Named(named) => assert_eq!(named.name, "str"),
                     _ => panic!("Expected NamedType as second function parameter"),
                 }
                 match *function.returned {
-                    ast::Type::Named(named) => assert_eq!(named.name, "boolean"),
+                    ast::Type::Named(named) => assert_eq!(named.name, "bool"),
                     _ => panic!("Expected NamedType as function return type"),
                 }
             }
@@ -247,12 +248,12 @@ mod tests {
 
     #[test]
     fn test_parse_function_type_no_args() {
-        let input = "() -> boolean";
+        let input = "() -> bool";
         let result = parse_type_input(input, Rule::function_type);
 
         match result {
             ast::Type::Function(function) => match *function.returned {
-                ast::Type::Named(named) => assert_eq!(named.name, "boolean"),
+                ast::Type::Named(named) => assert_eq!(named.name, "bool"),
                 _ => panic!("Expected NamedType as function return type"),
             },
             _ => panic!("Expected FunctionType"),
@@ -261,17 +262,17 @@ mod tests {
 
     #[test]
     fn test_parse_result_type() {
-        let input = "string!number";
+        let input = "str!int";
         let result = parse_type_input(input, Rule::result_type);
 
         match result {
             ast::Type::Result(result_type) => {
                 match *result_type.ok.unwrap() {
-                    ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                    ast::Type::Named(named) => assert_eq!(named.name, "int"),
                     _ => panic!("Expected NamedType as result ok type"),
                 }
                 match *result_type.error.unwrap() {
-                    ast::Type::Named(named) => assert_eq!(named.name, "string"),
+                    ast::Type::Named(named) => assert_eq!(named.name, "str"),
                     _ => panic!("Expected NamedType as result error type"),
                 }
             }

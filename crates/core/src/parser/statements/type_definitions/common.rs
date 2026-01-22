@@ -42,7 +42,7 @@ impl ParserEngine {
         let inner = pair.into_inner().next().unwrap();
         match inner.as_rule() {
             Rule::struct_body => self.parse_struct_body(inner).into(),
-            Rule::tuple_type => self.parse_tuple_type(inner).into(),
+            Rule::tuple_body => self.parse_tuple_body(inner).into(),
             _ => unreachable!(),
         }
     }
@@ -104,5 +104,15 @@ impl ParserEngine {
         let default = self.parse_expression(inner.next().unwrap());
 
         ast::StructOptionalField { loc, name, default }
+    }
+
+    fn parse_tuple_body(&mut self, pair: Pair<'_, Rule>) -> ast::TupleType {
+        debug_assert_eq!(pair.as_rule(), Rule::tuple_body);
+        let loc = self.localize(pair.as_span());
+        let elements: Vec<ast::Type> = pair
+            .into_inner()
+            .map(|pair| self.parse_type(pair))
+            .collect();
+        ast::TupleType { loc, elements }
     }
 }

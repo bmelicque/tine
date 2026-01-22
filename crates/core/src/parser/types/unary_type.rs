@@ -92,12 +92,12 @@ mod tests {
 
     #[test]
     fn test_parse_array_type() {
-        let input = "[]number";
+        let input = "[]int";
         let result = parse_type_input(input);
 
         match result {
             ast::Type::Array(array) => match *array.element.unwrap() {
-                ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                ast::Type::Named(named) => assert_eq!(named.name, "int"),
                 _ => panic!("Expected NamedType as array element"),
             },
             _ => panic!("Expected ArrayType"),
@@ -106,12 +106,12 @@ mod tests {
 
     #[test]
     fn test_parse_option_type() {
-        let input = "?number";
+        let input = "?int";
         let result = parse_type_input(input);
 
         match result {
             ast::Type::Option(option) => match *option.base.unwrap() {
-                ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                ast::Type::Named(named) => assert_eq!(named.name, "int"),
                 _ => panic!("Expected NamedType as option base"),
             },
             _ => panic!("Expected OptionType"),
@@ -120,12 +120,12 @@ mod tests {
 
     #[test]
     fn test_parse_signal_type() {
-        let input = "$number";
+        let input = "$int";
         let result = parse_type_input(input);
 
         match result {
             ast::Type::Signal(option) => match *option.inner {
-                ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                ast::Type::Named(named) => assert_eq!(named.name, "int"),
                 _ => panic!("Expected NamedType as option base"),
             },
             _ => panic!("Expected OptionType"),

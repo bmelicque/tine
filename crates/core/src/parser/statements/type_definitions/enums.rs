@@ -19,7 +19,7 @@ impl ParserEngine {
                 Rule::type_params => {
                     params = Some(self.parse_type_params(pair));
                 }
-                Rule::type_body => {
+                Rule::enum_body => {
                     variants = Some(self.parse_enum_body(pair));
                 }
                 _ => unreachable!(),

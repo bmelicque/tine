@@ -33,7 +33,7 @@ duck_type = { "~" ~ primary_type }
 primary_type = { generic_type | type_name | grouped_type }
 grouped_type = { "(" ~ type_annotation ~ ")" }
 // uses binary_type in generic_type to avoid unwrapping tuples
-generic_type = { type_identifier ~ ("[" ~ type_element ~ ("," ~ type_element)* ~ "]")? } // e.g., List[number]
+generic_type = { type_identifier ~ ("<" ~ type_element ~ ("," ~ type_element)* ~ ">")? } // e.g., List[number]
 type_name = { primitive_type | type_identifier }
 type_identifier = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_")* }
 primitive_type = @{ "int" | "float" | "bool" | "str" }
@@ -41,18 +41,19 @@ type_element = { function_type | binary_type | unary_type | primary_type }
 
 // Composite literals
 composite_literal = { variant_literal | map_literal | struct_literal | array_literal | option_literal }
-map_literal = { map_type ~ "(" ~ NEWLINE? ~ map_body ~ NEWLINE? ~ ")" }
+map_literal = { map_type ~ "{" ~ NEWLINE? ~ map_body ~ NEWLINE? ~ "}" }
 map_body = { (map_entry? ~ ((","|NEWLINE) ~ map_entry)*)? }
 map_entry = { map_key ~ ":" ~ anonymous_expression }
 map_key = { string_literal | number_literal | "[" ~ expression ~ "]" }
 array_literal = { array_type ~ array_literal_body }
-array_literal_body = { "(" ~ NEWLINE? ~ (anonymous_expression ~ ((","|NEWLINE) ~ anonymous_expression )*)? ~ NEWLINE? ~ ")" }
-option_literal = { option_type ~ "(" ~ NEWLINE? ~ (anonymous_expression ~ NEWLINE?)? ~ ")" }
+array_literal_body = { "{" ~ NEWLINE? ~ (anonymous_expression ~ ((","|NEWLINE) ~ anonymous_expression )*)? ~ NEWLINE? ~ "}" }
+option_literal = { option_type ~ "{" ~ NEWLINE? ~ (anonymous_expression ~ NEWLINE?)? ~ "}" }
 struct_literal = { generic_type ~ struct_literal_body }
-struct_literal_body = { "(" ~ NEWLINE? ~ (field_assignment ~ ((","|NEWLINE) ~ field_assignment)*)?  ~ NEWLINE? ~ ")" }
+struct_literal_body = { "{" ~ NEWLINE? ~ (field_assignment ~ ((","|NEWLINE) ~ field_assignment)*)?  ~ NEWLINE? ~ "}" }
 field_assignment = { value_identifier ~ ":" ~ expression }
 variant_literal = { (generic_type|type_identifier) ~ "." ~ type_identifier ~ variant_literal_body? }
-variant_literal_body = { array_literal_body | struct_literal_body }
+variant_literal_body = { tuple_literal_body | struct_literal_body }
+tuple_literal_body = { "(" ~ NEWLINE? ~ (anonymous_expression ~ ((","|NEWLINE) ~ anonymous_expression )*)? ~ NEWLINE? ~ ")" }
 anonymous_expression = { struct_literal_body | expression }
 
 // Expressions
@@ -151,11 +152,13 @@ enum_body = { "{" ~ NEWLINE? ~ (enum_variant ~ ((NEWLINE|",") ~ enum_variant)* ~
 enum_variant = { type_identifier ~ type_body? }
 
 type_params = { "<" ~ type_identifier ~ ("," ~ type_identifier)* ~ ">" }
-type_body = { struct_body | tuple_type }
+type_body = { struct_body | tuple_body }
 struct_body = { "{" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ "}" }
 field_declaration = { mandatory_field | optional_field  }
 mandatory_field = { value_identifier ~ type_element }
 optional_field = { value_identifier ~ "=" ~ expression }
+tuple_body = { "(" ~ type_element  ~ ("," ~ type_element)* ~ ")" }
+type_body_element = { function_type | binary_type | unary_type | generic_type | type_name }
 
 type_alias = { "type" ~ type_identifier ~ type_params? ~ "=" ~ type_annotation }
 
