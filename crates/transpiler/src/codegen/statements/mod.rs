@@ -1,11 +1,12 @@
 mod assignments;
 mod declarations;
+mod type_definitions;
 
 use super::{utils::create_ident, CodeGenerator};
 use crate::codegen::utils::{create_block_stmt, AssignTo};
-use tine_core::ast;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
+use tine_core::ast;
 
 impl CodeGenerator<'_> {
     pub fn stmt_to_swc(&mut self, node: &ast::Statement) -> Vec<swc::Stmt> {
@@ -13,6 +14,7 @@ impl CodeGenerator<'_> {
             ast::Statement::Assignment(node) => vec![self.assignment_to_swc(node).into()],
             ast::Statement::Break(_) => vec![self.break_to_swc_stmt().into()],
             ast::Statement::Empty => vec![],
+            ast::Statement::Enum(node) => vec![self.enum_to_swc(node).into()],
             ast::Statement::Expression(node) => match node.expression.as_ref() {
                 ast::Expression::Block(block) => {
                     vec![self.block_to_swc_stmt(block, AssignTo::None).into()]
@@ -40,7 +42,10 @@ impl CodeGenerator<'_> {
             }
             .into()],
             ast::Statement::Return(node) => vec![self.return_to_swc(node).into()],
-            ast::Statement::TypeAlias(node) => self.alias_to_swc(node).into(),
+            ast::Statement::StructDefinition(node) => {
+                vec![self.struct_def_to_swc_class(node).into()]
+            }
+            ast::Statement::TypeAlias(_) => vec![],
             ast::Statement::VariableDeclaration(node) => self.declaration_to_swc(node),
         }
     }
