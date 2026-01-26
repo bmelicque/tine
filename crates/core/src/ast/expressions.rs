@@ -353,38 +353,38 @@ impl Into<Expression> for CallExpression {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CallArgument {
     Expression(Expression),
-    Predicate(Predicate),
+    Callback(Callback),
 }
 impl From<Expression> for CallArgument {
     fn from(value: Expression) -> Self {
         Self::Expression(value)
     }
 }
-impl From<Predicate> for CallArgument {
-    fn from(value: Predicate) -> Self {
-        Self::Predicate(value)
+impl From<Callback> for CallArgument {
+    fn from(value: Callback) -> Self {
+        Self::Callback(value)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Predicate {
+pub struct Callback {
     pub loc: Location,
-    pub params: Vec<PredicateParam>,
-    pub body: FunctionBody,
+    pub params: Vec<CallbackParam>,
+    pub body: BlockExpression,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PredicateParam {
+pub enum CallbackParam {
     Identifier(Identifier),
     Param(FunctionParam),
 }
 
-impl From<Identifier> for PredicateParam {
+impl From<Identifier> for CallbackParam {
     fn from(value: Identifier) -> Self {
         Self::Identifier(value)
     }
 }
-impl From<FunctionParam> for PredicateParam {
+impl From<FunctionParam> for CallbackParam {
     fn from(value: FunctionParam) -> Self {
         Self::Param(value)
     }
@@ -474,8 +474,10 @@ pub enum UnaryOperator {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionExpression {
     pub loc: Location,
+    pub name: Option<Identifier>,
     pub params: Vec<FunctionParam>,
-    pub body: FunctionBody,
+    pub return_type: Option<Type>,
+    pub body: BlockExpression,
 }
 
 impl Into<Expression> for FunctionExpression {
@@ -489,28 +491,4 @@ pub struct FunctionParam {
     pub loc: Location,
     pub name: Identifier,
     pub type_annotation: Type,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum FunctionBody {
-    Expression(Box<Expression>),
-    TypedBlock(TypedBlock),
-}
-
-impl From<Expression> for FunctionBody {
-    fn from(value: Expression) -> Self {
-        FunctionBody::Expression(Box::new(value))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypedBlock {
-    pub type_annotation: Option<Type>,
-    pub block: BlockExpression,
-}
-
-impl Into<FunctionBody> for TypedBlock {
-    fn into(self) -> FunctionBody {
-        FunctionBody::TypedBlock(self)
-    }
 }

@@ -71,12 +71,12 @@ mul_op = { "*" | "/" | "%" }
 exponentiation = { (unary|primary) ~ ("**" ~ (unary|primary))* }
 unary = { unary_op ~ (unary|primary) }
 unary_op = { "*" | "&" | "@" | "$" }
-primary = { access_or_call_expression | string_literal | number_literal | boolean_literal | value_identifier | function_expression | "(" ~ tuple_or_expression ~ ")" }
+primary = { function_expression | access_or_call_expression | string_literal | number_literal | boolean_literal | value_identifier | "(" ~ tuple_or_expression ~ ")" }
 access_or_call_expression = { access_or_call_root ~ (member_suffix | call_arguments)+ }
 access_or_call_root = { value_identifier | "(" ~ tuple_or_expression ~ ")" }
 member_suffix = { "." ~ (value_identifier | integer)? }
 call_arguments = { "(" ~ (call_argument ~ ("," ~ call_argument)*)? ~ ")" }
-call_argument = { predicate | expression }
+call_argument = { callback | expression }
 array_expression = { "[" ~ NEWLINE? ~ expression ~ ("," ~ NEWLINE? ~ expression)* ~ (","? ~ NEWLINE)? ~ "]" }
 block = { "{" ~ NEWLINE? ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ NEWLINE? ~ "}" }
 
@@ -92,13 +92,13 @@ loop_expression = { for_expression | for_in_expression }
 for_expression = { "for" ~ expression ~ block }
 for_in_expression = { "for" ~ pattern ~ "in" ~ expression ~ block }
 
-function_expression = { parameter_list ~ "=>" ~ (typed_block | expression) }
+function_expression = { "fn" ~ value_identifier? ~ parameter_list ~ type_annotation? ~ block }
 typed_block = { type_annotation? ~ block }
 parameter_list = { "(" ~ (parameter ~ ("," ~ parameter)*)? ~ ")" }
 parameter = { value_identifier ~ type_annotation }
-predicate = { predicate_parameters ~ "=>" ~ (typed_block | expression) }
-predicate_parameters = { "(" ~ (predicate_param ~ ("," ~ predicate_param)*)? ~ ")" }
-predicate_param = { parameter | value_identifier }
+callback = { callback_parameters ~ "=>" ~ expression }
+callback_parameters = { "(" ~ (callback_param ~ ("," ~ callback_param)*)? ~ ")" }
+callback_param = { parameter | value_identifier }
 
 // DOM
 element_expression = { dom_element | void_element }
@@ -131,7 +131,8 @@ tuple_variant_pattern = { type_identifier ~ "." ~ type_identifier ~ "(" ~ patter
 literal_pattern = { string_literal | number_literal | boolean_literal }
 
 // Statements
-statement = { method_definition | assignment | break_statement | return_statement | variable_declaration | struct_definition | enum_definition | type_alias | expression_statement }
+statement = { function_definition | break_statement | return_statement | variable_declaration | struct_definition | enum_definition | type_alias | method_definition | assignment | expression_statement }
+function_definition = { doc_comment? ~ function_expression }
 method_definition = { "(" ~ method_receiver ~ ")" ~ value_identifier ~ "::" ~ function_expression }
 method_receiver = { value_identifier ~ type_identifier } // TODO: type_identifier -> include reference_type
 variable_declaration = { doc_comment? ~ declaration_keyword ~ pattern ~ "=" ~ expression }

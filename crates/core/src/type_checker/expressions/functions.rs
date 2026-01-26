@@ -9,7 +9,7 @@ impl TypeChecker<'_> {
     pub fn visit_function_expression(&mut self, node: &ast::FunctionExpression) -> TypeId {
         let (params, return_type) = self.with_scope(|s| {
             let param_types = s.visit_function_params(&node);
-            let body_type = s.visit_function_body(&node.body);
+            let body_type = s.visit_function_body(node);
             (param_types, body_type)
         });
 
@@ -36,39 +36,30 @@ impl TypeChecker<'_> {
         param_types
     }
 
-    pub fn visit_function_body(&mut self, node: &ast::FunctionBody) -> TypeId {
-        let block = match node {
-            ast::FunctionBody::Expression(node) => return self.visit_expression(node),
-            ast::FunctionBody::TypedBlock(node) => node,
-        };
+    pub fn visit_function_body(&mut self, node: &ast::FunctionExpression) -> TypeId {
+        let return_type = node
+            .return_type
+            .as_ref()
+            .map(|ty| self.visit_type(ty))
+            .unwrap_or(TypeStore::UNIT);
 
-        let ty = if let Some(ref type_annotation) = block.type_annotation {
-            self.visit_type(type_annotation)
-        } else {
-            TypeStore::UNIT
-        };
-        self.visit_block_expression(&block.block);
-        self.check_returns(block, ty);
-        ty
-    }
-
-    fn check_returns(&mut self, body: &ast::TypedBlock, expected: TypeId) {
+        let body_type = self.visit_block_expression(&node.body);
         let mut returns = Vec::<ast::ReturnStatement>::new();
-        body.block.find_returns(&mut returns);
-
-        if returns.len() == 0 && expected != TypeStore::UNIT {
-            self.error(
-                "A function with return annotation needs a return value".into(),
-                body.block.loc,
-            );
-        }
-
+        node.body.find_returns(&mut returns);
         for ret in returns {
             let ty = match ret.value {
                 Some(value) => self.get_type_at(value.loc()).unwrap(),
                 None => TypeStore::UNIT,
             };
-            self.check_assigned_type(expected, ty, ret.loc);
+            self.check_assigned_type(return_type, ty, ret.loc);
         }
+
+        if let Some(ast::Statement::Expression(expr)) = node.body.statements.last() {
+            if return_type != TypeStore::UNIT {
+                self.check_assigned_type(return_type, body_type, expr.expression.loc());
+            }
+        }
+
+        return_type
     }
 }

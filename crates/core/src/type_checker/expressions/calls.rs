@@ -46,7 +46,7 @@ impl TypeChecker<'_> {
     fn check_argument(&mut self, node: &ast::CallArgument, expected: TypeId) {
         match node {
             ast::CallArgument::Expression(expr) => self.check_expression_argument(expr, expected),
-            ast::CallArgument::Predicate(node) => self.check_predicate(node, expected),
+            ast::CallArgument::Callback(node) => self.check_callback(node, expected),
         }
     }
 
@@ -55,7 +55,7 @@ impl TypeChecker<'_> {
         self.check_assigned_type(expected, got, node.loc());
     }
 
-    fn check_predicate(&mut self, node: &ast::Predicate, expected: TypeId) {
+    fn check_callback(&mut self, node: &ast::Callback, expected: TypeId) {
         let expected = self.resolve(expected);
         let Type::Function(expected) = expected else {
             self.error(
@@ -77,15 +77,33 @@ impl TypeChecker<'_> {
                 s.error(message, node.loc);
             }
             s.define_params(&node.params, &params);
-            let body_type = s.visit_function_body(&node.body);
-            s.check_assigned_type(return_type, body_type, node.loc);
+            s.visit_callback_body(node, return_type);
         });
     }
 
-    fn define_params(&mut self, got: &Vec<ast::PredicateParam>, expected: &Vec<TypeId>) {
+    pub fn visit_callback_body(&mut self, node: &ast::Callback, expected_type: TypeId) {
+        let body_type = self.visit_block_expression(&node.body);
+        let mut returns = Vec::<ast::ReturnStatement>::new();
+        node.body.find_returns(&mut returns);
+        for ret in returns {
+            let ty = match ret.value {
+                Some(value) => self.get_type_at(value.loc()).unwrap(),
+                None => TypeStore::UNIT,
+            };
+            self.check_assigned_type(expected_type, ty, ret.loc);
+        }
+
+        if let Some(ast::Statement::Expression(expr)) = node.body.statements.last() {
+            if expected_type != TypeStore::UNIT {
+                self.check_assigned_type(expected_type, body_type, expr.expression.loc());
+            }
+        }
+    }
+
+    fn define_params(&mut self, got: &Vec<ast::CallbackParam>, expected: &Vec<TypeId>) {
         for (i, param) in got.iter().take(expected.len()).enumerate() {
             match param {
-                ast::PredicateParam::Identifier(id) => {
+                ast::CallbackParam::Identifier(id) => {
                     self.ctx.register_symbol(SymbolData {
                         name: id.as_str().into(),
                         ty: expected[i],
@@ -94,7 +112,7 @@ impl TypeChecker<'_> {
                         ..Default::default()
                     });
                 }
-                ast::PredicateParam::Param(param) => {
+                ast::CallbackParam::Param(param) => {
                     let ty = self.visit_type(&param.type_annotation);
                     self.ctx.register_symbol(SymbolData {
                         name: param.name.as_str().into(),

@@ -53,7 +53,7 @@ impl ParserEngine {
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {
             Rule::expression => self.parse_expression(pair).into(),
-            Rule::predicate => self.parse_predicate(pair).into(),
+            Rule::callback => self.parse_callback(pair).into(),
             rule => unreachable!("Unexpected rule {:?}", rule),
         }
     }
@@ -99,7 +99,7 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{TineParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str) -> ast::Expression {

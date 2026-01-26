@@ -37,6 +37,13 @@ impl Span {
         Self::new(end, end + 1)
     }
 
+    /// Make a 1 char long span ending just before the start of given span
+    pub fn decrement(&self) -> Self {
+        let end = self.start;
+        let start = if end > 0 { end - 1 } else { 0 };
+        Self::new(start, end)
+    }
+
     pub fn is_within(&self, test: Self) -> bool {
         self.start >= test.start && self.end <= test.end
     }
@@ -98,6 +105,14 @@ impl Location {
 
     pub fn increment(&self) -> Location {
         let span = self.span.increment();
+        Location {
+            module: self.module,
+            span,
+        }
+    }
+
+    pub fn decrement(&self) -> Location {
+        let span = self.span.decrement();
         Location {
             module: self.module,
             span,

@@ -42,7 +42,7 @@ impl ParserEngine {
         }
     }
 
-    fn parse_docs(&mut self, pair: Pair<'_, Rule>) -> ast::Docs {
+    pub fn parse_docs(&mut self, pair: Pair<'_, Rule>) -> ast::Docs {
         debug_assert_eq!(pair.as_rule(), Rule::doc_comment);
         let docs_span = pair.as_span();
         let line_count = docs_span.lines_span().count();

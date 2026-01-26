@@ -14,10 +14,11 @@ impl TypeChecker<'_> {
     pub fn visit_statement(&mut self, node: &ast::Statement) -> TypeId {
         match node {
             ast::Statement::Assignment(node) => self.visit_assignment(node),
+            ast::Statement::Break(node) => self.visit_break_statement(node),
             ast::Statement::Empty => TypeStore::UNIT,
             ast::Statement::Enum(node) => self.visit_enum_definition(node),
             ast::Statement::Expression(node) => self.visit_expression(&node.expression),
-            ast::Statement::Break(node) => self.visit_break_statement(node),
+            ast::Statement::Function(node) => self.visit_function_definition(node),
             ast::Statement::Invalid(_) => TypeStore::UNKNOWN,
             ast::Statement::MethodDefinition(node) => self.visit_method_definition(node),
             ast::Statement::Return(node) => self.visit_return_statement(node),
@@ -120,6 +121,40 @@ impl TypeChecker<'_> {
         if let Some(ref value) = node.value {
             self.visit_expression(value);
         }
+        TypeStore::UNIT
+    }
+
+    fn visit_function_definition(&mut self, node: &ast::FunctionDefinition) -> TypeId {
+        let ast::FunctionDefinition { docs, definition } = node;
+        let docs = docs.as_ref().map(|d| d.text.clone());
+        let Some(ref name) = definition.name else {
+            panic!("parser phase should've ensured that name is not None")
+        };
+        let (ty, dependencies) =
+            self.with_dependencies(|checker| checker.visit_function_expression(definition));
+        match self.ctx.find_in_current_scope(name.as_str()) {
+            Some(symbol) => {
+                let message = format!("name '{}' already defined in current scope", name.as_str());
+                self.error(message, name.loc);
+                symbol
+            }
+            None => self.ctx.register_symbol(SymbolData {
+                name: name.as_str().to_string(),
+                ty,
+                kind: SymbolKind::Function {
+                    param_names: definition
+                        .params
+                        .iter()
+                        .map(|param| param.name.text.clone())
+                        .collect(),
+                },
+                docs,
+                defined_at: name.loc,
+                dependencies: dependencies.clone(),
+                ..Default::default()
+            }),
+        };
+
         TypeStore::UNIT
     }
 

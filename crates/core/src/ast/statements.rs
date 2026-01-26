@@ -11,14 +11,15 @@ use super::{
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Statement {
-    Empty,
     Assignment(Assignment),
     Break(BreakStatement),
+    Empty,
+    Enum(EnumDefinition),
     Expression(ExpressionStatement),
+    Function(FunctionDefinition),
     Invalid(InvalidStatement),
     MethodDefinition(MethodDefinition),
     Return(ReturnStatement),
-    Enum(EnumDefinition),
     StructDefinition(StructDefinition),
     TypeAlias(TypeAlias),
     VariableDeclaration(VariableDeclaration),
@@ -304,6 +305,18 @@ impl From<Expression> for ExpressionStatement {
         ExpressionStatement {
             expression: Box::new(expression),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FunctionDefinition {
+    pub docs: Option<Docs>,
+    pub definition: FunctionExpression,
+}
+
+impl Into<Statement> for FunctionDefinition {
+    fn into(self) -> Statement {
+        Statement::Function(self)
     }
 }
 

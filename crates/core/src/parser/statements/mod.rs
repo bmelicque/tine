@@ -1,4 +1,5 @@
 mod assignments;
+mod functions;
 mod type_definitions;
 mod variable_declarations;
 
@@ -18,6 +19,7 @@ impl ParserEngine {
             Rule::variable_declaration => self.parse_variable_declaration(pair).into(),
             Rule::assignment => self.parse_assignment(pair).into(),
             Rule::enum_definition => self.parse_enum_definition(pair).into(),
+            Rule::function_definition => self.parse_function_definition(pair).into(),
             Rule::struct_definition => self.parse_struct_definition(pair).into(),
             Rule::type_alias => self.parse_type_alias(pair).into(),
             Rule::break_statement => self.parse_break_statement(pair).into(),

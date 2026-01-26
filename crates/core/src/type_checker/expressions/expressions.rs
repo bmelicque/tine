@@ -227,6 +227,8 @@ mod tests {
     fn test_visit_function_expression() {
         let mut checker = create_type_checker();
         let function_expression = ast::FunctionExpression {
+            loc: Location::dummy(),
+            name: None,
             params: vec![
                 ast::FunctionParam {
                     name: ident("x"),
@@ -247,15 +249,22 @@ mod tests {
                     loc: Location::dummy(),
                 },
             ],
-            body: ast::FunctionBody::Expression(Box::new(ast::Expression::Binary(
-                ast::BinaryExpression {
-                    left: Box::new(ast::Expression::Identifier(ident("x"))),
-                    right: Box::new(ast::Expression::Identifier(ident("y"))),
-                    operator: ast::BinaryOperator::Add,
-                    loc: Location::dummy(),
-                },
-            ))),
-            loc: Location::dummy(),
+            return_type: Some(ast::Type::Named(ast::NamedType {
+                loc: Location::dummy(),
+                name: "number".into(),
+                args: None,
+            })),
+            body: ast::BlockExpression {
+                loc: Location::dummy(),
+                statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
+                    expression: Box::new(ast::Expression::Binary(ast::BinaryExpression {
+                        left: Box::new(ast::Expression::Identifier(ident("x"))),
+                        right: Box::new(ast::Expression::Identifier(ident("y"))),
+                        operator: ast::BinaryOperator::Add,
+                        loc: Location::dummy(),
+                    })),
+                })],
+            },
         };
 
         let result = checker.visit_function_expression(&function_expression);
