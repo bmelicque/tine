@@ -184,7 +184,7 @@ mod tests {
                 assert!(matches!(*entry1.key, ast::Expression::StringLiteral(_)));
                 assert!(matches!(
                     *entry1.value,
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(ast::NumberLiteral{value, ..})) if value == 42.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(ast::IntLiteral{value, ..})) if value == 42
                 ));
 
                 // Check the second entry
@@ -192,7 +192,7 @@ mod tests {
                 assert!(matches!(*entry2.key, ast::Expression::StringLiteral(_)));
                 assert!(matches!(
                     *entry2.value,
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(ast::NumberLiteral{value, ..})) if value == 99.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(ast::IntLiteral{value, ..})) if value == 99
                 ));
             }
             _ => panic!("Expected MapLiteral"),
@@ -210,21 +210,21 @@ mod tests {
 
                 assert!(matches!(
                     array.elements[0],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 1.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 1
                 ));
                 assert!(matches!(
                     array.elements[1],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 2.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 2
                 ));
                 assert!(matches!(
                     array.elements[2],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 3.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 3
                 ));
             }
             _ => panic!("Expected ArrayLiteral"),
@@ -253,9 +253,9 @@ mod tests {
             ast::CompositeLiteral::Option(option) => {
                 assert!(matches!(
                     **option.value.as_ref().unwrap(),
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 42.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 42
                 ));
             }
             _ => panic!("Expected OptionLiteral"),
@@ -335,7 +335,7 @@ mod tests {
                 assert_eq!(field2.prop, "field2");
                 assert!(matches!(
                     field2.value,
-                    ast::Expression::NumberLiteral(ast::NumberLiteral { value, .. }) if value == 42.0
+                    ast::Expression::IntLiteral(ast::IntLiteral { value, .. }) if value == 42
                 ));
             }
             _ => panic!("Expected Struct body for the variant"),
@@ -361,21 +361,21 @@ mod tests {
 
                 assert!(matches!(
                     elements[0],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 1.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 1
                 ));
                 assert!(matches!(
                     elements[1],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 2.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 2
                 ));
                 assert!(matches!(
                     elements[2],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 3.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 3
                 ));
             }
             _ => panic!("Expected Array body for the variant"),

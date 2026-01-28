@@ -55,7 +55,8 @@ impl ParserEngine {
                 text: pair.as_str().to_string(),
             }
             .into(),
-            Rule::number_literal => self.parse_number_literal(pair).into(),
+            Rule::float_literal => self.parse_float_literal(pair).into(),
+            Rule::integer_literal => self.parse_integer_literal(pair).into(),
             Rule::boolean_literal => ast::BooleanLiteral {
                 loc: self.localize(pair.as_span()),
                 value: pair.as_str() == "true",
@@ -79,15 +80,22 @@ impl ParserEngine {
         }
     }
 
-    fn parse_number_literal(&mut self, pair: Pair<'_, Rule>) -> ast::NumberLiteral {
+    fn parse_integer_literal(&mut self, pair: Pair<'_, Rule>) -> ast::IntLiteral {
+        debug_assert_eq!(pair.as_rule(), Rule::integer_literal);
         let loc = self.localize(pair.as_span());
-        ast::NumberLiteral {
-            loc,
-            value: pair
-                .as_str()
-                .parse()
-                .unwrap_or(ordered_float::OrderedFloat(0.0)),
-        }
+        let value_str = pair.as_str().replace('_', "");
+        let value = value_str.parse().unwrap_or(0);
+        ast::IntLiteral { loc, value }
+    }
+
+    fn parse_float_literal(&mut self, pair: Pair<'_, Rule>) -> ast::FloatLiteral {
+        debug_assert_eq!(pair.as_rule(), Rule::float_literal);
+        let loc = self.localize(pair.as_span());
+        let value_str = pair.as_str().replace('_', "");
+        let value = value_str
+            .parse()
+            .unwrap_or(ordered_float::OrderedFloat(0.0));
+        ast::FloatLiteral { loc, value }
     }
 
     fn parse_match_expression(&mut self, pair: Pair<'_, Rule>) -> ast::MatchExpression {
@@ -125,14 +133,11 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{TineParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str, rule: Rule) -> ast::Expression {
-        let pair = TineParser::parse(rule, input)
-            .unwrap()
-            .next()
-            .unwrap();
+        let pair = TineParser::parse(rule, input).unwrap().next().unwrap();
         let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
@@ -140,11 +145,11 @@ mod tests {
     #[test]
     fn test_parse_number_literal() {
         let input = "42";
-        let result = parse_expression_input(input, Rule::number_literal);
+        let result = parse_expression_input(input, Rule::integer_literal);
 
         match result {
-            ast::Expression::NumberLiteral(literal) => {
-                assert_eq!(literal.value, 42.0);
+            ast::Expression::IntLiteral(literal) => {
+                assert_eq!(literal.value, 42);
             }
             _ => panic!("Expected NumberLiteral"),
         }

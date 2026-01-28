@@ -59,10 +59,10 @@ mod tests {
             _ => panic!("Identifier pattern expected"),
         };
         match *var_decl.value.clone() {
-            ast::Expression::NumberLiteral(literal) => {
-                assert_eq!(literal.value, 42.0)
+            ast::Expression::IntLiteral(literal) => {
+                assert_eq!(literal.value, 42)
             }
-            _ => panic!("Expected NumberLiteral as variable value"),
+            _ => panic!("Expected IntLiteral as variable value"),
         }
 
         // Check the second statement
@@ -74,10 +74,10 @@ mod tests {
             _ => panic!("Expected 'x'"),
         }
         match &assignment.value {
-            ast::Expression::NumberLiteral(literal) => {
-                assert_eq!(literal.value, 43.0)
+            ast::Expression::IntLiteral(literal) => {
+                assert_eq!(literal.value, 43)
             }
-            _ => panic!("Expected NumberLiteral as assignment value"),
+            _ => panic!("Expected IntLiteral as assignment value"),
         }
     }
 }

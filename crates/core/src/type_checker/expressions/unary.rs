@@ -93,11 +93,11 @@ impl TypeChecker<'_> {
             ast::Expression::Empty => TypeStore::UNKNOWN,
             operand => self.visit_expression(operand),
         };
-        if expr_type != TypeStore::NUMBER && expr_type != TypeStore::UNKNOWN {
-            self.error("expected number".into(), node.operand.loc());
+        if expr_type != TypeStore::INTEGER && expr_type != TypeStore::UNKNOWN {
+            self.error("expected int".into(), node.operand.loc());
             return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
         }
-        self.ctx.save_expression_type(node.loc, TypeStore::NUMBER)
+        self.ctx.save_expression_type(node.loc, TypeStore::INTEGER)
     }
 
     fn visit_logical_not_expresion(&mut self, node: &ast::UnaryExpression) -> TypeId {

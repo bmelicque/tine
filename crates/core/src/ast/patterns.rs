@@ -1,6 +1,9 @@
-use crate::{ast::Identifier, Location};
+use crate::{
+    ast::{FloatLiteral, Identifier, IntLiteral},
+    Location,
+};
 
-use super::{BooleanLiteral, NamedType, NumberLiteral, StringLiteral};
+use super::{BooleanLiteral, NamedType, StringLiteral};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Pattern {
@@ -128,7 +131,8 @@ impl Into<Identifier> for IdentifierPattern {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LiteralPattern {
     Boolean(BooleanLiteral),
-    Number(NumberLiteral),
+    Float(FloatLiteral),
+    Integer(IntLiteral),
     String(StringLiteral),
 }
 
@@ -136,7 +140,8 @@ impl LiteralPattern {
     pub fn loc(&self) -> Location {
         match self {
             LiteralPattern::Boolean(b) => b.loc,
-            LiteralPattern::Number(n) => n.loc,
+            LiteralPattern::Float(f) => f.loc,
+            LiteralPattern::Integer(i) => i.loc,
             LiteralPattern::String(s) => s.loc,
         }
     }
@@ -147,9 +152,14 @@ impl From<BooleanLiteral> for LiteralPattern {
         Self::Boolean(value)
     }
 }
-impl From<NumberLiteral> for LiteralPattern {
-    fn from(value: NumberLiteral) -> Self {
-        Self::Number(value)
+impl From<FloatLiteral> for LiteralPattern {
+    fn from(value: FloatLiteral) -> Self {
+        Self::Float(value)
+    }
+}
+impl From<IntLiteral> for LiteralPattern {
+    fn from(value: IntLiteral) -> Self {
+        Self::Integer(value)
     }
 }
 impl From<StringLiteral> for LiteralPattern {

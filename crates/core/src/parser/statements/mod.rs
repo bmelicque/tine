@@ -122,8 +122,8 @@ mod tests {
 
         match result {
             ast::Statement::Return(return_stmt) => match *return_stmt.value.unwrap() {
-                ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
-                _ => panic!("Expected NumberLiteral as return value"),
+                ast::Expression::IntLiteral(literal) => assert_eq!(literal.value, 42),
+                _ => panic!("Expected IntLiteral as return value"),
             },
             _ => panic!("Expected ReturnStatement"),
         }
@@ -139,8 +139,8 @@ mod tests {
         };
 
         match *expr_stmt.expression {
-            ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
-            _ => panic!("Expected NumberLiteral as expression"),
+            ast::Expression::IntLiteral(literal) => assert_eq!(literal.value, 42),
+            _ => panic!("Expected IntLiteral as expression"),
         }
     }
 
@@ -155,8 +155,8 @@ mod tests {
         };
 
         match *expr_stmt.expression {
-            ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
-            _ => panic!("Expected NumberLiteral as expression"),
+            ast::Expression::IntLiteral(literal) => assert_eq!(literal.value, 42),
+            _ => panic!("Expected IntLiteral as expression"),
         }
     }
 }

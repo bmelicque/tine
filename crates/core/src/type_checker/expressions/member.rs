@@ -60,13 +60,8 @@ impl TypeChecker<'_> {
             panic!();
         };
         let value = index.value;
-        if value != value.round() {
-            self.error("Integer expected".into(), index.loc);
-            return self.save_member_type(expr, TypeStore::UNKNOWN);
-        }
-        let value = *value as isize;
         if value < 0 {
-            self.error("Index out of range".into(), index.loc);
+            self.error("index must be positive".into(), index.loc);
             return self.save_member_type(expr, TypeStore::UNKNOWN);
         }
         let value = value as usize;
@@ -122,7 +117,7 @@ mod tests {
                 },
                 StructField {
                     name: "age".to_string(),
-                    def: TypeStore::NUMBER,
+                    def: TypeStore::INTEGER,
                     optional: false,
                 },
             ],
@@ -159,7 +154,7 @@ mod tests {
     fn test_visit_tuple_indexing_valid() {
         let mut checker = create_type_checker();
         let tuple_type = Type::Tuple(TupleType {
-            elements: vec![TypeStore::NUMBER, TypeStore::STRING, TypeStore::BOOLEAN],
+            elements: vec![TypeStore::INTEGER, TypeStore::STRING, TypeStore::BOOLEAN],
         });
 
         let ty = checker.intern(tuple_type);
@@ -173,8 +168,8 @@ mod tests {
 
         let tuple_indexing = ast::MemberExpression {
             object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
-            prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
-                value: ordered_float::OrderedFloat(1.0),
+            prop: Some(ast::MemberProp::Index(ast::IntLiteral {
+                value: 1,
                 loc: Location::dummy(),
             })),
             loc: Location::dummy(),
@@ -190,7 +185,7 @@ mod tests {
         let mut checker = create_type_checker();
         checker.ctx.register_symbol(SymbolData {
             name: "not_a_tuple".into(),
-            ty: TypeStore::NUMBER,
+            ty: TypeStore::INTEGER,
             kind: SymbolKind::constant(),
             defined_at: loc("not_a_tuple"),
             ..Default::default()
@@ -198,8 +193,8 @@ mod tests {
 
         let tuple_indexing = ast::MemberExpression {
             object: Box::new(ast::Expression::Identifier(ident("not_a_tuple"))),
-            prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
-                value: ordered_float::OrderedFloat(0.0),
+            prop: Some(ast::MemberProp::Index(ast::IntLiteral {
+                value: 0,
                 loc: Location::dummy(),
             })),
             loc: Location::dummy(),
@@ -214,7 +209,7 @@ mod tests {
     fn test_visit_tuple_indexing_out_of_range() {
         let mut checker = create_type_checker();
         let tuple_type = Type::Tuple(TupleType {
-            elements: vec![TypeStore::NUMBER, TypeStore::STRING],
+            elements: vec![TypeStore::INTEGER, TypeStore::STRING],
         });
         let tuple_type = checker.intern(tuple_type);
         checker.ctx.register_symbol(SymbolData {
@@ -227,8 +222,8 @@ mod tests {
 
         let tuple_indexing = ast::MemberExpression {
             object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
-            prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
-                value: ordered_float::OrderedFloat(2.0),
+            prop: Some(ast::MemberProp::Index(ast::IntLiteral {
+                value: 2,
                 loc: Location::dummy(),
             })),
             loc: Location::dummy(),
@@ -244,7 +239,7 @@ mod tests {
     fn test_visit_tuple_indexing_negative_index() {
         let mut checker = create_type_checker();
         let tuple_type = Type::Tuple(TupleType {
-            elements: vec![TypeStore::NUMBER, TypeStore::STRING],
+            elements: vec![TypeStore::INTEGER, TypeStore::STRING],
         });
         let tuple_type = checker.intern(tuple_type);
         checker.ctx.register_symbol(SymbolData {
@@ -257,8 +252,8 @@ mod tests {
 
         let tuple_indexing = ast::MemberExpression {
             object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
-            prop: Some(ast::MemberProp::Index(ast::NumberLiteral {
-                value: ordered_float::OrderedFloat(-1.0),
+            prop: Some(ast::MemberProp::Index(ast::IntLiteral {
+                value: -1,
                 loc: Location::dummy(),
             })),
             loc: Location::dummy(),
@@ -267,6 +262,5 @@ mod tests {
         let result = checker.visit_tuple_indexing(&tuple_indexing);
         assert_eq!(result, TypeStore::UNKNOWN);
         assert_eq!(checker.errors.len(), 1);
-        assert!(checker.errors[0].message.contains("Index out of range"));
     }
 }

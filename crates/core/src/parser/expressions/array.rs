@@ -21,7 +21,7 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{TineParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str) -> ast::Expression {
@@ -42,17 +42,17 @@ mod tests {
 
         assert!(matches!(
             array.elements[0],
-            ast::Expression::NumberLiteral(ast::NumberLiteral { value, .. }) if value == 1.0
+            ast::Expression::IntLiteral(ast::IntLiteral { value, .. }) if value == 1
         ));
 
         assert!(matches!(
             array.elements[1],
-            ast::Expression::NumberLiteral(ast::NumberLiteral { value, .. }) if value == 2.0
+            ast::Expression::IntLiteral(ast::IntLiteral { value, .. }) if value == 2
         ));
 
         assert!(matches!(
             array.elements[2],
-            ast::Expression::NumberLiteral(ast::NumberLiteral { value, .. }) if value == 3.0
+            ast::Expression::IntLiteral(ast::IntLiteral { value, .. }) if value == 3
         ));
     }
 

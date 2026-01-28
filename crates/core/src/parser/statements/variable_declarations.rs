@@ -85,8 +85,8 @@ mod tests {
         };
         assert_eq!(var_decl.keyword, ast::DeclarationKeyword::Var);
         match *var_decl.value {
-            ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
-            _ => panic!("Expected NumberLiteral as variable value"),
+            ast::Expression::IntLiteral(literal) => assert_eq!(literal.value, 42),
+            _ => panic!("Expected IntLiteral as variable value"),
         }
     }
 

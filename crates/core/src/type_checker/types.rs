@@ -73,9 +73,10 @@ impl TypeChecker<'_> {
     pub fn visit_named_type(&mut self, node: &ast::NamedType) -> TypeId {
         let name = node.name.as_str();
         match name {
-            "string" => return TypeStore::STRING,
-            "number" => return TypeStore::NUMBER,
-            "boolean" => return TypeStore::BOOLEAN,
+            "bool" => return TypeStore::BOOLEAN,
+            "float" => return TypeStore::FLOAT,
+            "int" => return TypeStore::INTEGER,
+            "str" => return TypeStore::STRING,
             "void" => return TypeStore::UNIT,
             _ => {}
         }
@@ -180,7 +181,7 @@ mod tests {
         let mut checker = TypeChecker::new(&session, 0);
         let array_type = ast::ArrayType {
             element: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "number".to_string(),
+                name: "int".to_string(),
                 args: None,
                 loc: Location::dummy(),
             }))),
@@ -192,7 +193,7 @@ mod tests {
         assert_eq!(
             result,
             Type::Array(ArrayType {
-                element: TypeStore::NUMBER
+                element: TypeStore::INTEGER
             })
         );
     }
@@ -204,18 +205,18 @@ mod tests {
         let function_type = ast::FunctionType {
             params: vec![
                 ast::Type::Named(ast::NamedType {
-                    name: "number".to_string(),
+                    name: "int".to_string(),
                     args: None,
                     loc: Location::dummy(),
                 }),
                 ast::Type::Named(ast::NamedType {
-                    name: "string".to_string(),
+                    name: "str".to_string(),
                     args: None,
                     loc: Location::dummy(),
                 }),
             ],
             returned: Box::new(ast::Type::Named(ast::NamedType {
-                name: "boolean".to_string(),
+                name: "bool".to_string(),
                 args: None,
                 loc: Location::dummy(),
             })),
@@ -227,7 +228,7 @@ mod tests {
         assert_eq!(
             result,
             Type::Function(FunctionType {
-                params: vec![TypeStore::NUMBER, TypeStore::STRING],
+                params: vec![TypeStore::INTEGER, TypeStore::STRING],
                 return_type: TypeStore::BOOLEAN,
             })
         );
@@ -239,12 +240,12 @@ mod tests {
         let mut checker = TypeChecker::new(&session, 0);
         let map_type = ast::MapType {
             key: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "string".to_string(),
+                name: "str".to_string(),
                 args: None,
                 loc: Location::dummy(),
             }))),
             value: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "number".to_string(),
+                name: "int".to_string(),
                 args: None,
                 loc: Location::dummy(),
             }))),
@@ -257,7 +258,7 @@ mod tests {
             result,
             Type::Map(MapType {
                 key: TypeStore::STRING,
-                value: TypeStore::NUMBER,
+                value: TypeStore::INTEGER,
             })
         );
     }
@@ -294,7 +295,7 @@ mod tests {
         let mut checker = TypeChecker::new(&session, 0);
         let option_type = ast::OptionType {
             base: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "number".to_string(),
+                name: "int".to_string(),
                 args: None,
                 loc: Location::dummy(),
             }))),
@@ -306,7 +307,7 @@ mod tests {
         assert_eq!(
             result,
             Type::Option(OptionType {
-                some: TypeStore::NUMBER
+                some: TypeStore::INTEGER
             })
         );
     }
@@ -317,7 +318,7 @@ mod tests {
         let mut checker = TypeChecker::new(&session, 0);
         let reference_type = ast::ReferenceType {
             target: Box::new(ast::Type::Named(ast::NamedType {
-                name: "string".to_string(),
+                name: "str".to_string(),
                 args: None,
                 loc: Location::dummy(),
             })),
@@ -341,12 +342,12 @@ mod tests {
         let mut checker = TypeChecker::new(&session, 0);
         let result_type = ast::ResultType {
             ok: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "number".to_string(),
+                name: "int".to_string(),
                 args: None,
                 loc: Location::dummy(),
             }))),
             error: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "string".to_string(),
+                name: "str".to_string(),
                 args: None,
                 loc: Location::dummy(),
             }))),
@@ -358,7 +359,7 @@ mod tests {
         assert_eq!(
             result,
             Type::Result(ResultType {
-                ok: TypeStore::NUMBER,
+                ok: TypeStore::INTEGER,
                 error: Some(TypeStore::STRING),
             })
         );
@@ -371,12 +372,12 @@ mod tests {
         let tuple_type = ast::TupleType {
             elements: vec![
                 ast::Type::Named(ast::NamedType {
-                    name: "number".to_string(),
+                    name: "int".to_string(),
                     args: None,
                     loc: Location::dummy(),
                 }),
                 ast::Type::Named(ast::NamedType {
-                    name: "string".to_string(),
+                    name: "str".to_string(),
                     args: None,
                     loc: Location::dummy(),
                 }),
@@ -389,7 +390,7 @@ mod tests {
         assert_eq!(
             result,
             Type::Tuple(TupleType {
-                elements: vec![TypeStore::NUMBER, TypeStore::STRING]
+                elements: vec![TypeStore::INTEGER, TypeStore::STRING]
             })
         );
     }

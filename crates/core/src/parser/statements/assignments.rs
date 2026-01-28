@@ -58,16 +58,13 @@ impl ParserEngine {
 mod tests {
     use super::*;
     use crate::{
-        parser::parser::{TineParser, Rule},
+        parser::parser::{Rule, TineParser},
         ParseError,
     };
     use pest::Parser;
 
     fn parse_statement_input(input: &'static str, rule: Rule) -> (ast::Statement, Vec<ParseError>) {
-        let pair = TineParser::parse(rule, input)
-            .unwrap()
-            .next()
-            .unwrap();
+        let pair = TineParser::parse(rule, input).unwrap().next().unwrap();
         let mut parser_engine = ParserEngine::new(0);
         let stmt = parser_engine.parse_statement(pair);
         (stmt, parser_engine.errors)
@@ -89,8 +86,8 @@ mod tests {
         }
 
         match assignment.value {
-            ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
-            _ => panic!("Expected NumberLiteral as assignment value"),
+            ast::Expression::IntLiteral(literal) => assert_eq!(literal.value, 42),
+            _ => panic!("Expected IntLiteral as assignment value"),
         }
     }
 

@@ -341,7 +341,7 @@ mod tests {
                 },
                 StructField {
                     name: "age".to_string(),
-                    def: TypeStore::NUMBER,
+                    def: TypeStore::INTEGER,
                     optional: false,
                 },
             ],
@@ -358,8 +358,8 @@ mod tests {
                 },
                 ast::StructLiteralField {
                     prop: "age".to_string(),
-                    value: ast::Expression::NumberLiteral(ast::NumberLiteral {
-                        value: ordered_float::OrderedFloat(30.0),
+                    value: ast::Expression::IntLiteral(ast::IntLiteral {
+                        value: 30,
                         loc: Location::dummy(),
                     }),
                     loc: Location::dummy(),
@@ -381,22 +381,22 @@ mod tests {
         let array_literal = ast::ArrayLiteral {
             ty: ast::ArrayType {
                 element: Some(Box::new(ast::Type::Named(ast::NamedType {
-                    name: "number".to_string(),
+                    name: "int".to_string(),
                     args: None,
                     loc: Location::dummy(),
                 }))),
                 loc: Location::dummy(),
             },
             elements: vec![
-                ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                    ast::NumberLiteral {
-                        value: ordered_float::OrderedFloat(1.0),
+                ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                    ast::IntLiteral {
+                        value: 1,
                         loc: Location::dummy(),
                     },
                 )),
-                ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                    ast::NumberLiteral {
-                        value: ordered_float::OrderedFloat(2.0),
+                ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                    ast::IntLiteral {
+                        value: 2,
                         loc: Location::dummy(),
                     },
                 )),
@@ -409,7 +409,7 @@ mod tests {
         assert!(matches!(
             result,
             Type::Array(ArrayType {
-                element: TypeStore::NUMBER
+                element: TypeStore::INTEGER
             })
         ));
         assert!(checker.errors.is_empty());
@@ -422,12 +422,12 @@ mod tests {
         let map_literal = ast::MapLiteral {
             ty: ast::MapType {
                 key: Some(Box::new(ast::Type::Named(ast::NamedType {
-                    name: "string".to_string(),
+                    name: "str".to_string(),
                     args: None,
                     loc: Location::dummy(),
                 }))),
                 value: Some(Box::new(ast::Type::Named(ast::NamedType {
-                    name: "number".to_string(),
+                    name: "int".to_string(),
                     args: None,
                     loc: Location::dummy(),
                 }))),
@@ -440,8 +440,8 @@ mod tests {
                         text: "key1".into(),
                     })),
                     value: Box::new(ast::ExpressionOrAnonymous::Expression(
-                        ast::Expression::NumberLiteral(ast::NumberLiteral {
-                            value: ordered_float::OrderedFloat(42.0),
+                        ast::Expression::IntLiteral(ast::IntLiteral {
+                            value: 42,
                             loc: Location::dummy(),
                         }),
                     )),
@@ -453,8 +453,8 @@ mod tests {
                         text: "key1".into(),
                     })),
                     value: Box::new(ast::ExpressionOrAnonymous::Expression(
-                        ast::Expression::NumberLiteral(ast::NumberLiteral {
-                            value: ordered_float::OrderedFloat(99.0),
+                        ast::Expression::IntLiteral(ast::IntLiteral {
+                            value: 99,
                             loc: Location::dummy(),
                         }),
                     )),
@@ -470,7 +470,7 @@ mod tests {
             result,
             Type::Map(MapType {
                 key: TypeStore::STRING,
-                value: TypeStore::NUMBER
+                value: TypeStore::INTEGER
             })
         ));
         assert!(checker.errors.is_empty());
@@ -483,15 +483,15 @@ mod tests {
         let option_literal = ast::OptionLiteral {
             ty: ast::OptionType {
                 base: Some(Box::new(ast::Type::Named(ast::NamedType {
-                    name: "number".to_string(),
+                    name: "int".to_string(),
                     args: None,
                     loc: Location::dummy(),
                 }))),
                 loc: Location::dummy(),
             },
             value: Some(Box::new(ast::ExpressionOrAnonymous::Expression(
-                ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: ordered_float::OrderedFloat(42.0),
+                ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: 42,
                     loc: Location::dummy(),
                 }),
             ))),
@@ -503,7 +503,7 @@ mod tests {
         assert!(matches!(
             result,
             Type::Option(OptionType {
-                some: TypeStore::NUMBER
+                some: TypeStore::INTEGER
             })
         ));
         assert!(checker.errors.is_empty());
@@ -524,7 +524,7 @@ mod tests {
                 },
                 StructField {
                     name: "age".to_string(),
-                    def: TypeStore::NUMBER,
+                    def: TypeStore::INTEGER,
                     optional: false,
                 },
             ],
@@ -555,8 +555,8 @@ mod tests {
                 },
                 ast::StructLiteralField {
                     prop: "age".to_string(),
-                    value: ast::Expression::NumberLiteral(ast::NumberLiteral {
-                        value: ordered_float::OrderedFloat(30.0),
+                    value: ast::Expression::IntLiteral(ast::IntLiteral {
+                        value: 30,
                         loc: Location::dummy(),
                     }),
                     loc: Location::dummy(),
@@ -589,7 +589,7 @@ mod tests {
                         id: 0,
                         fields: vec![StructField {
                             name: "radius".to_string(),
-                            def: TypeStore::NUMBER,
+                            def: TypeStore::INTEGER,
                             optional: false,
                         }],
                     })),
@@ -601,12 +601,12 @@ mod tests {
                         fields: vec![
                             StructField {
                                 name: "width".to_string(),
-                                def: TypeStore::NUMBER,
+                                def: TypeStore::INTEGER,
                                 optional: false,
                             },
                             StructField {
                                 name: "height".to_string(),
-                                def: TypeStore::NUMBER,
+                                def: TypeStore::INTEGER,
                                 optional: false,
                             },
                         ],
@@ -634,8 +634,8 @@ mod tests {
             body: Some(ast::VariantLiteralBody::Struct(vec![
                 ast::StructLiteralField {
                     prop: "radius".to_string(),
-                    value: ast::Expression::NumberLiteral(ast::NumberLiteral {
-                        value: ordered_float::OrderedFloat(10.0),
+                    value: ast::Expression::IntLiteral(ast::IntLiteral {
+                        value: 10,
                         loc: Location::dummy(),
                     }),
                     loc: Location::dummy(),

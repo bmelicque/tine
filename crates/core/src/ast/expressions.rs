@@ -19,12 +19,13 @@ pub enum Expression {
     Function(FunctionExpression),
     Identifier(Identifier),
     If(IfExpression),
+    IntLiteral(IntLiteral),
     IfDecl(IfPatExpression),
     Invalid(InvalidExpression),
     Loop(Loop),
     Match(MatchExpression),
     Member(MemberExpression),
-    NumberLiteral(NumberLiteral),
+    FloatLiteral(FloatLiteral),
     StringLiteral(StringLiteral),
     Tuple(TupleExpression),
     Unary(UnaryExpression),
@@ -41,15 +42,16 @@ impl Expression {
             Self::CompositeLiteral(e) => e.loc(),
             Self::Element(e) => e.loc(),
             Self::Empty => Location::dummy(),
+            Self::FloatLiteral(e) => e.loc,
             Self::Member(e) => e.loc,
             Self::Function(e) => e.loc,
             Self::Identifier(e) => e.loc,
             Self::If(e) => e.loc,
             Self::IfDecl(e) => e.loc,
+            Self::IntLiteral(e) => e.loc,
             Self::Invalid(e) => e.loc,
             Self::Loop(e) => e.loc(),
             Self::Match(e) => e.loc,
-            Self::NumberLiteral(e) => e.loc,
             Self::StringLiteral(e) => e.loc,
             Self::Tuple(e) => e.loc,
             Self::Unary(e) => e.loc,
@@ -165,6 +167,18 @@ impl From<IfPatExpression> for Alternate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct IntLiteral {
+    pub loc: Location,
+    pub value: i64,
+}
+
+impl Into<Expression> for IntLiteral {
+    fn into(self) -> Expression {
+        Expression::IntLiteral(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InvalidExpression {
     pub loc: Location,
 }
@@ -215,14 +229,14 @@ impl Into<Expression> for StringLiteral {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct NumberLiteral {
+pub struct FloatLiteral {
     pub loc: Location,
     pub value: OrderedFloat<f64>,
 }
 
-impl Into<Expression> for NumberLiteral {
+impl Into<Expression> for FloatLiteral {
     fn into(self) -> Expression {
-        Expression::NumberLiteral(self)
+        Expression::FloatLiteral(self)
     }
 }
 
@@ -415,7 +429,7 @@ impl Into<Expression> for MemberExpression {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum MemberProp {
     FieldName(Identifier),
-    Index(NumberLiteral),
+    Index(IntLiteral),
 }
 impl MemberProp {
     pub fn loc(&self) -> Location {
@@ -430,8 +444,8 @@ impl From<Identifier> for MemberProp {
         Self::FieldName(value)
     }
 }
-impl From<NumberLiteral> for MemberProp {
-    fn from(value: NumberLiteral) -> Self {
+impl From<IntLiteral> for MemberProp {
+    fn from(value: IntLiteral) -> Self {
         Self::Index(value)
     }
 }

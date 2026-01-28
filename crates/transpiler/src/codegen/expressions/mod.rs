@@ -7,10 +7,10 @@ use super::{
     CodeGenerator,
 };
 use crate::codegen::utils::{can_block_be_inlined, create_block_stmt, create_number, AssignTo};
-use tine_core::ast;
 use rand::{distr::Alphanumeric, Rng};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
+use tine_core::ast;
 
 impl CodeGenerator<'_> {
     pub fn expr_or_an_to_swc(&mut self, node: &ast::ExpressionOrAnonymous) -> swc::Expr {
@@ -34,7 +34,11 @@ impl CodeGenerator<'_> {
             ast::Expression::CompositeLiteral(node) => self.composite_literal_to_swc_expr(node),
             ast::Expression::Empty => panic!("shouldn't have empty expressions at codegen step"),
             ast::Expression::Element(node) => self.element_expression_to_swc(node),
-            ast::Expression::Member(node) => self.member_expr_to_swc(node).into(),
+            ast::Expression::FloatLiteral(node) => swc::Expr::Lit(swc::Lit::Num(swc::Number {
+                span: DUMMY_SP,
+                value: *node.value,
+                raw: None,
+            })),
             ast::Expression::Function(node) => self.function_expression_to_swc(node).into(),
             ast::Expression::Identifier(node) => self.ident_to_swc(node).into(),
             ast::Expression::If(node) => self.if_to_swc_expr(node).into(),
@@ -42,14 +46,14 @@ impl CodeGenerator<'_> {
             ast::Expression::Invalid(_) => {
                 unreachable!("Invalid input should've been detected during analysis phase")
             }
+            ast::Expression::IntLiteral(node) => swc::Expr::Lit(swc::Lit::Num(swc::Number {
+                span: DUMMY_SP,
+                value: node.value as f64,
+                raw: None,
+            })),
             ast::Expression::Loop(node) => self.loop_to_swc_expr(node).into(),
             ast::Expression::Match(node) => self.match_to_swc_expr(node).into(),
-            ast::Expression::NumberLiteral(node) => swc::Lit::Num(swc::Number {
-                span: DUMMY_SP,
-                value: *node.value,
-                raw: None,
-            })
-            .into(),
+            ast::Expression::Member(node) => self.member_expr_to_swc(node).into(),
             ast::Expression::Unary(node) => self.unary_expression_to_swc_expr(node),
             ast::Expression::StringLiteral(node) => swc::Lit::Str(swc::Str {
                 span: DUMMY_SP,

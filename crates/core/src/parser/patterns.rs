@@ -48,12 +48,9 @@ impl ParserEngine {
                 value: inner.as_str() == "true",
             }
             .into(),
-            Rule::number_literal => ast::NumberLiteral {
+            Rule::integer_literal => ast::IntLiteral {
                 loc,
-                value: inner
-                    .as_str()
-                    .parse()
-                    .unwrap_or(ordered_float::OrderedFloat(0.0)),
+                value: inner.as_str().parse().unwrap_or(0),
             }
             .into(),
             Rule::string_literal => ast::StringLiteral { loc, text }.into(),

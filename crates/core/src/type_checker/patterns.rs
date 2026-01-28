@@ -40,7 +40,8 @@ impl TypeChecker<'_> {
         let against = self.resolve(against);
         let got = match pattern {
             ast::LiteralPattern::Boolean(_) => types::Type::Boolean,
-            ast::LiteralPattern::Number(_) => types::Type::Number,
+            ast::LiteralPattern::Float(_) => types::Type::Float,
+            ast::LiteralPattern::Integer(_) => types::Type::Integer,
             ast::LiteralPattern::String(_) => types::Type::String,
         };
         if against != types::Type::Unknown && against != got {

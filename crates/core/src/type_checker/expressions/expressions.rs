@@ -17,15 +17,16 @@ impl TypeChecker<'_> {
             ast::Expression::CompositeLiteral(node) => self.visit_composite_literal(node),
             ast::Expression::Element(node) => self.visit_element_expression(node),
             ast::Expression::Empty => TypeStore::UNIT,
+            ast::Expression::FloatLiteral(_) => TypeStore::FLOAT,
             ast::Expression::Member(node) => self.visit_member_expression(node),
             ast::Expression::Function(node) => self.visit_function_expression(node).into(),
             ast::Expression::Identifier(node) => self.visit_identifier(node),
             ast::Expression::If(node) => self.visit_if_expression(node),
             ast::Expression::IfDecl(node) => self.visit_if_decl_expression(node),
             ast::Expression::Invalid(_) => TypeStore::UNKNOWN,
+            ast::Expression::IntLiteral(_) => TypeStore::INTEGER,
             ast::Expression::Loop(node) => self.visit_loop(node),
             ast::Expression::Match(node) => self.visit_match_expression(node),
-            ast::Expression::NumberLiteral(_) => TypeStore::NUMBER,
             ast::Expression::StringLiteral(_) => TypeStore::STRING,
             ast::Expression::Tuple(node) => self.visit_tuple_expression(node).into(),
             ast::Expression::Unary(node) => self.visit_unary_expression(&node),
@@ -151,12 +152,12 @@ mod tests {
         let mut checker = create_type_checker();
         let array_expression = ast::ArrayExpression {
             elements: vec![
-                ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: ordered_float::OrderedFloat(1.0),
+                ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: 1,
                     loc: Location::dummy(),
                 }),
-                ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: ordered_float::OrderedFloat(2.0),
+                ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: 2,
                     loc: Location::dummy(),
                 }),
             ],
@@ -168,7 +169,7 @@ mod tests {
         assert_eq!(
             result,
             Type::Array(ArrayType {
-                element: TypeStore::NUMBER
+                element: TypeStore::INTEGER
             })
         );
         assert!(checker.errors.is_empty());
@@ -179,8 +180,8 @@ mod tests {
         let mut checker = create_type_checker();
         let array_expression = ast::ArrayExpression {
             elements: vec![
-                ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: ordered_float::OrderedFloat(1.0),
+                ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: 1,
                     loc: Location::dummy(),
                 }),
                 ast::Expression::StringLiteral(ast::StringLiteral {
@@ -196,7 +197,7 @@ mod tests {
         assert_eq!(
             result,
             Type::Array(ArrayType {
-                element: TypeStore::NUMBER
+                element: TypeStore::INTEGER
             })
         );
         assert_eq!(checker.errors.len(), 1);
@@ -206,12 +207,12 @@ mod tests {
     fn test_visit_binary_expression() {
         let mut checker = create_type_checker();
         let binary_expression = ast::BinaryExpression {
-            left: Box::new(ast::Expression::NumberLiteral(ast::NumberLiteral {
-                value: ordered_float::OrderedFloat(1.0),
+            left: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+                value: 1,
                 loc: Location::dummy(),
             })),
-            right: Box::new(ast::Expression::NumberLiteral(ast::NumberLiteral {
-                value: ordered_float::OrderedFloat(2.0),
+            right: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+                value: 2,
                 loc: Location::dummy(),
             })),
             operator: ast::BinaryOperator::Add,
@@ -219,8 +220,12 @@ mod tests {
         };
 
         let result = checker.visit_binary_expression(&binary_expression);
-        assert_eq!(result, TypeStore::NUMBER);
-        assert!(checker.errors.is_empty());
+        assert_eq!(result, TypeStore::INTEGER);
+        assert!(
+            checker.errors.is_empty(),
+            "expected no errors, got {:?}",
+            checker.errors
+        );
     }
 
     #[test]
@@ -233,7 +238,7 @@ mod tests {
                 ast::FunctionParam {
                     name: ident("x"),
                     type_annotation: ast::Type::Named(ast::NamedType {
-                        name: "number".to_string(),
+                        name: "int".to_string(),
                         args: None,
                         loc: Location::dummy(),
                     }),
@@ -242,7 +247,7 @@ mod tests {
                 ast::FunctionParam {
                     name: ident("y"),
                     type_annotation: ast::Type::Named(ast::NamedType {
-                        name: "number".to_string(),
+                        name: "int".to_string(),
                         args: None,
                         loc: Location::dummy(),
                     }),
@@ -251,7 +256,7 @@ mod tests {
             ],
             return_type: Some(ast::Type::Named(ast::NamedType {
                 loc: Location::dummy(),
-                name: "number".into(),
+                name: "int".into(),
                 args: None,
             })),
             body: ast::BlockExpression {
@@ -272,8 +277,8 @@ mod tests {
         assert_eq!(
             result,
             Type::Function(FunctionType {
-                params: vec![TypeStore::NUMBER, TypeStore::NUMBER],
-                return_type: TypeStore::NUMBER,
+                params: vec![TypeStore::INTEGER, TypeStore::INTEGER],
+                return_type: TypeStore::INTEGER,
             })
         );
         assert!(checker.errors.is_empty());
@@ -284,7 +289,7 @@ mod tests {
         let mut checker = create_type_checker();
         checker.ctx.register_symbol(SymbolData {
             name: "x".into(),
-            ty: TypeStore::NUMBER,
+            ty: TypeStore::INTEGER,
             kind: SymbolKind::constant(),
             defined_at: loc("x"),
             ..Default::default()
@@ -293,7 +298,7 @@ mod tests {
         let identifier = ident("x");
 
         let result = checker.visit_identifier(&identifier);
-        assert_eq!(result, TypeStore::NUMBER);
+        assert_eq!(result, TypeStore::INTEGER);
         assert!(checker.errors.is_empty());
     }
 
@@ -316,8 +321,8 @@ mod tests {
         let mut checker = create_type_checker();
         let tuple_expression = ast::TupleExpression {
             elements: vec![
-                ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: ordered_float::OrderedFloat(42.0),
+                ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: 42,
                     loc: Location::dummy(),
                 }),
                 ast::Expression::StringLiteral(ast::StringLiteral {
@@ -337,7 +342,7 @@ mod tests {
         assert_eq!(
             result,
             Type::Tuple(TupleType {
-                elements: vec![TypeStore::NUMBER, TypeStore::STRING, TypeStore::BOOLEAN]
+                elements: vec![TypeStore::INTEGER, TypeStore::STRING, TypeStore::BOOLEAN]
             })
         );
         assert!(checker.errors.is_empty());
@@ -348,8 +353,8 @@ mod tests {
         let mut checker = create_type_checker();
         let tuple_expression = ast::TupleExpression {
             elements: vec![
-                ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: ordered_float::OrderedFloat(42.0),
+                ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: 42,
                     loc: Location::dummy(),
                 }),
                 ast::Expression::Tuple(ast::TupleExpression {

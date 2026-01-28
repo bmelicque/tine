@@ -86,11 +86,17 @@ impl ParserEngine {
                 object: Box::new(root),
                 prop: Some(self.parse_identifier(right_pair).into()),
             },
-            Rule::integer => ast::MemberExpression {
-                loc,
-                object: Box::new(root),
-                prop: Some(self.parse_number_literal(right_pair).into()),
-            },
+            Rule::integer_literal => {
+                let index = self.parse_integer_literal(right_pair);
+                if index.value < 0 {
+                    self.error("tuple index cannot be negative".into(), index.loc);
+                }
+                ast::MemberExpression {
+                    loc,
+                    object: Box::new(root),
+                    prop: Some(index.into()),
+                }
+            }
             rule => unreachable!("unexpected rule '{:?}'", rule),
         }
     }
@@ -141,7 +147,7 @@ mod tests {
         assert_eq!(call.args.len(), 3, "expected no args, got {:?}", call.args);
 
         match &call.args[0] {
-            ast::CallArgument::Expression(ast::Expression::NumberLiteral(n)) if n.value == 1.0 => {}
+            ast::CallArgument::Expression(ast::Expression::IntLiteral(n)) if n.value == 1 => {}
             _ => panic!("Expected number argument with value 42"),
         }
     }

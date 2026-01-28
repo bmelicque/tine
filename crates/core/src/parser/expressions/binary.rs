@@ -51,7 +51,7 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{TineParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str) -> ast::Expression {
@@ -74,8 +74,8 @@ mod tests {
 
         assert_eq!(binary.operator, ast::BinaryOperator::Add);
         match *binary.left {
-            ast::Expression::NumberLiteral(left) => assert_eq!(left.value, 1.0),
-            _ => panic!("Expected NumberLiteral on the left"),
+            ast::Expression::IntLiteral(left) => assert_eq!(left.value, 1),
+            _ => panic!("Expected IntLiteral on the left"),
         }
 
         let ast::Expression::Binary(inner_binary) = *binary.right else {
@@ -83,12 +83,12 @@ mod tests {
         };
         assert_eq!(inner_binary.operator, ast::BinaryOperator::Mul);
         match *inner_binary.left {
-            ast::Expression::NumberLiteral(left) => assert_eq!(left.value, 2.0),
-            _ => panic!("Expected NumberLiteral on the left"),
+            ast::Expression::IntLiteral(left) => assert_eq!(left.value, 2),
+            _ => panic!("Expected IntLiteral on the left"),
         }
         match *inner_binary.right {
-            ast::Expression::NumberLiteral(right) => assert_eq!(right.value, 3.0),
-            _ => panic!("Expected NumberLiteral on the right"),
+            ast::Expression::IntLiteral(right) => assert_eq!(right.value, 3),
+            _ => panic!("Expected IntLiteral on the right"),
         }
     }
 
@@ -103,12 +103,12 @@ mod tests {
 
         assert_eq!(binary.operator, ast::BinaryOperator::EqEq);
         match *binary.left {
-            ast::Expression::NumberLiteral(left) => assert_eq!(left.value, 1.0),
-            _ => panic!("Expected NumberLiteral on the left"),
+            ast::Expression::IntLiteral(left) => assert_eq!(left.value, 1),
+            _ => panic!("Expected IntLiteral on the left"),
         }
         match *binary.right {
-            ast::Expression::NumberLiteral(right) => assert_eq!(right.value, 1.0),
-            _ => panic!("Expected NumberLiteral on the right"),
+            ast::Expression::IntLiteral(right) => assert_eq!(right.value, 1),
+            _ => panic!("Expected IntLiteral on the right"),
         }
     }
 }

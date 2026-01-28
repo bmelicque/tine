@@ -21,11 +21,18 @@ impl TypeChecker<'_> {
             | ast::BinaryOperator::Grt
             | ast::BinaryOperator::Leq
             | ast::BinaryOperator::Less => {
-                if left_type != TypeStore::UNKNOWN && left_type != TypeStore::NUMBER {
+                let left_is_num = left_type == TypeStore::INTEGER || left_type == TypeStore::FLOAT;
+                let right_is_num =
+                    right_type == TypeStore::INTEGER || right_type == TypeStore::FLOAT;
+                if left_type != TypeStore::UNKNOWN && !left_is_num {
                     self.push_binary_error(node.operator, left_type, node.loc);
                 };
-                if right_type != TypeStore::UNKNOWN && right_type != TypeStore::NUMBER {
+                if right_type != TypeStore::UNKNOWN && !right_is_num {
                     self.push_binary_error(node.operator, right_type, node.loc);
+                };
+                if left_is_num && right_is_num && left_type != right_type {
+                    let error = format!("Incompatible types '{}' and '{}'", left_type, right_type);
+                    self.error(error, node.loc);
                 };
             }
             ast::BinaryOperator::EqEq | ast::BinaryOperator::Neq => {
@@ -50,8 +57,10 @@ impl TypeChecker<'_> {
             }
         };
 
-        self.ctx
-            .save_expression_type(node.loc, get_binary_expression_type(node.operator))
+        self.ctx.save_expression_type(
+            node.loc,
+            get_binary_expression_type(node.operator, left_type, right_type),
+        )
     }
 
     fn push_binary_error(&mut self, op: ast::BinaryOperator, ty: TypeId, loc: Location) {
@@ -63,14 +72,18 @@ impl TypeChecker<'_> {
     }
 }
 
-fn get_binary_expression_type(op: ast::BinaryOperator) -> TypeId {
+fn get_binary_expression_type(op: ast::BinaryOperator, left: TypeId, right: TypeId) -> TypeId {
     match op {
         ast::BinaryOperator::Add
         | ast::BinaryOperator::Sub
         | ast::BinaryOperator::Mul
         | ast::BinaryOperator::Div
         | ast::BinaryOperator::Mod
-        | ast::BinaryOperator::Pow => TypeStore::NUMBER,
+        | ast::BinaryOperator::Pow => match (left, right) {
+            (TypeStore::INTEGER, TypeStore::INTEGER) => TypeStore::INTEGER,
+            (TypeStore::FLOAT, TypeStore::FLOAT) => TypeStore::FLOAT,
+            _ => TypeStore::UNKNOWN,
+        },
         ast::BinaryOperator::EqEq
         | ast::BinaryOperator::Geq
         | ast::BinaryOperator::Grt
