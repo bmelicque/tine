@@ -2,9 +2,9 @@ use crate::codegen::{
     utils::{create_ident, create_number, create_str},
     CodeGenerator,
 };
-use tine_core::{ast, Location};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
+use tine_core::{ast, Location};
 
 impl CodeGenerator<'_> {
     pub fn unary_expression_to_swc_expr(&mut self, node: &ast::UnaryExpression) -> swc::Expr {
@@ -44,7 +44,7 @@ impl CodeGenerator<'_> {
                 self.expr_to_swc(&expr.object),
                 match expr.prop.clone().unwrap() {
                     ast::MemberProp::FieldName(i) => create_str(i.as_str().into()),
-                    ast::MemberProp::Index(n) => create_number(*n.value),
+                    ast::MemberProp::Index(n) => create_number(n.value as f64),
                 },
             ),
             expr => (

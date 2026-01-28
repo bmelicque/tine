@@ -33,6 +33,11 @@ impl CodeGenerator<'_> {
                 }
                 .into()],
             },
+            ast::Statement::Function(node) => vec![swc::Stmt::Decl(swc::Decl::Fn(swc::FnDecl {
+                ident: create_ident(node.definition.name.as_ref().unwrap().as_str()),
+                declare: false,
+                function: Box::new(self.function_to_swc_function(&node.definition)),
+            }))],
             ast::Statement::Invalid(_) => {
                 unreachable!("Invalid input should've been detected during analysis phase")
             }

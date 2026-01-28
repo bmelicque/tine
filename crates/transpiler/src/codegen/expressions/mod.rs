@@ -193,11 +193,11 @@ impl CodeGenerator<'_> {
     fn call_arg_to_swc(&mut self, node: &ast::CallArgument) -> swc::Expr {
         match node {
             ast::CallArgument::Expression(expr) => self.expr_to_swc(expr),
-            ast::CallArgument::Predicate(pred) => self.predicate_to_swc(pred).into(),
+            ast::CallArgument::Callback(cb) => self.callback_to_swc(cb).into(),
         }
     }
 
-    fn predicate_to_swc(&mut self, node: &ast::Predicate) -> swc::ArrowExpr {
+    fn callback_to_swc(&mut self, node: &ast::Callback) -> swc::ArrowExpr {
         let params = node
             .params
             .iter()
@@ -215,10 +215,10 @@ impl CodeGenerator<'_> {
         }
     }
 
-    fn predicate_param_to_swc(&mut self, node: &ast::PredicateParam) -> swc::Pat {
+    fn predicate_param_to_swc(&mut self, node: &ast::CallbackParam) -> swc::Pat {
         let name = match node {
-            ast::PredicateParam::Identifier(id) => id.as_str(),
-            ast::PredicateParam::Param(param) => param.name.as_str(),
+            ast::CallbackParam::Identifier(id) => id.as_str(),
+            ast::CallbackParam::Param(param) => param.name.as_str(),
         };
         swc::Pat::Ident(swc::BindingIdent {
             id: create_ident(name),
@@ -254,22 +254,14 @@ impl CodeGenerator<'_> {
             .collect()
     }
 
-    pub fn function_body_to_swc(&mut self, node: &ast::FunctionBody) -> swc::BlockStmtOrExpr {
-        match node {
-            ast::FunctionBody::TypedBlock(typed_block) => {
-                let stmts = typed_block
-                    .block
-                    .statements
-                    .iter()
-                    .flat_map(|stmt| self.stmt_to_swc(stmt))
-                    .collect();
+    pub fn function_body_to_swc(&mut self, body: &ast::BlockExpression) -> swc::BlockStmtOrExpr {
+        let stmts = body
+            .statements
+            .iter()
+            .flat_map(|stmt| self.stmt_to_swc(stmt))
+            .collect();
 
-                swc::BlockStmtOrExpr::BlockStmt(create_block_stmt(stmts))
-            }
-            ast::FunctionBody::Expression(expr) => {
-                swc::BlockStmtOrExpr::Expr(Box::new(self.expr_to_swc(expr)))
-            }
-        }
+        swc::BlockStmtOrExpr::BlockStmt(create_block_stmt(stmts))
     }
 
     /// Create code for identifiers.

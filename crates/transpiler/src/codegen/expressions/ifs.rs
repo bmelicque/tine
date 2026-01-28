@@ -80,8 +80,8 @@ mod tests {
     use tine_core::{ast, Location, Session};
 
     fn mock_expr() -> ast::Expression {
-        ast::Expression::NumberLiteral(ast::NumberLiteral {
-            value: 1.0.into(),
+        ast::Expression::IntLiteral(ast::IntLiteral {
+            value: 1,
             loc: Location::dummy(),
         })
     }
