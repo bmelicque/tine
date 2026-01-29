@@ -1,6 +1,6 @@
 use pest::iterators::{Pair, Pairs};
 
-use crate::ast;
+use crate::{ast, diagnostics::DiagnosticKind};
 
 use super::{parser::Rule, ParserEngine};
 
@@ -24,7 +24,9 @@ impl ParserEngine {
         match pair.as_str() {
             "break" | "continue" | "else" | "for" | "if" | "in" | "match" | "return" | "use" => {
                 self.error(
-                    format!("invalid identifier: '{}' is a reserved name", pair.as_str()),
+                    DiagnosticKind::ReservedName {
+                        name: pair.as_str().into(),
+                    },
                     loc,
                 );
             }

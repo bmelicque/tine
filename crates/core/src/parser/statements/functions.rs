@@ -2,6 +2,7 @@ use pest::iterators::Pair;
 
 use crate::{
     ast,
+    diagnostics::DiagnosticKind,
     parser::{parser::Rule, ParserEngine},
 };
 
@@ -17,7 +18,7 @@ impl ParserEngine {
         let definition = self.parse_function_expression(inner.next().unwrap());
         if definition.name.is_none() {
             self.error(
-                "function name expected".into(),
+                DiagnosticKind::MissingFunctionName,
                 definition
                     .loc
                     .decrement()

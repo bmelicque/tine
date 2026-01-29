@@ -31,7 +31,7 @@ impl Session {
         let file_names = get_dependencies(&self.entry_point, &result.node);
 
         self.parsed.insert(module_id, result.node);
-        self.diagnostics.insert(module_id, result.errors);
+        self.diagnostics.insert(module_id, result.diagnostics);
 
         for dependency_name in file_names {
             self.parse_dependency(&dependency_name, module_id);
@@ -77,7 +77,7 @@ impl Session {
         let module_id = self.module_graph.add_module(module);
         let result = ParseResult {
             node: Program::dummy(),
-            errors: vec![],
+            diagnostics: vec![],
         };
         Ok((module_id, result))
     }

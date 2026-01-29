@@ -1,5 +1,6 @@
 use crate::{
     ast,
+    diagnostics::DiagnosticKind,
     type_checker::analysis_context::type_store::TypeStore,
     types::{ArrayType, TupleType, Type, TypeId},
 };
@@ -86,7 +87,10 @@ impl TypeChecker<'_> {
                 handle.borrow().get_type()
             }
             None => {
-                self.error(format!("Undefined variable: {}", node.as_str()), node.loc);
+                let error = DiagnosticKind::CannotFindName {
+                    name: node.as_str().to_string(),
+                };
+                self.error(error, node.loc);
                 TypeStore::UNKNOWN
             }
         };
@@ -144,7 +148,7 @@ mod tests {
 
         let result = checker.visit_array_expression(&array_expression);
         assert_eq!(result, TypeStore::DYNAMIC);
-        assert!(checker.errors.is_empty());
+        assert!(checker.diagnostics.is_empty());
     }
 
     #[test]
@@ -172,7 +176,7 @@ mod tests {
                 element: TypeStore::INTEGER
             })
         );
-        assert!(checker.errors.is_empty());
+        assert!(checker.diagnostics.is_empty());
     }
 
     #[test]
@@ -200,7 +204,7 @@ mod tests {
                 element: TypeStore::INTEGER
             })
         );
-        assert_eq!(checker.errors.len(), 1);
+        assert_eq!(checker.diagnostics.len(), 1);
     }
 
     #[test]
@@ -222,9 +226,9 @@ mod tests {
         let result = checker.visit_binary_expression(&binary_expression);
         assert_eq!(result, TypeStore::INTEGER);
         assert!(
-            checker.errors.is_empty(),
+            checker.diagnostics.is_empty(),
             "expected no errors, got {:?}",
-            checker.errors
+            checker.diagnostics
         );
     }
 
@@ -281,7 +285,7 @@ mod tests {
                 return_type: TypeStore::INTEGER,
             })
         );
-        assert!(checker.errors.is_empty());
+        assert!(checker.diagnostics.is_empty());
     }
 
     #[test]
@@ -299,7 +303,7 @@ mod tests {
 
         let result = checker.visit_identifier(&identifier);
         assert_eq!(result, TypeStore::INTEGER);
-        assert!(checker.errors.is_empty());
+        assert!(checker.diagnostics.is_empty());
     }
 
     #[test]
@@ -313,7 +317,7 @@ mod tests {
         let result = checker.visit_tuple_expression(&tuple_expression);
         let result = checker.resolve(result);
         assert_eq!(result, Type::Tuple(TupleType { elements: vec![] }));
-        assert!(checker.errors.is_empty());
+        assert!(checker.diagnostics.is_empty());
     }
 
     #[test]
@@ -345,7 +349,7 @@ mod tests {
                 elements: vec![TypeStore::INTEGER, TypeStore::STRING, TypeStore::BOOLEAN]
             })
         );
-        assert!(checker.errors.is_empty());
+        assert!(checker.diagnostics.is_empty());
     }
 
     #[test]
@@ -377,6 +381,6 @@ mod tests {
         let result = checker.visit_tuple_expression(&tuple_expression);
         let result = checker.resolve(result);
         assert!(matches!(result, Type::Tuple(_)));
-        assert!(checker.errors.is_empty());
+        assert!(checker.diagnostics.is_empty());
     }
 }

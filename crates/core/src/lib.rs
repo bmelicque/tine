@@ -1,6 +1,7 @@
 mod analyzer;
 pub mod ast;
 mod common;
+pub mod diagnostics;
 mod locations;
 mod parser;
 mod type_checker;
@@ -11,8 +12,8 @@ pub use analyzer::{
     analyze, session::Session, Module, ModuleId, ModulePath, ModuleTypeData, Source,
 };
 pub use common::{use_decl_to_paths, ModuleImports};
+pub use diagnostics::*;
 pub use locations::{Location, Span};
-pub use parser::ParseError;
 pub use type_checker::{
     MemberToken, SymbolData, SymbolKind, SymbolRef, SymbolToken, Token, TypeStore,
 };

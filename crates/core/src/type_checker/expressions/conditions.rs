@@ -1,5 +1,6 @@
 use crate::{
     ast,
+    diagnostics::DiagnosticKind,
     type_checker::{analysis_context::type_store::TypeStore, patterns::TokenList, TypeChecker},
     types::{OptionType, Type, TypeId},
     SymbolData, SymbolKind,
@@ -21,17 +22,16 @@ impl TypeChecker<'_> {
     pub fn visit_condition(&mut self, node: &ast::Expression) {
         let condition = self.visit_expression(node);
         if condition != TypeStore::BOOLEAN {
-            let condition = self.resolve(condition);
-            self.error(
-                format!("Condition must evaluate to a boolean, got {}", condition),
-                node.loc(),
-            );
+            let error = DiagnosticKind::InvalidCondition {
+                type_name: self.session.display_type(condition),
+            };
+            self.error(error, node.loc());
         }
     }
 
     pub fn visit_if_decl_expression(&mut self, node: &ast::IfPatExpression) -> TypeId {
         if !node.pattern.is_refutable() {
-            self.error("Refutable pattern expected".into(), node.pattern.loc());
+            self.error(DiagnosticKind::RefutablePatternExpected, node.pattern.loc());
         };
 
         let ty = self.with_scope(|s| {
@@ -69,12 +69,10 @@ impl TypeChecker<'_> {
             ast::Alternate::IfDecl(i) => self.visit_if_decl_expression(i),
         };
         if !self.can_be_assigned_to(alt_ty, expected) {
-            let expected = self.resolve(expected);
-            let alt_ty = self.resolve(alt_ty);
-            let error = format!(
-                "Branches' types don't match: expected {}, got {}",
-                expected, alt_ty
-            );
+            let error = DiagnosticKind::MismatchedBranchTypes {
+                expected: self.session.display_type(expected),
+                got: self.session.display_type(alt_ty),
+            };
             self.error(error, alternate.loc())
         }
     }

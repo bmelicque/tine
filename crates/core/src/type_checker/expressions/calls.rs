@@ -1,5 +1,6 @@
 use crate::{
     ast,
+    diagnostics::DiagnosticKind,
     type_checker::{
         analysis_context::{type_store::TypeStore, SymbolData},
         TypeChecker,
@@ -16,19 +17,21 @@ impl TypeChecker<'_> {
             types::Type::Unknown => {
                 return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
             }
-            t => {
-                self.error(format!("type '{}' is not callable", t), node.callee.loc());
+            _ => {
+                let error = DiagnosticKind::NotCallable {
+                    type_name: self.session.display_type(callee_type),
+                };
+                self.error(error, node.callee.loc());
                 return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
             }
         };
 
         if node.args.len() != callee_type.params.len() {
-            let error_message = format!(
-                "expected {} argument(s), got {}",
-                callee_type.params.len(),
-                node.args.len()
-            );
-            self.error(error_message, node.loc);
+            let error = DiagnosticKind::ArgumentCountMismatch {
+                expected: callee_type.params.len(),
+                got: node.args.len(),
+            };
+            self.error(error, node.loc);
         }
 
         node.args
@@ -55,13 +58,13 @@ impl TypeChecker<'_> {
         self.check_assigned_type(expected, got, node.loc());
     }
 
-    fn check_callback(&mut self, node: &ast::Callback, expected: TypeId) {
-        let expected = self.resolve(expected);
+    fn check_callback(&mut self, node: &ast::Callback, expected_id: TypeId) {
+        let expected = self.resolve(expected_id);
         let Type::Function(expected) = expected else {
-            self.error(
-                format!("Expected type {}, got function", expected),
-                node.loc,
-            );
+            let error = DiagnosticKind::UnexpectedCallback {
+                expected: self.session.display_type(expected_id),
+            };
+            self.error(error, node.loc);
             return;
         };
         let params = expected.params.clone();
@@ -69,12 +72,11 @@ impl TypeChecker<'_> {
 
         self.with_scope(|s| {
             if params.len() != node.params.len() {
-                let message = format!(
-                    "expected {} param(s), got {}",
-                    params.len(),
-                    node.params.len()
-                );
-                s.error(message, node.loc);
+                let error = DiagnosticKind::CallbackParamCountMismatch {
+                    expected: params.len(),
+                    got: node.params.len(),
+                };
+                s.error(error, node.loc);
             }
             s.define_params(&node.params, &params);
             s.visit_callback_body(node, return_type);

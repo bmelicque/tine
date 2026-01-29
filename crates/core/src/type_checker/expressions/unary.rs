@@ -2,6 +2,7 @@ use crate::{
     ast::{self, utils::root_identifier},
     type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
     types::{ListenerType, ReferenceType, SignalType, Type, TypeId},
+    DiagnosticKind,
 };
 
 impl TypeChecker<'_> {
@@ -23,8 +24,11 @@ impl TypeChecker<'_> {
             Type::Reference(r) => r.target,
             Type::Signal(s) => s.inner,
             Type::Unknown => TypeStore::UNKNOWN,
-            ty => {
-                self.error(format!("Cannot dereference type {}", ty), node.loc);
+            _ => {
+                let error = DiagnosticKind::NotDereferenceable {
+                    type_name: self.session.display_type(expr_type),
+                };
+                self.error(error, node.loc);
                 TypeStore::UNKNOWN
             }
         };
@@ -41,10 +45,7 @@ impl TypeChecker<'_> {
         let (expr_type, deps) = self.with_dependencies(|s| s.visit_expression(&node.operand));
         let count = self.save_reactive_dependencies(&deps, node.loc);
         if count == 0 {
-            self.error(
-                "Expected reactive values in listened expression".to_string(),
-                node.operand.loc(),
-            );
+            self.error(DiagnosticKind::NonReactiveExpression, node.operand.loc());
         }
         self.ctx.add_dependencies(deps);
         if let ast::Expression::Identifier(id) = node.operand.as_ref() {
@@ -62,11 +63,10 @@ impl TypeChecker<'_> {
         if let ast::Expression::Identifier(id) = node.operand.as_ref() {
             if let Some(info) = self.lookup_mut(&id.as_str()) {
                 if !info.is_mutable() {
-                    let error_message = format!(
-                        "Cannot take mutable reference of immutable variable '{}'",
-                        id.as_str()
-                    );
-                    self.error(error_message, node.loc);
+                    let error = DiagnosticKind::RefToConstant {
+                        name: id.as_str().to_string(),
+                    };
+                    self.error(error, node.loc);
                 } else {
                     info.read_to_mutable_ref(id.loc);
                 }
@@ -74,10 +74,10 @@ impl TypeChecker<'_> {
         } else if let Some(id) = root_identifier(&node.operand) {
             if let Some(info) = self.lookup_mut(&id.as_str()) {
                 if !info.is_mutable() {
-                    self.error(
-                        format!("Cannot assign to immutable variable '{}'", id.as_str()),
-                        node.loc,
-                    );
+                    let error = DiagnosticKind::AssignmentToConstant {
+                        name: id.as_str().to_string(),
+                    };
+                    self.error(error, node.loc);
                 } else {
                     info.read_to_write(id.loc);
                 }
@@ -93,8 +93,12 @@ impl TypeChecker<'_> {
             ast::Expression::Empty => TypeStore::UNKNOWN,
             operand => self.visit_expression(operand),
         };
-        if expr_type != TypeStore::INTEGER && expr_type != TypeStore::UNKNOWN {
-            self.error("expected int".into(), node.operand.loc());
+        let is_numeric = expr_type == TypeStore::INTEGER || expr_type == TypeStore::FLOAT;
+        if !is_numeric && expr_type != TypeStore::UNKNOWN {
+            let error = DiagnosticKind::ExpectedNumber {
+                got: self.session.display_type(expr_type),
+            };
+            self.error(error, node.operand.loc());
             return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
         }
         self.ctx.save_expression_type(node.loc, TypeStore::INTEGER)
@@ -106,7 +110,10 @@ impl TypeChecker<'_> {
             operand => self.visit_expression(operand),
         };
         if expr_type != TypeStore::BOOLEAN && expr_type != TypeStore::UNKNOWN {
-            self.error("expected boolean".into(), node.operand.loc());
+            let error = DiagnosticKind::ExpectedBool {
+                got: self.session.display_type(expr_type),
+            };
+            self.error(error, node.operand.loc());
             return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
         }
         self.ctx.save_expression_type(node.loc, TypeStore::BOOLEAN)

@@ -1,7 +1,7 @@
-use crate::{analyzer::Source, parser::parser::ParseError};
+use crate::{analyzer::Source, diagnostics::Diagnostic};
 
-pub fn pretty_print_error(src: &Source, error: &ParseError) {
-    let loc = &error.loc;
+pub fn pretty_print_error(src: &Source, diag: &Diagnostic) {
+    let loc = &diag.loc;
     let start_pos = loc.span().start();
     let end_pos = loc.span().end();
 
@@ -14,7 +14,7 @@ pub fn pretty_print_error(src: &Source, error: &ParseError) {
 
     println!(
         "\nerror: {}\n --> line {}, column {}\n",
-        error.message, start_line, start_col
+        diag.kind, start_line, start_col
     );
     println!("{} | {}", start_line, line_text);
 

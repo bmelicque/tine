@@ -3,8 +3,8 @@ mod utils;
 
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use tine_core::ModulePath;
-use tine_core::{analyze, ModuleId, ParseError, Session, Source, Span};
+use tine_core::{analyze, ModuleId, Session, Source, Span};
+use tine_core::{Diagnostic as ParserDiagnostic, ModulePath};
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::Client;
 use tower_lsp::{lsp_types::*, LspService, Server};
@@ -17,7 +17,7 @@ pub struct ModuleSummary {
     pub id: ModuleId,
     pub uri: Url,
     pub src: Source,
-    pub diagnostics: Vec<ParseError>,
+    pub diagnostics: Vec<ParserDiagnostic>,
 }
 
 #[derive(Clone)]
@@ -245,10 +245,10 @@ fn position_in_span(src: &Source, span: Span, pos: Position) -> bool {
     }
 }
 
-fn error_to_lsp(src: &Source, e: &ParseError) -> Diagnostic {
+fn error_to_lsp(src: &Source, e: &ParserDiagnostic) -> Diagnostic {
     Diagnostic {
         range: span_to_range(src, e.loc.span()),
-        message: e.message.clone(),
+        message: format!("{}", e.kind),
         severity: Some(DiagnosticSeverity::ERROR),
         ..Default::default()
     }

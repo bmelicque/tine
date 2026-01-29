@@ -6,4 +6,4 @@ mod statements;
 mod types;
 pub mod utils;
 
-pub use parser::{ParseError, ParserEngine};
+pub use parser::ParserEngine;

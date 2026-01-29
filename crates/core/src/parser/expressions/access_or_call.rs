@@ -2,6 +2,7 @@ use pest::iterators::Pair;
 
 use crate::{
     ast,
+    diagnostics::DiagnosticKind,
     parser::{parser::Rule, ParserEngine},
     Location,
 };
@@ -69,10 +70,7 @@ impl ParserEngine {
         let loc = Location::merge(left_loc, right_loc);
 
         let Some(right_pair) = right_pair.into_inner().next() else {
-            self.error(
-                "expected field name or integer".into(),
-                right_loc.increment(),
-            );
+            self.error(DiagnosticKind::InvalidMember, right_loc.increment());
             return ast::MemberExpression {
                 loc,
                 object: Box::new(root),
@@ -89,7 +87,7 @@ impl ParserEngine {
             Rule::integer_literal => {
                 let index = self.parse_integer_literal(right_pair);
                 if index.value < 0 {
-                    self.error("tuple index cannot be negative".into(), index.loc);
+                    self.error(DiagnosticKind::NegativeTupleIndex, index.loc);
                 }
                 ast::MemberExpression {
                     loc,

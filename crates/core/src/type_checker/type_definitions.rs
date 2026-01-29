@@ -2,7 +2,7 @@ use crate::{
     ast,
     type_checker::analysis_context::type_store::TypeStore,
     types::{self, EnumType, GenericType, StructType, TupleType, Type, TypeId},
-    Location, SymbolData, SymbolKind,
+    DiagnosticKind, Location, SymbolData, SymbolKind,
 };
 
 use super::TypeChecker;
@@ -155,7 +155,8 @@ impl TypeChecker<'_> {
     // OLD
     fn add_type_to_scope(&mut self, name: String, loc: Location, ty: TypeId) {
         if self.ctx.find_in_current_scope(&name).is_some() {
-            self.error(format!("cannot redefine type '{}'", name), loc);
+            let error = DiagnosticKind::DuplicateIdentifier { name: name.clone() };
+            self.error(error, loc);
             return;
         }
 

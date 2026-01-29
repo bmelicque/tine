@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ast,
+    diagnostics::DiagnosticKind,
     type_checker::TypeChecker,
     types::{DuckType, ListenerType, Type, TypeId},
     Location, TypeStore,
@@ -47,9 +48,9 @@ impl TypeChecker<'_> {
             if locs.len() == 1 {
                 continue;
             }
-            let message = format!("Duplicated attribute {}", name);
+            let error = DiagnosticKind::DuplicateAttribute { name };
             for loc in locs {
-                self.error(message.clone(), loc);
+                self.error(error.clone(), loc);
             }
         }
     }

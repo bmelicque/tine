@@ -40,21 +40,22 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{ParseError, Rule, TineParser};
+    use crate::{
+        diagnostics::Diagnostic,
+        parser::parser::{Rule, TineParser},
+    };
     use pest::Parser;
 
-    fn parse_struct_input(input: &'static str) -> (ast::StructDefinition, Vec<ParseError>) {
+    fn parse_struct_input(input: &'static str) -> (ast::StructDefinition, Vec<Diagnostic>) {
         let result = TineParser::parse(Rule::struct_definition, input);
         let Ok(mut pair) = result else {
             panic!("Failed to parse input: {:?}", result.err().unwrap());
         };
-        let pair = pair
-            .next()
-            .unwrap();
+        let pair = pair.next().unwrap();
         let mut parser_engine = ParserEngine::new(0);
         (
             parser_engine.parse_struct_definition(pair),
-            parser_engine.errors,
+            parser_engine.diagnostics,
         )
     }
 

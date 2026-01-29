@@ -20,7 +20,7 @@ impl ParserEngine {
     }
 
     fn parse_unary_operator(&mut self, pair: Pair<'_, Rule>) -> ast::UnaryOperator {
-        assert!(pair.as_rule() == Rule::unary_op);
+        debug_assert_eq!(pair.as_rule(), Rule::unary_op);
         match pair.as_str() {
             "&" => ast::UnaryOperator::Ampersand,
             "@" => ast::UnaryOperator::At,
@@ -29,11 +29,7 @@ impl ParserEngine {
             "-" => ast::UnaryOperator::Minus,
             "*" => ast::UnaryOperator::Star,
             op => {
-                self.error(
-                    format!("Unknown unary operator: {}", op),
-                    self.localize(pair.as_span()),
-                );
-                ast::UnaryOperator::Star
+                panic!("Unknown unary operator: {}", op);
             }
         }
     }
@@ -42,7 +38,7 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{TineParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str) -> ast::Expression {

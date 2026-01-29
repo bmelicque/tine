@@ -5,6 +5,7 @@ use crate::{
         ArrayType, DuckType, FunctionType, GenericType, ListenerType, MapType, OptionType,
         ReferenceType, ResultType, SignalType, TupleType, Type, TypeId,
     },
+    DiagnosticKind,
 };
 
 use super::TypeChecker;
@@ -81,7 +82,10 @@ impl TypeChecker<'_> {
             _ => {}
         }
         let Some(type_ref) = self.ctx.lookup(name) else {
-            self.error(format!("type '{}' not found", name), node.loc);
+            let error = DiagnosticKind::CannotFindName {
+                name: name.to_string(),
+            };
+            self.error(error, node.loc);
             return TypeStore::UNKNOWN;
         };
         let ty = type_ref.borrow().get_type();
@@ -97,12 +101,11 @@ impl TypeChecker<'_> {
         let args = node.args.clone().unwrap_or(Vec::new());
 
         if args.len() > arity {
-            let message = format!(
-                "too many arguments, expected at most {}, got {}",
-                arity,
-                args.len()
-            );
-            self.error(message, node.loc);
+            let error = DiagnosticKind::ArgumentCountMismatch {
+                expected: arity,
+                got: args.len(),
+            };
+            self.error(error, node.loc);
         }
 
         let mut arg_types: Vec<TypeId> = args

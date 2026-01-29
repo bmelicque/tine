@@ -3,6 +3,7 @@ use crate::{
     ast::{self, UseTree},
     common::{use_decl_to_paths, ModuleImports},
     type_checker::TypeChecker,
+    DiagnosticKind,
 };
 
 impl TypeChecker<'_> {
@@ -28,7 +29,10 @@ impl TypeChecker<'_> {
         assert_eq!(node.relative_count, 0);
         let module_name = node.tree.path[0].as_str();
         let Some(module_id) = self.session.get_module_id(module_name.into()) else {
-            self.error(format!("Cannot find module '{}'", module_name), node.loc);
+            let error = DiagnosticKind::CannotFindModule {
+                name: module_name.to_string(),
+            };
+            self.error(error, node.loc);
             return;
         };
         let subtree = ast::UseTree {
@@ -79,12 +83,14 @@ impl TypeChecker<'_> {
                 self.ctx.save_expression_type(path_element.loc(), ty);
             }
             None => self.error(
-                format!("This module has no exported element named '{}'", name),
+                DiagnosticKind::UnknownMember {
+                    member: name.to_string(),
+                },
                 path_element.loc(),
             ),
         };
         if tree.path.len() > 1 || tree.sub_trees.len() > 0 {
-            self.error("Cannot import subvalues".to_string(), tree.loc());
+            self.error(DiagnosticKind::UnexpectedModuleTree, tree.loc());
         }
     }
 }

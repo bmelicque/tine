@@ -1,5 +1,6 @@
 use crate::{
     ast,
+    diagnostics::DiagnosticKind,
     type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
     types::TypeId,
     Location,
@@ -31,7 +32,10 @@ impl TypeChecker<'_> {
                     self.push_binary_error(node.operator, right_type, node.loc);
                 };
                 if left_is_num && right_is_num && left_type != right_type {
-                    let error = format!("Incompatible types '{}' and '{}'", left_type, right_type);
+                    let error = DiagnosticKind::MismatchedTypes {
+                        left_name: self.session.display_type(left_type),
+                        right_name: self.session.display_type(right_type),
+                    };
                     self.error(error, node.loc);
                 };
             }
@@ -40,10 +44,10 @@ impl TypeChecker<'_> {
                     || left_type == TypeStore::UNKNOWN
                     || right_type == TypeStore::UNKNOWN;
                 if !allow_comparison {
-                    let error = format!(
-                        "Types '{}' and '{}' cannot be compared",
-                        left_type, right_type
-                    );
+                    let error = DiagnosticKind::MismatchedTypes {
+                        left_name: self.session.display_type(left_type),
+                        right_name: self.session.display_type(right_type),
+                    };
                     self.error(error, node.loc);
                 }
             }
@@ -64,11 +68,11 @@ impl TypeChecker<'_> {
     }
 
     fn push_binary_error(&mut self, op: ast::BinaryOperator, ty: TypeId, loc: Location) {
-        let ty = self.resolve(ty);
-        self.error(
-            format!("Operator '{}' cannot be applied to type '{}'", op, ty),
-            loc,
-        )
+        let error = DiagnosticKind::InvalidTypeForOperator {
+            operator: op,
+            type_name: self.session.display_type(ty),
+        };
+        self.error(error, loc)
     }
 }
 

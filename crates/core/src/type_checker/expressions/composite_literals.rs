@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use crate::{
     ast::{self, StructLiteralField},
+    diagnostics::DiagnosticKind,
     type_checker::analysis_context::type_store::TypeStore,
     types::{
         self, ArrayType, MapType, OptionType, StructField, StructType, TupleType, Type, TypeId,
@@ -15,10 +16,7 @@ impl TypeChecker<'_> {
     pub fn visit_composite_literal(&mut self, node: &ast::CompositeLiteral) -> TypeId {
         match node {
             ast::CompositeLiteral::AnonymousStruct(node) => {
-                self.error(
-                    "missing type constructor in composite literal".into(),
-                    node.loc,
-                );
+                self.error(DiagnosticKind::MissingConstructorName, node.loc.decrement());
                 TypeStore::UNKNOWN
             }
             ast::CompositeLiteral::Array(node) => self.visit_array_literal(node),
@@ -48,7 +46,10 @@ impl TypeChecker<'_> {
             })
             .collect();
         let Type::Struct(st) = self.resolve(expected_type) else {
-            self.error(format!("type mismatch"), node.loc);
+            let error = DiagnosticKind::UnexpectedStruct {
+                expected: self.session.display_type(expected_type),
+            };
+            self.error(error, node.loc);
             return TypeStore::UNKNOWN;
         };
         let ty = self.intern_unique(Type::Struct(StructType { id: st.id, fields }));
@@ -72,7 +73,7 @@ impl TypeChecker<'_> {
         }
 
         if self.resolve(expected_element_type).is_unresolved() {
-            self.error("cannot infer element type".to_string(), node.loc);
+            self.error(DiagnosticKind::CannotInferType, node.loc);
             expected_element_type = TypeStore::UNKNOWN;
         }
 
@@ -108,11 +109,11 @@ impl TypeChecker<'_> {
         }
 
         if self.resolve(key).is_unresolved() {
-            self.error("cannot infer key type".to_string(), node.loc);
+            self.error(DiagnosticKind::CannotInferType, node.loc);
             key = TypeStore::UNKNOWN;
         }
         if self.resolve(value).is_unresolved() {
-            self.error("cannot infer value type".to_string(), node.loc);
+            self.error(DiagnosticKind::CannotInferType, node.loc);
             value = TypeStore::UNKNOWN;
         }
 
@@ -137,7 +138,7 @@ impl TypeChecker<'_> {
         }
 
         if self.resolve(some).is_unresolved() {
-            self.error("Cannot infer type".to_string(), node.loc);
+            self.error(DiagnosticKind::CannotInferType, node.loc);
             some = TypeStore::UNKNOWN;
         }
 
@@ -177,10 +178,10 @@ impl TypeChecker<'_> {
             let expected_field = expected.fields.iter().find(|field| field.name == *name);
             let expected = expected_field.map(|field| field.def);
             let Some(mut expected) = expected else {
-                self.error(
-                    format!("property '{}' does not exist in this type", name),
-                    field.loc,
-                );
+                let error = DiagnosticKind::UnknownMember {
+                    member: name.clone(),
+                };
+                self.error(error, field.loc);
                 continue;
             };
             if self.resolve(expected).is_unresolved() {
@@ -215,10 +216,10 @@ impl TypeChecker<'_> {
                 return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
             }
             _ => {
-                self.error(
-                    format!("enum expected, got '{}'", node.ty.name),
-                    node.ty.loc,
-                );
+                let error = DiagnosticKind::ExpectedEnum {
+                    got: node.ty.name.clone(),
+                };
+                self.error(error, node.ty.loc);
                 return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
             }
         };
@@ -228,20 +229,18 @@ impl TypeChecker<'_> {
             .iter()
             .find(|variant| variant.name == node.name)
         else {
-            self.error(
-                format!("Variant '{}' does not exist on type {}", node.name, ty),
-                node.loc,
-            );
+            let error = DiagnosticKind::UnknownVariant {
+                variant: node.name.clone(),
+                enum_name: self.session.display_type(ty),
+            };
+            self.error(error, node.loc);
             return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
         };
         match &node.body {
             Some(body) => self.visit_variant_body(body, variant.def),
             None => {
                 if variant.def != TypeStore::UNIT && variant.def != TypeStore::UNKNOWN {
-                    self.error(
-                        "expected structured or tuple variant, got unit".into(),
-                        node.loc,
-                    );
+                    self.error(DiagnosticKind::InvalidVariantKind, node.loc);
                     TypeStore::UNKNOWN
                 } else {
                     TypeStore::UNIT
@@ -257,10 +256,7 @@ impl TypeChecker<'_> {
             ast::VariantLiteralBody::Tuple(_) => self.visit_variant_tuple_body(body, expected),
             ast::VariantLiteralBody::Struct(fields) => {
                 let Type::Struct(st) = self.resolve(expected).clone() else {
-                    self.error(
-                        "expected tuple or unit variant, got a structured type".into(),
-                        body.loc(),
-                    );
+                    self.error(DiagnosticKind::InvalidVariantKind, body.loc());
                     return TypeStore::UNKNOWN;
                 };
                 let id = st.id;
@@ -280,18 +276,14 @@ impl TypeChecker<'_> {
             panic!()
         };
         let Type::Tuple(expected_tuple) = self.resolve(expected).clone() else {
-            self.error(
-                "expected structured or unit variant, got a tuple".into(),
-                span,
-            );
+            self.error(DiagnosticKind::InvalidVariantKind, span);
             return TypeStore::UNKNOWN;
         };
         if got_tuple.len() != expected_tuple.elements.len() {
-            let error = format!(
-                "expected {} element(s), got {}",
-                expected_tuple.elements.len(),
-                got_tuple.len()
-            );
+            let error = DiagnosticKind::TupleElementCountMismatch {
+                expected: expected_tuple.elements.len(),
+                got: got_tuple.len(),
+            };
             self.error(error, span);
             return TypeStore::UNKNOWN;
         }
@@ -371,7 +363,7 @@ mod tests {
         let result = checker.visit_anonymous_struct_literal(&struct_literal, user_type);
         let result = checker.resolve(result).clone();
         assert!(matches!(result, Type::Struct(StructType { .. })));
-        assert!(checker.errors.is_empty());
+        assert!(checker.diagnostics.is_empty());
     }
 
     #[test]
@@ -412,7 +404,7 @@ mod tests {
                 element: TypeStore::INTEGER
             })
         ));
-        assert!(checker.errors.is_empty());
+        assert!(checker.diagnostics.is_empty());
     }
 
     #[test]
@@ -473,7 +465,7 @@ mod tests {
                 value: TypeStore::INTEGER
             })
         ));
-        assert!(checker.errors.is_empty());
+        assert!(checker.diagnostics.is_empty());
     }
 
     #[test]
@@ -506,7 +498,7 @@ mod tests {
                 some: TypeStore::INTEGER
             })
         ));
-        assert!(checker.errors.is_empty());
+        assert!(checker.diagnostics.is_empty());
     }
 
     #[test]
@@ -572,7 +564,7 @@ mod tests {
             result_resolved,
             types::Type::Struct(types::StructType { .. })
         ));
-        assert!(checker.errors.is_empty());
+        assert!(checker.diagnostics.is_empty());
     }
 
     #[test]
@@ -652,9 +644,9 @@ mod tests {
             result
         );
         assert!(
-            checker.errors.is_empty(),
+            checker.diagnostics.is_empty(),
             "expected no errors, got {:?}",
-            checker.errors
+            checker.diagnostics
         );
     }
 }

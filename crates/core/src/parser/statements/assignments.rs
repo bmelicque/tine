@@ -2,6 +2,7 @@ use pest::iterators::Pair;
 
 use crate::{
     ast,
+    diagnostics::DiagnosticKind,
     parser::{parser::Rule, ParserEngine},
 };
 
@@ -14,7 +15,7 @@ impl ParserEngine {
         let op_loc = self.localize(inner.next().unwrap().as_span());
         let value = self.parse_expression(inner.next().unwrap());
         if value.is_empty() {
-            self.error("expected expression".into(), op_loc.increment());
+            self.error(DiagnosticKind::MissingExpression, op_loc.increment());
         }
 
         ast::Assignment {
@@ -58,16 +59,16 @@ impl ParserEngine {
 mod tests {
     use super::*;
     use crate::{
+        diagnostics::Diagnostic,
         parser::parser::{Rule, TineParser},
-        ParseError,
     };
     use pest::Parser;
 
-    fn parse_statement_input(input: &'static str, rule: Rule) -> (ast::Statement, Vec<ParseError>) {
+    fn parse_statement_input(input: &'static str, rule: Rule) -> (ast::Statement, Vec<Diagnostic>) {
         let pair = TineParser::parse(rule, input).unwrap().next().unwrap();
         let mut parser_engine = ParserEngine::new(0);
         let stmt = parser_engine.parse_statement(pair);
-        (stmt, parser_engine.errors)
+        (stmt, parser_engine.diagnostics)
     }
 
     #[test]

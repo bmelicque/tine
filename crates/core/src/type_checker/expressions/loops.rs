@@ -1,5 +1,6 @@
 use crate::{
     ast,
+    diagnostics::DiagnosticKind,
     type_checker::{
         analysis_context::{type_store::TypeStore, SymbolData, SymbolRef},
         patterns::TokenList,
@@ -51,8 +52,11 @@ impl TypeChecker<'_> {
             let ty = checker.visit_expression(iterable);
             match checker.resolve(ty) {
                 types::Type::Array(ty) => ty.element,
-                ty => {
-                    checker.error(format!("Type {} is not iterable", ty), iterable.loc());
+                _ => {
+                    let error = DiagnosticKind::NotIterable {
+                        type_name: self.session.display_type(ty),
+                    };
+                    checker.error(error, iterable.loc());
                     TypeStore::UNKNOWN
                 }
             }

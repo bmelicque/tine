@@ -1,7 +1,7 @@
 use super::TypeChecker;
 use crate::{
     ast,
-    parser::parser::ParseError,
+    diagnostics::DiagnosticKind,
     type_checker::{
         analysis_context::{type_store::TypeStore, SymbolData},
         patterns::TokenList,
@@ -54,7 +54,9 @@ impl TypeChecker<'_> {
         for (name, ty) in variables.0 {
             let Some(info) = self.lookup_mut(name.as_str()) else {
                 self.error(
-                    format!("Cannot find name '{}'", name.as_str()),
+                    DiagnosticKind::CannotFindName {
+                        name: name.as_str().to_string(),
+                    },
                     pattern.loc(),
                 );
                 continue;
@@ -62,10 +64,10 @@ impl TypeChecker<'_> {
             info.write(name.loc);
             self.check_assigned_type(info.borrow().get_type(), ty, pattern.loc());
             if !info.borrow().is_mutable() {
-                self.error(
-                    "Cannot assign to immutable variable".to_string(),
-                    pattern.loc(),
-                );
+                let error = DiagnosticKind::AssignmentToConstant {
+                    name: name.as_str().to_string(),
+                };
+                self.error(error, pattern.loc());
             }
         }
     }
@@ -75,28 +77,34 @@ impl TypeChecker<'_> {
         self.check_assigned_type(against, ty, expr.loc);
         let root = expr.root_expression();
         let ast::Expression::Identifier(root) = root else {
-            self.errors.push(ParseError {
-                message: "Expected identifier".to_string(),
-                loc: root.loc(),
-            });
+            self.error(DiagnosticKind::InvalidRootAssignee, root.loc());
             return;
         };
         let Some(info) = self.lookup_mut(root.as_str()) else {
-            self.error(format!("Cannot find name '{}'", root.as_str()), root.loc);
+            let error = DiagnosticKind::CannotFindName {
+                name: root.as_str().to_string(),
+            };
+            self.error(error, root.loc);
             return;
         };
         // visit expression at the beginning of the current scope adds a read
         // so we need to remove it here
         info.read_to_write(root.loc);
         if !info.borrow().is_mutable() {
-            self.error("Cannot assign to immutable variable".to_string(), expr.loc);
+            let error = DiagnosticKind::AssignmentToConstant {
+                name: info.borrow().name.clone(),
+            };
+            self.error(error, expr.loc);
         }
     }
 
     fn visit_indirect_assignee(&mut self, node: &ast::IndirectionAssignee, against: TypeId) {
         let name = node.identifier.as_str();
         let Some(info) = self.lookup_mut(&name) else {
-            self.error(format!("Cannot find name '{}'", name), node.identifier.loc);
+            let error = DiagnosticKind::CannotFindName {
+                name: name.to_string(),
+            };
+            self.error(error, node.identifier.loc);
             return;
         };
         info.write(node.identifier.loc);
@@ -108,11 +116,11 @@ impl TypeChecker<'_> {
             Type::Listener(t) => {
                 self.check_assigned_type(t.inner, against, node.loc);
             }
-            ref ty => {
-                self.error(
-                    format!("Cannot dereference variable '{}' of type {}", name, ty),
-                    node.loc,
-                );
+            _ => {
+                let error = DiagnosticKind::NotDereferenceable {
+                    type_name: self.session.display_type(ty),
+                };
+                self.error(error, node.loc);
             }
         }
     }
@@ -134,8 +142,10 @@ impl TypeChecker<'_> {
             self.with_dependencies(|checker| checker.visit_function_expression(definition));
         match self.ctx.find_in_current_scope(name.as_str()) {
             Some(symbol) => {
-                let message = format!("name '{}' already defined in current scope", name.as_str());
-                self.error(message, name.loc);
+                let error = DiagnosticKind::DuplicateIdentifier {
+                    name: name.as_str().into(),
+                };
+                self.error(error, name.loc);
                 symbol
             }
             None => self.ctx.register_symbol(SymbolData {
@@ -160,7 +170,6 @@ impl TypeChecker<'_> {
 
     fn visit_method_definition(&mut self, node: &ast::MethodDefinition) -> TypeId {
         let ((receiver, function), _) = self.with_dependencies(|s| s.visit_method_expression(node));
-        let type_name = node.receiver.ty.name.as_str();
         let method_name = node.name.as_str();
 
         if receiver == TypeStore::UNKNOWN {
@@ -169,13 +178,10 @@ impl TypeChecker<'_> {
 
         let field_exists = self.session.types().has_property(receiver, method_name);
         if field_exists {
-            self.error(
-                format!(
-                    "field '{}' already defined on type '{}'",
-                    method_name, type_name
-                ),
-                node.loc,
-            );
+            let error = DiagnosticKind::DuplicateFieldName {
+                name: method_name.to_string(),
+            };
+            self.error(error, node.loc);
         } else {
             self.session
                 .types()
@@ -213,7 +219,10 @@ impl TypeChecker<'_> {
 
         let mutable = node.keyword == ast::DeclarationKeyword::Var;
         if node.pattern.is_refutable() {
-            self.error("Irrefutable pattern expected".into(), node.pattern.loc());
+            self.error(
+                DiagnosticKind::IrrefutablePatternExpected,
+                node.pattern.loc(),
+            );
         }
         let mut variables = TokenList::new();
         let docs = node.docs.clone().map(|d| d.text);
@@ -221,11 +230,10 @@ impl TypeChecker<'_> {
         for (id, ty) in variables.0 {
             match self.ctx.find_in_current_scope(id.as_str()) {
                 Some(symbol) => {
-                    let message = format!(
-                        "variable '{}' already defined in current scope",
-                        id.as_str()
-                    );
-                    self.error(message, id.loc);
+                    let error = DiagnosticKind::DuplicateIdentifier {
+                        name: id.as_str().to_string(),
+                    };
+                    self.error(error, id.loc);
                     symbol
                 }
                 None => self.ctx.register_symbol(SymbolData {

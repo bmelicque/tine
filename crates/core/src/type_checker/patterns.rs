@@ -2,6 +2,7 @@ use crate::{
     ast,
     type_checker::analysis_context::type_store::TypeStore,
     types::{self, Type, TypeId},
+    DiagnosticKind,
 };
 
 use super::TypeChecker;
@@ -36,8 +37,8 @@ impl TypeChecker<'_> {
         }
     }
 
-    fn match_literal_pattern(&mut self, pattern: &ast::LiteralPattern, against: TypeId) {
-        let against = self.resolve(against);
+    fn match_literal_pattern(&mut self, pattern: &ast::LiteralPattern, against_id: TypeId) {
+        let against = self.resolve(against_id);
         let got = match pattern {
             ast::LiteralPattern::Boolean(_) => types::Type::Boolean,
             ast::LiteralPattern::Float(_) => types::Type::Float,
@@ -45,10 +46,11 @@ impl TypeChecker<'_> {
             ast::LiteralPattern::String(_) => types::Type::String,
         };
         if against != types::Type::Unknown && against != got {
-            self.error(
-                format!("Cannot match {} literal against {}", got, against),
-                pattern.loc(),
-            );
+            let error = DiagnosticKind::InvalidPatternMatch {
+                expected: self.session.display_type(against_id),
+                got: got.to_string(),
+            };
+            self.error(error, pattern.loc());
         }
     }
 
@@ -65,36 +67,35 @@ impl TypeChecker<'_> {
         variables: &mut TokenList,
     ) {
         let Some(ty) = self.ctx.lookup(&pattern.ty.name) else {
-            self.error(
-                format!("cannot find type '{}'", &pattern.ty.name),
-                pattern.ty.loc,
-            );
+            let error = DiagnosticKind::CannotFindName {
+                name: pattern.ty.name.to_string(),
+            };
+            self.error(error, pattern.ty.loc);
             return;
         };
         let Type::Struct(pattern_type) = self.resolve(ty.borrow().get_type()).clone() else {
-            self.error(
-                format!("type '{}' is not a structured type", &pattern.ty.name),
-                pattern.loc,
-            );
+            let error = DiagnosticKind::ExpectedStruct {
+                got: pattern.ty.name.clone(),
+            };
+            self.error(error, pattern.loc);
             return;
         };
 
         let ty = match self.resolve(against) {
             Type::Struct(st) if st.id == pattern_type.id => st.clone(),
             _ => {
-                self.error("pattern doesn't match expected type".into(), pattern.loc);
+                self.error(DiagnosticKind::InvalidPattern, pattern.loc);
                 return;
             }
         };
 
-        self.match_struct_pattern_fields(&pattern.fields, &ty.fields, &pattern.ty.name, variables);
+        self.match_struct_pattern_fields(&pattern.fields, &ty.fields, variables);
     }
 
     fn match_struct_pattern_fields(
         &mut self,
         pattern_fields: &Vec<ast::StructPatternField>,
         against_fields: &Vec<types::StructField>,
-        type_name: &str,
         variables: &mut TokenList,
     ) {
         for field in pattern_fields.iter() {
@@ -102,11 +103,9 @@ impl TypeChecker<'_> {
                 .iter()
                 .find(|f| f.name == field.identifier.as_str())
             else {
-                let error = format!(
-                    "Property '{}' does not exist on type '{}'",
-                    field.identifier.as_str(),
-                    type_name
-                );
+                let error = DiagnosticKind::UnknownMember {
+                    member: field.identifier.text.clone(),
+                };
                 self.error(error, field.loc);
                 continue;
             };
@@ -126,19 +125,16 @@ impl TypeChecker<'_> {
         variables: &mut TokenList,
     ) {
         let types::Type::Tuple(ty) = self.resolve(against).clone() else {
-            self.error("Expected tuple type".into(), pattern.loc);
+            self.error(DiagnosticKind::ExpectedTuplePattern, pattern.loc);
             return;
         };
 
         if pattern.elements.len() != ty.elements.len() {
-            self.error(
-                format!(
-                    "Expected {} elements, got {}",
-                    ty.elements.len(),
-                    pattern.elements.len()
-                ),
-                pattern.loc,
-            );
+            let error = DiagnosticKind::TupleElementCountMismatch {
+                expected: ty.elements.len(),
+                got: pattern.elements.len(),
+            };
+            self.error(error, pattern.loc);
         }
 
         for (index, pattern) in pattern.elements.iter().enumerate() {
@@ -161,36 +157,34 @@ impl TypeChecker<'_> {
         variables: &mut TokenList,
     ) {
         let Some(ty) = self.ctx.lookup(&pattern.ty.name) else {
-            self.error(
-                format!("cannot find type '{}'", &pattern.ty.name),
-                pattern.ty.loc,
-            );
+            let error = DiagnosticKind::CannotFindName {
+                name: pattern.ty.name.clone(),
+            };
+            self.error(error, pattern.ty.loc);
             return;
         };
         let Type::Enum(pattern_type) = self.resolve(ty.borrow().get_type()).clone() else {
-            self.error(
-                format!("type '{}' is not an enum", &pattern.ty.name),
-                pattern.loc,
-            );
+            let error = DiagnosticKind::ExpectedEnum {
+                got: pattern.ty.name.clone(),
+            };
+            self.error(error, pattern.loc);
             return;
         };
 
         let ty = match self.resolve(against) {
             Type::Enum(e) if e.id == pattern_type.id => e.clone(),
             _ => {
-                self.error("pattern doesn't match expected type".into(), pattern.loc);
+                self.error(DiagnosticKind::InvalidPattern, pattern.loc);
                 return;
             }
         };
 
         let Some(variant) = ty.variants.iter().find(|var| var.name == pattern.name) else {
-            self.error(
-                format!(
-                    "Variant '{}' does not exist on type {}",
-                    pattern.name, pattern.ty.name,
-                ),
-                pattern.loc,
-            );
+            let error = DiagnosticKind::UnknownVariant {
+                variant: pattern.name.clone(),
+                enum_name: pattern.ty.name.clone(),
+            };
+            self.error(error, pattern.loc);
             return;
         };
 
@@ -212,15 +206,10 @@ impl TypeChecker<'_> {
         variables: &mut TokenList,
     ) {
         let Some(ast::VariantPatternBody::Struct(body)) = &pattern.body else {
-            self.error("Structured variant expected".to_string(), pattern.loc);
+            self.error(DiagnosticKind::ExpectedVariantStruct, pattern.loc);
             return;
         };
-        self.match_struct_pattern_fields(
-            body,
-            fields,
-            &format!("{}.{}", pattern.ty.name, pattern.name),
-            variables,
-        );
+        self.match_struct_pattern_fields(body, fields, variables);
     }
 
     fn match_tuple_variant(
@@ -230,7 +219,7 @@ impl TypeChecker<'_> {
         variables: &mut TokenList,
     ) {
         let Some(ast::VariantPatternBody::Tuple(ref body)) = pattern.body else {
-            self.error("Tuple variant expected".to_string(), pattern.loc);
+            self.error(DiagnosticKind::ExpectedVariantTuple, pattern.loc);
             return;
         };
         self.match_tuple_pattern(body, def, variables);
@@ -238,7 +227,7 @@ impl TypeChecker<'_> {
 
     fn match_unit_variant(&mut self, pattern: &ast::VariantPattern) {
         if pattern.body.is_some() {
-            self.error("No body expected for unit variant".to_string(), pattern.loc);
+            self.error(DiagnosticKind::ExpectedVariantUnit, pattern.loc);
         }
     }
 }

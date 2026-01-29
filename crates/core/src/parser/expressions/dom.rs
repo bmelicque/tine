@@ -2,6 +2,7 @@ use pest::iterators::Pair;
 
 use crate::{
     ast,
+    diagnostics::DiagnosticKind,
     parser::{parser::Rule, ParserEngine},
 };
 
@@ -103,13 +104,13 @@ impl ParserEngine {
     fn check_end_tag(&mut self, pair: Pair<'_, Rule>, expected: &str) {
         assert_eq!(pair.as_rule(), Rule::end_tag);
         let loc = self.localize(pair.as_span());
-        let found = pair.into_inner().next().unwrap().as_str().to_string();
-        if found != expected {
-            let message = format!(
-                "Mismatched end tag: expected </{}>, got </{}>",
-                found, expected
-            );
-            self.error(message, loc);
+        let got = pair.into_inner().next().unwrap().as_str().to_string();
+        if got != expected {
+            let error = DiagnosticKind::MismatchedTags {
+                open: expected.to_string(),
+                close: got,
+            };
+            self.error(error, loc);
         }
     }
 }

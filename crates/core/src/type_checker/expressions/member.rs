@@ -2,6 +2,7 @@ use crate::{
     ast,
     type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
     types::{Type, TypeId},
+    DiagnosticKind,
 };
 
 impl TypeChecker<'_> {
@@ -19,7 +20,6 @@ impl TypeChecker<'_> {
 
     fn visit_field_access(&mut self, expr: &ast::MemberExpression) -> TypeId {
         let root_type = self.visit_expression(&expr.object);
-        let type_str = format!("{}", root_type.clone());
 
         let Some(ast::MemberProp::FieldName(ref field_name)) = expr.prop else {
             unreachable!()
@@ -27,19 +27,19 @@ impl TypeChecker<'_> {
 
         let prop = field_name.as_str();
         let Type::Struct(ty) = self.resolve(root_type).clone() else {
-            self.error(
-                format!("Property '{}' does not exist on type '{}'", prop, type_str),
-                field_name.loc,
-            );
+            let error = DiagnosticKind::UnknownMember {
+                member: prop.to_string(),
+            };
+            self.error(error, field_name.loc);
             return self.save_member_type(expr, TypeStore::UNKNOWN);
         };
         let ty = match ty.fields.iter().find(|field| field.name == prop) {
             Some(field) => field.def,
             None => {
-                self.error(
-                    format!("Property '{}' does not exist on type '{}'", prop, type_str),
-                    expr.loc,
-                );
+                let error = DiagnosticKind::UnknownMember {
+                    member: prop.to_string(),
+                };
+                self.error(error, expr.loc);
                 TypeStore::UNKNOWN
             }
         };
@@ -49,10 +49,10 @@ impl TypeChecker<'_> {
     pub fn visit_tuple_indexing(&mut self, expr: &ast::MemberExpression) -> TypeId {
         let root_type = self.visit_expression(&expr.object);
         let Type::Tuple(tuple) = self.resolve(root_type) else {
-            self.error(
-                format!("Expected tuple type, got {}", root_type),
-                expr.object.loc(),
-            );
+            let error = DiagnosticKind::ExpectedTuple {
+                got: self.session.display_type(root_type),
+            };
+            self.error(error, expr.object.loc());
             return self.save_member_type(expr, TypeStore::UNKNOWN);
         };
 
@@ -61,12 +61,17 @@ impl TypeChecker<'_> {
         };
         let value = index.value;
         if value < 0 {
-            self.error("index must be positive".into(), index.loc);
+            self.error(DiagnosticKind::NegativeTupleIndex, index.loc);
             return self.save_member_type(expr, TypeStore::UNKNOWN);
         }
         let value = value as usize;
         if value >= tuple.elements.len() {
-            self.error("Index out of range".into(), index.loc);
+            self.error(
+                DiagnosticKind::UnknownMember {
+                    member: value.to_string(),
+                },
+                index.loc,
+            );
             return self.save_member_type(expr, TypeStore::UNKNOWN);
         } else {
             return self.save_member_type(expr, tuple.elements[value]);
@@ -143,9 +148,9 @@ mod tests {
 
         let result = checker.visit_member_expression(&field_access_expression);
         assert!(
-            checker.errors.is_empty(),
+            checker.diagnostics.is_empty(),
             "Expected no errors, got {:?}",
-            checker.errors
+            checker.diagnostics
         );
         assert_eq!(result, TypeStore::STRING);
     }
@@ -177,7 +182,7 @@ mod tests {
 
         let result = checker.visit_tuple_indexing(&tuple_indexing);
         assert_eq!(result, TypeStore::STRING);
-        assert!(checker.errors.is_empty());
+        assert!(checker.diagnostics.is_empty());
     }
 
     #[test]
@@ -202,7 +207,7 @@ mod tests {
 
         let result = checker.visit_tuple_indexing(&tuple_indexing);
         assert_eq!(result, TypeStore::UNKNOWN);
-        assert_eq!(checker.errors.len(), 1);
+        assert_eq!(checker.diagnostics.len(), 1);
     }
 
     #[test]
@@ -231,8 +236,11 @@ mod tests {
 
         let result = checker.visit_tuple_indexing(&tuple_indexing);
         assert_eq!(result, TypeStore::UNKNOWN);
-        assert_eq!(checker.errors.len(), 1);
-        assert!(checker.errors[0].message.contains("Index out of range"));
+        assert_eq!(checker.diagnostics.len(), 1);
+        assert!(matches!(
+            checker.diagnostics[0].kind,
+            DiagnosticKind::UnknownMember { .. }
+        ));
     }
 
     #[test]
@@ -261,6 +269,6 @@ mod tests {
 
         let result = checker.visit_tuple_indexing(&tuple_indexing);
         assert_eq!(result, TypeStore::UNKNOWN);
-        assert_eq!(checker.errors.len(), 1);
+        assert_eq!(checker.diagnostics.len(), 1);
     }
 }

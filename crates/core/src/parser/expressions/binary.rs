@@ -2,6 +2,7 @@ use pest::iterators::Pair;
 
 use crate::{
     ast,
+    diagnostics::DiagnosticKind,
     parser::{parser::Rule, ParserEngine},
 };
 
@@ -18,21 +19,21 @@ impl ParserEngine {
         while let Some(op_pair) = inner.next() {
             if !is_binary && left.is_empty() {
                 let loc = self.localize(op_pair.as_span());
-                self.error("Expression expected".to_string(), loc);
+                self.error(DiagnosticKind::MissingExpression, loc);
             }
             is_binary = true;
             let operator = op_pair.as_str().to_string();
 
             let Some(right_pair) = inner.next() else {
                 let loc = self.localize(op_pair.as_span());
-                self.error("Expression expected".to_string(), loc);
+                self.error(DiagnosticKind::MissingExpression, loc);
                 continue;
             };
 
             let right = self.parse_expression(right_pair);
             if right.is_empty() {
                 let loc = self.localize(op_pair.as_span());
-                self.error("Expression expected".to_string(), loc);
+                self.error(DiagnosticKind::MissingExpression, loc);
             }
 
             left = ast::BinaryExpression {

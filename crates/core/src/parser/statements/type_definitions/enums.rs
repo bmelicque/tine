@@ -56,10 +56,13 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{ParseError, Rule, TineParser};
+    use crate::{
+        diagnostics::Diagnostic,
+        parser::parser::{Rule, TineParser},
+    };
     use pest::Parser;
 
-    fn parse_enum_input(input: &'static str) -> (ast::EnumDefinition, Vec<ParseError>) {
+    fn parse_enum_input(input: &'static str) -> (ast::EnumDefinition, Vec<Diagnostic>) {
         let pair = TineParser::parse(Rule::enum_definition, input)
             .unwrap()
             .next()
@@ -67,7 +70,7 @@ mod tests {
         let mut parser_engine = ParserEngine::new(0);
         (
             parser_engine.parse_enum_definition(pair),
-            parser_engine.errors,
+            parser_engine.diagnostics,
         )
     }
 

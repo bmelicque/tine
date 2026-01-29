@@ -2,6 +2,7 @@ use pest::iterators::Pair;
 
 use crate::{
     ast,
+    diagnostics::DiagnosticKind,
     parser::{parser::Rule, utils::is_pascal_case, ParserEngine},
 };
 
@@ -14,9 +15,11 @@ impl ParserEngine {
         for param_pair in inner {
             let param_name = self.parse_type_param(&param_pair);
             if !type_param_names.insert(param_name.clone()) {
-                let message = format!("Duplicate type parameter name '{}'", param_name);
+                let error = DiagnosticKind::DuplicateIdentifier {
+                    name: param_name.clone(),
+                };
                 let loc = self.localize(param_pair.as_span());
-                self.error(message, loc);
+                self.error(error, loc);
             }
             type_params.push(param_name);
         }
@@ -27,12 +30,9 @@ impl ParserEngine {
         debug_assert_eq!(pair.as_rule(), Rule::type_identifier);
         let param_name = pair.as_str().to_string();
         if !is_pascal_case(&param_name) {
-            let message = format!(
-                "Type parameter name '{}' should be in Pascal case",
-                param_name
-            );
+            let error = DiagnosticKind::InvalidTypeName;
             let loc = self.localize(pair.as_span());
-            self.error(message, loc);
+            self.error(error, loc);
         }
         param_name
     }
@@ -59,10 +59,10 @@ impl ParserEngine {
         let mut field_names = std::collections::HashSet::new();
         fields.iter().for_each(|field| {
             if !field_names.insert(field.as_name()) {
-                self.error(
-                    format!("Duplicate field name '{}'", field.as_name()),
-                    field.loc(),
-                );
+                let error = DiagnosticKind::DuplicateFieldName {
+                    name: field.as_name(),
+                };
+                self.error(error, field.loc());
             }
         });
 

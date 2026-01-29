@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::analyzer::session::Session;
 use crate::analyzer::{ModuleId, ModulePath};
-use crate::parser::parser::ParseError;
+use crate::diagnostics::{Diagnostic, DiagnosticKind, DiagnosticLevel};
 use crate::type_checker::analysis_context::{LocalContext, SymbolRef};
 use crate::type_checker::SymbolHandle;
 use crate::types::{Type, TypeId};
@@ -13,13 +13,13 @@ pub struct CheckResult {
     pub exports: Vec<SymbolRef>,
     pub expressions: HashMap<Location, TypeId>,
     pub dependencies: HashMap<Location, Vec<SymbolRef>>,
-    pub diagnostics: Vec<ParseError>,
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 pub struct TypeChecker<'sess> {
     current_module: ModuleId,
     pub(crate) session: &'sess Session,
-    pub errors: Vec<ParseError>,
+    pub diagnostics: Vec<Diagnostic>,
     pub ctx: LocalContext,
 }
 
@@ -28,7 +28,7 @@ impl TypeChecker<'_> {
         TypeChecker {
             current_module: id,
             session,
-            errors: vec![],
+            diagnostics: vec![],
             ctx: LocalContext::new(),
         }
     }
@@ -48,7 +48,7 @@ impl TypeChecker<'_> {
             exports: self.ctx.scopes[0].bindings.clone(),
             expressions: self.ctx.expressions,
             dependencies: self.ctx.other_dependencies,
-            diagnostics: self.errors,
+            diagnostics: self.diagnostics,
         }
     }
 
@@ -116,8 +116,12 @@ impl TypeChecker<'_> {
         len
     }
 
-    pub fn error(&mut self, message: String, loc: Location) {
-        self.errors.push(ParseError { message, loc });
+    pub fn error(&mut self, kind: DiagnosticKind, loc: Location) {
+        self.diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Error,
+            loc,
+            kind,
+        });
     }
 
     pub fn lookup(&self, name: &str) -> Option<SymbolRef> {

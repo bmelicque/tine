@@ -3,6 +3,7 @@ use pest::Parser;
 use pest_derive::Parser;
 
 use crate::analyzer::ModuleId;
+use crate::diagnostics::{Diagnostic, DiagnosticKind, DiagnosticLevel};
 use crate::locations::Span;
 use crate::{ast, Location};
 
@@ -10,27 +11,21 @@ use crate::{ast, Location};
 #[grammar = "parser/grammar.pest"]
 pub struct TineParser;
 
-#[derive(Debug, Clone)]
-pub struct ParseError {
-    pub message: String,
-    pub loc: Location,
-}
-
 pub struct ParseResult {
     pub node: ast::Program,
-    pub errors: Vec<ParseError>,
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 pub struct ParserEngine {
     pub module: ModuleId,
-    pub errors: Vec<ParseError>,
+    pub diagnostics: Vec<Diagnostic>,
 }
 
 impl ParserEngine {
     pub fn new(module: ModuleId) -> Self {
         Self {
             module,
-            errors: Vec::new(),
+            diagnostics: Vec::new(),
         }
     }
 
@@ -59,7 +54,7 @@ impl ParserEngine {
 
         ParseResult {
             node: ast::Program { loc, items },
-            errors: self.errors.drain(..).collect(),
+            diagnostics: self.diagnostics.drain(..).collect(),
         }
     }
 
@@ -72,13 +67,14 @@ impl ParserEngine {
             loc,
             items: vec![invalid],
         };
-        let error = ParseError {
-            message: format!("{}", err),
+        let error = Diagnostic {
+            level: DiagnosticLevel::Error,
             loc,
+            kind: DiagnosticKind::ParseError(format!("{}", err)),
         };
         ParseResult {
             node: program,
-            errors: vec![error],
+            diagnostics: vec![error],
         }
     }
 
@@ -86,7 +82,11 @@ impl ParserEngine {
         Location::new(self.module, span.into())
     }
 
-    pub fn error(&mut self, message: String, loc: Location) {
-        self.errors.push(ParseError { message, loc });
+    pub fn error(&mut self, kind: DiagnosticKind, loc: Location) {
+        self.diagnostics.push(Diagnostic {
+            level: DiagnosticLevel::Error,
+            loc,
+            kind,
+        });
     }
 }

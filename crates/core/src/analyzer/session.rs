@@ -12,7 +12,7 @@ use crate::{
     pretty_print_error,
     type_checker::SymbolHandle,
     types::{Type, TypeId},
-    Location, ModulePath, ParseError, SymbolRef, TypeStore,
+    Diagnostic, Location, ModulePath, SymbolRef, TypeStore,
 };
 
 pub struct Session {
@@ -35,7 +35,7 @@ pub struct Session {
     /// Dependencies captured by some expressions (like reactive listeners or
     /// closures). Said expressions are identified by their location.
     pub(super) dependencies: HashMap<Location, Vec<SymbolRef>>,
-    pub(super) diagnostics: HashMap<ModuleId, Vec<ParseError>>,
+    pub(super) diagnostics: HashMap<ModuleId, Vec<Diagnostic>>,
 }
 
 impl Session {
@@ -158,7 +158,7 @@ impl Session {
         self.types.lock().unwrap().display_raw_type(id)
     }
 
-    pub fn diagnostics(&self) -> &HashMap<ModuleId, Vec<ParseError>> {
+    pub fn diagnostics(&self) -> &HashMap<ModuleId, Vec<Diagnostic>> {
         &self.diagnostics
     }
 

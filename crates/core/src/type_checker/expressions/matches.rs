@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use crate::{
     ast,
+    diagnostics::DiagnosticKind,
     type_checker::{
         analysis_context::{type_store::TypeStore, SymbolData, SymbolRef},
         patterns::TokenList,
@@ -51,7 +52,7 @@ impl TypeChecker<'_> {
         arm_ty
     }
 
-    fn check_exhaustiveness(&mut self, node: &ast::MatchExpression, against: TypeId) {
+    fn check_exhaustiveness(&mut self, node: &ast::MatchExpression, against_id: TypeId) {
         let has_irrefutable = node
             .arms
             .iter()
@@ -60,11 +61,13 @@ impl TypeChecker<'_> {
         if has_irrefutable {
             return;
         }
-        let against = self.resolve(against);
-        match against.clone() {
+        let against = self.resolve(against_id);
+        match &against {
             Type::Enum(ty) => self.check_variants_exhaustiveness(node, &ty.variants),
-            ty => self.error(
-                format!("Cannot match against type {} (not implemented yet)", ty),
+            _ => self.error(
+                DiagnosticKind::ExpectedEnum {
+                    got: self.session.display_type(against_id),
+                },
                 node.loc,
             ),
         }
@@ -86,7 +89,10 @@ impl TypeChecker<'_> {
             names.remove(&variant.name);
         }
         if names.len() > 0 {
-            self.error("Missing match cases".into(), node.loc)
+            let error = DiagnosticKind::NonExhaustiveMatch {
+                missing: names.into_iter().collect::<Vec<_>>(),
+            };
+            self.error(error, node.loc)
         }
     }
 }
