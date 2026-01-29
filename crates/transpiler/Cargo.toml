@@ -1,14 +1,13 @@
 [package]
-name = "mylang-transpiler"
+name = "tine_transpiler"
 version = "0.1.0"
 edition = "2021"
 build = "build.rs"
 
 [dependencies]
 anyhow = "1.0.100"
-mylang_core = { path = "../core" }
+tine_core = { path = "../core" }
 ordered-float = "5.1.0"
-pest = "2.8.3"
 rand = "0.9.2"
 swc_bundler = "35.0.0"
 swc_common = "17.0.0"

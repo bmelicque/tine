@@ -7,12 +7,12 @@ use super::{
     CodeGenerator,
 };
 use crate::codegen::utils::{can_block_be_inlined, create_block_stmt, create_number, AssignTo};
-use mylang_core::ast;
 use rand::{distr::Alphanumeric, Rng};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
+use tine_core::ast;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn expr_or_an_to_swc(&mut self, node: &ast::ExpressionOrAnonymous) -> swc::Expr {
         match node {
             ast::ExpressionOrAnonymous::Expression(node) => self.expr_to_swc(node),
@@ -34,7 +34,11 @@ impl CodeGenerator {
             ast::Expression::CompositeLiteral(node) => self.composite_literal_to_swc_expr(node),
             ast::Expression::Empty => panic!("shouldn't have empty expressions at codegen step"),
             ast::Expression::Element(node) => self.element_expression_to_swc(node),
-            ast::Expression::Member(node) => self.member_expr_to_swc(node).into(),
+            ast::Expression::FloatLiteral(node) => swc::Expr::Lit(swc::Lit::Num(swc::Number {
+                span: DUMMY_SP,
+                value: *node.value,
+                raw: None,
+            })),
             ast::Expression::Function(node) => self.function_expression_to_swc(node).into(),
             ast::Expression::Identifier(node) => self.ident_to_swc(node).into(),
             ast::Expression::If(node) => self.if_to_swc_expr(node).into(),
@@ -42,14 +46,14 @@ impl CodeGenerator {
             ast::Expression::Invalid(_) => {
                 unreachable!("Invalid input should've been detected during analysis phase")
             }
+            ast::Expression::IntLiteral(node) => swc::Expr::Lit(swc::Lit::Num(swc::Number {
+                span: DUMMY_SP,
+                value: node.value as f64,
+                raw: None,
+            })),
             ast::Expression::Loop(node) => self.loop_to_swc_expr(node).into(),
             ast::Expression::Match(node) => self.match_to_swc_expr(node).into(),
-            ast::Expression::NumberLiteral(node) => swc::Lit::Num(swc::Number {
-                span: DUMMY_SP,
-                value: *node.value,
-                raw: None,
-            })
-            .into(),
+            ast::Expression::Member(node) => self.member_expr_to_swc(node).into(),
             ast::Expression::Unary(node) => self.unary_expression_to_swc_expr(node),
             ast::Expression::StringLiteral(node) => swc::Lit::Str(swc::Str {
                 span: DUMMY_SP,
@@ -189,11 +193,11 @@ impl CodeGenerator {
     fn call_arg_to_swc(&mut self, node: &ast::CallArgument) -> swc::Expr {
         match node {
             ast::CallArgument::Expression(expr) => self.expr_to_swc(expr),
-            ast::CallArgument::Predicate(pred) => self.predicate_to_swc(pred).into(),
+            ast::CallArgument::Callback(cb) => self.callback_to_swc(cb).into(),
         }
     }
 
-    fn predicate_to_swc(&mut self, node: &ast::Predicate) -> swc::ArrowExpr {
+    fn callback_to_swc(&mut self, node: &ast::Callback) -> swc::ArrowExpr {
         let params = node
             .params
             .iter()
@@ -211,10 +215,10 @@ impl CodeGenerator {
         }
     }
 
-    fn predicate_param_to_swc(&mut self, node: &ast::PredicateParam) -> swc::Pat {
+    fn predicate_param_to_swc(&mut self, node: &ast::CallbackParam) -> swc::Pat {
         let name = match node {
-            ast::PredicateParam::Identifier(id) => id.as_str(),
-            ast::PredicateParam::Param(param) => param.name.as_str(),
+            ast::CallbackParam::Identifier(id) => id.as_str(),
+            ast::CallbackParam::Param(param) => param.name.as_str(),
         };
         swc::Pat::Ident(swc::BindingIdent {
             id: create_ident(name),
@@ -250,28 +254,20 @@ impl CodeGenerator {
             .collect()
     }
 
-    pub fn function_body_to_swc(&mut self, node: &ast::FunctionBody) -> swc::BlockStmtOrExpr {
-        match node {
-            ast::FunctionBody::TypedBlock(typed_block) => {
-                let stmts = typed_block
-                    .block
-                    .statements
-                    .iter()
-                    .flat_map(|stmt| self.stmt_to_swc(stmt))
-                    .collect();
+    pub fn function_body_to_swc(&mut self, body: &ast::BlockExpression) -> swc::BlockStmtOrExpr {
+        let stmts = body
+            .statements
+            .iter()
+            .flat_map(|stmt| self.stmt_to_swc(stmt))
+            .collect();
 
-                swc::BlockStmtOrExpr::BlockStmt(create_block_stmt(stmts))
-            }
-            ast::FunctionBody::Expression(expr) => {
-                swc::BlockStmtOrExpr::Expr(Box::new(self.expr_to_swc(expr)))
-            }
-        }
+        swc::BlockStmtOrExpr::BlockStmt(create_block_stmt(stmts))
     }
 
     /// Create code for identifiers.
     /// Identifiers that have references are declared wrapped in an array (like `let identifier = [value]`), so their reads are generated like `identifier[0]`
     pub fn ident_to_swc(&mut self, node: &ast::Identifier) -> swc::Expr {
-        let info = self.get_info(node.span).unwrap();
+        let info = self.find_symbol(node.loc).unwrap();
 
         if info.borrow().has_ref() {
             swc::Expr::Member(swc::MemberExpr {

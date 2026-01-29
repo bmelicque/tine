@@ -3,11 +3,11 @@ use swc_ecma_ast as swc;
 
 use crate::codegen::{utils::create_str, CodeGenerator};
 
-use mylang_core::ast;
+use tine_core::ast;
 
 use super::utils::create_ident;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn composite_literal_to_swc_expr(&mut self, node: &ast::CompositeLiteral) -> swc::Expr {
         match node {
             ast::CompositeLiteral::AnonymousStruct(node) => {

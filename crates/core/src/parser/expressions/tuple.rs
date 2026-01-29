@@ -6,29 +6,29 @@ use crate::{
 };
 
 impl ParserEngine {
-    pub fn parse_tuple_expression(&mut self, pair: Pair<'static, Rule>) -> ast::TupleExpression {
+    pub fn parse_tuple_expression(&mut self, pair: Pair<'_, Rule>) -> ast::TupleExpression {
         assert_eq!(pair.as_rule(), Rule::tuple_expression);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let elements = pair
             .into_inner()
             .map(|pair| self.parse_expression(pair))
             .collect();
-        ast::TupleExpression { span, elements }
+        ast::TupleExpression { loc, elements }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{MyLanguageParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str) -> ast::Expression {
-        let pair = MyLanguageParser::parse(Rule::tuple_or_expression, input)
+        let pair = TineParser::parse(Rule::tuple_or_expression, input)
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 
@@ -44,12 +44,12 @@ mod tests {
 
         assert!(matches!(
             result.elements[0],
-            ast::Expression::NumberLiteral(ast::NumberLiteral { value, .. }) if value == 1.0
+            ast::Expression::IntLiteral(ast::IntLiteral { value, .. }) if value == 1
         ));
 
         assert!(matches!(
             result.elements[1],
-            ast::Expression::StringLiteral(ast::StringLiteral { ref span, .. }) if span.as_str() == "\"hello\""
+            ast::Expression::StringLiteral(ast::StringLiteral { ref text, .. }) if text.as_str() == "\"hello\""
         ));
 
         assert!(matches!(
@@ -70,7 +70,7 @@ mod tests {
 
         assert!(matches!(
             result.elements[0],
-            ast::Expression::NumberLiteral(ast::NumberLiteral { value, .. }) if value == 1.0
+            ast::Expression::IntLiteral(ast::IntLiteral { value, .. }) if value == 1
         ));
 
         let ast::Expression::Tuple(nested_tuple) = &result.elements[1] else {
@@ -80,7 +80,7 @@ mod tests {
 
         assert!(matches!(
             nested_tuple.elements[0],
-            ast::Expression::StringLiteral(ast::StringLiteral { ref span, .. }) if span.as_str() == "\"nested\""
+            ast::Expression::StringLiteral(ast::StringLiteral { ref text, .. }) if text.as_str() == "\"nested\""
         ));
 
         assert!(matches!(

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-use mylang_core::ast;
+use tine_core::ast;
 
 use super::CodeGenerator;
 
@@ -161,7 +161,7 @@ pub fn true_lit() -> swc::Expr {
     }))
 }
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn into_option(&mut self, identifier: &String) -> swc::Stmt {
         // identifier !== undefined ? new __Option("Some", identifier) : new __Option("None")
 

@@ -1,7 +1,7 @@
 {
   "name": "vscode-extension",
-  "displayName": "MyLang",
-  "description": "VS Code support for MyLang",
+  "displayName": "Tine",
+  "description": "VS Code support for Tine",
   "version": "0.1.0",
   "publisher": "bmelicque",
   "engines": {
@@ -11,30 +11,30 @@
   "contributes": {
     "languages": [
       {
-        "id": "my-lang",
+        "id": "tine",
         "aliases": [
-          "MyLang"
+          "Tine"
         ],
         "extensions": [
-          ".my"
+          ".tine"
         ],
         "configuration": "./language-configuration.json"
       },
       {
-        "id": "my-lang-types",
+        "id": "tine-types",
         "extensions": []
       }
     ],
     "grammars": [
       {
-        "language": "my-lang",
-        "scopeName": "source.my",
-        "path": "./syntaxes/my.tmLanguage.json"
+        "language": "tine",
+        "scopeName": "source.tine",
+        "path": "./syntaxes/tine.tmLanguage.json"
       },
       {
-        "language": "my-lang-types",
-        "scopeName": "source.mylang-types",
-        "path": "./syntaxes/mylangtypes.tmLanguage.json"
+        "language": "tine-types",
+        "scopeName": "source.tine-types",
+        "path": "./syntaxes/tinetypes.tmLanguage.json"
       }
     ]
   },
@@ -43,8 +43,8 @@
     "compile": "npx tsc -p ./",
     "watch": "npx tsc -watch -p ./",
     "build:server": "cd ../crates/server && cargo build --release",
-    "copy:server": "mkdir -p ./server/bin && cp ../target/release/mylang_server ./server/bin/",
-    "copy:server:win": "mkdir server\\bin 2> NUL & copy ..\\target\\release\\mylang_server.exe server\\bin\\",
+    "copy:server": "mkdir -p ./server/bin && cp ../target/release/tine_server ./server/bin/",
+    "copy:server:win": "mkdir server\\bin 2> NUL & copy ..\\target\\release\\tine_server.exe server\\bin\\",
     "build:extension": "vsce package",
     "install:extension": "node -e \"const fs=require('fs');const{execSync}=require('child_process');const vsix=fs.readdirSync('.').find(f=>f.endsWith('.vsix'));if(!vsix)throw new Error('No VSIX found');execSync(`code --install-extension ${vsix}`,{stdio:'inherit'})\"",
     "build:all": "npm run build:server && npm run copy:server:win && npm run build:extension && npm run install:extension"

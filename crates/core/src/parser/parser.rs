@@ -1,17 +1,19 @@
 use pest::iterators::Pairs;
-use pest::{Parser, Span};
+use pest::Parser;
 use pest_derive::Parser;
 
-use crate::ast;
+use crate::analyzer::ModuleId;
+use crate::locations::Span;
+use crate::{ast, Location};
 
 #[derive(Parser)]
 #[grammar = "parser/grammar.pest"]
-pub struct MyLanguageParser;
+pub struct TineParser;
 
 #[derive(Debug, Clone)]
 pub struct ParseError {
     pub message: String,
-    pub span: pest::Span<'static>,
+    pub loc: Location,
 }
 
 pub struct ParseResult {
@@ -20,23 +22,28 @@ pub struct ParseResult {
 }
 
 pub struct ParserEngine {
+    pub module: ModuleId,
     pub errors: Vec<ParseError>,
 }
 
 impl ParserEngine {
-    pub fn new() -> Self {
-        Self { errors: Vec::new() }
-    }
-
-    pub fn parse(&mut self, input: &'static str) -> ParseResult {
-        match MyLanguageParser::parse(Rule::program, input) {
-            Ok(pairs) => self.build_ast(input, pairs),
-            Err(err) => make_invalid_program(input, err),
+    pub fn new(module: ModuleId) -> Self {
+        Self {
+            module,
+            errors: Vec::new(),
         }
     }
 
-    fn build_ast(&mut self, input: &'static str, pairs: Pairs<'static, Rule>) -> ParseResult {
-        let span = pest::Span::new(input, 0, input.len()).unwrap();
+    pub fn parse(&mut self, input: &str) -> ParseResult {
+        match TineParser::parse(Rule::program, input) {
+            Ok(pairs) => self.build_ast(input, pairs),
+            Err(err) => self.make_invalid_program(input, err),
+        }
+    }
+
+    fn build_ast<'i>(&mut self, input: &'i str, pairs: Pairs<'i, Rule>) -> ParseResult {
+        let span = Span::new(0, input.len() as u32);
+        let loc = Location::new(self.module, span);
         let items: Vec<ast::Item> = pairs
             .into_iter()
             .filter(|pair| pair.as_rule() == Rule::program)
@@ -51,29 +58,35 @@ impl ParserEngine {
             .collect();
 
         ParseResult {
-            node: ast::Program { span, items },
+            node: ast::Program { loc, items },
             errors: self.errors.drain(..).collect(),
         }
     }
 
-    pub fn error(&mut self, message: String, span: Span<'static>) {
-        self.errors.push(ParseError { message, span });
-    }
-}
+    fn make_invalid_program(&self, input: &str, err: pest::error::Error<Rule>) -> ParseResult {
+        let span = Span::new(0, input.len() as u32);
+        let loc = Location::new(self.module, span);
 
-fn make_invalid_program(input: &'static str, err: pest::error::Error<Rule>) -> ParseResult {
-    let span = Span::new(input, 0, input.len()).unwrap();
-    let invalid = ast::Item::Invalid(ast::InvalidItem { span });
-    let program = ast::Program {
-        span,
-        items: vec![invalid],
-    };
-    let error = ParseError {
-        message: format!("{}", err),
-        span,
-    };
-    ParseResult {
-        node: program,
-        errors: vec![error],
+        let invalid = ast::Item::Invalid(ast::InvalidItem { loc });
+        let program = ast::Program {
+            loc,
+            items: vec![invalid],
+        };
+        let error = ParseError {
+            message: format!("{}", err),
+            loc,
+        };
+        ParseResult {
+            node: program,
+            errors: vec![error],
+        }
+    }
+
+    pub fn localize(&self, span: pest::Span<'_>) -> Location {
+        Location::new(self.module, span.into())
+    }
+
+    pub fn error(&mut self, message: String, loc: Location) {
+        self.errors.push(ParseError { message, loc });
     }
 }

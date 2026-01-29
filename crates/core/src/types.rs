@@ -9,12 +9,13 @@ pub enum Type {
     Duck(DuckType),
     Dynamic, // Represents a type that will have to be inferred later
     Enum(EnumType),
+    Float,
     Function(FunctionType),
     Generic(GenericType),
+    Integer,
     Param(TypeParam), // Represents a generic type parameter
     Listener(ListenerType),
     Map(MapType),
-    Number,
     Option(OptionType),
     Reference(ReferenceType),
     Result(ResultType),
@@ -26,7 +27,6 @@ pub enum Type {
     Tuple(TupleType),
     Unit,
     Unknown,
-    Void,
 }
 
 impl Type {
@@ -249,7 +249,7 @@ impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Type::Array(ty) => write!(f, "[]{}", ty.element),
-            Type::Boolean => write!(f, "boolean"),
+            Type::Boolean => write!(f, "bool"),
             Type::Duck(ty) => write!(f, "~{}", ty.like),
             Type::Dynamic => write!(f, "any"),
             Type::Enum(ty) => {
@@ -261,6 +261,7 @@ impl fmt::Display for Type {
                     .join(" | ");
                 write!(f, "{}", variants_str)
             }
+            Type::Float => write!(f, "float"),
             Type::Function(ty) => {
                 let params_str = ty
                     .params
@@ -271,10 +272,10 @@ impl fmt::Display for Type {
                 write!(f, "({}) => {}", params_str, ty.return_type)
             }
             Type::Generic(_) => todo!(),
+            Type::Integer => write!(f, "int"),
             Type::Param(ty) => write!(f, "{}", ty.name),
             Type::Listener(ty) => write!(f, "@{}", ty.inner),
             Type::Map(ty) => write!(f, "{}#{}", ty.key, ty.value),
-            Type::Number => write!(f, "number"),
             Type::Option(ty) => write!(f, "?{}", ty.some),
             Type::Reference(ty) => write!(f, "&{}", ty.target),
             Type::Result(ty) => {
@@ -286,7 +287,7 @@ impl fmt::Display for Type {
             }
             Type::SelfType => write!(f, "Self"),
             Type::Signal(ty) => write!(f, "${}", ty.inner),
-            Type::String => write!(f, "string"),
+            Type::String => write!(f, "str"),
             Type::Struct(ty) => {
                 let fields_str = ty
                     .fields
@@ -316,7 +317,6 @@ impl fmt::Display for Type {
             }
             Type::Unknown => write!(f, "unknown"),
             Type::Unit => write!(f, "()"),
-            Type::Void => write!(f, "void"),
         }
     }
 }

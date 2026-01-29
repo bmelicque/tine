@@ -1,4 +1,4 @@
-use pest::Span;
+use crate::Location;
 
 use super::{BlockExpression, Expression, Pattern};
 
@@ -9,10 +9,10 @@ pub enum Loop {
 }
 
 impl Loop {
-    pub fn as_span(&self) -> Span<'static> {
+    pub fn loc(&self) -> Location {
         match self {
-            Loop::For(expr) => expr.span.clone(),
-            Loop::ForIn(expr) => expr.span.clone(),
+            Loop::For(expr) => expr.loc,
+            Loop::ForIn(expr) => expr.loc,
         }
     }
 }
@@ -25,7 +25,7 @@ impl Into<Expression> for Loop {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ForExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub condition: Box<Expression>,
     pub body: BlockExpression,
 }
@@ -38,7 +38,7 @@ impl Into<Loop> for ForExpression {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ForInExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub pattern: Box<Pattern>,
     pub iterable: Box<Expression>,
     pub body: BlockExpression,

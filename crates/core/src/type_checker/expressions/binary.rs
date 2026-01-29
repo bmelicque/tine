@@ -1,12 +1,11 @@
-use pest::Span;
-
 use crate::{
     ast,
     type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
     types::TypeId,
+    Location,
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_binary_expression(&mut self, node: &ast::BinaryExpression) -> TypeId {
         let left_type = self.visit_expression(&node.left);
         let right_type = self.visit_expression(&node.right);
@@ -22,11 +21,18 @@ impl TypeChecker {
             | ast::BinaryOperator::Grt
             | ast::BinaryOperator::Leq
             | ast::BinaryOperator::Less => {
-                if left_type != TypeStore::UNKNOWN && left_type != TypeStore::NUMBER {
-                    self.push_binary_error(node.operator, left_type, node.span);
+                let left_is_num = left_type == TypeStore::INTEGER || left_type == TypeStore::FLOAT;
+                let right_is_num =
+                    right_type == TypeStore::INTEGER || right_type == TypeStore::FLOAT;
+                if left_type != TypeStore::UNKNOWN && !left_is_num {
+                    self.push_binary_error(node.operator, left_type, node.loc);
                 };
-                if right_type != TypeStore::UNKNOWN && right_type != TypeStore::NUMBER {
-                    self.push_binary_error(node.operator, right_type, node.span);
+                if right_type != TypeStore::UNKNOWN && !right_is_num {
+                    self.push_binary_error(node.operator, right_type, node.loc);
+                };
+                if left_is_num && right_is_num && left_type != right_type {
+                    let error = format!("Incompatible types '{}' and '{}'", left_type, right_type);
+                    self.error(error, node.loc);
                 };
             }
             ast::BinaryOperator::EqEq | ast::BinaryOperator::Neq => {
@@ -38,40 +44,46 @@ impl TypeChecker {
                         "Types '{}' and '{}' cannot be compared",
                         left_type, right_type
                     );
-                    self.error(error, node.span);
+                    self.error(error, node.loc);
                 }
             }
             ast::BinaryOperator::LAnd | ast::BinaryOperator::LOr => {
                 if left_type != TypeStore::UNKNOWN && left_type != TypeStore::BOOLEAN {
-                    self.push_binary_error(node.operator, left_type, node.span);
+                    self.push_binary_error(node.operator, left_type, node.loc);
                 };
                 if right_type != TypeStore::UNKNOWN && right_type != TypeStore::BOOLEAN {
-                    self.push_binary_error(node.operator, right_type, node.span);
+                    self.push_binary_error(node.operator, right_type, node.loc);
                 };
             }
         };
 
-        self.analysis_context
-            .save_expression_type(node.span, get_binary_expression_type(node.operator))
+        self.ctx.save_expression_type(
+            node.loc,
+            get_binary_expression_type(node.operator, left_type, right_type),
+        )
     }
 
-    fn push_binary_error(&mut self, op: ast::BinaryOperator, ty: TypeId, span: Span<'static>) {
-        let ty = self.analysis_context.type_store.get(ty);
+    fn push_binary_error(&mut self, op: ast::BinaryOperator, ty: TypeId, loc: Location) {
+        let ty = self.resolve(ty);
         self.error(
             format!("Operator '{}' cannot be applied to type '{}'", op, ty),
-            span,
+            loc,
         )
     }
 }
 
-fn get_binary_expression_type(op: ast::BinaryOperator) -> TypeId {
+fn get_binary_expression_type(op: ast::BinaryOperator, left: TypeId, right: TypeId) -> TypeId {
     match op {
         ast::BinaryOperator::Add
         | ast::BinaryOperator::Sub
         | ast::BinaryOperator::Mul
         | ast::BinaryOperator::Div
         | ast::BinaryOperator::Mod
-        | ast::BinaryOperator::Pow => TypeStore::NUMBER,
+        | ast::BinaryOperator::Pow => match (left, right) {
+            (TypeStore::INTEGER, TypeStore::INTEGER) => TypeStore::INTEGER,
+            (TypeStore::FLOAT, TypeStore::FLOAT) => TypeStore::FLOAT,
+            _ => TypeStore::UNKNOWN,
+        },
         ast::BinaryOperator::EqEq
         | ast::BinaryOperator::Geq
         | ast::BinaryOperator::Grt

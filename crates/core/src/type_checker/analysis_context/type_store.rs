@@ -28,12 +28,12 @@ pub struct TypeStore {
 
 impl TypeStore {
     pub const UNKNOWN: TypeId = 0;
-    pub const VOID: TypeId = 1;
-    pub const UNIT: TypeId = 2;
-    pub const DYNAMIC: TypeId = 3;
-    pub const BOOLEAN: TypeId = 4;
-    pub const STRING: TypeId = 5;
-    pub const NUMBER: TypeId = 6;
+    pub const UNIT: TypeId = 1;
+    pub const DYNAMIC: TypeId = 2;
+    pub const BOOLEAN: TypeId = 3;
+    pub const STRING: TypeId = 4;
+    pub const INTEGER: TypeId = 5;
+    pub const FLOAT: TypeId = 6;
     pub const ELEMENT: TypeId = 7;
 
     pub fn new() -> Self {
@@ -44,12 +44,12 @@ impl TypeStore {
             aliases: Vec::new(),
         };
         store.add(Type::Unknown);
-        store.add(Type::Void);
         store.add(Type::Unit);
         store.add(Type::Dynamic);
         store.add(Type::Boolean);
         store.add(Type::String);
-        store.add(Type::Number);
+        store.add(Type::Integer);
+        store.add(Type::Float);
         let element = store.add(Type::Struct(StructType {
             id: TypeStore::ELEMENT,
             // TODO: define fields
@@ -72,6 +72,21 @@ impl TypeStore {
                 id
             }
         }
+    }
+    pub fn add_unique(&mut self, ty: Type) -> TypeId {
+        let ty = match ty {
+            Type::Struct(mut st) => {
+                st.id = self.get_next_id();
+                Type::Struct(st)
+            }
+            Type::Enum(mut e) => {
+                e.id = self.get_next_id();
+                Type::Enum(e)
+            }
+            ty => ty,
+        };
+        self.arena.push(ty);
+        (self.arena.len() - 1) as TypeId
     }
     pub fn add_alias(&mut self, ty: TypeId, name: String) {
         self.aliases.push((ty, name));
@@ -120,7 +135,7 @@ impl TypeStore {
 
     /// Canonicalize a type definition by replacing the type params with the provided arguments.
     ///
-    /// For example, with definition `Box[T] :: ( value T )`, `Box[number]` will become `( value T )`
+    /// For example, with definition `Box[T] :: ( value T )`, `Box[int]` will become `( value T )`
     pub fn substitute(&mut self, ty_id: TypeId, args: &[TypeId]) -> TypeId {
         let ty = self.get(ty_id).clone();
         match ty {
@@ -145,6 +160,7 @@ impl TypeStore {
                     .collect();
                 self.add(Type::Enum(EnumType { id: t.id, variants }))
             }
+            Type::Float => ty_id,
             Type::Function(t) => {
                 let params: Vec<_> = t
                     .params
@@ -158,6 +174,7 @@ impl TypeStore {
                 }))
             }
             Type::Generic(_) => unimplemented!("cannot handle nested generics"),
+            Type::Integer => ty_id,
             Type::Listener(t) => {
                 let inner = self.substitute(t.inner, args);
                 self.add(Type::Listener(ListenerType { inner }))
@@ -167,7 +184,6 @@ impl TypeStore {
                 let value = self.substitute(t.value, args);
                 self.add(Type::Map(MapType { key, value }))
             }
-            Type::Number => ty_id,
             Type::Option(t) => {
                 let some = self.substitute(t.some, args);
                 self.add(Type::Option(OptionType { some }))
@@ -221,7 +237,6 @@ impl TypeStore {
             }
             Type::Unit => ty_id,
             Type::Unknown => ty_id,
-            Type::Void => ty_id,
         }
     }
 
@@ -255,7 +270,7 @@ impl TypeStore {
             Type::Array(t) => {
                 format!("[]{}", self.display_type(t.element))
             }
-            Type::Boolean => "boolean".into(),
+            Type::Boolean => "bool".into(),
             Type::Duck(t) => {
                 format!("~{}", self.display_type(t.like))
             }
@@ -266,6 +281,7 @@ impl TypeStore {
                 .map(|variant| format!("{}({})", variant.name, self.display_type(variant.def)))
                 .collect::<Vec<_>>()
                 .join(" | "),
+            Type::Float => "float".into(),
             Type::Function(t) => {
                 let params = t
                     .params
@@ -286,7 +302,7 @@ impl TypeStore {
                     self.display_type(t.value)
                 )
             }
-            Type::Number => "number".into(),
+            Type::Integer => "int".into(),
             Type::Option(t) => {
                 format!("?{}", self.display_type(t.some))
             }
@@ -305,7 +321,7 @@ impl TypeStore {
             Type::Signal(t) => {
                 format!("${}", self.display_type(t.inner))
             }
-            Type::String => "string".into(),
+            Type::String => "str".into(),
             Type::Struct(t) => {
                 let fields = t
                     .fields
@@ -335,7 +351,6 @@ impl TypeStore {
             }
             Type::Unit => "()".into(),
             Type::Unknown => "unknown".into(),
-            Type::Void => "void".into(),
         }
     }
 
@@ -365,6 +380,7 @@ impl TypeStore {
                     variants,
                 }))
             }
+            Type::Float => TypeStore::FLOAT,
             Type::Function(t) => {
                 let params: Vec<_> = t
                     .params
@@ -378,6 +394,7 @@ impl TypeStore {
                 }))
             }
             Type::Generic(g) => self.add(Type::Generic(g.clone())),
+            Type::Integer => TypeStore::INTEGER,
             Type::Listener(t) => {
                 let inner = self.import(from, t.inner);
                 self.add(Type::Listener(ListenerType { inner }))
@@ -387,7 +404,6 @@ impl TypeStore {
                 let value = self.import(from, t.value);
                 self.add(Type::Map(MapType { key, value }))
             }
-            Type::Number => TypeStore::NUMBER,
             Type::Option(t) => {
                 let some = self.import(from, t.some);
                 self.add(Type::Option(OptionType { some }))
@@ -440,7 +456,6 @@ impl TypeStore {
             }
             Type::Unit => TypeStore::UNIT,
             Type::Unknown => TypeStore::UNKNOWN,
-            Type::Void => TypeStore::VOID,
         };
         if let Some(alias) = from.get_alias(id) {
             self.add_alias(type_id, alias.clone());
@@ -457,19 +472,19 @@ mod tests {
     fn test_typestore_initialization() {
         let store = TypeStore::new();
         assert_eq!(store.get(TypeStore::UNKNOWN), &Type::Unknown);
-        assert_eq!(store.get(TypeStore::VOID), &Type::Void);
         assert_eq!(store.get(TypeStore::UNIT), &Type::Unit);
         assert_eq!(store.get(TypeStore::DYNAMIC), &Type::Dynamic);
         assert_eq!(store.get(TypeStore::BOOLEAN), &Type::Boolean);
         assert_eq!(store.get(TypeStore::STRING), &Type::String);
-        assert_eq!(store.get(TypeStore::NUMBER), &Type::Number);
+        assert_eq!(store.get(TypeStore::INTEGER), &Type::Integer);
+        assert_eq!(store.get(TypeStore::FLOAT), &Type::Float);
     }
 
     #[test]
     fn test_add_type() {
         let mut store = TypeStore::new();
         let array_type = Type::Array(ArrayType {
-            element: TypeStore::NUMBER,
+            element: TypeStore::FLOAT,
         });
         let id = store.add(array_type.clone());
         assert_eq!(store.get(id), &array_type);
@@ -479,7 +494,7 @@ mod tests {
     fn test_add_duplicate_type() {
         let mut store = TypeStore::new();
         let array_type = Type::Array(ArrayType {
-            element: TypeStore::NUMBER,
+            element: TypeStore::FLOAT,
         });
         let id1 = store.add(array_type.clone());
         let id2 = store.add(array_type);
@@ -490,7 +505,7 @@ mod tests {
     fn test_find_id() {
         let mut store = TypeStore::new();
         let array_type = Type::Array(ArrayType {
-            element: TypeStore::NUMBER,
+            element: TypeStore::INTEGER,
         });
         let id = store.add(array_type.clone());
         assert_eq!(store.find_id(&array_type), Some(id));
@@ -499,8 +514,8 @@ mod tests {
     #[test]
     fn test_add_alias() {
         let mut store = TypeStore::new();
-        store.add_alias(TypeStore::NUMBER, "MyNumber".to_string());
-        assert_eq!(store.display_type(TypeStore::NUMBER), "MyNumber");
+        store.add_alias(TypeStore::INTEGER, "MyNumber".to_string());
+        assert_eq!(store.display_type(TypeStore::INTEGER), "MyNumber");
     }
 
     #[test]
@@ -514,7 +529,7 @@ mod tests {
 
         let fn_type = Type::Function(FunctionType {
             params: vec![],
-            return_type: TypeStore::VOID,
+            return_type: TypeStore::UNIT,
         });
         let fn_id = store.add(fn_type);
 
@@ -534,7 +549,7 @@ mod tests {
 
         let fn_type = Type::Function(FunctionType {
             params: vec![],
-            return_type: TypeStore::VOID,
+            return_type: TypeStore::UNIT,
         });
         let fn_id = store.add(fn_type);
 
@@ -564,14 +579,14 @@ mod tests {
     fn test_substitute_array() {
         let mut store = TypeStore::new();
         let array_type = Type::Array(ArrayType {
-            element: TypeStore::NUMBER,
+            element: TypeStore::INTEGER,
         });
         let array_id = store.add(array_type);
         let substituted = store.substitute(array_id, &[]);
         assert_eq!(
             store.get(substituted),
             &Type::Array(ArrayType {
-                element: TypeStore::NUMBER,
+                element: TypeStore::INTEGER,
             })
         );
     }
@@ -580,7 +595,7 @@ mod tests {
     fn test_substitute_function() {
         let mut store = TypeStore::new();
         let fn_type = Type::Function(FunctionType {
-            params: vec![TypeStore::NUMBER, TypeStore::STRING],
+            params: vec![TypeStore::INTEGER, TypeStore::STRING],
             return_type: TypeStore::BOOLEAN,
         });
         let fn_id = store.add(fn_type.clone());
@@ -594,7 +609,7 @@ mod tests {
         let mut target_store = TypeStore::new();
 
         let array_type = Type::Array(ArrayType {
-            element: TypeStore::NUMBER,
+            element: TypeStore::INTEGER,
         });
         let array_id = source_store.add(array_type.clone());
 
@@ -617,7 +632,7 @@ mod tests {
                 },
                 StructField {
                     name: "age".to_string(),
-                    def: TypeStore::NUMBER,
+                    def: TypeStore::INTEGER,
                     optional: false,
                 },
             ],
@@ -631,7 +646,7 @@ mod tests {
                 assert_eq!(st.fields[0].name, "name");
                 assert_eq!(st.fields[0].def, TypeStore::STRING);
                 assert_eq!(st.fields[1].name, "age");
-                assert_eq!(st.fields[1].def, TypeStore::NUMBER);
+                assert_eq!(st.fields[1].def, TypeStore::INTEGER);
             }
             _ => panic!("Expected struct type"),
         }
@@ -643,7 +658,7 @@ mod tests {
         let mut target_store = TypeStore::new();
 
         let fn_type = Type::Function(FunctionType {
-            params: vec![TypeStore::STRING, TypeStore::NUMBER],
+            params: vec![TypeStore::STRING, TypeStore::INTEGER],
             return_type: TypeStore::BOOLEAN,
         });
         let fn_id = source_store.add(fn_type.clone());
@@ -662,7 +677,7 @@ mod tests {
             variants: vec![
                 Variant {
                     name: "Some".to_string(),
-                    def: TypeStore::NUMBER,
+                    def: TypeStore::INTEGER,
                 },
                 Variant {
                     name: "None".to_string(),
@@ -689,7 +704,7 @@ mod tests {
         let mut target_store = TypeStore::new();
 
         let inner_array = Type::Array(ArrayType {
-            element: TypeStore::NUMBER,
+            element: TypeStore::INTEGER,
         });
         let inner_array_id = source_store.add(inner_array);
 
@@ -702,7 +717,7 @@ mod tests {
         match target_store.get(imported_id) {
             Type::Array(at) => match target_store.get(at.element) {
                 Type::Array(inner_at) => {
-                    assert_eq!(inner_at.element, TypeStore::NUMBER);
+                    assert_eq!(inner_at.element, TypeStore::INTEGER);
                 }
                 _ => panic!("Expected nested array"),
             },
@@ -729,10 +744,9 @@ mod tests {
     #[test]
     fn test_display_type_primitives() {
         let store = TypeStore::new();
-        assert_eq!(store.display_type(TypeStore::NUMBER), "number");
-        assert_eq!(store.display_type(TypeStore::STRING), "string");
-        assert_eq!(store.display_type(TypeStore::BOOLEAN), "boolean");
-        assert_eq!(store.display_type(TypeStore::VOID), "void");
+        assert_eq!(store.display_type(TypeStore::INTEGER), "int");
+        assert_eq!(store.display_type(TypeStore::STRING), "str");
+        assert_eq!(store.display_type(TypeStore::BOOLEAN), "bool");
         assert_eq!(store.display_type(TypeStore::UNIT), "()");
     }
 
@@ -740,20 +754,20 @@ mod tests {
     fn test_display_type_array() {
         let mut store = TypeStore::new();
         let array_type = Type::Array(ArrayType {
-            element: TypeStore::NUMBER,
+            element: TypeStore::INTEGER,
         });
         let array_id = store.add(array_type);
-        assert_eq!(store.display_type(array_id), "[]number");
+        assert_eq!(store.display_type(array_id), "[]int");
     }
 
     #[test]
     fn test_display_type_function() {
         let mut store = TypeStore::new();
         let fn_type = Type::Function(FunctionType {
-            params: vec![TypeStore::STRING, TypeStore::NUMBER],
+            params: vec![TypeStore::STRING, TypeStore::INTEGER],
             return_type: TypeStore::BOOLEAN,
         });
         let fn_id = store.add(fn_type);
-        assert_eq!(store.display_type(fn_id), "(string, number) => boolean");
+        assert_eq!(store.display_type(fn_id), "(str, int) => bool");
     }
 }

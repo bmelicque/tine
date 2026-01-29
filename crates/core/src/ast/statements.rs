@@ -1,6 +1,7 @@
-use pest::Span;
-
-use crate::ast::{InvalidExpression, MemberExpression};
+use crate::{
+    ast::{InvalidExpression, MemberExpression, TupleType},
+    Location,
+};
 
 use super::{
     expressions::{Expression, FunctionExpression, Identifier},
@@ -10,13 +11,16 @@ use super::{
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Statement {
-    Empty,
     Assignment(Assignment),
     Break(BreakStatement),
+    Empty,
+    Enum(EnumDefinition),
     Expression(ExpressionStatement),
+    Function(FunctionDefinition),
     Invalid(InvalidStatement),
     MethodDefinition(MethodDefinition),
     Return(ReturnStatement),
+    StructDefinition(StructDefinition),
     TypeAlias(TypeAlias),
     VariableDeclaration(VariableDeclaration),
 }
@@ -28,26 +32,32 @@ impl Statement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Docs {
+    pub loc: Location,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariableDeclaration {
-    pub docs: Option<Span<'static>>,
+    pub docs: Option<Docs>,
     /// This is the span of the actual declaration, and does not include the `docs` (if any)
-    pub span: Span<'static>,
+    pub loc: Location,
+    pub keyword: DeclarationKeyword,
     pub pattern: Box<Pattern>,
-    pub op: DeclarationOp,
     pub value: Box<Expression>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum DeclarationOp {
-    Mut,
+pub enum DeclarationKeyword {
     Const,
+    Var,
 }
 
-impl From<String> for DeclarationOp {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            ":=" => Self::Mut,
-            "::" => Self::Const,
+impl From<&str> for DeclarationKeyword {
+    fn from(value: &str) -> Self {
+        match value {
+            "const" => Self::Const,
+            "var" => Self::Var,
             _ => panic!(),
         }
     }
@@ -61,7 +71,7 @@ impl Into<Statement> for VariableDeclaration {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MethodDefinition {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub receiver: MethodReceiver,
     pub name: Identifier,
     pub definition: FunctionExpression,
@@ -75,18 +85,17 @@ impl Into<Statement> for MethodDefinition {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MethodReceiver {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub name: Identifier,
     pub ty: NamedType,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeAlias {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub name: String,
     pub params: Option<Vec<String>>,
-    pub op: DefinitionOp,
-    pub definition: Box<TypeDefinition>,
+    pub definition: Box<Type>,
 }
 
 impl Into<Statement> for TypeAlias {
@@ -96,54 +105,40 @@ impl Into<Statement> for TypeAlias {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum DefinitionOp {
-    Strict,
-    Like,
-}
-
-impl From<String> for DefinitionOp {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "::" => Self::Strict,
-            ":~" => Self::Like,
-            _ => panic!(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TypeDefinition {
-    Struct(StructDefinition),
-    Enum(EnumDefinition),
-    Type(Type),
-}
-
-impl TypeDefinition {
-    pub fn as_span(&self) -> Span<'static> {
-        match self {
-            Self::Struct(s) => s.span,
-            Self::Enum(e) => e.span,
-            Self::Type(t) => t.as_span(),
-        }
-    }
-}
-
-impl From<Type> for TypeDefinition {
-    fn from(value: Type) -> Self {
-        TypeDefinition::Type(value)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructDefinition {
-    pub span: Span<'static>,
-    pub fields: Vec<StructDefinitionField>,
+    pub loc: Location,
+    pub name: String,
+    pub params: Option<Vec<String>>,
+    pub body: TypeBody,
 }
 
-impl Into<TypeDefinition> for StructDefinition {
-    fn into(self) -> TypeDefinition {
-        TypeDefinition::Struct(self)
+impl Into<Statement> for StructDefinition {
+    fn into(self) -> Statement {
+        Statement::StructDefinition(self)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum TypeBody {
+    Struct(StructBody),
+    Tuple(TupleType),
+}
+
+impl From<StructBody> for TypeBody {
+    fn from(value: StructBody) -> Self {
+        Self::Struct(value)
+    }
+}
+impl From<TupleType> for TypeBody {
+    fn from(value: TupleType) -> Self {
+        Self::Tuple(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StructBody {
+    pub loc: Location,
+    pub fields: Vec<StructDefinitionField>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -160,10 +155,10 @@ impl StructDefinitionField {
         }
     }
 
-    pub fn as_span(&self) -> Span<'static> {
+    pub fn loc(&self) -> Location {
         match self {
-            Self::Mandatory(m) => m.span.clone(),
-            Self::Optional(o) => o.span.clone(),
+            Self::Mandatory(m) => m.loc,
+            Self::Optional(o) => o.loc,
         }
     }
 
@@ -174,7 +169,7 @@ impl StructDefinitionField {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructMandatoryField {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub name: String,
     pub definition: Type,
 }
@@ -187,7 +182,7 @@ impl Into<StructDefinitionField> for StructMandatoryField {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructOptionalField {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub name: String,
     pub default: Expression,
 }
@@ -200,78 +195,34 @@ impl Into<StructDefinitionField> for StructOptionalField {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
-    pub span: Span<'static>,
+    pub loc: Location,
+    pub name: String,
+    pub params: Option<Vec<String>>,
     pub variants: Vec<VariantDefinition>,
 }
 
-impl Into<TypeDefinition> for EnumDefinition {
-    fn into(self) -> TypeDefinition {
-        TypeDefinition::Enum(self)
+impl Into<Statement> for EnumDefinition {
+    fn into(self) -> Statement {
+        Statement::Enum(self)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum VariantDefinition {
-    Unit(UnitVariant),
-    Tuple(TupleVariant),
-    Struct(StructVariant),
+pub struct VariantDefinition {
+    pub loc: Location,
+    pub name: String,
+    pub body: Option<TypeBody>,
 }
 
 impl VariantDefinition {
-    pub fn as_name(&self) -> String {
-        match self {
-            Self::Unit(unit) => unit.name.clone(),
-            Self::Tuple(tuple) => tuple.name.clone(),
-            Self::Struct(struc) => struc.name.clone(),
-        }
-    }
-
     pub fn is_unit(&self) -> bool {
-        matches!(self, Self::Unit(_))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct UnitVariant {
-    pub span: Span<'static>,
-    pub name: String,
-}
-
-impl Into<VariantDefinition> for UnitVariant {
-    fn into(self) -> VariantDefinition {
-        VariantDefinition::Unit(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TupleVariant {
-    pub span: Span<'static>,
-    pub name: String,
-    pub elements: Vec<Type>,
-}
-
-impl Into<VariantDefinition> for TupleVariant {
-    fn into(self) -> VariantDefinition {
-        VariantDefinition::Tuple(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StructVariant {
-    pub span: Span<'static>,
-    pub name: String,
-    pub def: StructDefinition,
-}
-
-impl Into<VariantDefinition> for StructVariant {
-    fn into(self) -> VariantDefinition {
-        VariantDefinition::Struct(self)
+        self.body.is_none()
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Assignment {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub pattern: Assignee,
     pub value: Expression,
 }
@@ -302,7 +253,7 @@ impl From<Pattern> for Assignee {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IndirectionAssignee {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub identifier: Identifier,
 }
 impl Into<Assignee> for IndirectionAssignee {
@@ -313,7 +264,7 @@ impl Into<Assignee> for IndirectionAssignee {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BreakStatement {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub value: Option<Box<Expression>>,
 }
 
@@ -325,7 +276,7 @@ impl Into<Statement> for BreakStatement {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReturnStatement {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub value: Option<Box<Expression>>,
 }
 
@@ -358,8 +309,20 @@ impl From<Expression> for ExpressionStatement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FunctionDefinition {
+    pub docs: Option<Docs>,
+    pub definition: FunctionExpression,
+}
+
+impl Into<Statement> for FunctionDefinition {
+    fn into(self) -> Statement {
+        Statement::Function(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InvalidStatement {
-    pub span: Span<'static>,
+    pub loc: Location,
 }
 impl Into<Statement> for InvalidStatement {
     fn into(self) -> Statement {
@@ -368,6 +331,6 @@ impl Into<Statement> for InvalidStatement {
 }
 impl From<InvalidExpression> for InvalidStatement {
     fn from(value: InvalidExpression) -> Self {
-        Self { span: value.span }
+        Self { loc: value.loc }
     }
 }

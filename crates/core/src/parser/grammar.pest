@@ -7,8 +7,9 @@ dot = { "." }
 // Identifiers and literals
 value_identifier = @{ "_"? ~ ASCII_ALPHA_LOWER ~ (ASCII_ALPHANUMERIC | "_")* }
 string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
-number_literal = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
-integer = @{ ASCII_DIGIT+ }
+digits = @{ ASCII_DIGIT ~ (ASCII_DIGIT | "_" ~ ASCII_DIGIT)* }
+integer_literal = @{ "-"? ~ digits }
+float_literal = @{ "-"? ~ (digits ~ "." ~ digits? | "." ~ digits) }
 boolean_literal = @{ "true" | "false" }
 
 // Type annotations
@@ -33,26 +34,27 @@ duck_type = { "~" ~ primary_type }
 primary_type = { generic_type | type_name | grouped_type }
 grouped_type = { "(" ~ type_annotation ~ ")" }
 // uses binary_type in generic_type to avoid unwrapping tuples
-generic_type = { type_identifier ~ ("[" ~ type_element ~ ("," ~ type_element)* ~ "]")? } // e.g., List[number]
+generic_type = { type_identifier ~ ("<" ~ type_element ~ ("," ~ type_element)* ~ ">")? } // e.g., List[number]
 type_name = { primitive_type | type_identifier }
 type_identifier = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_")* }
-primitive_type = @{ "number" | "boolean" | "string" }
+primitive_type = @{ "int" | "float" | "bool" | "str" }
 type_element = { function_type | binary_type | unary_type | primary_type }
 
 // Composite literals
 composite_literal = { variant_literal | map_literal | struct_literal | array_literal | option_literal }
-map_literal = { map_type ~ "(" ~ NEWLINE? ~ map_body ~ NEWLINE? ~ ")" }
+map_literal = { map_type ~ "{" ~ NEWLINE? ~ map_body ~ NEWLINE? ~ "}" }
 map_body = { (map_entry? ~ ((","|NEWLINE) ~ map_entry)*)? }
 map_entry = { map_key ~ ":" ~ anonymous_expression }
-map_key = { string_literal | number_literal | "[" ~ expression ~ "]" }
+map_key = { string_literal | float_literal | integer_literal | "[" ~ expression ~ "]" }
 array_literal = { array_type ~ array_literal_body }
-array_literal_body = { "(" ~ NEWLINE? ~ (anonymous_expression ~ ((","|NEWLINE) ~ anonymous_expression )*)? ~ NEWLINE? ~ ")" }
-option_literal = { option_type ~ "(" ~ NEWLINE? ~ (anonymous_expression ~ NEWLINE?)? ~ ")" }
+array_literal_body = { "{" ~ NEWLINE? ~ (anonymous_expression ~ ((","|NEWLINE) ~ anonymous_expression )*)? ~ NEWLINE? ~ "}" }
+option_literal = { option_type ~ "{" ~ NEWLINE? ~ (anonymous_expression ~ NEWLINE?)? ~ "}" }
 struct_literal = { generic_type ~ struct_literal_body }
-struct_literal_body = { "(" ~ NEWLINE? ~ (field_assignment ~ ((","|NEWLINE) ~ field_assignment)*)?  ~ NEWLINE? ~ ")" }
+struct_literal_body = { "{" ~ NEWLINE? ~ (field_assignment ~ ((","|NEWLINE) ~ field_assignment)*)?  ~ NEWLINE? ~ "}" }
 field_assignment = { value_identifier ~ ":" ~ expression }
 variant_literal = { (generic_type|type_identifier) ~ "." ~ type_identifier ~ variant_literal_body? }
-variant_literal_body = { array_literal_body | struct_literal_body }
+variant_literal_body = { tuple_literal_body | struct_literal_body }
+tuple_literal_body = { "(" ~ NEWLINE? ~ (anonymous_expression ~ ((","|NEWLINE) ~ anonymous_expression )*)? ~ NEWLINE? ~ ")" }
 anonymous_expression = { struct_literal_body | expression }
 
 // Expressions
@@ -70,12 +72,12 @@ mul_op = { "*" | "/" | "%" }
 exponentiation = { (unary|primary) ~ ("**" ~ (unary|primary))* }
 unary = { unary_op ~ (unary|primary) }
 unary_op = { "*" | "&" | "@" | "$" }
-primary = { access_or_call_expression | string_literal | number_literal | boolean_literal | value_identifier | function_expression | "(" ~ tuple_or_expression ~ ")" }
+primary = { function_expression | access_or_call_expression | string_literal | float_literal | integer_literal | boolean_literal | value_identifier | "(" ~ tuple_or_expression ~ ")" }
 access_or_call_expression = { access_or_call_root ~ (member_suffix | call_arguments)+ }
 access_or_call_root = { value_identifier | "(" ~ tuple_or_expression ~ ")" }
-member_suffix = { "." ~ (value_identifier | integer)? }
+member_suffix = { "." ~ (value_identifier | integer_literal)? }
 call_arguments = { "(" ~ (call_argument ~ ("," ~ call_argument)*)? ~ ")" }
-call_argument = { predicate | expression }
+call_argument = { callback | expression }
 array_expression = { "[" ~ NEWLINE? ~ expression ~ ("," ~ NEWLINE? ~ expression)* ~ (","? ~ NEWLINE)? ~ "]" }
 block = { "{" ~ NEWLINE? ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ NEWLINE? ~ "}" }
 
@@ -91,13 +93,13 @@ loop_expression = { for_expression | for_in_expression }
 for_expression = { "for" ~ expression ~ block }
 for_in_expression = { "for" ~ pattern ~ "in" ~ expression ~ block }
 
-function_expression = { parameter_list ~ "=>" ~ (typed_block | expression) }
+function_expression = { "fn" ~ value_identifier? ~ parameter_list ~ type_annotation? ~ block }
 typed_block = { type_annotation? ~ block }
 parameter_list = { "(" ~ (parameter ~ ("," ~ parameter)*)? ~ ")" }
 parameter = { value_identifier ~ type_annotation }
-predicate = { predicate_parameters ~ "=>" ~ (typed_block | expression) }
-predicate_parameters = { "(" ~ (predicate_param ~ ("," ~ predicate_param)*)? ~ ")" }
-predicate_param = { parameter | value_identifier }
+callback = { callback_parameters ~ "=>" ~ expression }
+callback_parameters = { "(" ~ (callback_param ~ ("," ~ callback_param)*)? ~ ")" }
+callback_param = { parameter | value_identifier }
 
 // DOM
 element_expression = { dom_element | void_element }
@@ -127,15 +129,16 @@ variant_pattern = { struct_variant_pattern | tuple_variant_pattern | unit_varian
 unit_variant_pattern = { type_identifier ~ "." ~ type_identifier }
 struct_variant_pattern = { type_identifier ~ "." ~ type_identifier ~ "(" ~ struct_pattern_elements ~ ")" }
 tuple_variant_pattern = { type_identifier ~ "." ~ type_identifier ~ "(" ~ pattern_element ~ ("," ~ pattern_element)* ~ ")" }
-literal_pattern = { string_literal | number_literal | boolean_literal }
+literal_pattern = { string_literal | float_literal | integer_literal | boolean_literal }
 
 // Statements
-statement = { type_alias | method_definition | assignment | break_statement | return_statement | variable_declaration | expression_statement }
+statement = { function_definition | break_statement | return_statement | variable_declaration | struct_definition | enum_definition | type_alias | method_definition | assignment | expression_statement }
+function_definition = { doc_comment? ~ function_expression }
 method_definition = { "(" ~ method_receiver ~ ")" ~ value_identifier ~ "::" ~ function_expression }
 method_receiver = { value_identifier ~ type_identifier } // TODO: type_identifier -> include reference_type
-variable_declaration = { doc_comment? ~ pattern ~ decl_op ~ expression }
+variable_declaration = { doc_comment? ~ declaration_keyword ~ pattern ~ "=" ~ expression }
 doc_comment = { comment+ }
-decl_op = { ":=" | "::" }
+declaration_keyword = { "const" | "var" }
 assignment = { assignee ~ assign_op ~ expression }
 assign_op = { "=" }
 assignee = { indirection | member_assignee | pattern }
@@ -145,18 +148,21 @@ break_statement = { "break" ~ expression? }
 return_statement = { "return" ~ expression? }
 expression_statement = { comment* ~ expression }
 
-type_alias = { type_identifier ~ type_params? ~ type_def_op ~ type_def }
-type_def_op = { "::" | ":~" }
-type_params = { "[" ~ type_identifier ~ ("," ~ type_identifier)* ~ "]" }
-type_def = { "("~NEWLINE?~sum_type~NEWLINE?~")" | struct_body | sum_type }
-struct_body = { "(" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ ")" }
+struct_definition = { "struct" ~ type_identifier ~ type_params? ~ type_body }
+enum_definition = { "enum" ~ type_identifier ~ type_params? ~ enum_body }
+enum_body = { "{" ~ NEWLINE? ~ (enum_variant ~ ((NEWLINE|",") ~ enum_variant)* ~ NEWLINE?)? ~ "}" }
+enum_variant = { type_identifier ~ type_body? }
+
+type_params = { "<" ~ type_identifier ~ ("," ~ type_identifier)* ~ ">" }
+type_body = { struct_body | tuple_body }
+struct_body = { "{" ~ NEWLINE? ~ (field_declaration ~ ((NEWLINE|",") ~ field_declaration)* ~ NEWLINE?)? ~ "}" }
 field_declaration = { mandatory_field | optional_field  }
-embedded_field = { type_identifier }
 mandatory_field = { value_identifier ~ type_element }
-optional_field = { value_identifier ~ ":" ~ expression }
-sum_type = { (NEWLINE? ~ "|")? ~ sum_constructor ~ (NEWLINE? ~ "|" ~ sum_constructor)+ }
-sum_constructor = { type_identifier ~ (struct_body | sum_param)? }
-sum_param = { "(" ~ type_annotation ~ ")" }
+optional_field = { value_identifier ~ "=" ~ expression }
+tuple_body = { "(" ~ type_element  ~ ("," ~ type_element)* ~ ")" }
+type_body_element = { function_type | binary_type | unary_type | generic_type | type_name }
+
+type_alias = { "type" ~ type_identifier ~ type_params? ~ "=" ~ type_annotation }
 
 // Items
 item = { use_declaration | statement }

@@ -1,23 +1,20 @@
 use std::{collections::HashMap, rc::Rc};
 
-use pest::Span;
-use swc_common::FileName;
-
 use crate::{
-    analyzer::graph::ParsedModule,
-    ast::Program,
-    type_checker::{self, dom_metadata, CheckData, CheckResult, TypeChecker},
-    types::{Type, TypeId},
-    ParseError, SymbolRef, Token, TypeStore,
+    analyzer::{session::Session, ModuleId, ModulePath},
+    locations::Span,
+    type_checker::{CheckResult, TypeChecker},
+    types::{DuckType, FunctionType, Type, TypeId},
+    SymbolData, SymbolKind, SymbolRef, Token, TypeStore,
 };
 
 #[derive(Debug, Clone)]
 pub struct ModuleTypeData {
     pub type_store: Rc<TypeStore>,
     pub exports: Vec<SymbolRef>,
-    pub expressions: HashMap<Span<'static>, u32>,
-    pub tokens: HashMap<Span<'static>, Token>,
-    pub dependencies: HashMap<Span<'static>, Vec<SymbolRef>>,
+    pub expressions: HashMap<Span, u32>,
+    pub tokens: HashMap<Span, Token>,
+    pub dependencies: HashMap<Span, Vec<SymbolRef>>,
 }
 
 impl ModuleTypeData {
@@ -26,80 +23,78 @@ impl ModuleTypeData {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct CheckedModule {
-    pub name: Rc<FileName>,
-    pub ast: Program,
-    pub metadata: ModuleTypeData,
-    pub errors: Vec<ParseError>,
-}
-
-impl CheckedModule {
-    pub fn dummy() -> Self {
-        Self {
-            name: Rc::new(FileName::Custom("".into())),
-            ast: Program::dummy(),
-            metadata: ModuleTypeData {
-                type_store: Rc::new(TypeStore::new()),
-                exports: vec![],
-                expressions: HashMap::new(),
-                tokens: HashMap::new(),
-                dependencies: HashMap::new(),
-            },
-            errors: vec![],
+impl Session {
+    pub fn check_project(&mut self, sorted_modules: &[ModuleId]) {
+        for &module_id in sorted_modules {
+            let mut result = self.check_module(module_id);
+            self.diagnostics
+                .get_mut(&module_id)
+                .unwrap()
+                .append(&mut result.diagnostics);
+            self.symbols.append(&mut result.symbols);
+            self.exports.insert(module_id, result.exports);
+            self.add_expressions(result.expressions);
+            self.add_dependencies(result.dependencies);
         }
     }
-}
 
-pub fn type_check(mut modules: Vec<ParsedModule>) -> Vec<CheckedModule> {
-    let mut type_store = TypeStore::new();
-    let mut check_data = HashMap::new();
-    for module in &mut modules {
-        let mut result = type_check_module(&check_data, module, type_store);
-        module.errors.append(&mut result.errors);
-        check_data.insert(module.name.clone(), result.data);
-        type_store = result.type_store;
-    }
-
-    let type_store = Rc::new(type_store);
-    modules
-        .into_iter()
-        .map(|module| {
-            let check_data = check_data.remove(&module.name).unwrap();
-            CheckedModule {
-                name: module.name,
-                ast: module.ast,
-                metadata: ModuleTypeData {
-                    type_store: type_store.clone(),
-                    exports: check_data.exports,
-                    expressions: check_data.expressions,
-                    tokens: check_data.tokens,
-                    dependencies: check_data.dependencies,
-                },
-                errors: module.errors,
+    fn check_module(&mut self, id: ModuleId) -> CheckResult {
+        let module = &self.module_graph.nodes[id];
+        match module.name.clone() {
+            ModulePath::Real(_) => {
+                let checker = TypeChecker::new(&self, id);
+                checker.check()
             }
-        })
-        .collect()
-}
-
-fn type_check_module(
-    checked_modules: &HashMap<Rc<FileName>, CheckData>,
-    module: &ParsedModule,
-    store: TypeStore,
-) -> CheckResult {
-    match *module.name {
-        FileName::Real(_) => {
-            let checker = TypeChecker::with_store(checked_modules.clone(), store);
-            checker.check(&module)
+            ModulePath::Virtual(name) => self.check_virtual_module(id, &name),
         }
-        FileName::Custom(ref name) => type_check_virtual_module(name, store),
-        _ => unreachable!("unexpected FileName variant"),
     }
-}
 
-fn type_check_virtual_module(name: &str, store: TypeStore) -> type_checker::CheckResult {
-    match name {
-        "dom" => dom_metadata(store),
-        _ => panic!("unexpected module name '{}'", name),
+    fn check_virtual_module(&mut self, id: ModuleId, name: &str) -> CheckResult {
+        match name {
+            "dom" => self.check_dom_module(id),
+            _ => panic!("unexpected module name '{}'", name),
+        }
+    }
+
+    fn check_dom_module(&mut self, id: ModuleId) -> CheckResult {
+        let mut checker = TypeChecker::new(&self, id);
+        let element_trait = checker.intern(Type::Duck(DuckType {
+            like: TypeStore::ELEMENT,
+        }));
+        let render_type = checker.intern(Type::Function(FunctionType {
+            params: vec![TypeStore::STRING, element_trait],
+            return_type: TypeStore::UNIT,
+        }));
+
+        checker.ctx.register_symbol(SymbolData {
+            name: "render".into(),
+            docs: Some(
+                r#"Renders a UI element into a target container in the DOM
+
+# Example
+```tine
+render("body", <article>Content</article>)
+```
+
+In this example, the `<article>` element is rendered inside the document's body.
+        "#
+                .into(),
+            ),
+            ty: render_type,
+            kind: SymbolKind::Function {
+                param_names: vec!["selector".into(), "element".into()],
+            },
+            ..Default::default()
+        });
+
+        let main_scope = &checker.ctx.scopes[0];
+
+        CheckResult {
+            symbols: checker.ctx.symbols,
+            exports: main_scope.bindings.clone(),
+            expressions: HashMap::new(),
+            dependencies: HashMap::new(),
+            diagnostics: vec![],
+        }
     }
 }

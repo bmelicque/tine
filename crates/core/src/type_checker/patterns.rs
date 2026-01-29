@@ -1,5 +1,3 @@
-use pest::Span;
-
 use crate::{
     ast,
     type_checker::analysis_context::type_store::TypeStore,
@@ -9,18 +7,18 @@ use crate::{
 use super::TypeChecker;
 
 #[derive(Debug, Clone)]
-pub struct TokenList(pub Vec<(Span<'static>, TypeId)>);
+pub struct TokenList(pub Vec<(ast::Identifier, TypeId)>);
 impl TokenList {
     pub fn new() -> Self {
         Self(Vec::new())
     }
 
-    pub fn push(&mut self, span: Span<'static>, ty: TypeId) {
-        self.0.push((span, ty));
+    pub fn insert(&mut self, ident: ast::Identifier, ty: TypeId) {
+        self.0.push((ident, ty));
     }
 }
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn match_pattern(
         &mut self,
         pattern: &ast::Pattern,
@@ -28,7 +26,7 @@ impl TypeChecker {
         variables: &mut TokenList,
     ) {
         match pattern {
-            ast::Pattern::Identifier(id) => variables.push(id.span, against),
+            ast::Pattern::Identifier(id) => variables.insert(id.clone().into(), against),
             ast::Pattern::Literal(l) => self.match_literal_pattern(l, against),
             ast::Pattern::Struct(pattern) => self.match_struct_pattern(pattern, against, variables),
             ast::Pattern::Tuple(pattern) => self.match_tuple_pattern(pattern, against, variables),
@@ -39,16 +37,17 @@ impl TypeChecker {
     }
 
     fn match_literal_pattern(&mut self, pattern: &ast::LiteralPattern, against: TypeId) {
-        let against = self.analysis_context.type_store.get(against);
+        let against = self.resolve(against);
         let got = match pattern {
             ast::LiteralPattern::Boolean(_) => types::Type::Boolean,
-            ast::LiteralPattern::Number(_) => types::Type::Number,
+            ast::LiteralPattern::Float(_) => types::Type::Float,
+            ast::LiteralPattern::Integer(_) => types::Type::Integer,
             ast::LiteralPattern::String(_) => types::Type::String,
         };
-        if *against != types::Type::Unknown && *against != got {
+        if against != types::Type::Unknown && against != got {
             self.error(
-                format!("Cannot match {} literal against {}", got, *against),
-                pattern.as_span(),
+                format!("Cannot match {} literal against {}", got, against),
+                pattern.loc(),
             );
         }
     }
@@ -65,17 +64,17 @@ impl TypeChecker {
         against: TypeId,
         variables: &mut TokenList,
     ) {
-        let Some(ty) = self.analysis_context.lookup(&pattern.ty.name) else {
+        let Some(ty) = self.ctx.lookup(&pattern.ty.name) else {
             self.error(
                 format!("cannot find type '{}'", &pattern.ty.name),
-                pattern.ty.span,
+                pattern.ty.loc,
             );
             return;
         };
         let Type::Struct(pattern_type) = self.resolve(ty.borrow().get_type()).clone() else {
             self.error(
                 format!("type '{}' is not a structured type", &pattern.ty.name),
-                pattern.span,
+                pattern.loc,
             );
             return;
         };
@@ -83,7 +82,7 @@ impl TypeChecker {
         let ty = match self.resolve(against) {
             Type::Struct(st) if st.id == pattern_type.id => st.clone(),
             _ => {
-                self.error("pattern doesn't match expected type".into(), pattern.span);
+                self.error("pattern doesn't match expected type".into(), pattern.loc);
                 return;
             }
         };
@@ -108,14 +107,14 @@ impl TypeChecker {
                     field.identifier.as_str(),
                     type_name
                 );
-                self.error(error, field.span);
+                self.error(error, field.loc);
                 continue;
             };
             match field.pattern {
                 Some(ref sub_pattern) => {
                     self.match_pattern(sub_pattern, against.def.clone(), variables)
                 }
-                None => variables.0.push((field.identifier, against.def.clone())),
+                None => variables.insert(field.identifier.clone(), against.def.clone()),
             }
         }
     }
@@ -127,7 +126,7 @@ impl TypeChecker {
         variables: &mut TokenList,
     ) {
         let types::Type::Tuple(ty) = self.resolve(against).clone() else {
-            self.error("Expected tuple type".into(), pattern.span);
+            self.error("Expected tuple type".into(), pattern.loc);
             return;
         };
 
@@ -138,7 +137,7 @@ impl TypeChecker {
                     ty.elements.len(),
                     pattern.elements.len()
                 ),
-                pattern.span,
+                pattern.loc,
             );
         }
 
@@ -161,17 +160,17 @@ impl TypeChecker {
         against: TypeId,
         variables: &mut TokenList,
     ) {
-        let Some(ty) = self.analysis_context.lookup(&pattern.ty.name) else {
+        let Some(ty) = self.ctx.lookup(&pattern.ty.name) else {
             self.error(
                 format!("cannot find type '{}'", &pattern.ty.name),
-                pattern.ty.span,
+                pattern.ty.loc,
             );
             return;
         };
         let Type::Enum(pattern_type) = self.resolve(ty.borrow().get_type()).clone() else {
             self.error(
                 format!("type '{}' is not an enum", &pattern.ty.name),
-                pattern.span,
+                pattern.loc,
             );
             return;
         };
@@ -179,7 +178,7 @@ impl TypeChecker {
         let ty = match self.resolve(against) {
             Type::Enum(e) if e.id == pattern_type.id => e.clone(),
             _ => {
-                self.error("pattern doesn't match expected type".into(), pattern.span);
+                self.error("pattern doesn't match expected type".into(), pattern.loc);
                 return;
             }
         };
@@ -190,7 +189,7 @@ impl TypeChecker {
                     "Variant '{}' does not exist on type {}",
                     pattern.name, pattern.ty.name,
                 ),
-                pattern.span,
+                pattern.loc,
             );
             return;
         };
@@ -198,11 +197,7 @@ impl TypeChecker {
         match self.resolve(variant.def).clone() {
             Type::Struct(ty) => self.match_struct_variant(pattern, &ty.fields, variables),
             Type::Tuple(def) => {
-                let id = self
-                    .analysis_context
-                    .type_store
-                    .find_id(&def.into())
-                    .unwrap();
+                let id = self.session.find_type(&def.into()).unwrap();
                 self.match_tuple_variant(pattern, id, variables)
             }
             Type::Unit => self.match_unit_variant(pattern),
@@ -217,7 +212,7 @@ impl TypeChecker {
         variables: &mut TokenList,
     ) {
         let Some(ast::VariantPatternBody::Struct(body)) = &pattern.body else {
-            self.error("Structured variant expected".to_string(), pattern.span);
+            self.error("Structured variant expected".to_string(), pattern.loc);
             return;
         };
         self.match_struct_pattern_fields(
@@ -235,7 +230,7 @@ impl TypeChecker {
         variables: &mut TokenList,
     ) {
         let Some(ast::VariantPatternBody::Tuple(ref body)) = pattern.body else {
-            self.error("Tuple variant expected".to_string(), pattern.span);
+            self.error("Tuple variant expected".to_string(), pattern.loc);
             return;
         };
         self.match_tuple_pattern(body, def, variables);
@@ -243,10 +238,7 @@ impl TypeChecker {
 
     fn match_unit_variant(&mut self, pattern: &ast::VariantPattern) {
         if pattern.body.is_some() {
-            self.error(
-                "No body expected for unit variant".to_string(),
-                pattern.span,
-            );
+            self.error("No body expected for unit variant".to_string(), pattern.loc);
         }
     }
 }

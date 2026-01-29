@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl ParserEngine {
-    pub fn parse_composite_literal(&mut self, pair: Pair<'static, Rule>) -> ast::CompositeLiteral {
+    pub fn parse_composite_literal(&mut self, pair: Pair<'_, Rule>) -> ast::CompositeLiteral {
         assert!(pair.as_rule() == Rule::composite_literal);
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {
@@ -19,9 +19,9 @@ impl ParserEngine {
         }
     }
 
-    fn parse_map_literal(&mut self, pair: Pair<'static, Rule>) -> ast::MapLiteral {
+    fn parse_map_literal(&mut self, pair: Pair<'_, Rule>) -> ast::MapLiteral {
         assert!(pair.as_rule() == Rule::map_literal);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let ty = self.parse_map_type(inner.next().unwrap());
@@ -33,46 +33,43 @@ impl ParserEngine {
             .map(|entry_pair| self.parse_map_entry(entry_pair))
             .collect();
 
-        ast::MapLiteral { span, ty, entries }
+        ast::MapLiteral { loc, ty, entries }
     }
 
-    fn parse_map_entry(&mut self, pair: Pair<'static, Rule>) -> ast::MapEntry {
+    fn parse_map_entry(&mut self, pair: Pair<'_, Rule>) -> ast::MapEntry {
         assert!(pair.as_rule() == Rule::map_entry);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let key_pair = inner.next().unwrap().into_inner().next().unwrap();
         let key = Box::new(self.parse_expression(key_pair));
         let value = Box::new(self.parse_expression_or_anonymous(inner.next().unwrap()));
 
-        ast::MapEntry { span, key, value }
+        ast::MapEntry { loc, key, value }
     }
 
-    fn parse_array_literal(&mut self, pair: Pair<'static, Rule>) -> ast::ArrayLiteral {
+    fn parse_array_literal(&mut self, pair: Pair<'_, Rule>) -> ast::ArrayLiteral {
         assert!(pair.as_rule() == Rule::array_literal);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let ty = self.parse_array_type(inner.next().unwrap());
 
         let elements = self.parse_array_literal_body(inner.next().unwrap());
 
-        ast::ArrayLiteral { span, ty, elements }
+        ast::ArrayLiteral { loc, ty, elements }
     }
 
-    fn parse_array_literal_body(
-        &mut self,
-        pair: Pair<'static, Rule>,
-    ) -> Vec<ExpressionOrAnonymous> {
+    fn parse_array_literal_body(&mut self, pair: Pair<'_, Rule>) -> Vec<ExpressionOrAnonymous> {
         pair.into_inner()
             .map(|el_pair| self.parse_expression_or_anonymous(el_pair))
             .filter(|expr| !expr.is_empty())
             .collect()
     }
 
-    fn parse_option_literal(&mut self, pair: Pair<'static, Rule>) -> ast::OptionLiteral {
+    fn parse_option_literal(&mut self, pair: Pair<'_, Rule>) -> ast::OptionLiteral {
         assert!(pair.as_rule() == Rule::option_literal);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let ty = self.parse_option_type(inner.next().unwrap());
@@ -82,53 +79,50 @@ impl ParserEngine {
             .and_then(|pair| Some(self.parse_expression_or_anonymous(pair)))
             .map(Box::new);
 
-        ast::OptionLiteral { span, ty, value }
+        ast::OptionLiteral { loc, ty, value }
     }
 
-    fn parse_struct_literal(&mut self, pair: Pair<'static, Rule>) -> ast::StructLiteral {
+    fn parse_struct_literal(&mut self, pair: Pair<'_, Rule>) -> ast::StructLiteral {
         assert!(pair.as_rule() == Rule::struct_literal);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let ty = self.parse_named_type_with_args(inner.next().unwrap());
         let fields = self.parse_struct_literal_body(inner.next().unwrap());
 
-        ast::StructLiteral { span, ty, fields }
+        ast::StructLiteral { loc, ty, fields }
     }
 
     pub fn parse_anonymous_struct_literal(
         &mut self,
-        pair: Pair<'static, Rule>,
+        pair: Pair<'_, Rule>,
     ) -> ast::AnonymousStructLiteral {
         assert!(pair.as_rule() == Rule::struct_literal_body);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let fields = self.parse_struct_literal_body(pair);
 
-        ast::AnonymousStructLiteral { span, fields }
+        ast::AnonymousStructLiteral { loc, fields }
     }
 
-    fn parse_struct_literal_body(
-        &mut self,
-        pair: Pair<'static, Rule>,
-    ) -> Vec<ast::StructLiteralField> {
+    fn parse_struct_literal_body(&mut self, pair: Pair<'_, Rule>) -> Vec<ast::StructLiteralField> {
         assert!(pair.as_rule() == Rule::struct_literal_body);
         pair.into_inner()
             .map(|field| self.parse_struct_literal_field(field))
             .collect()
     }
 
-    fn parse_struct_literal_field(&mut self, pair: Pair<'static, Rule>) -> ast::StructLiteralField {
-        let span = pair.as_span();
+    fn parse_struct_literal_field(&mut self, pair: Pair<'_, Rule>) -> ast::StructLiteralField {
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let prop = inner.next().unwrap().as_str().to_string();
         let value = self.parse_expression(inner.next().unwrap());
 
-        ast::StructLiteralField { span, prop, value }
+        ast::StructLiteralField { loc, prop, value }
     }
 
-    fn parse_variant_literal(&mut self, pair: Pair<'static, Rule>) -> ast::VariantLiteral {
-        let span = pair.as_span();
+    fn parse_variant_literal(&mut self, pair: Pair<'_, Rule>) -> ast::VariantLiteral {
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let ty = self.parse_variant_parent(inner.next().unwrap());
@@ -138,14 +132,14 @@ impl ParserEngine {
             .map(|pair| self.parse_variant_literal_body(pair));
 
         ast::VariantLiteral {
-            span,
+            loc,
             ty,
             name,
             body,
         }
     }
 
-    fn parse_variant_parent(&mut self, pair: Pair<'static, Rule>) -> ast::NamedType {
+    fn parse_variant_parent(&mut self, pair: Pair<'_, Rule>) -> ast::NamedType {
         match pair.as_rule() {
             Rule::generic_type => self.parse_named_type_with_args(pair),
             Rule::type_name => self.parse_named_type(pair),
@@ -153,11 +147,11 @@ impl ParserEngine {
         }
     }
 
-    fn parse_variant_literal_body(&mut self, pair: Pair<'static, Rule>) -> ast::VariantLiteralBody {
+    fn parse_variant_literal_body(&mut self, pair: Pair<'_, Rule>) -> ast::VariantLiteralBody {
         assert!(pair.as_rule() == Rule::variant_literal_body);
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {
-            Rule::array_literal_body => self.parse_array_literal_body(pair).into(),
+            Rule::tuple_literal_body => self.parse_array_literal_body(pair).into(),
             Rule::struct_literal_body => self.parse_struct_literal_body(pair).into(),
             _ => unreachable!(),
         }
@@ -167,21 +161,18 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{MyLanguageParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_composite_literal_input(input: &'static str, rule: Rule) -> ast::CompositeLiteral {
-        let pair = MyLanguageParser::parse(rule, input)
-            .unwrap()
-            .next()
-            .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let pair = TineParser::parse(rule, input).unwrap().next().unwrap();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_composite_literal(pair)
     }
 
     #[test]
     fn test_parse_map_literal() {
-        let input = r#"string#number("key": 42, "another_key": 99)"#;
+        let input = r#"str#int{"key": 42, "another_key": 99}"#;
         let result = parse_composite_literal_input(input, Rule::composite_literal);
 
         match result {
@@ -193,7 +184,7 @@ mod tests {
                 assert!(matches!(*entry1.key, ast::Expression::StringLiteral(_)));
                 assert!(matches!(
                     *entry1.value,
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(ast::NumberLiteral{value, ..})) if value == 42.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(ast::IntLiteral{value, ..})) if value == 42
                 ));
 
                 // Check the second entry
@@ -201,7 +192,7 @@ mod tests {
                 assert!(matches!(*entry2.key, ast::Expression::StringLiteral(_)));
                 assert!(matches!(
                     *entry2.value,
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(ast::NumberLiteral{value, ..})) if value == 99.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(ast::IntLiteral{value, ..})) if value == 99
                 ));
             }
             _ => panic!("Expected MapLiteral"),
@@ -210,7 +201,7 @@ mod tests {
 
     #[test]
     fn test_parse_array_literal() {
-        let input = r#"[]number(1, 2, 3)"#;
+        let input = r#"[]int{1, 2, 3}"#;
         let result = parse_composite_literal_input(input, Rule::composite_literal);
 
         match result {
@@ -219,21 +210,21 @@ mod tests {
 
                 assert!(matches!(
                     array.elements[0],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 1.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 1
                 ));
                 assert!(matches!(
                     array.elements[1],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 2.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 2
                 ));
                 assert!(matches!(
                     array.elements[2],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 3.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 3
                 ));
             }
             _ => panic!("Expected ArrayLiteral"),
@@ -242,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_parse_empty_array_literal() {
-        let input = r#"[]string()"#;
+        let input = r#"[]str{}"#;
         let result = parse_composite_literal_input(input, Rule::composite_literal);
 
         match result {
@@ -255,16 +246,16 @@ mod tests {
 
     #[test]
     fn test_parse_option_literal() {
-        let input = r#"?number(42)"#;
+        let input = r#"?int{42}"#;
         let result = parse_composite_literal_input(input, Rule::composite_literal);
 
         match result {
             ast::CompositeLiteral::Option(option) => {
                 assert!(matches!(
                     **option.value.as_ref().unwrap(),
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 42.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 42
                 ));
             }
             _ => panic!("Expected OptionLiteral"),
@@ -273,7 +264,7 @@ mod tests {
 
     #[test]
     fn test_parse_struct_literal() {
-        let input = r#"User(name: "John", age: 30)"#;
+        let input = r#"User{name: "John", age: 30}"#;
         let result = parse_composite_literal_input(input, Rule::composite_literal);
 
         match result {
@@ -292,12 +283,12 @@ mod tests {
 
     #[test]
     fn test_parse_anonymous_struct_literal() {
-        let input = r#"(name: "John", age: 30)"#;
-        let pair = MyLanguageParser::parse(Rule::struct_literal_body, input)
+        let input = r#"{name: "John", age: 30}"#;
+        let pair = TineParser::parse(Rule::struct_literal_body, input)
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         let result = parser_engine.parse_anonymous_struct_literal(pair);
 
         assert_eq!(result.fields.len(), 2);
@@ -313,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_parse_variant_literal_with_struct_body() {
-        let input = r#"MyEnum.Variant(field1: "value1", field2: 42)"#;
+        let input = r#"MyEnum.Variant{field1: "value1", field2: 42}"#;
         let result = parse_composite_literal_input(input, Rule::composite_literal);
 
         let ast::CompositeLiteral::Variant(result) = result else {
@@ -333,7 +324,7 @@ mod tests {
                 assert!(
                     matches!(
                         field1.value,
-                        ast::Expression::StringLiteral(ast::StringLiteral { ref span, .. }) if span.as_str() == "\"value1\""
+                        ast::Expression::StringLiteral(ast::StringLiteral { ref text, .. }) if text.as_str() == "\"value1\""
                     ),
                     "got {:?}",
                     field1.value
@@ -344,7 +335,7 @@ mod tests {
                 assert_eq!(field2.prop, "field2");
                 assert!(matches!(
                     field2.value,
-                    ast::Expression::NumberLiteral(ast::NumberLiteral { value, .. }) if value == 42.0
+                    ast::Expression::IntLiteral(ast::IntLiteral { value, .. }) if value == 42
                 ));
             }
             _ => panic!("Expected Struct body for the variant"),
@@ -352,13 +343,13 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_variant_literal_with_array_body() {
+    fn test_parse_variant_literal_with_tuple_body() {
         let input = r#"MyEnum.Variant(1, 2, 3)"#;
-        let pair = MyLanguageParser::parse(Rule::variant_literal, input)
+        let pair = TineParser::parse(Rule::variant_literal, input)
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         let result = parser_engine.parse_variant_literal(pair);
 
         assert_eq!(result.name, "Variant");
@@ -370,21 +361,21 @@ mod tests {
 
                 assert!(matches!(
                     elements[0],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 1.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 1
                 ));
                 assert!(matches!(
                     elements[1],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 2.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 2
                 ));
                 assert!(matches!(
                     elements[2],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::NumberLiteral(
-                        ast::NumberLiteral { value, .. }
-                    )) if value == 3.0
+                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
+                        ast::IntLiteral { value, .. }
+                    )) if value == 3
                 ));
             }
             _ => panic!("Expected Array body for the variant"),
@@ -394,11 +385,11 @@ mod tests {
     #[test]
     fn test_parse_variant_literal_without_body() {
         let input = r#"MyEnum.Variant"#;
-        let pair = MyLanguageParser::parse(Rule::variant_literal, input)
+        let pair = TineParser::parse(Rule::variant_literal, input)
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         let result = parser_engine.parse_variant_literal(pair);
 
         assert_eq!(result.name, "Variant");

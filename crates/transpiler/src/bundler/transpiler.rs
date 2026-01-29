@@ -1,18 +1,23 @@
-use crate::bundler::{
-    bundler::bundle_entry, loader::SwcLoader, resolver::SwcResolver, utils::print_errors,
-};
-use mylang_core::analyze;
+use crate::bundler::{bundler::bundle_entry, loader::SwcLoader, resolver::SwcResolver};
+use tine_core::{analyze, pretty_print_error};
 use std::path::PathBuf;
 
 pub fn transpile(entry_point: PathBuf, out: &str) {
-    let Ok(result) = analyze(entry_point.clone()) else {
-        return;
-    };
-    if print_errors(&result.modules) {
+    let session = analyze(entry_point.clone());
+
+    let mut has_errors = false;
+    for (&module_id, diagnostics) in session.diagnostics() {
+        let src = &session.read_module(module_id).src;
+        for diag in diagnostics {
+            has_errors = true;
+            pretty_print_error(src, diag);
+        }
+    }
+    if has_errors {
         return;
     }
 
     let resolver = SwcResolver::new();
-    let loader = SwcLoader::new(result.modules);
+    let loader = SwcLoader::new(&session);
     let _ = bundle_entry(entry_point, out, loader, resolver);
 }

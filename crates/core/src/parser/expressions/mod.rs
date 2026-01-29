@@ -19,7 +19,7 @@ use crate::ast;
 use super::{parser::Rule, ParserEngine};
 
 impl ParserEngine {
-    pub fn parse_expression(&mut self, pair: Pair<'static, Rule>) -> ast::Expression {
+    pub fn parse_expression(&mut self, pair: Pair<'_, Rule>) -> ast::Expression {
         match pair.as_rule() {
             Rule::anonymous_expression
             | Rule::expression
@@ -51,12 +51,14 @@ impl ParserEngine {
             Rule::tuple_expression => self.parse_tuple_expression(pair).into(),
             Rule::unary => self.parse_unary_expression(pair).into(),
             Rule::string_literal => ast::StringLiteral {
-                span: pair.as_span(),
+                loc: self.localize(pair.as_span()),
+                text: pair.as_str().to_string(),
             }
             .into(),
-            Rule::number_literal => self.parse_number_literal(pair).into(),
+            Rule::float_literal => self.parse_float_literal(pair).into(),
+            Rule::integer_literal => self.parse_integer_literal(pair).into(),
             Rule::boolean_literal => ast::BooleanLiteral {
-                span: pair.as_span(),
+                loc: self.localize(pair.as_span()),
                 value: pair.as_str() == "true",
             }
             .into(),
@@ -66,7 +68,7 @@ impl ParserEngine {
 
     pub fn parse_expression_or_anonymous(
         &mut self,
-        pair: Pair<'static, Rule>,
+        pair: Pair<'_, Rule>,
     ) -> ast::ExpressionOrAnonymous {
         // { struct_literal_body | array_literal_body | expression }
         assert!(pair.as_rule() == Rule::anonymous_expression);
@@ -78,19 +80,27 @@ impl ParserEngine {
         }
     }
 
-    fn parse_number_literal(&mut self, pair: Pair<'static, Rule>) -> ast::NumberLiteral {
-        ast::NumberLiteral {
-            span: pair.as_span(),
-            value: pair
-                .as_str()
-                .parse()
-                .unwrap_or(ordered_float::OrderedFloat(0.0)),
-        }
+    fn parse_integer_literal(&mut self, pair: Pair<'_, Rule>) -> ast::IntLiteral {
+        debug_assert_eq!(pair.as_rule(), Rule::integer_literal);
+        let loc = self.localize(pair.as_span());
+        let value_str = pair.as_str().replace('_', "");
+        let value = value_str.parse().unwrap_or(0);
+        ast::IntLiteral { loc, value }
     }
 
-    fn parse_match_expression(&mut self, pair: Pair<'static, Rule>) -> ast::MatchExpression {
+    fn parse_float_literal(&mut self, pair: Pair<'_, Rule>) -> ast::FloatLiteral {
+        debug_assert_eq!(pair.as_rule(), Rule::float_literal);
+        let loc = self.localize(pair.as_span());
+        let value_str = pair.as_str().replace('_', "");
+        let value = value_str
+            .parse()
+            .unwrap_or(ordered_float::OrderedFloat(0.0));
+        ast::FloatLiteral { loc, value }
+    }
+
+    fn parse_match_expression(&mut self, pair: Pair<'_, Rule>) -> ast::MatchExpression {
         assert!(pair.as_rule() == Rule::match_expression);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let scrutinee = Box::new(self.parse_expression(inner.next().unwrap()));
         let arms = inner
@@ -100,20 +110,20 @@ impl ParserEngine {
             .map(|arm| self.parse_match_arm(arm))
             .collect();
         ast::MatchExpression {
-            span,
+            loc,
             scrutinee,
             arms,
         }
     }
 
-    fn parse_match_arm(&mut self, pair: Pair<'static, Rule>) -> ast::MatchArm {
+    fn parse_match_arm(&mut self, pair: Pair<'_, Rule>) -> ast::MatchArm {
         assert!(pair.as_rule() == Rule::match_arm);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
         let expression = Box::new(self.parse_expression(inner.next().unwrap()));
         ast::MatchArm {
-            span,
+            loc,
             pattern,
             expression,
         }
@@ -123,28 +133,41 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{MyLanguageParser, Rule};
+    use crate::{
+        parser::parser::{Rule, TineParser},
+        Location, Span,
+    };
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str, rule: Rule) -> ast::Expression {
-        let pair = MyLanguageParser::parse(rule, input)
-            .unwrap()
-            .next()
-            .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let pair = TineParser::parse(rule, input).unwrap().next().unwrap();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 
     #[test]
-    fn test_parse_number_literal() {
+    fn test_parse_int_literal() {
         let input = "42";
-        let result = parse_expression_input(input, Rule::number_literal);
+        let result = parse_expression_input(input, Rule::integer_literal);
 
-        match result {
-            ast::Expression::NumberLiteral(literal) => {
-                assert_eq!(literal.value, 42.0);
-            }
-            _ => panic!("Expected NumberLiteral"),
-        }
+        let expected = ast::Expression::IntLiteral(ast::IntLiteral {
+            loc: Location::new(0, Span::new(0, 2)),
+            value: 42,
+        });
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_parse_float_literal() {
+        let input = "3.14";
+        let result = parse_expression_input(input, Rule::float_literal);
+
+        let expected = ast::Expression::FloatLiteral(ast::FloatLiteral {
+            loc: Location::new(0, Span::new(0, 4)),
+            value: ordered_float::OrderedFloat(3.14),
+        });
+
+        assert_eq!(result, expected);
     }
 }

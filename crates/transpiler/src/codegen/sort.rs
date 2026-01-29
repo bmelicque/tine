@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use mylang_core::ast;
+use tine_core::ast;
 
 use super::CodeGenerator;
 
@@ -38,7 +38,7 @@ impl Scope {
     }
 }
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn register_struct(&mut self, name: &String, fields: &Vec<ast::StructDefinitionField>) {
         let mandatory_fields = fields.iter().filter(|field| !field.is_optional());
         let optional_fields = fields.iter().filter(|field| field.is_optional());

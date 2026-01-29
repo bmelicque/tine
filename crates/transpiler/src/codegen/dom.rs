@@ -3,9 +3,9 @@ use swc_ecma_ast as swc;
 
 use crate::codegen::{utils::create_ident, CodeGenerator};
 
-use mylang_core::ast;
+use tine_core::ast;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn element_expression_to_swc(&mut self, node: &ast::ElementExpression) -> swc::Expr {
         match node {
             ast::ElementExpression::Element(el) => self.element_to_swc(el),
@@ -106,7 +106,7 @@ impl CodeGenerator {
             ast::ElementChild::VoidElement(el) => self.void_element_to_swc(el),
             ast::ElementChild::Text(t) => swc::Expr::Lit(swc::Lit::Str(swc::Str {
                 span: DUMMY_SP,
-                value: t.span.as_str().into(),
+                value: t.text.clone().into(),
                 raw: None,
             })),
             ast::ElementChild::Expression(e) => self.expression_child_to_swc(e),
@@ -121,7 +121,7 @@ impl CodeGenerator {
             return self.expr_to_swc(child);
         }
 
-        let dependencies = swc::Expr::Array(self.listener_deps_to_swc_array(child.as_span()));
+        let dependencies = swc::Expr::Array(self.listener_deps_to_swc_array(child.loc()));
         let getter = self.reactive_to_swc_getter(child);
 
         swc::Expr::New(swc::NewExpr {

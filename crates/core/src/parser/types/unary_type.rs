@@ -4,7 +4,7 @@ use super::ParserEngine;
 use crate::{ast, parser::parser::Rule};
 
 impl ParserEngine {
-    pub fn parse_unary_type(&mut self, pair: Pair<'static, Rule>) -> ast::Type {
+    pub fn parse_unary_type(&mut self, pair: Pair<'_, Rule>) -> ast::Type {
         assert_eq!(pair.as_rule(), Rule::unary_type);
         let inner = pair.into_inner().next().unwrap();
         match inner.as_rule() {
@@ -18,86 +18,86 @@ impl ParserEngine {
         }
     }
 
-    pub fn parse_array_type(&mut self, pair: Pair<'static, Rule>) -> ast::ArrayType {
+    pub fn parse_array_type(&mut self, pair: Pair<'_, Rule>) -> ast::ArrayType {
         assert!(pair.as_rule() == Rule::array_type);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let element = pair
             .into_inner()
             .next()
             .map(|pair| Box::new(self.parse_type(pair)));
 
-        ast::ArrayType { span, element }
+        ast::ArrayType { loc, element }
     }
 
-    pub fn parse_duck_type(&mut self, pair: Pair<'static, Rule>) -> ast::DuckType {
+    pub fn parse_duck_type(&mut self, pair: Pair<'_, Rule>) -> ast::DuckType {
         assert!(pair.as_rule() == Rule::duck_type);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let like = pair
             .into_inner()
             .next()
             .map(|pair| Box::new(self.parse_type(pair)))
             .unwrap();
-        ast::DuckType { span, like }
+        ast::DuckType { loc, like }
     }
 
-    fn parse_listener_type(&mut self, pair: Pair<'static, Rule>) -> ast::ListenerType {
+    fn parse_listener_type(&mut self, pair: Pair<'_, Rule>) -> ast::ListenerType {
         assert!(pair.as_rule() == Rule::listener_type);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let inner_pair = pair.into_inner().next().unwrap();
         let inner = Box::new(self.parse_type(inner_pair));
-        ast::ListenerType { span, inner }
+        ast::ListenerType { loc, inner }
     }
 
-    pub fn parse_option_type(&mut self, pair: Pair<'static, Rule>) -> ast::OptionType {
+    pub fn parse_option_type(&mut self, pair: Pair<'_, Rule>) -> ast::OptionType {
         assert!(pair.as_rule() == Rule::option_type);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let base = pair
             .into_inner()
             .next()
             .map(|pair| Box::new(self.parse_type(pair)));
-        ast::OptionType { span, base }
+        ast::OptionType { loc, base }
     }
 
-    fn parse_reference_type(&mut self, pair: Pair<'static, Rule>) -> ast::ReferenceType {
+    fn parse_reference_type(&mut self, pair: Pair<'_, Rule>) -> ast::ReferenceType {
         assert!(pair.as_rule() == Rule::reference_type);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let inner = pair.into_inner().next().unwrap();
         let target = Box::new(self.parse_type(inner));
-        ast::ReferenceType { span, target }
+        ast::ReferenceType { loc, target }
     }
 
-    fn parse_signal_type(&mut self, pair: Pair<'static, Rule>) -> ast::SignalType {
+    fn parse_signal_type(&mut self, pair: Pair<'_, Rule>) -> ast::SignalType {
         assert!(pair.as_rule() == Rule::signal_type);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let inner_pair = pair.into_inner().next().unwrap();
         let inner = Box::new(self.parse_type(inner_pair));
-        ast::SignalType { span, inner }
+        ast::SignalType { loc, inner }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{MyLanguageParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_type_input(input: &'static str) -> ast::Type {
-        let pair = MyLanguageParser::parse(Rule::unary_type, input)
+        let pair = TineParser::parse(Rule::unary_type, input)
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_type(pair)
     }
 
     #[test]
     fn test_parse_array_type() {
-        let input = "[]number";
+        let input = "[]int";
         let result = parse_type_input(input);
 
         match result {
             ast::Type::Array(array) => match *array.element.unwrap() {
-                ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                ast::Type::Named(named) => assert_eq!(named.name, "int"),
                 _ => panic!("Expected NamedType as array element"),
             },
             _ => panic!("Expected ArrayType"),
@@ -106,12 +106,12 @@ mod tests {
 
     #[test]
     fn test_parse_option_type() {
-        let input = "?number";
+        let input = "?int";
         let result = parse_type_input(input);
 
         match result {
             ast::Type::Option(option) => match *option.base.unwrap() {
-                ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                ast::Type::Named(named) => assert_eq!(named.name, "int"),
                 _ => panic!("Expected NamedType as option base"),
             },
             _ => panic!("Expected OptionType"),
@@ -120,12 +120,12 @@ mod tests {
 
     #[test]
     fn test_parse_signal_type() {
-        let input = "$number";
+        let input = "$int";
         let result = parse_type_input(input);
 
         match result {
             ast::Type::Signal(option) => match *option.inner {
-                ast::Type::Named(named) => assert_eq!(named.name, "number"),
+                ast::Type::Named(named) => assert_eq!(named.name, "int"),
                 _ => panic!("Expected NamedType as option base"),
             },
             _ => panic!("Expected OptionType"),

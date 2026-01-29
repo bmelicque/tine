@@ -8,24 +8,17 @@ use crate::{
     SymbolKind,
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_call_expression(&mut self, node: &ast::CallExpression) -> TypeId {
         let callee_type = self.visit_expression(&node.callee);
-        let callee_type = match self.analysis_context.type_store.get(callee_type) {
+        let callee_type = match self.resolve(callee_type) {
             types::Type::Function(t) => t.clone(),
             types::Type::Unknown => {
-                return self
-                    .analysis_context
-                    .save_expression_type(node.span, TypeStore::UNKNOWN);
+                return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
             }
             t => {
-                self.error(
-                    format!("type '{}' is not callable", t),
-                    node.callee.as_span(),
-                );
-                return self
-                    .analysis_context
-                    .save_expression_type(node.span, TypeStore::UNKNOWN);
+                self.error(format!("type '{}' is not callable", t), node.callee.loc());
+                return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
             }
         };
 
@@ -35,7 +28,7 @@ impl TypeChecker {
                 callee_type.params.len(),
                 node.args.len()
             );
-            self.error(error_message, node.span);
+            self.error(error_message, node.loc);
         }
 
         node.args
@@ -46,68 +39,86 @@ impl TypeChecker {
                 self.check_argument(param, callee_type.params[i].clone());
             });
 
-        self.analysis_context
-            .save_expression_type(node.span, callee_type.return_type)
+        self.ctx
+            .save_expression_type(node.loc, callee_type.return_type)
     }
 
     fn check_argument(&mut self, node: &ast::CallArgument, expected: TypeId) {
         match node {
             ast::CallArgument::Expression(expr) => self.check_expression_argument(expr, expected),
-            ast::CallArgument::Predicate(node) => self.check_predicate(node, expected),
+            ast::CallArgument::Callback(node) => self.check_callback(node, expected),
         }
     }
 
     fn check_expression_argument(&mut self, node: &ast::Expression, expected: TypeId) {
         let got = self.visit_expression(node);
-        self.check_assigned_type(expected, got, node.as_span());
+        self.check_assigned_type(expected, got, node.loc());
     }
 
-    fn check_predicate(&mut self, node: &ast::Predicate, expected: TypeId) {
+    fn check_callback(&mut self, node: &ast::Callback, expected: TypeId) {
         let expected = self.resolve(expected);
         let Type::Function(expected) = expected else {
             self.error(
                 format!("Expected type {}, got function", expected),
-                node.span,
+                node.loc,
             );
             return;
         };
         let params = expected.params.clone();
         let return_type = expected.return_type;
 
-        self.with_scope(node.span, |s| {
+        self.with_scope(|s| {
             if params.len() != node.params.len() {
-                s.error(
-                    format!(
-                        "expected {} param(s), got {}",
-                        params.len(),
-                        node.params.len()
-                    ),
-                    node.span,
+                let message = format!(
+                    "expected {} param(s), got {}",
+                    params.len(),
+                    node.params.len()
                 );
+                s.error(message, node.loc);
             }
             s.define_params(&node.params, &params);
-            let body_type = s.visit_function_body(&node.body);
-            s.check_assigned_type(return_type, body_type, node.span);
+            s.visit_callback_body(node, return_type);
         });
     }
 
-    fn define_params(&mut self, got: &Vec<ast::PredicateParam>, expected: &Vec<TypeId>) {
+    pub fn visit_callback_body(&mut self, node: &ast::Callback, expected_type: TypeId) {
+        let body_type = self.visit_block_expression(&node.body);
+        let mut returns = Vec::<ast::ReturnStatement>::new();
+        node.body.find_returns(&mut returns);
+        for ret in returns {
+            let ty = match ret.value {
+                Some(value) => self.get_type_at(value.loc()).unwrap(),
+                None => TypeStore::UNIT,
+            };
+            self.check_assigned_type(expected_type, ty, ret.loc);
+        }
+
+        if let Some(ast::Statement::Expression(expr)) = node.body.statements.last() {
+            if expected_type != TypeStore::UNIT {
+                self.check_assigned_type(expected_type, body_type, expr.expression.loc());
+            }
+        }
+    }
+
+    fn define_params(&mut self, got: &Vec<ast::CallbackParam>, expected: &Vec<TypeId>) {
         for (i, param) in got.iter().take(expected.len()).enumerate() {
             match param {
-                ast::PredicateParam::Identifier(id) => {
-                    self.analysis_context.register_symbol(SymbolData {
+                ast::CallbackParam::Identifier(id) => {
+                    self.ctx.register_symbol(SymbolData {
                         name: id.as_str().into(),
-                        kind: SymbolKind::constant(expected[i]),
-                        defined_at: id.span,
+                        ty: expected[i],
+                        kind: SymbolKind::constant(),
+                        defined_at: id.loc,
                         ..Default::default()
                     });
                 }
-                ast::PredicateParam::Param(param) => {
+                ast::CallbackParam::Param(param) => {
                     let ty = self.visit_type(&param.type_annotation);
-                    self.analysis_context.register_symbol(SymbolData {
+                    self.ctx.register_symbol(SymbolData {
                         name: param.name.as_str().into(),
-                        kind: SymbolKind::constant(ty),
-                        defined_at: param.name.span,
+                        ty,
+                        kind: SymbolKind::constant(),
+                        defined_at: param.name.loc,
                         ..Default::default()
                     });
                 }

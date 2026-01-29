@@ -1,4 +1,4 @@
-use pest::Span;
+use crate::Location;
 
 use super::Expression;
 
@@ -9,10 +9,10 @@ pub enum ElementExpression {
 }
 
 impl ElementExpression {
-    pub fn as_span(&self) -> Span<'static> {
+    pub fn loc(&self) -> Location {
         match self {
-            ElementExpression::Element(e) => e.span,
-            ElementExpression::Void(v) => v.span,
+            ElementExpression::Element(e) => e.loc,
+            ElementExpression::Void(v) => v.loc,
         }
     }
 }
@@ -25,7 +25,7 @@ impl Into<Expression> for ElementExpression {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Element {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub tag_name: String,
     pub attributes: Vec<Attribute>,
     pub children: Vec<ElementChild>,
@@ -44,7 +44,7 @@ impl Into<Expression> for Element {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VoidElement {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub tag_name: String,
     pub attributes: Vec<Attribute>,
 }
@@ -62,11 +62,12 @@ impl Into<Expression> for VoidElement {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TextNode {
-    pub span: Span<'static>,
+    pub loc: Location,
+    pub text: String,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Attribute {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub name: String,
     pub value: Option<AttributeValue>,
 }

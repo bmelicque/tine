@@ -5,23 +5,25 @@ use crate::{
     type_checker::{
         analysis_context::{type_store::TypeStore, SymbolData},
         patterns::TokenList,
-        utils::normalize_doc_comment,
     },
     types::{Type, TypeId},
     SymbolKind,
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_statement(&mut self, node: &ast::Statement) -> TypeId {
         match node {
             ast::Statement::Assignment(node) => self.visit_assignment(node),
-            ast::Statement::Empty => TypeStore::VOID,
-            ast::Statement::Expression(node) => self.visit_expression(&node.expression),
             ast::Statement::Break(node) => self.visit_break_statement(node),
+            ast::Statement::Empty => TypeStore::UNIT,
+            ast::Statement::Enum(node) => self.visit_enum_definition(node),
+            ast::Statement::Expression(node) => self.visit_expression(&node.expression),
+            ast::Statement::Function(node) => self.visit_function_definition(node),
             ast::Statement::Invalid(_) => TypeStore::UNKNOWN,
             ast::Statement::MethodDefinition(node) => self.visit_method_definition(node),
             ast::Statement::Return(node) => self.visit_return_statement(node),
-            ast::Statement::TypeAlias(node) => self.visit_type_declaration(node),
+            ast::Statement::StructDefinition(node) => self.visit_struct_definition(node),
+            ast::Statement::TypeAlias(node) => self.visit_type_alias(node),
             ast::Statement::VariableDeclaration(node) => self.visit_variable_declaration(node),
         }
     }
@@ -33,7 +35,7 @@ impl TypeChecker {
         };
         self.visit_assignee(&node.pattern, value_type);
 
-        TypeStore::VOID
+        TypeStore::UNIT
     }
 
     /// Visit an assignee (i.e. the lhs of an assignment)
@@ -50,84 +52,110 @@ impl TypeChecker {
         let mut variables = TokenList::new();
         self.match_pattern(pattern, against, &mut variables);
         for (name, ty) in variables.0 {
-            let Some(info) = self.analysis_context.lookup_mut(name.as_str()) else {
+            let Some(info) = self.lookup_mut(name.as_str()) else {
                 self.error(
                     format!("Cannot find name '{}'", name.as_str()),
-                    pattern.as_span(),
+                    pattern.loc(),
                 );
                 continue;
             };
-            info.add_write();
-            self.check_assigned_type(info.borrow().get_type(), ty, pattern.as_span());
+            info.write(name.loc);
+            self.check_assigned_type(info.borrow().get_type(), ty, pattern.loc());
             if !info.borrow().is_mutable() {
                 self.error(
                     "Cannot assign to immutable variable".to_string(),
-                    pattern.as_span(),
+                    pattern.loc(),
                 );
             }
-            self.analysis_context
-                .save_symbol_token(name, info.readonly());
         }
     }
 
     fn visit_expr_assignee(&mut self, expr: &ast::MemberExpression, against: TypeId) {
         let ty = self.visit_expression(&expr.object);
-        self.check_assigned_type(against, ty, expr.span);
+        self.check_assigned_type(against, ty, expr.loc);
         let root = expr.root_expression();
         let ast::Expression::Identifier(root) = root else {
             self.errors.push(ParseError {
                 message: "Expected identifier".to_string(),
-                span: root.as_span(),
+                loc: root.loc(),
             });
             return;
         };
-        let Some(info) = self.analysis_context.lookup_mut(root.as_str()) else {
-            self.errors.push(ParseError {
-                message: format!("Cannot find name '{}'", root.as_str()),
-                span: root.span,
-            });
+        let Some(info) = self.lookup_mut(root.as_str()) else {
+            self.error(format!("Cannot find name '{}'", root.as_str()), root.loc);
             return;
         };
-        info.add_write();
         // visit expression at the beginning of the current scope adds a read
         // so we need to remove it here
-        info.remove_read();
+        info.read_to_write(root.loc);
         if !info.borrow().is_mutable() {
-            self.error("Cannot assign to immutable variable".to_string(), expr.span);
+            self.error("Cannot assign to immutable variable".to_string(), expr.loc);
         }
     }
 
     fn visit_indirect_assignee(&mut self, node: &ast::IndirectionAssignee, against: TypeId) {
         let name = node.identifier.as_str();
-        let Some(info) = self.analysis_context.lookup_mut(&name) else {
-            self.error(format!("Cannot find name '{}'", name), node.identifier.span);
+        let Some(info) = self.lookup_mut(&name) else {
+            self.error(format!("Cannot find name '{}'", name), node.identifier.loc);
             return;
         };
-        info.add_write();
+        info.write(node.identifier.loc);
         let ty = info.borrow().get_type();
         match self.resolve(ty).clone() {
             Type::Signal(t) => {
-                self.check_assigned_type(t.inner, against, node.span);
+                self.check_assigned_type(t.inner, against, node.loc);
             }
             Type::Listener(t) => {
-                self.check_assigned_type(t.inner, against, node.span);
+                self.check_assigned_type(t.inner, against, node.loc);
             }
             ref ty => {
                 self.error(
                     format!("Cannot dereference variable '{}' of type {}", name, ty),
-                    node.span,
+                    node.loc,
                 );
             }
         }
-        self.analysis_context
-            .save_symbol_token(node.identifier.span, info.readonly());
     }
 
     fn visit_break_statement(&mut self, node: &ast::BreakStatement) -> TypeId {
         if let Some(ref value) = node.value {
             self.visit_expression(value);
         }
-        TypeStore::VOID
+        TypeStore::UNIT
+    }
+
+    fn visit_function_definition(&mut self, node: &ast::FunctionDefinition) -> TypeId {
+        let ast::FunctionDefinition { docs, definition } = node;
+        let docs = docs.as_ref().map(|d| d.text.clone());
+        let Some(ref name) = definition.name else {
+            panic!("parser phase should've ensured that name is not None")
+        };
+        let (ty, dependencies) =
+            self.with_dependencies(|checker| checker.visit_function_expression(definition));
+        match self.ctx.find_in_current_scope(name.as_str()) {
+            Some(symbol) => {
+                let message = format!("name '{}' already defined in current scope", name.as_str());
+                self.error(message, name.loc);
+                symbol
+            }
+            None => self.ctx.register_symbol(SymbolData {
+                name: name.as_str().to_string(),
+                ty,
+                kind: SymbolKind::Function {
+                    param_names: definition
+                        .params
+                        .iter()
+                        .map(|param| param.name.text.clone())
+                        .collect(),
+                },
+                docs,
+                defined_at: name.loc,
+                dependencies: dependencies.clone(),
+                ..Default::default()
+            }),
+        };
+
+        TypeStore::UNIT
     }
 
     fn visit_method_definition(&mut self, node: &ast::MethodDefinition) -> TypeId {
@@ -136,37 +164,35 @@ impl TypeChecker {
         let method_name = node.name.as_str();
 
         if receiver == TypeStore::UNKNOWN {
-            return TypeStore::VOID;
+            return TypeStore::UNIT;
         }
 
-        let field_exists = self
-            .analysis_context
-            .type_store
-            .has_property(receiver, method_name);
+        let field_exists = self.session.types().has_property(receiver, method_name);
         if field_exists {
             self.error(
                 format!(
                     "field '{}' already defined on type '{}'",
                     method_name, type_name
                 ),
-                node.span,
+                node.loc,
             );
         } else {
-            self.analysis_context
-                .type_store
+            self.session
+                .types()
                 .define_method(receiver, method_name, function);
         }
 
-        TypeStore::VOID
+        TypeStore::UNIT
     }
 
     fn visit_method_expression(&mut self, node: &ast::MethodDefinition) -> (TypeId, TypeId) {
-        self.with_scope(node.span, |checker| {
+        self.with_scope(|checker| {
             let receiver = checker.visit_named_type(&node.receiver.ty);
-            checker.analysis_context.register_symbol(SymbolData {
+            checker.ctx.register_symbol(SymbolData {
                 name: node.receiver.name.as_str().into(),
-                kind: SymbolKind::constant(receiver),
-                defined_at: node.receiver.span,
+                ty: receiver,
+                kind: SymbolKind::constant(),
+                defined_at: node.receiver.loc,
                 ..Default::default()
             });
             let function = checker.visit_function_expression(&node.definition);
@@ -178,44 +204,41 @@ impl TypeChecker {
         if let Some(ref value) = node.value {
             self.visit_expression(value);
         }
-        TypeStore::VOID
+        TypeStore::UNIT
     }
 
     pub fn visit_variable_declaration(&mut self, node: &ast::VariableDeclaration) -> TypeId {
         let (inferred_type, dependencies) =
             self.with_dependencies(|s| s.visit_expression(&node.value));
 
-        let mutable = node.op == ast::DeclarationOp::Mut;
+        let mutable = node.keyword == ast::DeclarationKeyword::Var;
         if node.pattern.is_refutable() {
-            self.error(
-                "Irrefutable pattern expected".into(),
-                node.pattern.as_span(),
-            );
+            self.error("Irrefutable pattern expected".into(), node.pattern.loc());
         }
         let mut variables = TokenList::new();
-        let docs = node.docs.map(|d| normalize_doc_comment(d.as_str()));
+        let docs = node.docs.clone().map(|d| d.text);
         self.match_pattern(&node.pattern, inferred_type, &mut variables);
         for (id, ty) in variables.0 {
-            let symbol = match self.analysis_context.find_in_current_scope(id.as_str()) {
+            match self.ctx.find_in_current_scope(id.as_str()) {
                 Some(symbol) => {
                     let message = format!(
                         "variable '{}' already defined in current scope",
                         id.as_str()
                     );
-                    self.error(message, id);
+                    self.error(message, id.loc);
                     symbol
                 }
-                None => self.analysis_context.register_symbol(SymbolData {
+                None => self.ctx.register_symbol(SymbolData {
                     name: id.as_str().to_string(),
-                    kind: SymbolKind::Value { ty, mutable },
+                    ty,
+                    kind: SymbolKind::Value { mutable },
                     docs: docs.clone(),
-                    defined_at: node.pattern.as_span(),
+                    defined_at: node.pattern.loc(),
                     dependencies: dependencies.clone(),
                     ..Default::default()
                 }),
             };
-            self.analysis_context.save_symbol_token(id, symbol);
         }
-        TypeStore::VOID
+        TypeStore::UNIT
     }
 }

@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl ParserEngine {
-    pub fn parse_item(&mut self, pair: Pair<'static, Rule>) -> ast::Item {
+    pub fn parse_item(&mut self, pair: Pair<'_, Rule>) -> ast::Item {
         assert_eq!(pair.as_rule(), Rule::item);
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {
@@ -16,28 +16,28 @@ impl ParserEngine {
         }
     }
 
-    fn parse_use_declaration(&mut self, pair: Pair<'static, Rule>) -> ast::UseDeclaration {
+    fn parse_use_declaration(&mut self, pair: Pair<'_, Rule>) -> ast::UseDeclaration {
         assert_eq!(pair.as_rule(), Rule::use_declaration);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
         let tree = self.parse_use_tree(inner.next_back().unwrap());
         let relative_count = self.parse_relative_count(inner.next());
 
         ast::UseDeclaration {
-            span,
+            loc,
             relative_count,
             tree,
         }
     }
 
-    fn parse_relative_count(&mut self, pair: Option<Pair<'static, Rule>>) -> usize {
+    fn parse_relative_count(&mut self, pair: Option<Pair<'_, Rule>>) -> usize {
         let Some(pair) = pair else { return 0 };
         assert_eq!(pair.as_rule(), Rule::relative_count);
         pair.as_str().len()
     }
 
-    fn parse_use_tree(&mut self, pair: Pair<'static, Rule>) -> ast::UseTree {
+    fn parse_use_tree(&mut self, pair: Pair<'_, Rule>) -> ast::UseTree {
         assert_eq!(pair.as_rule(), Rule::use_tree);
         let mut path = Vec::new();
         let mut sub_trees = Vec::new();
@@ -51,10 +51,13 @@ impl ParserEngine {
         ast::UseTree { path, sub_trees }
     }
 
-    fn parse_file_name(&mut self, pair: Pair<'static, Rule>) -> ast::PathElement {
+    fn parse_file_name(&mut self, pair: Pair<'_, Rule>) -> ast::PathElement {
         assert_eq!(pair.as_rule(), Rule::file_name);
-        ast::PathElement {
-            span: pair.as_span(),
-        }
+        let loc = self.localize(pair.as_span());
+        let ident = ast::Identifier {
+            loc,
+            text: pair.as_str().to_string(),
+        };
+        ast::PathElement(ident)
     }
 }

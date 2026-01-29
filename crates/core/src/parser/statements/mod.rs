@@ -1,5 +1,6 @@
 mod assignments;
-mod type_aliases;
+mod functions;
+mod type_definitions;
 mod variable_declarations;
 
 use pest::iterators::Pair;
@@ -9,7 +10,7 @@ use crate::ast;
 use super::{parser::Rule, ParserEngine};
 
 impl ParserEngine {
-    pub fn parse_statement(&mut self, pair: Pair<'static, Rule>) -> ast::Statement {
+    pub fn parse_statement(&mut self, pair: Pair<'_, Rule>) -> ast::Statement {
         match pair.as_rule() {
             Rule::statement => {
                 let inner_pair = pair.into_inner().next().unwrap();
@@ -17,6 +18,9 @@ impl ParserEngine {
             }
             Rule::variable_declaration => self.parse_variable_declaration(pair).into(),
             Rule::assignment => self.parse_assignment(pair).into(),
+            Rule::enum_definition => self.parse_enum_definition(pair).into(),
+            Rule::function_definition => self.parse_function_definition(pair).into(),
+            Rule::struct_definition => self.parse_struct_definition(pair).into(),
             Rule::type_alias => self.parse_type_alias(pair).into(),
             Rule::break_statement => self.parse_break_statement(pair).into(),
             Rule::method_definition => self.parse_method_definition(pair).into(),
@@ -26,54 +30,62 @@ impl ParserEngine {
         }
     }
 
-    fn parse_break_statement(&mut self, pair: Pair<'static, Rule>) -> ast::BreakStatement {
+    fn parse_break_statement(&mut self, pair: Pair<'_, Rule>) -> ast::BreakStatement {
         assert_eq!(pair.as_rule(), Rule::break_statement);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let value = pair
             .into_inner()
             .next()
             .map(|inner| self.parse_expression(inner))
             .map(Box::new);
 
-        ast::BreakStatement { span, value }
+        ast::BreakStatement { loc, value }
     }
 
-    fn parse_method_definition(&mut self, pair: Pair<'static, Rule>) -> ast::MethodDefinition {
+    fn parse_method_definition(&mut self, pair: Pair<'_, Rule>) -> ast::MethodDefinition {
         assert_eq!(pair.as_rule(), Rule::method_definition);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let receiver = self.parse_method_receiver(inner.next().unwrap());
-        let name = inner.next().unwrap().as_span().into();
+        let next = inner.next().unwrap();
+        let name = ast::Identifier {
+            loc: self.localize(next.as_span()),
+            text: next.as_str().to_string(),
+        };
         let definition = self.parse_function_expression(inner.next().unwrap());
         ast::MethodDefinition {
-            span,
+            loc,
             receiver,
             name,
             definition,
         }
     }
 
-    fn parse_method_receiver(&mut self, pair: Pair<'static, Rule>) -> ast::MethodReceiver {
+    fn parse_method_receiver(&mut self, pair: Pair<'_, Rule>) -> ast::MethodReceiver {
         assert_eq!(pair.as_rule(), Rule::method_receiver);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
-        let name = inner.next().unwrap().as_span().into();
+        let next = inner.next().unwrap();
+        let name = ast::Identifier {
+            loc: self.localize(next.as_span()),
+            text: next.as_str().to_string(),
+        };
         let ty = self.parse_named_type(inner.next().unwrap());
-        ast::MethodReceiver { span, name, ty }
+        ast::MethodReceiver { loc, name, ty }
     }
 
-    fn parse_return_statement(&mut self, pair: Pair<'static, Rule>) -> ast::ReturnStatement {
-        let span = pair.as_span();
+    fn parse_return_statement(&mut self, pair: Pair<'_, Rule>) -> ast::ReturnStatement {
+        let loc = self.localize(pair.as_span());
         let value = pair
             .into_inner()
             .next()
             .map(|inner| self.parse_expression(inner))
             .map(Box::new);
 
-        ast::ReturnStatement { span, value }
+        ast::ReturnStatement { loc, value }
     }
 
-    fn parse_expression_statement(&mut self, pair: Pair<'static, Rule>) -> ast::Statement {
+    fn parse_expression_statement(&mut self, pair: Pair<'_, Rule>) -> ast::Statement {
         let mut expression = ast::Expression::Empty;
         for pair in pair.into_inner() {
             match pair.as_rule() {
@@ -94,15 +106,12 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{MyLanguageParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_statement_input(input: &'static str, rule: Rule) -> ast::Statement {
-        let pair = MyLanguageParser::parse(rule, input)
-            .unwrap()
-            .next()
-            .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let pair = TineParser::parse(rule, input).unwrap().next().unwrap();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_statement(pair)
     }
 
@@ -113,8 +122,8 @@ mod tests {
 
         match result {
             ast::Statement::Return(return_stmt) => match *return_stmt.value.unwrap() {
-                ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
-                _ => panic!("Expected NumberLiteral as return value"),
+                ast::Expression::IntLiteral(literal) => assert_eq!(literal.value, 42),
+                _ => panic!("Expected IntLiteral as return value"),
             },
             _ => panic!("Expected ReturnStatement"),
         }
@@ -130,8 +139,8 @@ mod tests {
         };
 
         match *expr_stmt.expression {
-            ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
-            _ => panic!("Expected NumberLiteral as expression"),
+            ast::Expression::IntLiteral(literal) => assert_eq!(literal.value, 42),
+            _ => panic!("Expected IntLiteral as expression"),
         }
     }
 
@@ -146,8 +155,8 @@ mod tests {
         };
 
         match *expr_stmt.expression {
-            ast::Expression::NumberLiteral(literal) => assert_eq!(literal.value, 42.0),
-            _ => panic!("Expected NumberLiteral as expression"),
+            ast::Expression::IntLiteral(literal) => assert_eq!(literal.value, 42),
+            _ => panic!("Expected IntLiteral as expression"),
         }
     }
 }

@@ -1,5 +1,8 @@
 use std::path::{Path, PathBuf};
 
+use swc_common::FileName;
+use tine_core::ModulePath;
+
 /// Compute a relative path from `base` to `path`.
 /// Works even if `path` is outside of `base` (e.g. gives `../../other/file`).
 pub fn make_relative(base: &Path, path: &Path) -> PathBuf {
@@ -21,4 +24,11 @@ pub fn make_relative(base: &Path, path: &Path) -> PathBuf {
     }
 
     rel
+}
+
+pub fn modulepath_to_filename(name: &ModulePath) -> FileName {
+    match name {
+        ModulePath::Real(path) => FileName::Real(path.clone()),
+        ModulePath::Virtual(name) => FileName::Custom(name.clone()),
+    }
 }

@@ -6,10 +6,12 @@ use crate::{
 };
 
 impl ParserEngine {
-    pub fn parse_identifier(&mut self, pair: Pair<'static, Rule>) -> ast::Identifier {
+    pub fn parse_identifier(&mut self, pair: Pair<'_, Rule>) -> ast::Identifier {
         assert_eq!(pair.as_rule(), Rule::value_identifier);
+        let loc = self.localize(pair.as_span());
         ast::Identifier {
-            span: pair.as_span(),
+            loc,
+            text: pair.as_str().to_string(),
         }
     }
 }
@@ -17,15 +19,15 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{MyLanguageParser, Rule};
+    use crate::parser::parser::{TineParser, Rule};
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str) -> ast::Expression {
-        let pair = MyLanguageParser::parse(Rule::value_identifier, input)
+        let pair = TineParser::parse(Rule::value_identifier, input)
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 
@@ -36,7 +38,7 @@ mod tests {
 
         match result {
             ast::Expression::Identifier(identifier) => {
-                assert_eq!(identifier.span.as_str(), "myVariable");
+                assert_eq!(identifier.text.as_str(), "myVariable");
             }
             _ => panic!("Expected Identifier"),
         }
@@ -49,7 +51,7 @@ mod tests {
 
         match result {
             ast::Expression::Identifier(identifier) => {
-                assert_eq!(identifier.span.as_str(), "_private");
+                assert_eq!(identifier.text.as_str(), "_private");
             }
             _ => panic!("Expected Identifier"),
         }
@@ -62,7 +64,7 @@ mod tests {
 
         match result {
             ast::Expression::Identifier(identifier) => {
-                assert_eq!(identifier.span.as_str(), "value2");
+                assert_eq!(identifier.text.as_str(), "value2");
             }
             _ => panic!("Expected Identifier"),
         }

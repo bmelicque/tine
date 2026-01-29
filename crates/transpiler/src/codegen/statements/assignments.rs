@@ -1,9 +1,9 @@
 use crate::codegen::{utils::create_ident, CodeGenerator};
-use mylang_core::ast;
+use tine_core::ast;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn assignment_to_swc(&mut self, node: &ast::Assignment) -> swc::ExprStmt {
         if let ast::Assignee::Indirection(_) = node.pattern {
             return swc::ExprStmt {
@@ -32,7 +32,7 @@ impl CodeGenerator {
 
             ast::Assignee::Pattern(pat) => match pat {
                 ast::Pattern::Identifier(id) => {
-                    swc::SimpleAssignTarget::Ident(create_ident(id.span.as_str()).into()).into()
+                    swc::SimpleAssignTarget::Ident(create_ident(id.as_str()).into()).into()
                 }
                 ast::Pattern::Literal(_) => unreachable!(),
                 ast::Pattern::Struct(pat) => {

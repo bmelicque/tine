@@ -1,6 +1,6 @@
 {
     "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-    "name": "MyLang",
+    "name": "Tine",
     "patterns": [
         {
             "include": "#xml-element"
@@ -39,16 +39,16 @@
             "begin": "(<\/?)([A-Za-z][A-Za-z0-9\\-]*)",
             "beginCaptures": {
                 "1": {
-                    "name": "punctuation.definition.tag.begin.my"
+                    "name": "punctuation.definition.tag.begin.tine"
                 },
                 "2": {
-                    "name": "entity.name.tag.open.my"
+                    "name": "entity.name.tag.open.tine"
                 }
             },
             "end": "(\/?>)",
             "endCaptures": {
                 "1": {
-                    "name": "punctuation.definition.tag.end.my"
+                    "name": "punctuation.definition.tag.end.tine"
                 }
             },
             "patterns": [
@@ -66,22 +66,22 @@
                     "match": "\\b([A-Za-z_:][A-Za-z0-9_:\\-\\.]*)\\b",
                     "captures": {
                         "1": {
-                            "name": "entity.other.attribute-name.my"
+                            "name": "entity.other.attribute-name.tine"
                         }
                     }
                 },
                 {
                     "match": "\"[^\"]*\"",
-                    "name": "string.quoted.double.my"
+                    "name": "string.quoted.double.tine"
                 },
                 {
                     "match": "'[^']*'",
-                    "name": "string.quoted.single.my"
+                    "name": "string.quoted.single.tine"
                 },
                 {
                     "begin": "\\{",
                     "end": "\\}",
-                    "name": "meta.embedded.expression.my",
+                    "name": "meta.embedded.expression.tine",
                     "patterns": [
                         {
                             "include": "#expressions"
@@ -92,30 +92,34 @@
         },
         "xml-children": {
             "match": "(?<=>).*?(?=<\/)",
-            "name": "text.my"
+            "name": "text.tine"
         },
         "keywords": {
             "patterns": [
                 {
-                    "name": "keyword.control.my",
+                    "name": "keyword.control.tine",
                     "match": "\\b(if|else|for|in|return|break|continue|match|use)\\b"
+                },
+                {
+                    "name": "keyword.declaration.variable.tine",
+                    "match": "\\b(const|var)\\b"
                 }
             ]
         },
         "types": {
             "patterns": [
                 {
-                    "name": "entity.name.type.my",
+                    "name": "entity.name.type.tine",
                     "match": "\\b([A-Z][a-zA-Z0-9_]*|string|number|boolean)\\b"
                 },
                 {
-                    "name": "entity.name.type.my",
+                    "name": "entity.name.type.tine",
                     "match": "(?<=^use)\\s+[A-Za-z_][A-Za-z0-9_]*|(?<=\\.)[A-Za-z_][A-Za-z0-9_]*"
                 }
             ]
         },
         "booleans": {
-            "name": "constant.language.boolean.my",
+            "name": "constant.language.boolean.tine",
             "match": "\\b(true|false)\\b"
         },
         "functions": {
@@ -124,7 +128,7 @@
                     "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*:(:|=)\\s*(?=\\(.*?\\)\\s*=>)",
                     "captures": {
                         "1": {
-                            "name": "entity.name.function.my"
+                            "name": "entity.name.function.tine"
                         }
                     }
                 },
@@ -132,7 +136,7 @@
                     "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
                     "captures": {
                         "1": {
-                            "name": "entity.name.function.call.my"
+                            "name": "entity.name.function.call.tine"
                         }
                     }
                 }
@@ -141,7 +145,7 @@
         "identifiers": {
             "patterns": [
                 {
-                    "name": "variable.other.my",
+                    "name": "variable.other.tine",
                     "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)"
                 }
             ]
@@ -149,39 +153,39 @@
         "numbers": {
             "patterns": [
                 {
-                    "name": "constant.numeric.integer.decimal.my",
+                    "name": "constant.numeric.integer.decimal.tine",
                     "match": "\\b([0-9]+)\\b"
                 },
                 {
-                    "name": "constant.numeric.integer.hexadecimal.my",
+                    "name": "constant.numeric.integer.hexadecimal.tine",
                     "match": "\\b0x([0-9a-fA-F]+)\\b"
                 },
                 {
-                    "name": "constant.numeric.integer.binary.my",
+                    "name": "constant.numeric.integer.binary.tine",
                     "match": "\\b0b([01]+)\\b"
                 },
                 {
-                    "name": "constant.numeric.float.my",
+                    "name": "constant.numeric.float.tine",
                     "match": "\\b([0-9]+\\.[0-9]*)([eE][+-]?[0-9]+)?\\b"
                 }
             ]
         },
         "strings": {
-            "name": "string.quoted.double.my",
+            "name": "string.quoted.double.tine",
             "begin": "\"",
             "end": "\"",
             "patterns": [
                 {
-                    "name": "constant.character.escape.my",
+                    "name": "constant.character.escape.tine",
                     "match": "\\\\."
                 }
             ]
         },
         "comments": {
-            "name": "comment.line.double-slash.my",
+            "name": "comment.line.double-slash.tine",
             "begin": "//",
             "end": "$"
         }
     },
-    "scopeName": "source.my"
+    "scopeName": "source.tine"
 }

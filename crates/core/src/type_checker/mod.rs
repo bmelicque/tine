@@ -3,15 +3,12 @@ mod expressions;
 mod items;
 mod patterns;
 mod statements;
-mod std;
 mod type_checker;
-mod type_declaration;
+mod type_definitions;
 mod types;
-mod utils;
 
 pub use analysis_context::{
-    type_store::TypeStore, CheckData, MemberToken, SymbolData, SymbolKind, SymbolRef, SymbolToken,
-    Token,
+    type_store::TypeStore, MemberToken, SymbolData, SymbolHandle, SymbolKind, SymbolRef,
+    SymbolToken, Token,
 };
-pub use std::dom::dom_metadata;
 pub use type_checker::{CheckResult, TypeChecker};

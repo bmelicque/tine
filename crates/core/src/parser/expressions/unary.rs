@@ -2,27 +2,24 @@ use pest::iterators::Pair;
 
 use crate::{
     ast,
-    parser::{
-        parser::{ParseError, Rule},
-        ParserEngine,
-    },
+    parser::{parser::Rule, ParserEngine},
 };
 
 impl ParserEngine {
-    pub fn parse_unary_expression(&mut self, pair: Pair<'static, Rule>) -> ast::UnaryExpression {
+    pub fn parse_unary_expression(&mut self, pair: Pair<'_, Rule>) -> ast::UnaryExpression {
         assert!(pair.as_rule() == Rule::unary);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let operator = self.parse_unary_operator(inner.next().unwrap());
         let operand = Box::new(self.parse_expression(inner.next().unwrap()));
         ast::UnaryExpression {
-            span,
+            loc,
             operator,
             operand,
         }
     }
 
-    fn parse_unary_operator(&mut self, pair: Pair<'static, Rule>) -> ast::UnaryOperator {
+    fn parse_unary_operator(&mut self, pair: Pair<'_, Rule>) -> ast::UnaryOperator {
         assert!(pair.as_rule() == Rule::unary_op);
         match pair.as_str() {
             "&" => ast::UnaryOperator::Ampersand,
@@ -32,10 +29,10 @@ impl ParserEngine {
             "-" => ast::UnaryOperator::Minus,
             "*" => ast::UnaryOperator::Star,
             op => {
-                self.errors.push(ParseError {
-                    message: format!("Unknown unary operator: {}", op),
-                    span: pair.as_span(),
-                });
+                self.error(
+                    format!("Unknown unary operator: {}", op),
+                    self.localize(pair.as_span()),
+                );
                 ast::UnaryOperator::Star
             }
         }
@@ -45,15 +42,15 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{MyLanguageParser, Rule};
+    use crate::parser::parser::{TineParser, Rule};
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str) -> ast::Expression {
-        let pair = MyLanguageParser::parse(Rule::expression, input)
+        let pair = TineParser::parse(Rule::expression, input)
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 

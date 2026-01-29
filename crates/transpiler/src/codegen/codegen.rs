@@ -1,30 +1,31 @@
 use super::sort::Scope;
 use crate::codegen::utils::create_ident;
-use mylang_core::{ast, types, CheckedModule, SymbolRef, Token};
-use pest::Span;
-use swc_common::{sync::Lrc, FileName, SourceMap, DUMMY_SP};
+use tine_core::{ast, types, Location, ModuleId, ModulePath, Session, SymbolRef};
+use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-pub struct CodeGenerator {
-    filename: FileName,
+pub struct CodeGenerator<'sess> {
     scope: Scope,
     _source_map: Lrc<SourceMap>,
     current_block: Vec<Vec<swc::Stmt>>,
-    pub(crate) module: CheckedModule,
+
+    session: &'sess Session,
+    pub(crate) module: ModuleId,
 }
 
-impl CodeGenerator {
-    pub fn new(filename: FileName, metadata: CheckedModule) -> Self {
-        Self {
-            filename,
+impl CodeGenerator<'_> {
+    pub fn new<'sess>(session: &'sess Session, module: ModuleId) -> CodeGenerator<'sess> {
+        CodeGenerator {
+            session,
+            module,
             scope: Scope::new(),
             _source_map: Lrc::new(SourceMap::new(Default::default())),
             current_block: vec![],
-            module: metadata,
         }
     }
 
-    pub fn program_to_swc_module(&mut self, node: &ast::Program) -> swc::Module {
+    pub fn program_to_swc_module(&mut self) -> swc::Module {
+        let node = self.session.get_ast(self.module);
         self.enter_block();
         let items: Vec<swc::ModuleItem> = self.with_scope(|s| {
             node.items
@@ -63,8 +64,9 @@ impl CodeGenerator {
         }
     }
 
-    pub fn get_filename(&self) -> &FileName {
-        &self.filename
+    pub fn get_filename(&self) -> &ModulePath {
+        let module = self.session.read_module(self.module);
+        &module.name
     }
 
     pub fn enter_block(&mut self) {
@@ -101,37 +103,25 @@ impl CodeGenerator {
         self.scope.find(name)
     }
 
-    pub fn get_info(&self, span: Span<'static>) -> Option<SymbolRef> {
-        self.module
-            .metadata
-            .tokens
-            .get(&span)
-            .map(|token| match token {
-                Token::Member(_) => None,
-                Token::Symbol(symbol) => Some(symbol.symbol.clone()),
-            })
-            .flatten()
+    pub fn find_symbol(&self, loc: Location) -> Option<SymbolRef> {
+        self.session
+            .symbols()
+            .iter()
+            .find(|s| s.uses().into_iter().find(|&l| l == loc).is_some())
+            .cloned()
     }
 
-    pub fn get_reactive_dependencies(&self, span: Span<'static>) -> Vec<SymbolRef> {
-        let Some(deps) = self.module.metadata.dependencies.get(&span) else {
+    pub fn get_reactive_dependencies(&self, loc: Location) -> Vec<SymbolRef> {
+        let Some(deps) = self.session.get_dependencies(loc) else {
             return vec![];
         };
         deps.iter()
-            .filter(|dep| {
-                self.module
-                    .metadata
-                    .resolve_type(dep.borrow().get_type())
-                    .is_reactive()
-            })
+            .filter(|dep| self.session.get_type(dep.borrow().get_type()).is_reactive())
             .cloned()
             .collect()
     }
 
     pub fn get_expr_type(&self, node: &ast::Expression) -> Option<types::Type> {
-        let type_id = self.module.metadata.expressions.get(&node.as_span());
-        type_id
-            .map(|id| self.module.metadata.type_store.get(*id))
-            .cloned()
+        self.session.get_type_at(node.loc())
     }
 }

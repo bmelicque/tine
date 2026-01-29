@@ -1,14 +1,14 @@
 use crate::{
     codegen::{utils::create_ident, CodeGenerator},
-    utils::make_relative,
+    utils::{make_relative, modulepath_to_filename},
 };
 
-use mylang_core::{ast, use_decl_to_paths, ModuleImports};
+use tine_core::{ast, use_decl_to_paths, ModuleImports, ModulePath};
 
 use swc_common::{FileName, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn item_to_swc(&mut self, node: &ast::Item) -> Vec<swc::ModuleItem> {
         match node {
             ast::Item::Invalid(_) => {
@@ -27,7 +27,8 @@ impl CodeGenerator {
     }
 
     fn imports_to_swc(&mut self, imports: ModuleImports) -> swc::ModuleItem {
-        let src = self.get_imports_src(imports.module_name);
+        let module_name = modulepath_to_filename(&imports.module_name);
+        let src = self.get_imports_src(module_name);
         let specifiers: Vec<_> = imports
             .import_tree
             .into_iter()
@@ -47,7 +48,7 @@ impl CodeGenerator {
     fn get_imports_src(&self, name: FileName) -> Box<swc::Str> {
         match name {
             FileName::Real(filename) => {
-                let FileName::Real(current) = self.get_filename() else {
+                let ModulePath::Real(current) = self.get_filename() else {
                     panic!("unexpected filename variant")
                 };
                 let relative = make_relative(current, &filename);

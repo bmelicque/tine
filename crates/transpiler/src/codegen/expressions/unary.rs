@@ -2,12 +2,11 @@ use crate::codegen::{
     utils::{create_ident, create_number, create_str},
     CodeGenerator,
 };
-use mylang_core::ast;
-use pest::Span;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
+use tine_core::{ast, Location};
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn unary_expression_to_swc_expr(&mut self, node: &ast::UnaryExpression) -> swc::Expr {
         match node.operator {
             ast::UnaryOperator::Ampersand => self.ref_to_swc_expr(node),
@@ -45,7 +44,7 @@ impl CodeGenerator {
                 self.expr_to_swc(&expr.object),
                 match expr.prop.clone().unwrap() {
                     ast::MemberProp::FieldName(i) => create_str(i.as_str().into()),
-                    ast::MemberProp::Index(n) => create_number(*n.value),
+                    ast::MemberProp::Index(n) => create_number(n.value as f64),
                 },
             ),
             expr => (
@@ -79,7 +78,7 @@ impl CodeGenerator {
 
     fn listener_to_swc_expr(&mut self, node: &ast::UnaryExpression) -> swc::Expr {
         let getter = self.listener_expr_to_swc_getter(&node.operand);
-        let dependencies = swc::Expr::Array(self.listener_deps_to_swc_array(node.span));
+        let dependencies = swc::Expr::Array(self.listener_deps_to_swc_array(node.loc));
 
         swc::Expr::New(swc::NewExpr {
             span: DUMMY_SP,
@@ -107,9 +106,9 @@ impl CodeGenerator {
         }
     }
 
-    pub fn listener_deps_to_swc_array(&mut self, listener_span: Span<'static>) -> swc::ArrayLit {
+    pub fn listener_deps_to_swc_array(&mut self, listener_loc: Location) -> swc::ArrayLit {
         let reactive_dependencies: Vec<swc::Ident> = self
-            .get_reactive_dependencies(listener_span)
+            .get_reactive_dependencies(listener_loc)
             .into_iter()
             .map(|dep| create_ident(&dep.borrow().name))
             .collect();

@@ -1,9 +1,8 @@
 use std::fmt;
 
 use ordered_float::OrderedFloat;
-use pest::Span;
 
-use crate::ast::ElementExpression;
+use crate::{analyzer::ModuleId, ast::ElementExpression, Location};
 
 use super::{composite_literals::CompositeLiteral, types::Type, Loop, Pattern, Statement};
 
@@ -20,40 +19,42 @@ pub enum Expression {
     Function(FunctionExpression),
     Identifier(Identifier),
     If(IfExpression),
+    IntLiteral(IntLiteral),
     IfDecl(IfPatExpression),
     Invalid(InvalidExpression),
     Loop(Loop),
     Match(MatchExpression),
     Member(MemberExpression),
-    NumberLiteral(NumberLiteral),
+    FloatLiteral(FloatLiteral),
     StringLiteral(StringLiteral),
     Tuple(TupleExpression),
     Unary(UnaryExpression),
 }
 
 impl Expression {
-    pub fn as_span(&self) -> Span<'static> {
+    pub fn loc(&self) -> Location {
         match self {
-            Self::Array(e) => e.span,
-            Self::Binary(e) => e.span,
-            Self::BooleanLiteral(e) => e.span,
-            Self::Block(e) => e.span,
-            Self::Call(e) => e.span,
-            Self::CompositeLiteral(e) => e.as_span(),
-            Self::Element(e) => e.as_span(),
-            Self::Empty => Span::new("", 0, 0).unwrap(),
-            Self::Member(e) => e.span,
-            Self::Function(e) => e.span,
-            Self::Identifier(e) => e.span,
-            Self::If(e) => e.span,
-            Self::IfDecl(e) => e.span,
-            Self::Invalid(e) => e.span,
-            Self::Loop(e) => e.as_span(),
-            Self::Match(e) => e.span,
-            Self::NumberLiteral(e) => e.span,
-            Self::StringLiteral(e) => e.span,
-            Self::Tuple(e) => e.span,
-            Self::Unary(e) => e.span,
+            Self::Array(e) => e.loc,
+            Self::Binary(e) => e.loc,
+            Self::BooleanLiteral(e) => e.loc,
+            Self::Block(e) => e.loc,
+            Self::Call(e) => e.loc,
+            Self::CompositeLiteral(e) => e.loc(),
+            Self::Element(e) => e.loc(),
+            Self::Empty => Location::dummy(),
+            Self::FloatLiteral(e) => e.loc,
+            Self::Member(e) => e.loc,
+            Self::Function(e) => e.loc,
+            Self::Identifier(e) => e.loc,
+            Self::If(e) => e.loc,
+            Self::IfDecl(e) => e.loc,
+            Self::IntLiteral(e) => e.loc,
+            Self::Invalid(e) => e.loc,
+            Self::Loop(e) => e.loc(),
+            Self::Match(e) => e.loc,
+            Self::StringLiteral(e) => e.loc,
+            Self::Tuple(e) => e.loc,
+            Self::Unary(e) => e.loc,
         }
     }
 
@@ -70,7 +71,7 @@ impl From<CompositeLiteral> for Expression {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ArrayExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub elements: Vec<Expression>,
 }
 
@@ -82,18 +83,20 @@ impl Into<Expression> for ArrayExpression {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier {
-    pub span: Span<'static>,
+    pub loc: Location,
+    pub text: String,
 }
 
 impl Identifier {
-    pub fn as_str(&self) -> &str {
-        self.span.as_str()
+    pub fn from_pest(module: ModuleId, span: pest::Span<'_>) -> Self {
+        Self {
+            loc: Location::new(module, span.into()),
+            text: span.as_str().to_string(),
+        }
     }
-}
 
-impl From<Span<'static>> for Identifier {
-    fn from(span: Span<'static>) -> Self {
-        Identifier { span }
+    pub fn as_str(&self) -> &str {
+        self.text.as_str()
     }
 }
 
@@ -105,7 +108,7 @@ impl Into<Expression> for Identifier {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IfPatExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub pattern: Box<Pattern>,
     pub scrutinee: Box<Expression>,
     pub consequent: Box<BlockExpression>,
@@ -120,7 +123,7 @@ impl Into<Expression> for IfPatExpression {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IfExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub condition: Box<Expression>,
     pub consequent: Box<BlockExpression>,
     pub alternate: Option<Box<Alternate>>,
@@ -139,11 +142,11 @@ pub enum Alternate {
     IfDecl(IfPatExpression),
 }
 impl Alternate {
-    pub fn as_span(&self) -> pest::Span<'static> {
+    pub fn loc(&self) -> Location {
         match self {
-            Alternate::Block(b) => b.span,
-            Alternate::If(i) => i.span,
-            Alternate::IfDecl(i) => i.span,
+            Alternate::Block(b) => b.loc,
+            Alternate::If(i) => i.loc,
+            Alternate::IfDecl(i) => i.loc,
         }
     }
 }
@@ -164,8 +167,20 @@ impl From<IfPatExpression> for Alternate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct IntLiteral {
+    pub loc: Location,
+    pub value: i64,
+}
+
+impl Into<Expression> for IntLiteral {
+    fn into(self) -> Expression {
+        Expression::IntLiteral(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InvalidExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
 }
 
 impl Into<Expression> for InvalidExpression {
@@ -176,7 +191,7 @@ impl Into<Expression> for InvalidExpression {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MatchExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub scrutinee: Box<Expression>,
     pub arms: Vec<MatchArm>,
 }
@@ -189,19 +204,20 @@ impl Into<Expression> for MatchExpression {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MatchArm {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub pattern: Box<Pattern>,
     pub expression: Box<Expression>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StringLiteral {
-    pub span: Span<'static>,
+    pub loc: Location,
+    pub text: String,
 }
 
 impl StringLiteral {
     pub fn as_str(&self) -> &str {
-        let str = self.span.as_str();
+        let str = self.text.as_str();
         &str[1..(str.len() - 1)]
     }
 }
@@ -213,20 +229,20 @@ impl Into<Expression> for StringLiteral {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct NumberLiteral {
-    pub span: Span<'static>,
+pub struct FloatLiteral {
+    pub loc: Location,
     pub value: OrderedFloat<f64>,
 }
 
-impl Into<Expression> for NumberLiteral {
+impl Into<Expression> for FloatLiteral {
     fn into(self) -> Expression {
-        Expression::NumberLiteral(self)
+        Expression::FloatLiteral(self)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BooleanLiteral {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub value: bool,
 }
 
@@ -238,7 +254,7 @@ impl Into<Expression> for BooleanLiteral {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BinaryExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub left: Box<Expression>,
     pub operator: BinaryOperator,
     pub right: Box<Expression>,
@@ -325,7 +341,7 @@ impl From<String> for BinaryOperator {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BlockExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub statements: Vec<Statement>,
 }
 
@@ -337,7 +353,7 @@ impl Into<Expression> for BlockExpression {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CallExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub callee: Box<Expression>,
     pub args: Vec<CallArgument>,
 }
@@ -351,38 +367,38 @@ impl Into<Expression> for CallExpression {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CallArgument {
     Expression(Expression),
-    Predicate(Predicate),
+    Callback(Callback),
 }
 impl From<Expression> for CallArgument {
     fn from(value: Expression) -> Self {
         Self::Expression(value)
     }
 }
-impl From<Predicate> for CallArgument {
-    fn from(value: Predicate) -> Self {
-        Self::Predicate(value)
+impl From<Callback> for CallArgument {
+    fn from(value: Callback) -> Self {
+        Self::Callback(value)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Predicate {
-    pub span: Span<'static>,
-    pub params: Vec<PredicateParam>,
-    pub body: FunctionBody,
+pub struct Callback {
+    pub loc: Location,
+    pub params: Vec<CallbackParam>,
+    pub body: BlockExpression,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PredicateParam {
+pub enum CallbackParam {
     Identifier(Identifier),
     Param(FunctionParam),
 }
 
-impl From<Identifier> for PredicateParam {
+impl From<Identifier> for CallbackParam {
     fn from(value: Identifier) -> Self {
         Self::Identifier(value)
     }
 }
-impl From<FunctionParam> for PredicateParam {
+impl From<FunctionParam> for CallbackParam {
     fn from(value: FunctionParam) -> Self {
         Self::Param(value)
     }
@@ -390,7 +406,7 @@ impl From<FunctionParam> for PredicateParam {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MemberExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub object: Box<Expression>,
     pub prop: Option<MemberProp>,
 }
@@ -413,13 +429,13 @@ impl Into<Expression> for MemberExpression {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum MemberProp {
     FieldName(Identifier),
-    Index(NumberLiteral),
+    Index(IntLiteral),
 }
 impl MemberProp {
-    pub fn as_span(&self) -> Span<'static> {
+    pub fn loc(&self) -> Location {
         match self {
-            Self::FieldName(i) => i.span,
-            Self::Index(n) => n.span,
+            Self::FieldName(i) => i.loc,
+            Self::Index(n) => n.loc,
         }
     }
 }
@@ -428,15 +444,15 @@ impl From<Identifier> for MemberProp {
         Self::FieldName(value)
     }
 }
-impl From<NumberLiteral> for MemberProp {
-    fn from(value: NumberLiteral) -> Self {
+impl From<IntLiteral> for MemberProp {
+    fn from(value: IntLiteral) -> Self {
         Self::Index(value)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TupleExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub elements: Vec<Expression>,
 }
 
@@ -448,7 +464,7 @@ impl Into<Expression> for TupleExpression {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnaryExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub operator: UnaryOperator,
     pub operand: Box<Expression>,
 }
@@ -471,9 +487,11 @@ pub enum UnaryOperator {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionExpression {
-    pub span: Span<'static>,
+    pub loc: Location,
+    pub name: Option<Identifier>,
     pub params: Vec<FunctionParam>,
-    pub body: FunctionBody,
+    pub return_type: Option<Type>,
+    pub body: BlockExpression,
 }
 
 impl Into<Expression> for FunctionExpression {
@@ -484,31 +502,7 @@ impl Into<Expression> for FunctionExpression {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionParam {
-    pub span: Span<'static>,
+    pub loc: Location,
     pub name: Identifier,
     pub type_annotation: Type,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum FunctionBody {
-    Expression(Box<Expression>),
-    TypedBlock(TypedBlock),
-}
-
-impl From<Expression> for FunctionBody {
-    fn from(value: Expression) -> Self {
-        FunctionBody::Expression(Box::new(value))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypedBlock {
-    pub type_annotation: Option<Type>,
-    pub block: BlockExpression,
-}
-
-impl Into<FunctionBody> for TypedBlock {
-    fn into(self) -> FunctionBody {
-        FunctionBody::TypedBlock(self)
-    }
 }

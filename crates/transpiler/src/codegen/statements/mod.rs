@@ -1,18 +1,20 @@
 mod assignments;
 mod declarations;
+mod type_definitions;
 
 use super::{utils::create_ident, CodeGenerator};
 use crate::codegen::utils::{create_block_stmt, AssignTo};
-use mylang_core::ast;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
+use tine_core::ast;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn stmt_to_swc(&mut self, node: &ast::Statement) -> Vec<swc::Stmt> {
         match node {
             ast::Statement::Assignment(node) => vec![self.assignment_to_swc(node).into()],
             ast::Statement::Break(_) => vec![self.break_to_swc_stmt().into()],
             ast::Statement::Empty => vec![],
+            ast::Statement::Enum(node) => vec![self.enum_to_swc(node).into()],
             ast::Statement::Expression(node) => match node.expression.as_ref() {
                 ast::Expression::Block(block) => {
                     vec![self.block_to_swc_stmt(block, AssignTo::None).into()]
@@ -31,6 +33,11 @@ impl CodeGenerator {
                 }
                 .into()],
             },
+            ast::Statement::Function(node) => vec![swc::Stmt::Decl(swc::Decl::Fn(swc::FnDecl {
+                ident: create_ident(node.definition.name.as_ref().unwrap().as_str()),
+                declare: false,
+                function: Box::new(self.function_to_swc_function(&node.definition)),
+            }))],
             ast::Statement::Invalid(_) => {
                 unreachable!("Invalid input should've been detected during analysis phase")
             }
@@ -40,7 +47,10 @@ impl CodeGenerator {
             }
             .into()],
             ast::Statement::Return(node) => vec![self.return_to_swc(node).into()],
-            ast::Statement::TypeAlias(node) => self.alias_to_swc(node).into(),
+            ast::Statement::StructDefinition(node) => {
+                vec![self.struct_def_to_swc_class(node).into()]
+            }
+            ast::Statement::TypeAlias(_) => vec![],
             ast::Statement::VariableDeclaration(node) => self.declaration_to_swc(node),
         }
     }
@@ -273,13 +283,13 @@ impl CodeGenerator {
         alternate: Option<Box<ast::IfPatExpression>>,
     ) -> ast::IfPatExpression {
         let consequent = Box::new(ast::BlockExpression {
-            span: node.expression.as_span(),
+            loc: node.expression.loc(),
             statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
                 expression: node.expression.clone(),
             })],
         });
         ast::IfPatExpression {
-            span: node.span,
+            loc: node.loc,
             pattern: node.pattern.clone(),
             scrutinee: scrutinee.clone(),
             consequent,

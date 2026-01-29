@@ -9,7 +9,7 @@ use crate::{
 
 use super::TypeChecker;
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_type(&mut self, node: &ast::Type) -> TypeId {
         match node {
             ast::Type::Array(array) => self.visit_array_type(array),
@@ -31,9 +31,7 @@ impl TypeChecker {
             Some(ref element) => self.visit_type(element),
             None => TypeStore::DYNAMIC,
         };
-        self.analysis_context
-            .type_store
-            .add(Type::Array(ArrayType { element }))
+        self.intern(Type::Array(ArrayType { element }))
     }
 
     pub(super) fn visit_function_type(&mut self, node: &ast::FunctionType) -> TypeId {
@@ -45,19 +43,15 @@ impl TypeChecker {
 
         let return_type = self.visit_type(&node.returned);
 
-        self.analysis_context
-            .type_store
-            .add(Type::Function(FunctionType {
-                params,
-                return_type,
-            }))
+        self.intern(Type::Function(FunctionType {
+            params,
+            return_type,
+        }))
     }
 
     fn visit_listener_type(&mut self, node: &ast::ListenerType) -> TypeId {
         let inner = self.visit_type(&node.inner);
-        self.analysis_context
-            .type_store
-            .add(Type::Listener(ListenerType { inner }))
+        self.intern(Type::Listener(ListenerType { inner }))
     }
 
     pub fn visit_map_type(&mut self, node: &ast::MapType) -> TypeId {
@@ -70,7 +64,7 @@ impl TypeChecker {
             None => TypeStore::DYNAMIC,
         };
 
-        self.analysis_context.type_store.add(Type::Map(MapType {
+        self.intern(Type::Map(MapType {
             key: key_type,
             value: value_type,
         }))
@@ -79,14 +73,15 @@ impl TypeChecker {
     pub fn visit_named_type(&mut self, node: &ast::NamedType) -> TypeId {
         let name = node.name.as_str();
         match name {
-            "string" => return TypeStore::STRING,
-            "number" => return TypeStore::NUMBER,
-            "boolean" => return TypeStore::BOOLEAN,
-            "void" => return TypeStore::VOID,
+            "bool" => return TypeStore::BOOLEAN,
+            "float" => return TypeStore::FLOAT,
+            "int" => return TypeStore::INTEGER,
+            "str" => return TypeStore::STRING,
+            "void" => return TypeStore::UNIT,
             _ => {}
         }
-        let Some(type_ref) = self.analysis_context.lookup(name) else {
-            self.error(format!("type '{}' not found", name), node.span);
+        let Some(type_ref) = self.ctx.lookup(name) else {
+            self.error(format!("type '{}' not found", name), node.loc);
             return TypeStore::UNKNOWN;
         };
         let ty = type_ref.borrow().get_type();
@@ -102,14 +97,12 @@ impl TypeChecker {
         let args = node.args.clone().unwrap_or(Vec::new());
 
         if args.len() > arity {
-            self.error(
-                format!(
-                    "too many arguments, expected at most {}, got {}",
-                    arity,
-                    args.len()
-                ),
-                node.span,
+            let message = format!(
+                "too many arguments, expected at most {}, got {}",
+                arity,
+                args.len()
             );
+            self.error(message, node.loc);
         }
 
         let mut arg_types: Vec<TypeId> = args
@@ -118,45 +111,35 @@ impl TypeChecker {
             .map(|arg| self.visit_type(arg))
             .collect();
         while arg_types.len() < arity {
-            let dynamic = self.analysis_context.type_store.add(Type::Dynamic);
+            let dynamic = self.intern(Type::Dynamic);
             arg_types.push(dynamic);
         }
 
-        self.analysis_context
-            .type_store
-            .substitute(ty.definition, &arg_types)
+        self.session.types().substitute(ty.definition, &arg_types)
     }
 
     pub fn visit_option_type(&mut self, node: &ast::OptionType) -> TypeId {
         let some = match node.base {
             Some(ref base) => self.visit_type(base),
-            None => self.analysis_context.type_store.add(Type::Dynamic),
+            None => self.intern(Type::Dynamic),
         };
 
-        self.analysis_context
-            .type_store
-            .add(Type::Option(OptionType { some }))
+        self.intern(Type::Option(OptionType { some }))
     }
 
     fn visit_signal_type(&mut self, node: &ast::SignalType) -> TypeId {
         let inner = self.visit_type(&node.inner);
-        self.analysis_context
-            .type_store
-            .add(Type::Signal(SignalType { inner }))
+        self.intern(Type::Signal(SignalType { inner }))
     }
 
     pub fn visit_reference_type(&mut self, node: &ast::ReferenceType) -> TypeId {
         let target = self.visit_type(&node.target);
-        self.analysis_context
-            .type_store
-            .add(Type::Reference(ReferenceType { target }))
+        self.intern(Type::Reference(ReferenceType { target }))
     }
 
     pub fn visit_duck_type(&mut self, node: &ast::DuckType) -> TypeId {
         let like = self.visit_type(&node.like);
-        self.analysis_context
-            .type_store
-            .add(Type::Duck(DuckType { like }))
+        self.intern(Type::Duck(DuckType { like }))
     }
 
     pub fn visit_result_type(&mut self, node: &ast::ResultType) -> TypeId {
@@ -169,45 +152,40 @@ impl TypeChecker {
             None => TypeStore::DYNAMIC,
         };
 
-        self.analysis_context
-            .type_store
-            .add(Type::Result(ResultType {
-                error: Some(err_type),
-                ok: ok_type,
-            }))
+        self.intern(Type::Result(ResultType {
+            error: Some(err_type),
+            ok: ok_type,
+        }))
     }
 
     pub fn visit_tuple_type(&mut self, node: &ast::TupleType) -> TypeId {
         let elements: Vec<TypeId> = node.elements.iter().map(|ty| self.visit_type(ty)).collect();
-        self.analysis_context
-            .type_store
-            .add(Type::Tuple(TupleType { elements }))
+        self.intern(Type::Tuple(TupleType { elements }))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyzer::session::Session;
     use crate::ast;
     use crate::types::StructType;
     use crate::types::Type;
+    use crate::Location;
     use crate::SymbolData;
     use crate::SymbolKind;
 
-    fn dummy_span() -> pest::Span<'static> {
-        pest::Span::new("_", 0, 0).unwrap()
-    }
-
     #[test]
     fn test_visit_array_type() {
-        let mut checker = TypeChecker::dummy();
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
         let array_type = ast::ArrayType {
             element: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "number".to_string(),
+                name: "int".to_string(),
                 args: None,
-                span: dummy_span(),
+                loc: Location::dummy(),
             }))),
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_array_type(&array_type);
@@ -215,33 +193,34 @@ mod tests {
         assert_eq!(
             result,
             Type::Array(ArrayType {
-                element: TypeStore::NUMBER
+                element: TypeStore::INTEGER
             })
         );
     }
 
     #[test]
     fn test_visit_function_type() {
-        let mut checker = TypeChecker::dummy();
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
         let function_type = ast::FunctionType {
             params: vec![
                 ast::Type::Named(ast::NamedType {
-                    name: "number".to_string(),
+                    name: "int".to_string(),
                     args: None,
-                    span: dummy_span(),
+                    loc: Location::dummy(),
                 }),
                 ast::Type::Named(ast::NamedType {
-                    name: "string".to_string(),
+                    name: "str".to_string(),
                     args: None,
-                    span: dummy_span(),
+                    loc: Location::dummy(),
                 }),
             ],
             returned: Box::new(ast::Type::Named(ast::NamedType {
-                name: "boolean".to_string(),
+                name: "bool".to_string(),
                 args: None,
-                span: dummy_span(),
+                loc: Location::dummy(),
             })),
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_function_type(&function_type);
@@ -249,7 +228,7 @@ mod tests {
         assert_eq!(
             result,
             Type::Function(FunctionType {
-                params: vec![TypeStore::NUMBER, TypeStore::STRING],
+                params: vec![TypeStore::INTEGER, TypeStore::STRING],
                 return_type: TypeStore::BOOLEAN,
             })
         );
@@ -257,19 +236,20 @@ mod tests {
 
     #[test]
     fn test_visit_map_type() {
-        let mut checker = TypeChecker::dummy();
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
         let map_type = ast::MapType {
             key: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "string".to_string(),
+                name: "str".to_string(),
                 args: None,
-                span: dummy_span(),
+                loc: Location::dummy(),
             }))),
             value: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "number".to_string(),
+                name: "int".to_string(),
                 args: None,
-                span: dummy_span(),
+                loc: Location::dummy(),
             }))),
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_map_type(&map_type);
@@ -278,31 +258,30 @@ mod tests {
             result,
             Type::Map(MapType {
                 key: TypeStore::STRING,
-                value: TypeStore::NUMBER,
+                value: TypeStore::INTEGER,
             })
         );
     }
 
     #[test]
     fn test_visit_named_type() {
-        let mut checker = TypeChecker::dummy();
-        let def = checker
-            .analysis_context
-            .type_store
-            .add(Type::Struct(StructType {
-                id: 7,
-                fields: vec![],
-            }));
-        checker.analysis_context.register_symbol(SymbolData {
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
+        let def = checker.intern(Type::Struct(StructType {
+            id: 7,
+            fields: vec![],
+        }));
+        checker.ctx.register_symbol(SymbolData {
             name: "Box".into(),
-            kind: SymbolKind::Type(def),
+            ty: def,
+            kind: SymbolKind::Type { members: vec![] },
             ..Default::default()
         });
 
         let named_type = ast::NamedType {
             name: "Box".to_string(),
             args: None,
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_named_type(&named_type);
@@ -312,14 +291,15 @@ mod tests {
 
     #[test]
     fn test_visit_option_type() {
-        let mut checker = TypeChecker::dummy();
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
         let option_type = ast::OptionType {
             base: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "number".to_string(),
+                name: "int".to_string(),
                 args: None,
-                span: dummy_span(),
+                loc: Location::dummy(),
             }))),
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_option_type(&option_type);
@@ -327,21 +307,22 @@ mod tests {
         assert_eq!(
             result,
             Type::Option(OptionType {
-                some: TypeStore::NUMBER
+                some: TypeStore::INTEGER
             })
         );
     }
 
     #[test]
     fn test_visit_reference_type() {
-        let mut checker = TypeChecker::dummy();
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
         let reference_type = ast::ReferenceType {
             target: Box::new(ast::Type::Named(ast::NamedType {
-                name: "string".to_string(),
+                name: "str".to_string(),
                 args: None,
-                span: dummy_span(),
+                loc: Location::dummy(),
             })),
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_reference_type(&reference_type);
@@ -357,19 +338,20 @@ mod tests {
 
     #[test]
     fn test_visit_result_type() {
-        let mut checker = TypeChecker::dummy();
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
         let result_type = ast::ResultType {
             ok: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "number".to_string(),
+                name: "int".to_string(),
                 args: None,
-                span: dummy_span(),
+                loc: Location::dummy(),
             }))),
             error: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "string".to_string(),
+                name: "str".to_string(),
                 args: None,
-                span: dummy_span(),
+                loc: Location::dummy(),
             }))),
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_result_type(&result_type);
@@ -377,7 +359,7 @@ mod tests {
         assert_eq!(
             result,
             Type::Result(ResultType {
-                ok: TypeStore::NUMBER,
+                ok: TypeStore::INTEGER,
                 error: Some(TypeStore::STRING),
             })
         );
@@ -385,21 +367,22 @@ mod tests {
 
     #[test]
     fn test_visit_tuple_type() {
-        let mut checker = TypeChecker::dummy();
+        let session = Session::new();
+        let mut checker = TypeChecker::new(&session, 0);
         let tuple_type = ast::TupleType {
             elements: vec![
                 ast::Type::Named(ast::NamedType {
-                    name: "number".to_string(),
+                    name: "int".to_string(),
                     args: None,
-                    span: dummy_span(),
+                    loc: Location::dummy(),
                 }),
                 ast::Type::Named(ast::NamedType {
-                    name: "string".to_string(),
+                    name: "str".to_string(),
                     args: None,
-                    span: dummy_span(),
+                    loc: Location::dummy(),
                 }),
             ],
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_tuple_type(&tuple_type);
@@ -407,7 +390,7 @@ mod tests {
         assert_eq!(
             result,
             Type::Tuple(TupleType {
-                elements: vec![TypeStore::NUMBER, TypeStore::STRING]
+                elements: vec![TypeStore::INTEGER, TypeStore::STRING]
             })
         );
     }

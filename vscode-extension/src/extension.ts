@@ -6,7 +6,7 @@ let client: LanguageClient | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
 	// Adjust this path if needed
-	const serverBinary = process.platform === "win32" ? "mylang_server.exe" : "mylang_server";
+	const serverBinary = process.platform === "win32" ? "tine_server.exe" : "tine_server";
 
 	const serverPath = context.asAbsolutePath(path.join("server", "bin", serverBinary));
 
@@ -16,13 +16,13 @@ export function activate(context: vscode.ExtensionContext) {
 	};
 
 	const clientOptions: LanguageClientOptions = {
-		documentSelector: [{ scheme: "file", language: "my-lang" }],
+		documentSelector: [{ scheme: "file", language: "tine" }],
 		synchronize: {
-			fileEvents: vscode.workspace.createFileSystemWatcher("**/*.my"),
+			fileEvents: vscode.workspace.createFileSystemWatcher("**/*.tine"),
 		},
 	};
 
-	client = new LanguageClient("myLangServer", "MyLang Language Server", serverOptions, clientOptions);
+	client = new LanguageClient("TineServer", "Tine Language Server", serverOptions, clientOptions);
 	client.start();
 
 	context.subscriptions.push({ dispose: () => client?.stop() });

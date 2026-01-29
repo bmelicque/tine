@@ -1,9 +1,9 @@
 use crate::codegen::{utils::create_ident, CodeGenerator};
-use mylang_core::ast;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
+use tine_core::ast;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn declaration_to_swc(&mut self, node: &ast::VariableDeclaration) -> Vec<swc::Stmt> {
         if let ast::Pattern::Identifier(_) = *node.pattern {
             return vec![self.identifier_declaration_to_swc(node).into()];
@@ -13,7 +13,7 @@ impl CodeGenerator {
             .pattern
             .list_identifiers()
             .into_iter()
-            .filter_map(|id| self.get_info(id.span))
+            .filter_map(|id| self.find_symbol(id.loc()))
             .filter(|var| var.borrow().has_ref())
             .map(|var| wrap_identifier(&var.borrow().name).into())
             .collect();
@@ -31,7 +31,13 @@ impl CodeGenerator {
         };
 
         let mut init = self.expr_to_swc(&node.value);
-        let info = self.get_info(id.span).unwrap();
+        let Some(info) = self.find_symbol(id.loc()) else {
+            panic!(
+                "expected to find symbol with name '{}' at location {:?}",
+                id.as_str(),
+                id.loc()
+            )
+        };
         if info.borrow().has_ref() {
             init = swc::Expr::Array(swc::ArrayLit {
                 span: DUMMY_SP,
@@ -39,13 +45,13 @@ impl CodeGenerator {
             })
         }
 
-        let kind = match node.op {
-            ast::DeclarationOp::Const => swc::VarDeclKind::Const,
-            ast::DeclarationOp::Mut => swc::VarDeclKind::Let,
+        let kind = match node.keyword {
+            ast::DeclarationKeyword::Const => swc::VarDeclKind::Const,
+            ast::DeclarationKeyword::Var => swc::VarDeclKind::Let,
         };
 
         let name = swc::Pat::Ident(swc::BindingIdent {
-            id: create_ident(id.span.as_str()),
+            id: create_ident(id.as_str()),
             type_ann: None,
         });
 

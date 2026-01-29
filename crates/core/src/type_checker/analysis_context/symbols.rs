@@ -1,38 +1,42 @@
-use std::{
-    cell::{Ref, RefCell},
-    rc::Rc,
-};
+use std::sync::{Arc, Mutex, MutexGuard};
 
-use pest::Span;
+use crate::{types::TypeId, Location, TypeStore};
 
-use crate::{types::TypeId, utils::dummy_span, TypeStore};
-
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum SymbolKind {
     Value {
-        ty: TypeId,
         mutable: bool,
     },
-    /// Contains the list of param names
+    /// A function name.
+    /// Its type_id should refer to a FunctionType.
     Function {
-        params: Vec<String>,
-        /// This TypeId should be guaranted to refer to a function type
-        ty: TypeId,
+        // This is expected to have the same length as the function type's params.
+        param_names: Vec<String>,
     },
-    Type(TypeId),
+    Type {
+        /// These could be members or methods
+        members: Vec<SymbolRef>,
+    },
+    /// An enum constructor. In this case, the symbol's `def` should refer to either a `StructType`, a `TupleType` or a `TypeTemplate` wrapping either
+    Constructor {
+        /// The type definition of the enum owning this.
+        owner: SymbolRef,
+    },
+    Member {
+        /// The type definition of the struct owning this member.
+        owner: SymbolRef,
+    },
+    Method {
+        /// The type definition of the type owning this.
+        owner: SymbolRef,
+        // This is expected to have the same length as the function type's params.
+        param_names: Vec<String>,
+    },
 }
 
 impl SymbolKind {
-    pub fn constant(ty: TypeId) -> Self {
-        Self::Value { ty, mutable: false }
-    }
-
-    pub fn get_type(&self) -> TypeId {
-        match self {
-            SymbolKind::Function { ty, .. } => *ty,
-            SymbolKind::Type(ty) => *ty,
-            SymbolKind::Value { ty, .. } => *ty,
-        }
+    pub fn constant() -> Self {
+        Self::Value { mutable: false }
     }
 
     pub fn is_mutable(&self) -> bool {
@@ -44,21 +48,51 @@ impl SymbolKind {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct SymbolAccessManager {
+    reads: Vec<Location>,
+    writes: Vec<Location>,
+    references: Vec<Location>,
+}
+
+impl SymbolAccessManager {
+    pub fn new() -> Self {
+        Self {
+            reads: vec![],
+            writes: vec![],
+            references: vec![],
+        }
+    }
+
+    pub fn uses(&self) -> impl Iterator<Item = Location> + '_ {
+        let reads = self.reads.iter().cloned();
+        let writes = self.writes.iter().cloned();
+        let refs = self.references.iter().cloned();
+        reads.chain(writes).chain(refs)
+    }
+
+    pub fn read(&mut self, at: Location) {
+        self.reads.push(at);
+    }
+
+    pub fn write(&mut self, at: Location) {
+        self.writes.push(at);
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SymbolData {
     pub name: String,
+    pub ty: TypeId,
     pub kind: SymbolKind,
-    pub defined_at: Span<'static>,
+    pub defined_at: Location,
     pub docs: Option<String>,
-    pub reads: usize,
-    pub writes: usize,
-    pub mut_refs: usize,
-    pub ro_refs: usize,
+    pub access: SymbolAccessManager,
     pub dependencies: Vec<SymbolRef>,
 }
 
 impl SymbolData {
     pub fn has_ref(&self) -> bool {
-        self.mut_refs + self.ro_refs > 0
+        self.access.references.len() > 0
     }
 
     pub fn is_mutable(&self) -> bool {
@@ -66,7 +100,7 @@ impl SymbolData {
     }
 
     pub fn get_type(&self) -> TypeId {
-        self.kind.get_type()
+        self.ty
     }
 }
 
@@ -74,69 +108,78 @@ impl Default for SymbolData {
     fn default() -> Self {
         Self {
             name: "".into(),
-            kind: SymbolKind::Value {
-                ty: TypeStore::UNKNOWN,
-                mutable: false,
-            },
-            defined_at: dummy_span(),
+            ty: TypeStore::UNKNOWN,
+            kind: SymbolKind::constant(),
+            defined_at: Location::dummy(),
             docs: None,
-            reads: 0,
-            writes: 0,
-            mut_refs: 0,
-            ro_refs: 0,
+            access: SymbolAccessManager::new(),
             dependencies: vec![],
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct SymbolHandle(Rc<RefCell<SymbolData>>);
+pub struct SymbolHandle(Arc<Mutex<SymbolData>>);
 
 impl SymbolHandle {
     pub fn new(symbol: SymbolData) -> Self {
-        Self(Rc::new(RefCell::new(symbol)))
+        Self(Arc::new(Mutex::new(symbol)))
     }
 
     pub fn is_mutable(&self) -> bool {
-        match self.0.borrow().kind {
+        match self.0.lock().unwrap().kind {
             SymbolKind::Value { mutable, .. } => mutable,
             _ => false,
         }
     }
 
-    pub fn add_read(&self) {
-        self.0.borrow_mut().reads += 1;
+    pub fn read(&self, at: Location) {
+        self.0.lock().unwrap().access.read(at);
     }
-    pub fn remove_read(&self) {
-        self.0.borrow_mut().reads -= 1;
+    pub fn reference(&self, at: Location) {
+        self.0.lock().unwrap().access.references.push(at);
     }
-    pub fn add_write(&self) {
-        self.0.borrow_mut().writes += 1;
+    pub fn write(&self, at: Location) {
+        self.0.lock().unwrap().access.writes.push(at);
     }
-    pub fn add_readonly_ref(&self) {
-        self.0.borrow_mut().ro_refs += 1;
+    pub fn read_to_write(&self, at: Location) {
+        self.0.lock().unwrap().access.reads.retain(|loc| *loc != at);
+        self.0.lock().unwrap().access.writes.push(at);
     }
-    pub fn add_mutable_ref(&self) {
-        self.0.borrow_mut().mut_refs += 1;
+    pub fn read_to_mutable_ref(&self, at: Location) {
+        self.read_to_write(at);
+        self.reference(at);
     }
 
-    pub fn borrow(&self) -> Ref<'_, SymbolData> {
-        self.0.borrow()
+    pub fn borrow(&self) -> MutexGuard<'_, SymbolData> {
+        self.0.lock().unwrap()
     }
     pub fn readonly(&self) -> SymbolRef {
         SymbolRef(self.0.clone())
     }
 
     pub fn has_ref(&self, variable: &SymbolRef) -> bool {
-        Rc::ptr_eq(&self.0, &variable.0)
+        Arc::ptr_eq(&self.0, &variable.0)
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct SymbolRef(Rc<RefCell<SymbolData>>);
+#[derive(Debug, Clone)]
+pub struct SymbolRef(Arc<Mutex<SymbolData>>);
 
 impl SymbolRef {
-    pub fn borrow(&self) -> Ref<'_, SymbolData> {
-        self.0.borrow()
+    pub fn borrow(&self) -> MutexGuard<'_, SymbolData> {
+        self.0.lock().unwrap()
+    }
+
+    pub fn is(&self, test: &SymbolRef) -> bool {
+        Arc::ptr_eq(&self.0, &test.0)
+    }
+
+    pub fn uses(&self) -> Vec<Location> {
+        let symbol = self.0.lock().unwrap();
+        vec![symbol.defined_at]
+            .into_iter()
+            .chain(symbol.access.uses())
+            .collect::<Vec<_>>()
     }
 }

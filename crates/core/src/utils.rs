@@ -1,37 +1,29 @@
-use crate::parser::parser::ParseError;
+use crate::{analyzer::Source, parser::parser::ParseError};
 
-pub fn pretty_print_error(error: &ParseError) {
-    let span = &error.span;
-    let start_pos = span.start_pos();
-    let end_pos = span.end_pos();
+pub fn pretty_print_error(src: &Source, error: &ParseError) {
+    let loc = &error.loc;
+    let start_pos = loc.span().start();
+    let end_pos = loc.span().end();
 
-    let line_str = start_pos.line_col().0;
-    let col_start = start_pos.line_col().1;
-    let col_end = end_pos.line_col().1;
-
-    let line_text = error
-        .span
-        .get_input()
-        .lines()
-        .nth(line_str - 1) // lines are 1-based
-        .unwrap_or("");
+    let (start_line, start_col) = src.line_col(start_pos);
+    let line_text = src.read_line(start_line);
+    let end_col = match src.line_col(end_pos) {
+        (line, col) if line == start_line => col,
+        (_, _) => line_text.len(),
+    };
 
     println!(
         "\nerror: {}\n --> line {}, column {}\n",
-        error.message, line_str, col_start
+        error.message, start_line, start_col
     );
-    println!("{} | {}", line_str, line_text);
+    println!("{} | {}", start_line, line_text);
 
-    let gutter = " ".repeat(line_str.to_string().len());
-    let underline = if col_end > col_start {
-        "~".repeat(col_end - col_start)
+    let gutter = " ".repeat(start_line.to_string().len());
+    let underline = if end_col > start_col {
+        "~".repeat(end_col - start_col)
     } else {
         "^".to_string()
     };
 
-    println!("{} | {}{}", gutter, " ".repeat(col_start - 1), underline);
-}
-
-pub fn dummy_span() -> pest::Span<'static> {
-    pest::Span::new("_", 0, 0).unwrap()
+    println!("{} | {}{}", gutter, " ".repeat(start_col - 1), underline);
 }

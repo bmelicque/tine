@@ -2,11 +2,11 @@ use crate::codegen::{
     utils::{can_ifexpr_be_inlined, create_ident, undefined, AssignTo},
     CodeGenerator,
 };
-use mylang_core::ast;
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
+use tine_core::ast;
 
-impl CodeGenerator {
+impl CodeGenerator<'_> {
     pub fn if_to_swc_expr(&mut self, node: &ast::IfExpression) -> swc::Expr {
         if node.consequent.statements.len() == 0 && node.alternate.is_none() {
             undefined()
@@ -76,17 +76,13 @@ impl CodeGenerator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mylang_core::{ast, CheckedModule};
     use swc_ecma_ast as swc;
-
-    fn dummy_span() -> pest::Span<'static> {
-        pest::Span::new("", 0, 0).unwrap()
-    }
+    use tine_core::{ast, Location, Session};
 
     fn mock_expr() -> ast::Expression {
-        ast::Expression::NumberLiteral(ast::NumberLiteral {
-            value: 1.0.into(),
-            span: dummy_span(),
+        ast::Expression::IntLiteral(ast::IntLiteral {
+            value: 1,
+            loc: Location::dummy(),
         })
     }
 
@@ -95,7 +91,7 @@ mod tests {
             statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
                 expression: mock_expr().into(),
             })],
-            span: dummy_span(),
+            loc: Location::dummy(),
         }
     }
 
@@ -108,16 +104,14 @@ mod tests {
             } else {
                 None
             },
-            span: dummy_span(),
+            loc: Location::dummy(),
         }
     }
 
-    impl CodeGenerator {
+    impl CodeGenerator<'_> {
         fn new_for_test() -> Self {
-            let mut gen = CodeGenerator::new(
-                swc_common::FileName::Custom("".into()),
-                CheckedModule::dummy(),
-            );
+            let session = Box::leak(Box::new(Session::new()));
+            let mut gen = CodeGenerator::new(session, 0);
             gen.enter_block();
             gen
         }
@@ -130,10 +124,10 @@ mod tests {
             condition: mock_expr().into(),
             consequent: Box::new(ast::BlockExpression {
                 statements: vec![],
-                span: dummy_span(),
+                loc: Location::dummy(),
             }),
             alternate: None,
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = gen.if_to_swc_expr(&node);
@@ -171,7 +165,7 @@ mod tests {
         let result = gen.if_to_swc_inlined(&node);
         match result {
             swc::Expr::Cond(cond) => {
-                assert!(matches!(*cond.alt, swc::Expr::Cond(_) | swc::Expr::Call(_)));
+                assert!(matches!(*cond.alt, swc::Expr::Lit(_)), "got {:?}", cond.alt);
             }
             _ => panic!("Expected CondExpr, got {:?}", result),
         }

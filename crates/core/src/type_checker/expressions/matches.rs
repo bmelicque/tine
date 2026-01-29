@@ -11,7 +11,7 @@ use crate::{
     SymbolKind,
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_match_expression(&mut self, node: &ast::MatchExpression) -> TypeId {
         let ty = self.visit_expression(&node.scrutinee);
         let mut expected = TypeStore::DYNAMIC;
@@ -20,12 +20,11 @@ impl TypeChecker {
             if expected == TypeStore::DYNAMIC {
                 expected = arm_ty;
             } else {
-                self.check_assigned_type(expected, arm_ty, node.span);
+                self.check_assigned_type(expected, arm_ty, node.loc);
             }
         }
         self.check_exhaustiveness(node, ty);
-        self.analysis_context
-            .save_expression_type(node.span, expected)
+        self.ctx.save_expression_type(node.loc, expected)
     }
 
     fn visit_match_arm(
@@ -34,18 +33,18 @@ impl TypeChecker {
         against: TypeId,
         deps: Vec<SymbolRef>,
     ) -> TypeId {
-        let arm_ty = self.with_scope(arm.span, |s| {
+        let arm_ty = self.with_scope(|s| {
             let mut variables = TokenList::new();
             s.match_pattern(&arm.pattern, against, &mut variables);
             for (name, ty) in variables.0 {
-                let symbol = s.analysis_context.register_symbol(SymbolData {
+                s.ctx.register_symbol(SymbolData {
                     name: name.as_str().into(),
-                    kind: SymbolKind::constant(ty),
-                    defined_at: arm.pattern.as_span(),
+                    ty,
+                    kind: SymbolKind::constant(),
+                    defined_at: arm.pattern.loc(),
                     dependencies: deps.clone(),
                     ..Default::default()
                 });
-                s.analysis_context.save_symbol_token(name, symbol);
             }
             s.visit_expression(&arm.expression)
         });
@@ -66,7 +65,7 @@ impl TypeChecker {
             Type::Enum(ty) => self.check_variants_exhaustiveness(node, &ty.variants),
             ty => self.error(
                 format!("Cannot match against type {} (not implemented yet)", ty),
-                node.span,
+                node.loc,
             ),
         }
     }
@@ -87,7 +86,7 @@ impl TypeChecker {
             names.remove(&variant.name);
         }
         if names.len() > 0 {
-            self.error("Missing match cases".into(), node.span)
+            self.error("Missing match cases".into(), node.loc)
         }
     }
 }

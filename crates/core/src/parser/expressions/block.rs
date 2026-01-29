@@ -6,38 +6,38 @@ use crate::{
 };
 
 impl ParserEngine {
-    pub fn parse_block(&mut self, pair: Pair<'static, Rule>) -> ast::BlockExpression {
+    pub fn parse_block(&mut self, pair: Pair<'_, Rule>) -> ast::BlockExpression {
         assert_eq!(pair.as_rule(), Rule::block);
-        let span = pair.as_span();
+        let loc = self.localize(pair.as_span());
         let statements = pair
             .into_inner()
             .map(|pair| self.parse_statement(pair))
             .filter(|stmt| !stmt.is_empty())
             .collect();
 
-        ast::BlockExpression { span, statements }
+        ast::BlockExpression { loc, statements }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{MyLanguageParser, Rule};
+    use crate::parser::parser::{Rule, TineParser};
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str) -> ast::Expression {
-        let pair = MyLanguageParser::parse(Rule::expression, input)
+        let pair = TineParser::parse(Rule::expression, input)
             .unwrap()
             .next()
             .unwrap();
-        let mut parser_engine = ParserEngine::new();
+        let mut parser_engine = ParserEngine::new(0);
         parser_engine.parse_expression(pair)
     }
 
     #[test]
     fn test_parse_block_expression() {
         let input = r#"{
-            x := 42
+            var x = 42
             x = 43
         }
         "#;
@@ -54,14 +54,15 @@ mod tests {
             panic!("Expected VariableDeclaration")
         };
         match *var_decl.pattern {
-            ast::Pattern::Identifier(ast::IdentifierPattern { span }) if span.as_str() == "x" => {}
+            ast::Pattern::Identifier(ast::IdentifierPattern(ref ident))
+                if ident.as_str() == "x" => {}
             _ => panic!("Identifier pattern expected"),
         };
         match *var_decl.value.clone() {
-            ast::Expression::NumberLiteral(literal) => {
-                assert_eq!(literal.value, 42.0)
+            ast::Expression::IntLiteral(literal) => {
+                assert_eq!(literal.value, 42)
             }
-            _ => panic!("Expected NumberLiteral as variable value"),
+            _ => panic!("Expected IntLiteral as variable value"),
         }
 
         // Check the second statement
@@ -69,14 +70,14 @@ mod tests {
             panic!("Expected Assignment")
         };
         match &assignment.pattern {
-            ast::Assignee::Pattern(ast::Pattern::Identifier(id)) if id.span.as_str() == "x" => {}
+            ast::Assignee::Pattern(ast::Pattern::Identifier(id)) if id.as_str() == "x" => {}
             _ => panic!("Expected 'x'"),
         }
         match &assignment.value {
-            ast::Expression::NumberLiteral(literal) => {
-                assert_eq!(literal.value, 43.0)
+            ast::Expression::IntLiteral(literal) => {
+                assert_eq!(literal.value, 43)
             }
-            _ => panic!("Expected NumberLiteral as assignment value"),
+            _ => panic!("Expected IntLiteral as assignment value"),
         }
     }
 }

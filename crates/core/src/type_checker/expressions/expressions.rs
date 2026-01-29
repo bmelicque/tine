@@ -6,7 +6,7 @@ use crate::{
 
 use super::TypeChecker;
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub fn visit_expression(&mut self, node: &ast::Expression) -> TypeId {
         match node {
             ast::Expression::Array(node) => self.visit_array_expression(node),
@@ -16,16 +16,17 @@ impl TypeChecker {
             ast::Expression::Call(node) => self.visit_call_expression(node),
             ast::Expression::CompositeLiteral(node) => self.visit_composite_literal(node),
             ast::Expression::Element(node) => self.visit_element_expression(node),
-            ast::Expression::Empty => TypeStore::VOID,
+            ast::Expression::Empty => TypeStore::UNIT,
+            ast::Expression::FloatLiteral(_) => TypeStore::FLOAT,
             ast::Expression::Member(node) => self.visit_member_expression(node),
             ast::Expression::Function(node) => self.visit_function_expression(node).into(),
             ast::Expression::Identifier(node) => self.visit_identifier(node),
             ast::Expression::If(node) => self.visit_if_expression(node),
             ast::Expression::IfDecl(node) => self.visit_if_decl_expression(node),
             ast::Expression::Invalid(_) => TypeStore::UNKNOWN,
+            ast::Expression::IntLiteral(_) => TypeStore::INTEGER,
             ast::Expression::Loop(node) => self.visit_loop(node),
             ast::Expression::Match(node) => self.visit_match_expression(node),
-            ast::Expression::NumberLiteral(_) => TypeStore::NUMBER,
             ast::Expression::StringLiteral(_) => TypeStore::STRING,
             ast::Expression::Tuple(node) => self.visit_tuple_expression(node).into(),
             ast::Expression::Unary(node) => self.visit_unary_expression(&node),
@@ -47,9 +48,7 @@ impl TypeChecker {
 
     fn visit_array_expression(&mut self, node: &ast::ArrayExpression) -> TypeId {
         if node.elements.len() == 0 {
-            return self
-                .analysis_context
-                .save_expression_type(node.span, TypeStore::DYNAMIC);
+            return self.ctx.save_expression_type(node.loc, TypeStore::DYNAMIC);
         }
 
         let mut ty = TypeStore::DYNAMIC;
@@ -59,45 +58,39 @@ impl TypeChecker {
                 ty = value_ty;
                 continue;
             }
-            self.check_assigned_type(ty, value_ty, value.as_span());
+            self.check_assigned_type(ty, value_ty, value.loc());
         }
 
-        let id = self
-            .analysis_context
-            .type_store
-            .add(Type::Array(ArrayType { element: ty }));
-        self.analysis_context.save_expression_type(node.span, id)
+        let id = self.intern(Type::Array(ArrayType { element: ty }));
+        self.ctx.save_expression_type(node.loc, id)
     }
 
     pub fn visit_block_expression(&mut self, node: &ast::BlockExpression) -> TypeId {
         // TODO: handle diverging statements (return, break, continue)
-        let ty = self.with_scope(node.span, |checker| {
-            let mut ty = TypeStore::VOID;
+        let ty = self.with_scope(|checker| {
+            let mut ty = TypeStore::UNIT;
             for stmt in node.statements.iter() {
                 ty = checker.visit_statement(&stmt);
             }
             ty
         });
-        self.analysis_context.save_expression_type(node.span, ty)
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_identifier(&mut self, node: &ast::Identifier) -> TypeId {
-        let var = self.analysis_context.lookup_mut(node.as_str());
+        let var = self.lookup_mut(node.as_str());
         let ty = match var {
             Some(handle) => {
-                handle.add_read();
-                self.analysis_context
-                    .add_dependencies(vec![handle.readonly()]);
-                self.analysis_context
-                    .save_symbol_token(node.span, handle.readonly());
+                handle.read(node.loc);
+                self.ctx.add_dependencies(vec![handle.readonly()]);
                 handle.borrow().get_type()
             }
             None => {
-                self.error(format!("Undefined variable: {}", node.as_str()), node.span);
+                self.error(format!("Undefined variable: {}", node.as_str()), node.loc);
                 TypeStore::UNKNOWN
             }
         };
-        self.analysis_context.save_expression_type(node.span, ty)
+        self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_tuple_expression(&mut self, node: &ast::TupleExpression) -> TypeId {
@@ -108,29 +101,37 @@ impl TypeChecker {
                 .map(|el| self.visit_expression(el))
                 .collect(),
         };
-        let ty = self.analysis_context.type_store.add(ty.into());
-        self.analysis_context.save_expression_type(node.span, ty)
+        let ty = self.intern(ty.into());
+        self.ctx.save_expression_type(node.loc, ty)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyzer::session::Session;
     use crate::ast;
+    use crate::locations::Span;
     use crate::types::*;
+    use crate::Location;
     use crate::SymbolData;
     use crate::SymbolKind;
 
-    fn create_type_checker() -> TypeChecker {
-        TypeChecker::dummy()
+    fn create_type_checker() -> TypeChecker<'static> {
+        let session = Box::leak(Box::new(Session::new()));
+        TypeChecker::new(session, 0)
     }
 
-    fn dummy_span() -> pest::Span<'static> {
-        pest::Span::new("_", 0, 0).unwrap()
+    fn loc(text: &'static str) -> Location {
+        let span = Span::new(0, text.len() as u32);
+        Location::new(0, span)
     }
 
-    fn span(text: &'static str) -> pest::Span<'static> {
-        pest::Span::new(text, 0, text.len()).unwrap()
+    fn ident(text: &str) -> ast::Identifier {
+        ast::Identifier {
+            loc: Location::new(0, Span::new(0, text.len() as u32)),
+            text: text.to_string(),
+        }
     }
 
     #[test]
@@ -138,7 +139,7 @@ mod tests {
         let mut checker = create_type_checker();
         let array_expression = ast::ArrayExpression {
             elements: vec![],
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_array_expression(&array_expression);
@@ -151,28 +152,24 @@ mod tests {
         let mut checker = create_type_checker();
         let array_expression = ast::ArrayExpression {
             elements: vec![
-                ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: ordered_float::OrderedFloat(1.0),
-                    span: dummy_span(),
+                ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: 1,
+                    loc: Location::dummy(),
                 }),
-                ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: ordered_float::OrderedFloat(2.0),
-                    span: dummy_span(),
-                }),
-                ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: ordered_float::OrderedFloat(3.0),
-                    span: dummy_span(),
+                ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: 2,
+                    loc: Location::dummy(),
                 }),
             ],
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_array_expression(&array_expression);
         let result = checker.resolve(result);
         assert_eq!(
-            *result,
+            result,
             Type::Array(ArrayType {
-                element: TypeStore::NUMBER
+                element: TypeStore::INTEGER
             })
         );
         assert!(checker.errors.is_empty());
@@ -183,23 +180,24 @@ mod tests {
         let mut checker = create_type_checker();
         let array_expression = ast::ArrayExpression {
             elements: vec![
-                ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: ordered_float::OrderedFloat(1.0),
-                    span: dummy_span(),
+                ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: 1,
+                    loc: Location::dummy(),
                 }),
                 ast::Expression::StringLiteral(ast::StringLiteral {
-                    span: span("hello"),
+                    loc: Location::dummy(),
+                    text: "hello".into(),
                 }),
             ],
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_array_expression(&array_expression);
         let result = checker.resolve(result);
         assert_eq!(
-            *result,
+            result,
             Type::Array(ArrayType {
-                element: TypeStore::NUMBER
+                element: TypeStore::INTEGER
             })
         );
         assert_eq!(checker.errors.len(), 1);
@@ -209,69 +207,78 @@ mod tests {
     fn test_visit_binary_expression() {
         let mut checker = create_type_checker();
         let binary_expression = ast::BinaryExpression {
-            left: Box::new(ast::Expression::NumberLiteral(ast::NumberLiteral {
-                value: ordered_float::OrderedFloat(1.0),
-                span: dummy_span(),
+            left: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+                value: 1,
+                loc: Location::dummy(),
             })),
-            right: Box::new(ast::Expression::NumberLiteral(ast::NumberLiteral {
-                value: ordered_float::OrderedFloat(2.0),
-                span: dummy_span(),
+            right: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+                value: 2,
+                loc: Location::dummy(),
             })),
             operator: ast::BinaryOperator::Add,
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_binary_expression(&binary_expression);
-        assert_eq!(result, TypeStore::NUMBER);
-        assert!(checker.errors.is_empty());
+        assert_eq!(result, TypeStore::INTEGER);
+        assert!(
+            checker.errors.is_empty(),
+            "expected no errors, got {:?}",
+            checker.errors
+        );
     }
 
     #[test]
     fn test_visit_function_expression() {
         let mut checker = create_type_checker();
         let function_expression = ast::FunctionExpression {
+            loc: Location::dummy(),
+            name: None,
             params: vec![
                 ast::FunctionParam {
-                    name: ast::Identifier { span: span("x") },
+                    name: ident("x"),
                     type_annotation: ast::Type::Named(ast::NamedType {
-                        name: "number".to_string(),
+                        name: "int".to_string(),
                         args: None,
-                        span: dummy_span(),
+                        loc: Location::dummy(),
                     }),
-                    span: dummy_span(),
+                    loc: Location::dummy(),
                 },
                 ast::FunctionParam {
-                    name: ast::Identifier { span: span("y") },
+                    name: ident("y"),
                     type_annotation: ast::Type::Named(ast::NamedType {
-                        name: "number".to_string(),
+                        name: "int".to_string(),
                         args: None,
-                        span: dummy_span(),
+                        loc: Location::dummy(),
                     }),
-                    span: dummy_span(),
+                    loc: Location::dummy(),
                 },
             ],
-            body: ast::FunctionBody::Expression(Box::new(ast::Expression::Binary(
-                ast::BinaryExpression {
-                    left: Box::new(ast::Expression::Identifier(ast::Identifier {
-                        span: span("x"),
+            return_type: Some(ast::Type::Named(ast::NamedType {
+                loc: Location::dummy(),
+                name: "int".into(),
+                args: None,
+            })),
+            body: ast::BlockExpression {
+                loc: Location::dummy(),
+                statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
+                    expression: Box::new(ast::Expression::Binary(ast::BinaryExpression {
+                        left: Box::new(ast::Expression::Identifier(ident("x"))),
+                        right: Box::new(ast::Expression::Identifier(ident("y"))),
+                        operator: ast::BinaryOperator::Add,
+                        loc: Location::dummy(),
                     })),
-                    right: Box::new(ast::Expression::Identifier(ast::Identifier {
-                        span: span("y"),
-                    })),
-                    operator: ast::BinaryOperator::Add,
-                    span: dummy_span(),
-                },
-            ))),
-            span: dummy_span(),
+                })],
+            },
         };
 
         let result = checker.visit_function_expression(&function_expression);
         let result = checker.resolve(result);
         assert_eq!(
-            *result,
+            result,
             Type::Function(FunctionType {
-                params: vec![TypeStore::NUMBER, TypeStore::NUMBER],
-                return_type: TypeStore::NUMBER,
+                params: vec![TypeStore::INTEGER, TypeStore::INTEGER],
+                return_type: TypeStore::INTEGER,
             })
         );
         assert!(checker.errors.is_empty());
@@ -280,17 +287,18 @@ mod tests {
     #[test]
     fn test_visit_identifier() {
         let mut checker = create_type_checker();
-        checker.analysis_context.register_symbol(SymbolData {
+        checker.ctx.register_symbol(SymbolData {
             name: "x".into(),
-            kind: SymbolKind::constant(TypeStore::NUMBER),
-            defined_at: span("x"),
+            ty: TypeStore::INTEGER,
+            kind: SymbolKind::constant(),
+            defined_at: loc("x"),
             ..Default::default()
         });
 
-        let identifier = ast::Identifier { span: span("x") };
+        let identifier = ident("x");
 
         let result = checker.visit_identifier(&identifier);
-        assert_eq!(result, TypeStore::NUMBER);
+        assert_eq!(result, TypeStore::INTEGER);
         assert!(checker.errors.is_empty());
     }
 
@@ -299,12 +307,12 @@ mod tests {
         let mut checker = create_type_checker();
         let tuple_expression = ast::TupleExpression {
             elements: vec![],
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_tuple_expression(&tuple_expression);
         let result = checker.resolve(result);
-        assert_eq!(*result, Type::Tuple(TupleType { elements: vec![] }));
+        assert_eq!(result, Type::Tuple(TupleType { elements: vec![] }));
         assert!(checker.errors.is_empty());
     }
 
@@ -313,25 +321,28 @@ mod tests {
         let mut checker = create_type_checker();
         let tuple_expression = ast::TupleExpression {
             elements: vec![
-                ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: ordered_float::OrderedFloat(42.0),
-                    span: dummy_span(),
+                ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: 42,
+                    loc: Location::dummy(),
                 }),
-                ast::Expression::StringLiteral(ast::StringLiteral { span: dummy_span() }),
+                ast::Expression::StringLiteral(ast::StringLiteral {
+                    loc: Location::dummy(),
+                    text: "".into(),
+                }),
                 ast::Expression::BooleanLiteral(ast::BooleanLiteral {
                     value: true,
-                    span: dummy_span(),
+                    loc: Location::dummy(),
                 }),
             ],
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_tuple_expression(&tuple_expression);
         let result = checker.resolve(result);
         assert_eq!(
-            *result,
+            result,
             Type::Tuple(TupleType {
-                elements: vec![TypeStore::NUMBER, TypeStore::STRING, TypeStore::BOOLEAN]
+                elements: vec![TypeStore::INTEGER, TypeStore::STRING, TypeStore::BOOLEAN]
             })
         );
         assert!(checker.errors.is_empty());
@@ -342,22 +353,25 @@ mod tests {
         let mut checker = create_type_checker();
         let tuple_expression = ast::TupleExpression {
             elements: vec![
-                ast::Expression::NumberLiteral(ast::NumberLiteral {
-                    value: ordered_float::OrderedFloat(42.0),
-                    span: dummy_span(),
+                ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: 42,
+                    loc: Location::dummy(),
                 }),
                 ast::Expression::Tuple(ast::TupleExpression {
                     elements: vec![
-                        ast::Expression::StringLiteral(ast::StringLiteral { span: dummy_span() }),
+                        ast::Expression::StringLiteral(ast::StringLiteral {
+                            loc: Location::dummy(),
+                            text: "".into(),
+                        }),
                         ast::Expression::BooleanLiteral(ast::BooleanLiteral {
                             value: false,
-                            span: dummy_span(),
+                            loc: Location::dummy(),
                         }),
                     ],
-                    span: dummy_span(),
+                    loc: Location::dummy(),
                 }),
             ],
-            span: dummy_span(),
+            loc: Location::dummy(),
         };
 
         let result = checker.visit_tuple_expression(&tuple_expression);
