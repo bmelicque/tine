@@ -133,7 +133,10 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{Rule, TineParser};
+    use crate::{
+        parser::parser::{Rule, TineParser},
+        Location, Span,
+    };
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str, rule: Rule) -> ast::Expression {
@@ -143,15 +146,28 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_number_literal() {
+    fn test_parse_int_literal() {
         let input = "42";
         let result = parse_expression_input(input, Rule::integer_literal);
 
-        match result {
-            ast::Expression::IntLiteral(literal) => {
-                assert_eq!(literal.value, 42);
-            }
-            _ => panic!("Expected NumberLiteral"),
-        }
+        let expected = ast::Expression::IntLiteral(ast::IntLiteral {
+            loc: Location::new(0, Span::new(0, 2)),
+            value: 42,
+        });
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_parse_float_literal() {
+        let input = "3.14";
+        let result = parse_expression_input(input, Rule::float_literal);
+
+        let expected = ast::Expression::FloatLiteral(ast::FloatLiteral {
+            loc: Location::new(0, Span::new(0, 4)),
+            value: ordered_float::OrderedFloat(3.14),
+        });
+
+        assert_eq!(result, expected);
     }
 }
