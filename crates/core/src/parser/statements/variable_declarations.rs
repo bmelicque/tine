@@ -12,8 +12,7 @@ impl ParserEngine {
     /// Parse a variable declaration.
     ///
     /// Expected pairs:
-    /// `doc_comment? ~ declaration_operator ~ pattern ~ "=" ~ expression`
-    /// with `declaration_operator` being either `:=` (mutable) or `::` (constant)
+    /// `doc_comment? ~ ("const"|"var") ~ pattern ~ "=" ~ expression`
     pub fn parse_variable_declaration(&mut self, pair: Pair<'_, Rule>) -> ast::VariableDeclaration {
         let whole_span = Span::from(pair.as_span());
         let mut inner = pair.into_inner();
@@ -29,7 +28,12 @@ impl ParserEngine {
 
         let keyword = next.as_str().into();
         let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
-        let value = Box::new(self.parse_expression(inner.next().unwrap()));
+        let value = Box::new(
+            inner
+                .next()
+                .map(|v| self.parse_expression(v))
+                .unwrap_or(ast::Expression::Empty),
+        );
         if value.is_empty() {
             self.error(DiagnosticKind::MissingExpression, loc.increment());
         }
@@ -76,19 +80,48 @@ mod tests {
         let input = "var x = 42";
         let (stmt, errors) = parse_statement_input(input, Rule::variable_declaration);
 
+        let expected = ast::Statement::VariableDeclaration(ast::VariableDeclaration {
+            docs: None,
+            loc: Location::new(0, Span::new(0, input.len() as u32)),
+            keyword: ast::DeclarationKeyword::Var,
+            pattern: Box::new(ast::Pattern::Identifier(ast::IdentifierPattern(
+                ast::Identifier {
+                    loc: Location::new(0, Span::new(4, 5)),
+                    text: "x".into(),
+                },
+            ))),
+            value: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+                loc: Location::new(0, Span::new(8, input.len() as u32)),
+                value: 42,
+            })),
+        });
+
         assert_eq!(errors.len(), 0);
-        let ast::Statement::VariableDeclaration(var_decl) = stmt else {
-            panic!("Expected VariableDeclaration");
-        };
-        match *var_decl.pattern {
-            ast::Pattern::Identifier(ident) if ident.as_str() == "x" => {}
-            _ => panic!("Identifier pattern expected"),
-        };
-        assert_eq!(var_decl.keyword, ast::DeclarationKeyword::Var);
-        match *var_decl.value {
-            ast::Expression::IntLiteral(literal) => assert_eq!(literal.value, 42),
-            _ => panic!("Expected IntLiteral as variable value"),
-        }
+        assert_eq!(stmt, expected);
+    }
+
+    #[test]
+    fn test_parse_constant_declaration() {
+        let input = "const x = 42";
+        let (stmt, errors) = parse_statement_input(input, Rule::variable_declaration);
+
+        let expected = ast::Statement::VariableDeclaration(ast::VariableDeclaration {
+            docs: None,
+            loc: Location::new(0, Span::new(0, input.len() as u32)),
+            keyword: ast::DeclarationKeyword::Const,
+            pattern: Box::new(ast::Pattern::Identifier(ast::IdentifierPattern(
+                ast::Identifier {
+                    loc: Location::new(0, Span::new(6, 7)),
+                    text: "x".into(),
+                },
+            ))),
+            value: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+                loc: Location::new(0, Span::new(10, input.len() as u32)),
+                value: 42,
+            })),
+        });
+        assert_eq!(errors.len(), 0);
+        assert_eq!(stmt, expected);
     }
 
     #[test]
@@ -125,17 +158,23 @@ mod tests {
     #[test]
     fn test_parse_variable_declaration_missing_value() {
         let input = "var x = ";
+        let expected = ast::Statement::VariableDeclaration(ast::VariableDeclaration {
+            docs: None,
+            loc: Location::new(0, Span::new(0, input.len() as u32)),
+            keyword: ast::DeclarationKeyword::Var,
+            pattern: Box::new(ast::Pattern::Identifier(ast::IdentifierPattern(
+                ast::Identifier {
+                    loc: Location::new(0, Span::new(4, 5)),
+                    text: "x".into(),
+                },
+            ))),
+            value: Box::new(ast::Expression::Empty),
+        });
+
         let (stmt, errors) = parse_statement_input(input, Rule::variable_declaration);
 
+        assert_eq!(stmt, expected);
         assert_eq!(errors.len(), 1);
-        let ast::Statement::VariableDeclaration(var_decl) = stmt else {
-            panic!("Expected VariableDeclaration");
-        };
-        match *var_decl.pattern {
-            ast::Pattern::Identifier(ident) if ident.as_str() == "x" => {}
-            _ => panic!("Identifier pattern expected"),
-        };
-        assert_eq!(var_decl.keyword, ast::DeclarationKeyword::Var);
-        assert_eq!(*var_decl.value, ast::Expression::Empty);
+        assert_eq!(errors[0].kind, DiagnosticKind::MissingExpression);
     }
 }

@@ -200,51 +200,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_array_literal() {
-        let input = r#"[]int{1, 2, 3}"#;
-        let result = parse_composite_literal_input(input, Rule::composite_literal);
-
-        match result {
-            ast::CompositeLiteral::Array(array) => {
-                assert_eq!(array.elements.len(), 3);
-
-                assert!(matches!(
-                    array.elements[0],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
-                        ast::IntLiteral { value, .. }
-                    )) if value == 1
-                ));
-                assert!(matches!(
-                    array.elements[1],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
-                        ast::IntLiteral { value, .. }
-                    )) if value == 2
-                ));
-                assert!(matches!(
-                    array.elements[2],
-                    ast::ExpressionOrAnonymous::Expression(ast::Expression::IntLiteral(
-                        ast::IntLiteral { value, .. }
-                    )) if value == 3
-                ));
-            }
-            _ => panic!("Expected ArrayLiteral"),
-        }
-    }
-
-    #[test]
-    fn test_parse_empty_array_literal() {
-        let input = r#"[]str{}"#;
-        let result = parse_composite_literal_input(input, Rule::composite_literal);
-
-        match result {
-            ast::CompositeLiteral::Array(array) => {
-                assert_eq!(array.elements.len(), 0, "{:?}", array.elements);
-            }
-            _ => panic!("Expected ArrayLiteral"),
-        }
-    }
-
-    #[test]
     fn test_parse_option_literal() {
         let input = r#"?int{42}"#;
         let result = parse_composite_literal_input(input, Rule::composite_literal);

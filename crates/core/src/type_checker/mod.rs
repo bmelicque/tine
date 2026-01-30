@@ -4,7 +4,6 @@ mod items;
 mod patterns;
 mod statements;
 mod type_checker;
-mod type_definitions;
 mod types;
 
 pub use analysis_context::{

@@ -42,7 +42,7 @@ primitive_type = @{ "int" | "float" | "bool" | "str" }
 type_element = { function_type | binary_type | unary_type | primary_type }
 
 // Composite literals
-composite_literal = { variant_literal | map_literal | struct_literal | array_literal | option_literal }
+composite_literal = { variant_literal | map_literal | struct_literal | option_literal }
 map_literal = { map_type ~ "{" ~ NEWLINE? ~ map_body ~ NEWLINE? ~ "}" }
 map_body = { (map_entry? ~ ((","|NEWLINE) ~ map_entry)*)? }
 map_entry = { map_key ~ ":" ~ anonymous_expression }
@@ -83,7 +83,7 @@ access_or_call_root = { value_identifier | "(" ~ tuple_or_expression ~ ")" }
 member_suffix = { "." ~ (value_identifier | integer_literal)? }
 call_arguments = { "(" ~ (call_argument ~ ("," ~ call_argument)*)? ~ ")" }
 call_argument = { callback | expression }
-array_expression = { "[" ~ NEWLINE? ~ expression ~ ("," ~ NEWLINE? ~ expression)* ~ (","? ~ NEWLINE)? ~ "]" }
+array_expression = { ("[" ~ NEWLINE? ~ expression ~ ("," ~ NEWLINE? ~ expression)* ~ (","? ~ NEWLINE)? ~ "]")|"[" ~ NEWLINE* ~ "]" }
 block = { "{" ~ NEWLINE? ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ NEWLINE? ~ "}" }
 
 if_expression = { "if" ~ expression ~ block ~ alternate?}
@@ -141,10 +141,10 @@ statement = { function_definition | break_statement | return_statement | variabl
 function_definition = { doc_comment? ~ function_expression }
 method_definition = { "(" ~ method_receiver ~ ")" ~ value_identifier ~ "::" ~ function_expression }
 method_receiver = { value_identifier ~ type_identifier } // TODO: type_identifier -> include reference_type
-variable_declaration = { doc_comment? ~ declaration_keyword ~ pattern ~ "=" ~ expression }
+variable_declaration = { doc_comment? ~ declaration_keyword ~ pattern ~ "=" ~ expression? }
 doc_comment = { comment+ }
 declaration_keyword = { "const" | "var" }
-assignment = { assignee ~ assign_op ~ expression }
+assignment = { assignee ~ assign_op ~ expression? }
 assign_op = { "=" }
 assignee = { indirection | member_assignee | pattern }
 member_assignee = { value_identifier ~ member_suffix+ }

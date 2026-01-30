@@ -13,7 +13,10 @@ impl ParserEngine {
 
         let pattern = self.parse_assignee(inner.next().unwrap());
         let op_loc = self.localize(inner.next().unwrap().as_span());
-        let value = self.parse_expression(inner.next().unwrap());
+        let value = inner
+            .next()
+            .map(|pair| self.parse_expression(pair))
+            .unwrap_or(ast::Expression::Empty);
         if value.is_empty() {
             self.error(DiagnosticKind::MissingExpression, op_loc.increment());
         }
@@ -61,6 +64,7 @@ mod tests {
     use crate::{
         diagnostics::Diagnostic,
         parser::parser::{Rule, TineParser},
+        Location, Span,
     };
     use pest::Parser;
 
@@ -76,38 +80,43 @@ mod tests {
         let input = "x = 42";
         let (stmt, errors) = parse_statement_input(input, Rule::assignment);
 
+        let expected = ast::Statement::Assignment(ast::Assignment {
+            loc: Location::new(0, Span::new(0, input.len() as u32)),
+            pattern: ast::Assignee::Pattern(ast::Pattern::Identifier(ast::IdentifierPattern(
+                ast::Identifier {
+                    loc: Location::new(0, Span::new(0, 1)),
+                    text: "x".to_string(),
+                },
+            ))),
+            value: ast::Expression::IntLiteral(ast::IntLiteral {
+                loc: Location::new(0, Span::new(4, 6)),
+                value: 42,
+            }),
+        });
+
         assert_eq!(errors.len(), 0);
-        let ast::Statement::Assignment(assignment) = stmt else {
-            panic!("Expected Assignment")
-        };
-
-        match assignment.pattern {
-            ast::Assignee::Pattern(ast::Pattern::Identifier(id)) if id.as_str() == "x" => {}
-            _ => panic!("Expected 'x' as the assignee"),
-        }
-
-        match assignment.value {
-            ast::Expression::IntLiteral(literal) => assert_eq!(literal.value, 42),
-            _ => panic!("Expected IntLiteral as assignment value"),
-        }
+        assert_eq!(stmt, expected);
     }
 
     #[test]
     fn test_parse_simple_assignment_missing_value() {
         let input = "x = ";
+        let expected = ast::Statement::Assignment(ast::Assignment {
+            loc: Location::new(0, Span::new(0, input.len() as u32)),
+            pattern: ast::Assignee::Pattern(ast::Pattern::Identifier(ast::IdentifierPattern(
+                ast::Identifier {
+                    loc: Location::new(0, Span::new(0, 1)),
+                    text: "x".to_string(),
+                },
+            ))),
+            value: ast::Expression::Empty,
+        });
+
         let (stmt, errors) = parse_statement_input(input, Rule::assignment);
 
+        assert_eq!(stmt, expected);
         assert_eq!(errors.len(), 1);
-        let ast::Statement::Assignment(assignment) = stmt else {
-            panic!("Expected Assignment")
-        };
-
-        match assignment.pattern {
-            ast::Assignee::Pattern(ast::Pattern::Identifier(id)) if id.as_str() == "x" => {}
-            _ => panic!("Expected 'x' as the assignee"),
-        }
-
-        assert!(assignment.value.is_empty());
+        assert!(matches!(errors[0].kind, DiagnosticKind::MissingExpression));
     }
 
     #[test]

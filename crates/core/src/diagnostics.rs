@@ -16,7 +16,7 @@ pub enum DiagnosticLevel {
     Error,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiagnosticKind {
     ArgumentCountMismatch {
         expected: usize,
@@ -149,30 +149,30 @@ impl Display for DiagnosticKind {
                 write!(f, "expected {} argument(s) but got {}", expected, got)
             }
             Self::AssignmentToConstant { name } => {
-                write!(f, "assignment to constant '{}'", name)
+                write!(f, "assignment to constant `{}`", name)
             }
             Self::CallbackParamCountMismatch { expected, got } => {
                 write!(f, "expected {} param(s) but got {}", expected, got)
             }
             Self::CannotFindModule { name } => {
-                write!(f, "cannot find module '{}'", name)
+                write!(f, "cannot find module `{}`", name)
             }
             Self::CannotFindName { name } => {
-                write!(f, "cannot find name '{}' in scope", name)
+                write!(f, "cannot find name `{}` in scope", name)
             }
             Self::CannotInferType => write!(f, "cannot infer type"),
             Self::DuplicateAttribute { name } => {
-                write!(f, "duplicate attribute: '{}'", name)
+                write!(f, "duplicate attribute: `{}`", name)
             }
             Self::DuplicateFieldName { name } => {
-                write!(f, "duplicate field: '{}'", name)
+                write!(f, "duplicate field: `{}`", name)
             }
             Self::DuplicateIdentifier { name } => {
-                write!(f, "duplicate identifier: '{}'", name)
+                write!(f, "duplicate identifier: `{}`", name)
             }
-            Self::ExpectedBool { got } => write!(f, "expected bool but got '{}'", got),
+            Self::ExpectedBool { got } => write!(f, "expected bool but got `{}`", got),
             Self::ExpectedEnum { got } => write!(f, "expected enum but got type `{}`", got),
-            Self::ExpectedNumber { got } => write!(f, "expected number but got '{}'", got),
+            Self::ExpectedNumber { got } => write!(f, "expected number but got `{}`", got),
             Self::ExpectedStruct { got } => write!(f, "expected struct but got type `{}`", got),
             Self::ExpectedTuple { got } => write!(f, "expected tuple but got type `{}`", got),
             Self::ExpectedTuplePattern => write!(f, "expected tuple pattern"),
@@ -182,7 +182,7 @@ impl Display for DiagnosticKind {
             Self::InvalidCondition { type_name } => {
                 write!(
                     f,
-                    "condition should evaluate to a boolean, got type '{}'",
+                    "condition should evaluate to a boolean, got type `{}`",
                     type_name
                 )
             }
@@ -191,7 +191,7 @@ impl Display for DiagnosticKind {
             Self::InvalidPatternMatch { expected, got } => {
                 write!(
                     f,
-                    "cannot match pattern with type '{}' against type '{}'",
+                    "cannot match pattern with type `{}` against type `{}`",
                     got, expected
                 )
             }
@@ -202,7 +202,7 @@ impl Display for DiagnosticKind {
             } => {
                 write!(
                     f,
-                    "invalid type `{}` for operator '{}'",
+                    "invalid type `{}` for operator `{}`",
                     type_name, operator
                 )
             }
@@ -212,14 +212,14 @@ impl Display for DiagnosticKind {
             Self::MismatchedBranchTypes { expected, got } => {
                 write!(
                     f,
-                    "mismatched branch types: expected '{}', got '{}'",
+                    "mismatched branch types: expected `{}`, got `{}`",
                     expected, got
                 )
             }
             Self::MismatchedTags { open, close } => {
                 write!(
                     f,
-                    "mismatched tag: got opening '{}' and closing '{}'",
+                    "mismatched tag: got opening `{}` and closing `{}`",
                     open, close
                 )
             }
@@ -229,7 +229,7 @@ impl Display for DiagnosticKind {
             } => {
                 write!(
                     f,
-                    "mismatched types: got left type '{}' and right type '{}'",
+                    "mismatched types: got left type `{}` and right type `{}`",
                     left_name, right_name
                 )
             }
@@ -256,13 +256,13 @@ impl Display for DiagnosticKind {
             }
             Self::NonReactiveExpression => write!(f, "expected a reactive expression"),
             Self::NotCallable { type_name } => {
-                write!(f, "type '{}' cannot be called", type_name)
+                write!(f, "type `{}` cannot be called", type_name)
             }
             Self::NotDereferenceable { type_name } => {
-                write!(f, "type '{}' cannot be dereferenced", type_name)
+                write!(f, "type `{}` cannot be dereferenced", type_name)
             }
             Self::NotIterable { type_name } => {
-                write!(f, "type '{}' cannot be iterated over", type_name)
+                write!(f, "type `{}` cannot be iterated over", type_name)
             }
             Self::ParseError(msg) => {
                 write!(f, "parse error: {}", msg)
@@ -272,11 +272,11 @@ impl Display for DiagnosticKind {
             }
             Self::RefToConstant { name } => write!(
                 f,
-                "cannot take mutable reference of constant variable '{}'",
+                "cannot take mutable reference of constant variable `{}`",
                 name
             ),
             Self::ReservedName { name } => {
-                write!(f, "invalid identifier: '{}' is a reserved keyword", name)
+                write!(f, "invalid identifier: `{}` is a reserved keyword", name)
             }
             Self::TupleElementCountMismatch { expected, got } => {
                 write!(f, "expected {} element(s) but got {}", expected, got)
@@ -288,14 +288,14 @@ impl Display for DiagnosticKind {
                 write!(f, "expected type `{}` but got a struct", expected)
             }
             Self::UnknownMember { member } => {
-                write!(f, "unknown member '{}'", member)
+                write!(f, "unknown member `{}`", member)
             }
             Self::UnexpectedModuleTree => write!(f, "unexpected module tree"),
             Self::UnknownVariant { variant, enum_name } => {
-                write!(f, "unknown variant '{}' for enum '{}'", variant, enum_name)
+                write!(f, "unknown variant `{}` for enum `{}`", variant, enum_name)
             }
             Self::WrongType { expected, got } => {
-                write!(f, "wrong type: expected '{}', got '{}'", expected, got)
+                write!(f, "wrong type: expected `{}`, got `{}`", expected, got)
             }
         }
     }
