@@ -1,8 +1,8 @@
 use super::sort::Scope;
 use crate::codegen::utils::create_ident;
-use tine_core::{ast, types, Location, ModuleId, ModulePath, Session, SymbolRef};
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
+use tine_core::{ast, types, Location, ModuleId, ModulePath, Session, SymbolRef};
 
 pub struct CodeGenerator<'sess> {
     scope: Scope,
@@ -123,5 +123,8 @@ impl CodeGenerator<'_> {
 
     pub fn get_expr_type(&self, node: &ast::Expression) -> Option<types::Type> {
         self.session.get_type_at(node.loc())
+    }
+    pub fn get_type_at(&self, loc: Location) -> Option<types::Type> {
+        self.session.get_type_at(loc)
     }
 }

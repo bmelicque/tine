@@ -38,9 +38,12 @@ impl ParserEngine {
             Rule::block => self.parse_block(pair).into(),
             Rule::composite_literal => self.parse_composite_literal(pair).into(),
             Rule::element_expression => self.parse_element_expression(pair).into(),
-            Rule::equality | Rule::relation | Rule::addition | Rule::multiplication => {
-                self.parse_binary_ltr_expression(pair).into()
-            }
+            Rule::lor
+            | Rule::land
+            | Rule::equality
+            | Rule::relation
+            | Rule::addition
+            | Rule::multiplication => self.parse_binary_ltr_expression(pair).into(),
             Rule::exponentiation => self.parse_exponentiation(pair).into(),
             Rule::function_expression => self.parse_function_expression(pair).into(),
             Rule::value_identifier => self.parse_identifier(pair).into(),
@@ -62,7 +65,7 @@ impl ParserEngine {
                 value: pair.as_str() == "true",
             }
             .into(),
-            _ => ast::Expression::Empty,
+            rule => unreachable!("unreachable: {:?}", rule),
         }
     }
 
@@ -135,39 +138,58 @@ mod tests {
     use super::*;
     use crate::{
         parser::parser::{Rule, TineParser},
-        Location, Span,
+        Diagnostic, Location, Span,
     };
     use pest::Parser;
 
-    fn parse_expression_input(input: &'static str, rule: Rule) -> ast::Expression {
+    fn parse_expression_input(
+        input: &'static str,
+        rule: Rule,
+    ) -> (ast::Expression, Vec<Diagnostic>) {
         let pair = TineParser::parse(rule, input).unwrap().next().unwrap();
         let mut parser_engine = ParserEngine::new(0);
-        parser_engine.parse_expression(pair)
+        (
+            parser_engine.parse_expression(pair),
+            parser_engine.diagnostics,
+        )
     }
 
     #[test]
     fn test_parse_int_literal() {
         let input = "42";
-        let result = parse_expression_input(input, Rule::integer_literal);
+        let (expr, _) = parse_expression_input(input, Rule::integer_literal);
 
         let expected = ast::Expression::IntLiteral(ast::IntLiteral {
             loc: Location::new(0, Span::new(0, 2)),
             value: 42,
         });
 
-        assert_eq!(result, expected);
+        assert_eq!(expr, expected);
+    }
+
+    #[test]
+    fn test_parse_big_int_literal() {
+        let input = "42_000";
+        let (expr, _) = parse_expression_input(input, Rule::integer_literal);
+
+        let expected = ast::Expression::IntLiteral(ast::IntLiteral {
+            loc: Location::new(0, Span::new(0, 6)),
+            value: 42000,
+        });
+
+        assert_eq!(expr, expected);
     }
 
     #[test]
     fn test_parse_float_literal() {
         let input = "3.14";
-        let result = parse_expression_input(input, Rule::float_literal);
+        let (expr, _) = parse_expression_input(input, Rule::float_literal);
 
         let expected = ast::Expression::FloatLiteral(ast::FloatLiteral {
             loc: Location::new(0, Span::new(0, 4)),
             value: ordered_float::OrderedFloat(3.14),
         });
 
-        assert_eq!(result, expected);
+        assert_eq!(expr, expected);
     }
 }

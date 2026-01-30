@@ -1,8 +1,9 @@
 // Whitespace and comments
 NEWLINE = _{ "\n" | "\r\n" }
 WHITESPACE = _{ " " | "\t" }
-comment = { "//" ~ (!"\n" ~ ANY)* ~ "\n" }
+comment = { "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE+ }
 dot = { "." }
+invalid = { (!NEWLINE ~ ANY)+ ~ (NEWLINE | EOI) }
 
 // Identifiers and literals
 value_identifier = @{ "_"? ~ ASCII_ALPHA_LOWER ~ (ASCII_ALPHANUMERIC | "_")* }
@@ -60,18 +61,22 @@ anonymous_expression = { struct_literal_body | expression }
 // Expressions
 tuple_or_expression = { tuple_expression | expression }
 tuple_expression = { expression ~ ("," ~ expression)+ }
-expression = { if_expression | if_decl_expression | match_expression | loop_expression | block | element_expression | composite_literal | array_expression | equality }
-equality = { relation? ~ (eq_op ~ relation?)* }
+expression = { if_expression | if_decl_expression | match_expression | loop_expression | block | element_expression | composite_literal | array_expression | lor }
+lor = { land ~ (lor_op ~ land?)* }
+lor_op = { "||" }
+land = { equality ~ (land_op ~ equality?)* }
+land_op = { "&&" }
+equality = { relation ~ (eq_op ~ relation?)* }
 eq_op = { "==" | "!=" }
-relation = { addition? ~ (rel_op ~ addition?)*}
-rel_op = { "<" | "<=" | ">=" | ">" }
-addition = { multiplication? ~ (add_op ~ multiplication?)* }
+relation = { addition ~ (rel_op ~ addition?)*}
+rel_op = { "<=" | "<" | ">=" | ">" }
+addition = { multiplication ~ (add_op ~ multiplication?)* }
 add_op = { "+" | "-" }
 multiplication = { exponentiation ~ (mul_op ~ exponentiation?)* }
 mul_op = { "*" | "/" | "%" }
 exponentiation = { (unary|primary) ~ ("**" ~ (unary|primary))* }
 unary = { unary_op ~ (unary|primary) }
-unary_op = { "*" | "&" | "@" | "$" }
+unary_op = { "*" | "&" | "@" | "$" | "!" }
 primary = { function_expression | access_or_call_expression | string_literal | float_literal | integer_literal | boolean_literal | value_identifier | "(" ~ tuple_or_expression ~ ")" }
 access_or_call_expression = { access_or_call_root ~ (member_suffix | call_arguments)+ }
 access_or_call_root = { value_identifier | "(" ~ tuple_or_expression ~ ")" }
@@ -165,7 +170,7 @@ type_body_element = { function_type | binary_type | unary_type | generic_type | 
 type_alias = { "type" ~ type_identifier ~ type_params? ~ "=" ~ type_annotation }
 
 // Items
-item = { use_declaration | statement }
+item = { use_declaration | statement | invalid }
 use_declaration = { "use " ~ relative_count ~ use_tree }
 relative_count = { "."* }
 use_tree = { file_name ~ ("." ~ file_name)* ~ ("(" ~ use_tree ~ ((","|NEWLINE) ~ use_tree)* ~ ")")? }

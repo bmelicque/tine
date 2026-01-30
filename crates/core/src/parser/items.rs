@@ -10,6 +10,9 @@ impl ParserEngine {
         assert_eq!(pair.as_rule(), Rule::item);
         let pair = pair.into_inner().next().unwrap();
         match pair.as_rule() {
+            Rule::invalid => ast::Item::Invalid(ast::InvalidItem {
+                loc: self.localize(pair.as_span()),
+            }),
             Rule::statement => self.parse_statement(pair).into(),
             Rule::use_declaration => self.parse_use_declaration(pair).into(),
             rule => unreachable!("unexpected rule {:?}", rule),

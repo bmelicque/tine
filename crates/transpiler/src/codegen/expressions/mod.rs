@@ -10,7 +10,7 @@ use crate::codegen::utils::{can_block_be_inlined, create_block_stmt, create_numb
 use rand::{distr::Alphanumeric, Rng};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
-use tine_core::ast;
+use tine_core::{ast, types};
 
 impl CodeGenerator<'_> {
     pub fn expr_or_an_to_swc(&mut self, node: &ast::ExpressionOrAnonymous) -> swc::Expr {
@@ -98,13 +98,25 @@ impl CodeGenerator<'_> {
             ast::BinaryOperator::Sub => swc::BinaryOp::Sub,
         };
 
-        swc::BinExpr {
+        let mut expr = swc::Expr::Bin(swc::BinExpr {
             span: DUMMY_SP,
             op,
             left: Box::new(left_expr),
             right: Box::new(right_expr),
+        });
+        if self.get_type_at(node.loc) == Some(types::Type::Integer) {
+            expr = swc::Expr::Bin(swc::BinExpr {
+                span: DUMMY_SP,
+                op: swc::BinaryOp::BitOr,
+                left: Box::new(expr),
+                right: Box::new(swc::Expr::Lit(swc::Lit::Num(swc::Number {
+                    span: DUMMY_SP,
+                    value: 0.,
+                    raw: None,
+                }))),
+            });
         }
-        .into()
+        expr
     }
 
     fn block_expr_to_swc(&mut self, node: &ast::BlockExpression) -> swc::Expr {

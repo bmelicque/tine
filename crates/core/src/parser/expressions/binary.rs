@@ -52,7 +52,10 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{Rule, TineParser};
+    use crate::{
+        parser::parser::{Rule, TineParser},
+        Location, Span,
+    };
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str) -> ast::Expression {
@@ -111,5 +114,43 @@ mod tests {
             ast::Expression::IntLiteral(right) => assert_eq!(right.value, 1),
             _ => panic!("Expected IntLiteral on the right"),
         }
+    }
+
+    #[test]
+    fn test_parse_logical_and() {
+        let input = "true && false";
+        let result = parse_expression_input(input);
+        let expected = ast::Expression::Binary(ast::BinaryExpression {
+            loc: Location::new(0, Span::new(0, 13)),
+            left: Box::new(ast::Expression::BooleanLiteral(ast::BooleanLiteral {
+                loc: Location::new(0, Span::new(0, 4)),
+                value: true,
+            })),
+            right: Box::new(ast::Expression::BooleanLiteral(ast::BooleanLiteral {
+                loc: Location::new(0, Span::new(8, 13)),
+                value: false,
+            })),
+            operator: ast::BinaryOperator::LAnd,
+        });
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_parse_logical_or() {
+        let input = "true || false";
+        let result = parse_expression_input(input);
+        let expected = ast::Expression::Binary(ast::BinaryExpression {
+            loc: Location::new(0, Span::new(0, 13)),
+            left: Box::new(ast::Expression::BooleanLiteral(ast::BooleanLiteral {
+                loc: Location::new(0, Span::new(0, 4)),
+                value: true,
+            })),
+            right: Box::new(ast::Expression::BooleanLiteral(ast::BooleanLiteral {
+                loc: Location::new(0, Span::new(8, 13)),
+                value: false,
+            })),
+            operator: ast::BinaryOperator::LOr,
+        });
+        assert_eq!(result, expected);
     }
 }
