@@ -65,6 +65,7 @@ impl ParserEngine {
                 value: pair.as_str() == "true",
             }
             .into(),
+            Rule::expression_error => self.parse_expression_error(pair).into(),
             rule => unreachable!("unreachable: {:?}", rule),
         }
     }
@@ -80,6 +81,13 @@ impl ParserEngine {
             Rule::expression => self.parse_expression(inner).into(),
             Rule::struct_literal_body => self.parse_anonymous_struct_literal(inner).into(),
             _ => panic!(),
+        }
+    }
+
+    pub fn parse_expression_error(&mut self, pair: Pair<'_, Rule>) -> ast::InvalidExpression {
+        debug_assert_eq!(pair.as_rule(), Rule::expression_error);
+        ast::InvalidExpression {
+            loc: self.localize(pair.as_span()),
         }
     }
 
@@ -188,6 +196,19 @@ mod tests {
         let expected = ast::Expression::FloatLiteral(ast::FloatLiteral {
             loc: Location::new(0, Span::new(0, 4)),
             value: ordered_float::OrderedFloat(3.14),
+        });
+
+        assert_eq!(expr, expected);
+    }
+
+    #[test]
+    fn test_parse_boolean_literal() {
+        let input = "true";
+        let (expr, _) = parse_expression_input(input, Rule::expression);
+
+        let expected = ast::Expression::BooleanLiteral(ast::BooleanLiteral {
+            loc: Location::new(0, Span::new(0, 4)),
+            value: true,
         });
 
         assert_eq!(expr, expected);

@@ -10,6 +10,7 @@ use crate::{
 impl ParserEngine {
     pub fn parse_access_or_call(&mut self, pair: Pair<'_, Rule>) -> ast::Expression {
         debug_assert_eq!(pair.as_rule(), Rule::access_or_call_expression);
+        let span = pair.as_span();
         let mut inner = pair.into_inner();
         let mut node = self.parse_expression(inner.next().unwrap());
 
@@ -17,6 +18,12 @@ impl ParserEngine {
             match sub_pair.as_rule() {
                 Rule::call_arguments => node = self.parse_call(node, sub_pair).into(),
                 Rule::member_suffix => node = self.parse_member_expression(node, sub_pair).into(),
+                Rule::expression_error => {
+                    let loc = self.localize(span);
+                    node = ast::Expression::Invalid(ast::InvalidExpression { loc });
+                    self.error(DiagnosticKind::InvalidExpression, loc);
+                    return node;
+                }
                 rule => unreachable!("unexpected rule '{:?}'", rule),
             }
         }
@@ -32,6 +39,7 @@ impl ParserEngine {
         let right_loc = self.localize(right_pair.as_span());
         let left_loc = root.loc();
         let loc = Location::merge(left_loc, right_loc);
+        println!("{:?} {:?} {:?}", left_loc, right_loc, loc);
 
         let args = self.parse_call_arguments(right_pair);
         ast::CallExpression {
@@ -103,7 +111,10 @@ impl ParserEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::parser::{Rule, TineParser};
+    use crate::{
+        parser::parser::{Rule, TineParser},
+        Span,
+    };
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str) -> ast::Expression {
@@ -118,16 +129,17 @@ mod tests {
     #[test]
     fn test_parse_function_call() {
         let input = "function()";
+        let expected = ast::Expression::Call(ast::CallExpression {
+            loc: Location::new(0, Span::new(0, input.len() as u32)),
+            callee: Box::new(ast::Expression::Identifier(ast::Identifier {
+                loc: Location::new(0, Span::new(0, 8)),
+                text: "function".to_string(),
+            })),
+            args: vec![],
+        });
         let result = parse_expression_input(input);
 
-        let ast::Expression::Call(call) = result else {
-            panic!("Expected CallExpression");
-        };
-        match *call.callee {
-            ast::Expression::Identifier(id) if id.as_str() == "function" => {}
-            _ => panic!("Expected callee to be 'function'"),
-        }
-        assert_eq!(call.args.len(), 0, "expected no args, got {:?}", call.args);
+        assert_eq!(result, expected);
     }
 
     #[test]

@@ -20,10 +20,10 @@ impl TypeChecker<'_> {
                     || right_type == TypeStore::FLOAT
                     || right_type == TypeStore::STRING;
                 if !left_is_ok && left_type != TypeStore::UNKNOWN {
-                    self.push_binary_error(node.operator, left_type, node.loc);
+                    self.push_binary_error(node.operator, left_type, node.left.loc());
                 };
                 if !right_is_ok && right_type != TypeStore::UNKNOWN {
-                    self.push_binary_error(node.operator, right_type, node.loc);
+                    self.push_binary_error(node.operator, right_type, node.right.loc());
                 };
                 if left_is_ok && right_is_ok && left_type != right_type {
                     let error = DiagnosticKind::MismatchedTypes {
@@ -46,10 +46,10 @@ impl TypeChecker<'_> {
                 let right_is_num =
                     right_type == TypeStore::INTEGER || right_type == TypeStore::FLOAT;
                 if left_type != TypeStore::UNKNOWN && !left_is_num {
-                    self.push_binary_error(node.operator, left_type, node.loc);
+                    self.push_binary_error(node.operator, left_type, node.left.loc());
                 };
                 if right_type != TypeStore::UNKNOWN && !right_is_num {
-                    self.push_binary_error(node.operator, right_type, node.loc);
+                    self.push_binary_error(node.operator, right_type, node.right.loc());
                 };
                 if left_is_num && right_is_num && left_type != right_type {
                     let error = DiagnosticKind::MismatchedTypes {
@@ -73,10 +73,10 @@ impl TypeChecker<'_> {
             }
             ast::BinaryOperator::LAnd | ast::BinaryOperator::LOr => {
                 if left_type != TypeStore::UNKNOWN && left_type != TypeStore::BOOLEAN {
-                    self.push_binary_error(node.operator, left_type, node.loc);
+                    self.push_binary_error(node.operator, left_type, node.left.loc());
                 };
                 if right_type != TypeStore::UNKNOWN && right_type != TypeStore::BOOLEAN {
-                    self.push_binary_error(node.operator, right_type, node.loc);
+                    self.push_binary_error(node.operator, right_type, node.right.loc());
                 };
             }
         };

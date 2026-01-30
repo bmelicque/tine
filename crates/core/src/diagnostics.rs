@@ -67,6 +67,7 @@ pub enum DiagnosticKind {
     InvalidCondition {
         type_name: String,
     },
+    InvalidExpression,
     InvalidMember,
     InvalidPattern,
     InvalidPatternMatch {
@@ -186,6 +187,8 @@ impl Display for DiagnosticKind {
                     type_name
                 )
             }
+            Self::InvalidExpression => write!(f, "cannot parse expression"),
+
             Self::InvalidMember => write!(f, "invalid member, expected field name or integer"),
             Self::InvalidPattern => write!(f, "pattern does not match expected type"),
             Self::InvalidPatternMatch { expected, got } => {

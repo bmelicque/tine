@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::cmp::{max, min};
 
 use crate::analyzer::ModuleId;
 
@@ -19,7 +19,7 @@ impl Span {
 
     pub fn merge(first: Self, second: Self) -> Self {
         let start = min(first.start, second.start);
-        let end = min(first.end, second.end);
+        let end = max(first.end, second.end);
         Self { start, end }
     }
 

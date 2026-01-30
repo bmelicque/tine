@@ -3,7 +3,10 @@ NEWLINE = _{ "\n" | "\r\n" }
 WHITESPACE = _{ " " | "\t" }
 comment = { "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE+ }
 dot = { "." }
-invalid = { (!NEWLINE ~ ANY)+ ~ (NEWLINE | EOI) }
+sync = { NEWLINE | "}" | ")" | "]" | EOI }
+invalid_statement = { (!sync ~ ANY)+ }
+expression_error  = { (!sync ~ ANY)+ }
+invalid = { (!sync ~ ANY)+ }
 
 // Identifiers and literals
 value_identifier = @{ "_"? ~ ASCII_ALPHA_LOWER ~ (ASCII_ALPHANUMERIC | "_")* }
@@ -77,13 +80,13 @@ mul_op = { "*" | "/" | "%" }
 exponentiation = { (unary|primary) ~ ("**" ~ (unary|primary))* }
 unary = { unary_op ~ (unary|primary) }
 unary_op = { "*" | "&" | "@" | "$" | "!" }
-primary = { function_expression | access_or_call_expression | string_literal | float_literal | integer_literal | boolean_literal | value_identifier | "(" ~ tuple_or_expression ~ ")" }
-access_or_call_expression = { access_or_call_root ~ (member_suffix | call_arguments)+ }
+primary = { boolean_literal | function_expression | access_or_call_expression | string_literal | float_literal | integer_literal | value_identifier | "(" ~ tuple_or_expression ~ ")" | expression_error }
+access_or_call_expression = { access_or_call_root ~ ((member_suffix | call_arguments)+ | expression_error) }
 access_or_call_root = { value_identifier | "(" ~ tuple_or_expression ~ ")" }
 member_suffix = { "." ~ (value_identifier | integer_literal)? }
-call_arguments = { "(" ~ (call_argument ~ ("," ~ call_argument)*)? ~ ")" }
+call_arguments = { ("(" ~ (call_argument ~ ("," ~ call_argument)*) ~ ")")| "(" ~ NEWLINE* ~ ")" }
 call_argument = { callback | expression }
-array_expression = { ("[" ~ NEWLINE? ~ expression ~ ("," ~ NEWLINE? ~ expression)* ~ (","? ~ NEWLINE)? ~ "]")|"[" ~ NEWLINE* ~ "]" }
+array_expression = { ("[" ~ NEWLINE* ~ "]") | ("[" ~ NEWLINE* ~ (expression ~ ("," ~ NEWLINE* ~ expression)* ~ ("," ~ NEWLINE*)?)? ~ NEWLINE* ~ "]") }
 block = { "{" ~ NEWLINE? ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ NEWLINE? ~ "}" }
 
 if_expression = { "if" ~ expression ~ block ~ alternate?}
