@@ -66,7 +66,7 @@ impl TypeChecker<'_> {
         against: TypeId,
         variables: &mut TokenList,
     ) {
-        let Some(ty) = self.ctx.lookup(&pattern.ty.name) else {
+        let Some(ty) = self.lookup(&pattern.ty.name) else {
             let error = DiagnosticKind::CannotFindName {
                 name: pattern.ty.name.to_string(),
             };
@@ -156,7 +156,7 @@ impl TypeChecker<'_> {
         against: TypeId,
         variables: &mut TokenList,
     ) {
-        let Some(ty) = self.ctx.lookup(&pattern.ty.name) else {
+        let Some(ty) = self.lookup(&pattern.ty.name) else {
             let error = DiagnosticKind::CannotFindName {
                 name: pattern.ty.name.clone(),
             };

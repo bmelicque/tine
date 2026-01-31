@@ -39,7 +39,6 @@ impl ParserEngine {
         let right_loc = self.localize(right_pair.as_span());
         let left_loc = root.loc();
         let loc = Location::merge(left_loc, right_loc);
-        println!("{:?} {:?} {:?}", left_loc, right_loc, loc);
 
         let args = self.parse_call_arguments(right_pair);
         ast::CallExpression {

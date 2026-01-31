@@ -1,3 +1,4 @@
+mod builtins;
 mod graph;
 mod modules;
 mod parse;

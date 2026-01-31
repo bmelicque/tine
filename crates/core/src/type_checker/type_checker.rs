@@ -125,7 +125,7 @@ impl TypeChecker<'_> {
     }
 
     pub fn lookup(&self, name: &str) -> Option<SymbolRef> {
-        self.ctx.lookup(name)
+        self.ctx.lookup(name).or(self.session.find_builtin(name))
     }
 
     pub fn lookup_mut(&self, name: &str) -> Option<SymbolHandle> {

@@ -81,7 +81,7 @@ impl TypeChecker<'_> {
             "void" => return TypeStore::UNIT,
             _ => {}
         }
-        let Some(type_ref) = self.ctx.lookup(name) else {
+        let Some(type_ref) = self.lookup(name) else {
             let error = DiagnosticKind::CannotFindName {
                 name: name.to_string(),
             };

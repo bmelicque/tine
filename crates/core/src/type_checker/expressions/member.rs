@@ -20,29 +20,37 @@ impl TypeChecker<'_> {
 
     fn visit_field_access(&mut self, expr: &ast::MemberExpression) -> TypeId {
         let root_type = self.visit_expression(&expr.object);
-
         let Some(ast::MemberProp::FieldName(ref field_name)) = expr.prop else {
             unreachable!()
         };
 
-        let prop = field_name.as_str();
-        let Type::Struct(ty) = self.resolve(root_type).clone() else {
-            let error = DiagnosticKind::UnknownMember {
-                member: prop.to_string(),
-            };
-            self.error(error, field_name.loc);
-            return self.save_member_type(expr, TypeStore::UNKNOWN);
+        let ty: Option<TypeId> = match self.resolve(root_type) {
+            Type::Integer => self
+                .session
+                .find_method(field_name.as_str(), root_type)
+                .map(|s| s.borrow().ty),
+            Type::Float => self
+                .session
+                .find_method(field_name.as_str(), root_type)
+                .map(|s| s.borrow().ty),
+            Type::Struct(ref ty) => {
+                let prop = field_name.as_str();
+                ty.fields.iter().find(|f| f.name == prop).map(|f| f.def)
+            }
+            _ => None,
         };
-        let ty = match ty.fields.iter().find(|field| field.name == prop) {
-            Some(field) => field.def,
+
+        let ty = match ty {
+            Some(ty) => ty,
             None => {
                 let error = DiagnosticKind::UnknownMember {
-                    member: prop.to_string(),
+                    member: field_name.as_str().to_string(),
                 };
                 self.error(error, expr.loc);
                 TypeStore::UNKNOWN
             }
         };
+
         self.save_member_type(expr, ty)
     }
 
