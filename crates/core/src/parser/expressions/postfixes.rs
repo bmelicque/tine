@@ -8,8 +8,8 @@ use crate::{
 };
 
 impl ParserEngine {
-    pub fn parse_access_or_call(&mut self, pair: Pair<'_, Rule>) -> ast::Expression {
-        debug_assert_eq!(pair.as_rule(), Rule::access_or_call_expression);
+    pub fn parse_postfix_expression(&mut self, pair: Pair<'_, Rule>) -> ast::Expression {
+        debug_assert_eq!(pair.as_rule(), Rule::postfix);
         let span = pair.as_span();
         let mut inner = pair.into_inner();
         let mut node = self.parse_expression(inner.next().unwrap());
@@ -117,7 +117,7 @@ mod tests {
     use pest::Parser;
 
     fn parse_expression_input(input: &'static str) -> ast::Expression {
-        let pair = TineParser::parse(Rule::access_or_call_expression, input)
+        let pair = TineParser::parse(Rule::postfix, input)
             .unwrap()
             .next()
             .unwrap();

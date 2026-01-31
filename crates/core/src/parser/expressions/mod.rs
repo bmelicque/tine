@@ -1,4 +1,3 @@
-mod access_or_call;
 mod array;
 mod binary;
 mod block;
@@ -9,6 +8,7 @@ mod function;
 mod identifier;
 mod ifs;
 mod loops;
+mod postfixes;
 mod tuple;
 mod unary;
 
@@ -25,7 +25,6 @@ impl ParserEngine {
             | Rule::expression
             | Rule::primary
             | Rule::tuple_or_expression
-            | Rule::access_or_call_root
             | Rule::type_annotation => {
                 if let Some(inner) = pair.into_inner().next() {
                     self.parse_expression(inner)
@@ -33,7 +32,7 @@ impl ParserEngine {
                     ast::Expression::Empty
                 }
             }
-            Rule::access_or_call_expression => self.parse_access_or_call(pair),
+            Rule::postfix => self.parse_postfix_expression(pair),
             Rule::array_expression => self.parse_array_expression(pair).into(),
             Rule::block => self.parse_block(pair).into(),
             Rule::composite_literal => self.parse_composite_literal(pair).into(),

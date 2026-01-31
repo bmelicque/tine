@@ -86,20 +86,17 @@ impl ParserEngine {
     }
 
     fn parse_expression_statement(&mut self, pair: Pair<'_, Rule>) -> ast::Statement {
-        let mut expression = ast::Expression::Empty;
-        for pair in pair.into_inner() {
-            match pair.as_rule() {
-                Rule::comment => {}
-                Rule::expression => expression = self.parse_expression(pair),
-                rule => unreachable!("unexpected rule '{:?}'", rule),
-            }
+        let mut inner = pair.into_inner();
+        if inner.peek().unwrap().as_rule() == Rule::comment {
+            inner.next();
         }
-        match expression {
-            ast::Expression::Empty => ast::Statement::Empty,
-            expression => ast::Statement::Expression(ast::ExpressionStatement {
-                expression: Box::new(expression),
-            }),
+        let expression = self.parse_expression(inner.next().unwrap());
+        if let Some(err) = inner.next() {
+            self.parse_expression_error(err);
         }
+        ast::Statement::Expression(ast::ExpressionStatement {
+            expression: Box::new(expression),
+        })
     }
 }
 

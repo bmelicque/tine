@@ -19,6 +19,7 @@ impl TypeChecker<'_> {
     }
 
     fn visit_field_access(&mut self, expr: &ast::MemberExpression) -> TypeId {
+        debug_assert!(matches!(expr.prop, Some(ast::MemberProp::FieldName(_))));
         let root_type = self.visit_expression(&expr.object);
         let Some(ast::MemberProp::FieldName(ref field_name)) = expr.prop else {
             unreachable!()
@@ -46,7 +47,7 @@ impl TypeChecker<'_> {
                 let error = DiagnosticKind::UnknownMember {
                     member: field_name.as_str().to_string(),
                 };
-                self.error(error, expr.loc);
+                self.error(error, expr.prop.as_ref().unwrap().loc());
                 TypeStore::UNKNOWN
             }
         };
