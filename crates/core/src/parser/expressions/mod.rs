@@ -23,6 +23,7 @@ impl ParserEngine {
         match pair.as_rule() {
             Rule::anonymous_expression
             | Rule::expression
+            | Rule::condition
             | Rule::primary
             | Rule::tuple_or_expression
             | Rule::type_annotation => {
