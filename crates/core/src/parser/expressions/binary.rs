@@ -4,11 +4,11 @@ use crate::{
     ast,
     diagnostics::DiagnosticKind,
     parser::{parser::Rule, ParserEngine},
+    Location,
 };
 
 impl ParserEngine {
     pub fn parse_binary_ltr_expression(&mut self, pair: Pair<'_, Rule>) -> ast::Expression {
-        let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let Some(next) = inner.next() else {
             return ast::Expression::Empty;
@@ -35,6 +35,14 @@ impl ParserEngine {
                 let loc = self.localize(op_pair.as_span());
                 self.error(DiagnosticKind::MissingExpression, loc);
             }
+
+            let op_loc = self.localize(op_pair.as_span());
+            let loc = match (&left, &right) {
+                (ast::Expression::Empty, ast::Expression::Empty) => op_loc,
+                (ast::Expression::Empty, _) => Location::merge(op_loc, right.loc()),
+                (_, ast::Expression::Empty) => Location::merge(left.loc(), op_loc),
+                _ => Location::merge(left.loc(), right.loc()),
+            };
 
             left = ast::BinaryExpression {
                 loc,

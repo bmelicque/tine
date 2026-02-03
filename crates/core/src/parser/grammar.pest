@@ -65,17 +65,17 @@ anonymous_expression = { struct_literal_body | expression }
 tuple_or_expression = { tuple_expression | expression }
 tuple_expression = { expression ~ ("," ~ expression)+ }
 expression = { if_expression | if_decl_expression | match_expression | loop_expression | block | element_expression | composite_literal | array_expression | lor }
-lor = { land ~ (lor_op ~ land?)* }
+lor = { land ~ (lor_op ~ land)* }
 lor_op = { "||" }
-land = { equality ~ (land_op ~ equality?)* }
+land = { equality ~ (land_op ~ equality)* }
 land_op = { "&&" }
-equality = { relation ~ (eq_op ~ relation?)* }
+equality = { relation ~ (eq_op ~ relation)* }
 eq_op = { "==" | "!=" }
-relation = { addition ~ (rel_op ~ addition?)*}
+relation = { addition ~ (rel_op ~ addition)*}
 rel_op = { "<=" | "<" | ">=" | ">" }
-addition = { multiplication ~ (add_op ~ multiplication?)* }
+addition = { multiplication ~ (add_op ~ multiplication)* }
 add_op = { "+" | "-" }
-multiplication = { exponentiation ~ (mul_op ~ exponentiation?)* }
+multiplication = { exponentiation ~ (mul_op ~ exponentiation)* }
 mul_op = { "*" | "/" | "%" }
 exponentiation = { (unary | postfix) ~ ("**" ~ (unary | postfix))* }
 unary = { unary_op ~ (unary | postfix) }
@@ -86,9 +86,9 @@ member_suffix = { "." ~ (value_identifier | integer_literal)? }
 call_arguments = { ("(" ~ (call_argument ~ ("," ~ call_argument)*) ~ ")")| "(" ~ NEWLINE* ~ ")" }
 call_argument = { callback | expression }
 array_expression = { ("[" ~ NEWLINE* ~ "]") | ("[" ~ NEWLINE* ~ (expression ~ ("," ~ NEWLINE* ~ expression)* ~ ("," ~ NEWLINE*)?)? ~ NEWLINE* ~ "]") }
-block = { "{" ~ NEWLINE? ~ ((blank_line | statement) ~ (NEWLINE ~ (blank_line | statement))*)? ~ NEWLINE? ~ "}" }
+block = { "{" ~ NEWLINE* ~ (statement ~ NEWLINE+)* ~ "}" }
 
-if_expression = { "if" ~ (block | (condition ~ block?)) ~ alternate?}
+if_expression = { "if" ~ (block | (condition ~ block) | (condition ~ &NEWLINE?)) ~ alternate?}
 condition = { array_expression | lor }
 if_decl_expression = { "if" ~ pattern ~ "::" ~ expression ~ block ~ alternate? }
 alternate = { "else" ~ (block | if_expression | if_decl_expression) }
@@ -98,7 +98,7 @@ match_body = { "{" ~ NEWLINE? ~ (match_arm ~ (NEWLINE ~ match_arm)*)? ~ NEWLINE?
 match_arm = { pattern ~ "->" ~ expression }
 
 loop_expression = { for_expression | for_in_expression }
-for_expression = { "for" ~ expression ~ block }
+for_expression = { "for" ~ (block | (condition ~ block?)) }
 for_in_expression = { "for" ~ pattern ~ "in" ~ expression ~ block }
 
 function_expression = { "fn" ~ value_identifier? ~ parameter_list ~ type_annotation? ~ block }
@@ -154,7 +154,7 @@ member_assignee = { value_identifier ~ member_suffix+ }
 indirection = { "*" ~ value_identifier }
 break_statement = { "break" ~ expression? }
 return_statement = { "return" ~ expression? }
-expression_statement = { comment* ~ expression ~ expression_error? }
+expression_statement = { comment* ~ expression ~ &(NEWLINE | "}" | EOI) ~ expression_error? }
 
 struct_definition = { "struct" ~ type_identifier ~ type_params? ~ type_body }
 enum_definition = { "enum" ~ type_identifier ~ type_params? ~ enum_body }
@@ -181,5 +181,4 @@ file_name = @{ (ASCII_ALPHANUMERIC | "_" | "-")+ }
 
 
 // Program
-blank_line = _{ NEWLINE }
-program = { SOI ~ ((blank_line | item) ~ (NEWLINE+ ~ (blank_line | item))*)? ~ NEWLINE* ~ EOI }
+program = { SOI ~ NEWLINE* ~ ((item ~ NEWLINE+)* ~ item)? ~ NEWLINE* ~ EOI }
