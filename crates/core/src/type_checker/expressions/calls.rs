@@ -79,14 +79,19 @@ impl TypeChecker<'_> {
                 s.error(error, node.loc);
             }
             s.define_params(&node.params, &params);
-            s.visit_callback_body(node, return_type);
+            match &*node.body {
+                ast::Expression::Block(b) => s.visit_callback_body(&b, return_type),
+                _ => {
+                    s.visit_expression(&node.body);
+                }
+            }
         });
     }
 
-    pub fn visit_callback_body(&mut self, node: &ast::Callback, expected_type: TypeId) {
-        let body_type = self.visit_block_expression(&node.body);
+    pub fn visit_callback_body(&mut self, body: &ast::BlockExpression, expected_type: TypeId) {
+        let body_type = self.visit_block_expression(&body);
         let mut returns = Vec::<ast::ReturnStatement>::new();
-        node.body.find_returns(&mut returns);
+        body.find_returns(&mut returns);
         for ret in returns {
             let ty = match ret.value {
                 Some(value) => self.get_type_at(value.loc()).unwrap(),
@@ -95,7 +100,7 @@ impl TypeChecker<'_> {
             self.check_assigned_type(expected_type, ty, ret.loc);
         }
 
-        if let Some(ast::Statement::Expression(expr)) = node.body.statements.last() {
+        if let Some(ast::Statement::Expression(expr)) = body.statements.last() {
             if expected_type != TypeStore::UNIT {
                 self.check_assigned_type(expected_type, body_type, expr.expression.loc());
             }

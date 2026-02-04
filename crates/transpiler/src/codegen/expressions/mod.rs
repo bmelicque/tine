@@ -219,7 +219,10 @@ impl CodeGenerator<'_> {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
             params,
-            body: Box::new(self.function_body_to_swc(&node.body)),
+            body: Box::new(match &*node.body {
+                ast::Expression::Block(b) => self.function_body_to_swc(b),
+                expr => swc::BlockStmtOrExpr::Expr(Box::new(self.expr_to_swc(expr))),
+            }),
             is_async: false,
             is_generator: false,
             type_params: None,

@@ -384,7 +384,7 @@ impl From<Callback> for CallArgument {
 pub struct Callback {
     pub loc: Location,
     pub params: Vec<CallbackParam>,
-    pub body: BlockExpression,
+    pub body: Box<Expression>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

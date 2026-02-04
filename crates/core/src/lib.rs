@@ -4,6 +4,7 @@ mod common;
 pub mod diagnostics;
 mod locations;
 mod parser;
+mod parser2;
 mod type_checker;
 pub mod types;
 mod utils;

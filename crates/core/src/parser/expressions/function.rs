@@ -56,7 +56,7 @@ impl ParserEngine {
         let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let params = self.parse_predicate_params(inner.next().unwrap());
-        let body = self.parse_block(inner.next().unwrap());
+        let body = Box::new(self.parse_block(inner.next().unwrap()).into());
         ast::Callback { loc, params, body }
     }
 
