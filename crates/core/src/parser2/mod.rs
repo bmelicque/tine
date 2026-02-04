@@ -48,7 +48,7 @@ impl<'src> Parser<'src> {
     }
 
     fn parse_value_expression(&mut self) -> ast::Expression {
-        let lhs = self.parse_postfix();
+        let lhs = self.parse_binary_expression(1);
         lhs
     }
 

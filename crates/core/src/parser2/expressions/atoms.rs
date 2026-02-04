@@ -5,7 +5,11 @@ use crate::{
 
 impl Parser<'_> {
     pub fn parse_atom(&mut self) -> ast::Expression {
-        let Some((Ok(token), _)) = self.tokens.peek() else {
+        let Some(ranged_token) = self.tokens.peek() else {
+            return ast::Expression::Empty;
+        };
+        let (Ok(token), _) = ranged_token else {
+            // TODO: handle error with InvalidExpression
             panic!()
         };
         match token {
@@ -15,7 +19,7 @@ impl Parser<'_> {
             Token::String(_) => self.parse_string().into(),
             Token::Ident(_) => self.parse_identifier().into(),
             Token::LParen => self.parse_tuple().into(),
-            _ => unreachable!("unexpected token {:?}", token),
+            _ => ast::Expression::Empty,
         }
     }
 

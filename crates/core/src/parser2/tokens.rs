@@ -17,14 +17,44 @@ pub enum Token {
     Ident(String),
 
     // --- operators ---
+    #[token("&&")]
+    AndAnd,
+    #[token("||")]
+    PipePipe,
+    #[token("==")]
+    EqEq,
+    #[token("!=")]
+    NotEq,
+    #[token("<=")]
+    Le,
+    #[token("<")]
+    Lt,
+    #[token(">=")]
+    Ge,
+    #[token(">")]
+    Gt,
+    #[token("&")]
+    And,
+    #[token("|")]
+    Pipe,
+    #[token("@")]
+    At,
+    #[token("!")]
+    Bang,
+    #[token("$")]
+    Dollar,
     #[token("+")]
     Plus,
     #[token("-")]
     Minus,
+    #[token("**")]
+    StarStar,
     #[token("*")]
     Star,
     #[token("/")]
     Slash,
+    #[token("%")]
+    Mod,
 
     // --- punctuation ---
     #[token("(")]
@@ -96,10 +126,27 @@ impl Token {
             Token::Bool(b) => b.to_string(),
             Token::String(s) => format!("\"{}\"", s),
             Token::Ident(i) => i.clone(),
+
+            Token::AndAnd => "&&".to_string(),
+            Token::PipePipe => "||".to_string(),
+            Token::EqEq => "==".to_string(),
+            Token::NotEq => "!=".to_string(),
+            Token::Le => "<=".to_string(),
+            Token::Lt => "<".to_string(),
+            Token::Ge => ">=".to_string(),
+            Token::Gt => ">".to_string(),
+            Token::And => "&".to_string(),
+            Token::Pipe => "|".to_string(),
+            Token::At => "@".to_string(),
+            Token::Bang => "!".to_string(),
+            Token::Dollar => "$".to_string(),
             Token::Plus => "+".to_string(),
             Token::Minus => "-".to_string(),
+            Token::StarStar => "**".to_string(),
             Token::Star => "*".to_string(),
             Token::Slash => "/".to_string(),
+            Token::Mod => "%".to_string(),
+
             Token::LParen => "(".to_string(),
             Token::RParen => ")".to_string(),
             Token::Comma => ",".to_string(),
@@ -107,6 +154,17 @@ impl Token {
             Token::FatArrow => "=>".to_string(),
             Token::Whitespace => " ".to_string(),
             Token::Newline => "\n".to_string(),
+        }
+    }
+
+    pub fn precedence(&self) -> u8 {
+        match self {
+            Token::PipePipe => 1,
+            Token::AndAnd => 2,
+            Token::Plus | Token::Minus => 3,
+            Token::Star | Token::Slash | Token::Mod => 4,
+            Token::StarStar => 5,
+            _ => 10,
         }
     }
 }

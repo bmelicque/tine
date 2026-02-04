@@ -485,6 +485,20 @@ pub enum UnaryOperator {
     Bang,      // !
 }
 
+impl From<String> for UnaryOperator {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "*" => Self::Star,
+            "&" => Self::Ampersand,
+            "$" => Self::Dollar,
+            "@" => Self::At,
+            "-" => Self::Minus,
+            "!" => Self::Bang,
+            _ => panic!("Unknown unary operator: {}", value),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionExpression {
     pub loc: Location,
