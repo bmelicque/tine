@@ -39,12 +39,16 @@ impl<'src> Parser<'src> {
             return None;
         };
         let Ok(peeked) = peeked.0.clone() else {
+            // FIXME: recover
             return Some(ast::Expression::Invalid(ast::InvalidExpression {
                 loc: self.localize(peeked.1),
             }));
         };
-        //FIXME:
-        Some(self.parse_value_expression())
+
+        match peeked {
+            Token::LBracket => Some(self.parse_array().into()),
+            _ => Some(self.parse_value_expression()),
+        }
     }
 
     fn parse_value_expression(&mut self) -> ast::Expression {

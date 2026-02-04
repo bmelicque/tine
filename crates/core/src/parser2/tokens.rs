@@ -61,6 +61,14 @@ pub enum Token {
     LParen,
     #[token(")")]
     RParen,
+    #[token("[")]
+    LBracket,
+    #[token("]")]
+    RBracket,
+    #[token("{")]
+    LBrace,
+    #[token("}")]
+    RBrace,
     #[token(",")]
     Comma,
     #[token(".")]
@@ -149,6 +157,10 @@ impl Token {
 
             Token::LParen => "(".to_string(),
             Token::RParen => ")".to_string(),
+            Token::LBrace => "{".to_string(),
+            Token::RBrace => "}".to_string(),
+            Token::LBracket => "[".to_string(),
+            Token::RBracket => "]".to_string(),
             Token::Comma => ",".to_string(),
             Token::Dot => ".".to_string(),
             Token::FatArrow => "=>".to_string(),
@@ -161,10 +173,12 @@ impl Token {
         match self {
             Token::PipePipe => 1,
             Token::AndAnd => 2,
-            Token::Plus | Token::Minus => 3,
-            Token::Star | Token::Slash | Token::Mod => 4,
-            Token::StarStar => 5,
-            _ => 10,
+            Token::EqEq | Token::NotEq => 3,
+            Token::Ge | Token::Le | Token::Lt | Token::Gt => 4,
+            Token::Plus | Token::Minus => 5,
+            Token::Star | Token::Slash | Token::Mod => 6,
+            Token::StarStar => 7,
+            _ => 0,
         }
     }
 }
