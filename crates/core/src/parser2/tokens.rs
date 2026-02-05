@@ -3,6 +3,42 @@ use ordered_float::OrderedFloat;
 
 #[derive(Logos, Debug, Clone, PartialEq)]
 pub enum Token {
+    // --- comments ---
+    #[regex(r"//[^\n]*", |lex| lex.slice().to_string(), allow_greedy = true)]
+    LineComment(String),
+
+    // --- keywords ---
+    #[token("break")]
+    Break,
+    #[token("continue")]
+    Continue,
+    #[token("const")]
+    Const,
+    #[token("else")]
+    Else,
+    #[token("enum")]
+    Enum,
+    #[token("fn")]
+    Fn,
+    #[token("for")]
+    For,
+    #[token("if")]
+    If,
+    #[token("match")]
+    Match,
+    #[token("return")]
+    Return,
+    #[token("struct")]
+    Struct,
+    #[token("trait")]
+    Trait,
+    #[token("type")]
+    Type,
+    #[token("use")]
+    Use,
+    #[token("var")]
+    Var,
+
     // --- literals ---
     #[regex(r"\d+(_\d+)*", |lex| lex.slice().replace("_", "").parse::<i64>().unwrap())]
     Int(i64),
@@ -43,6 +79,8 @@ pub enum Token {
     Bang,
     #[token("$")]
     Dollar,
+    #[token("=")]
+    Eq,
     #[token("+")]
     Plus,
     #[token("-")]
@@ -129,6 +167,24 @@ fn parse_string(lex: &mut logos::Lexer<Token>) -> String {
 impl Token {
     pub fn to_string(&self) -> String {
         match self {
+            Token::LineComment(_) => "comment".to_string(),
+
+            Token::Break => "break".to_string(),
+            Token::Const => "const".to_string(),
+            Token::Continue => "continue".to_string(),
+            Token::Else => "else".to_string(),
+            Token::Enum => "enum".to_string(),
+            Token::Fn => "fn".to_string(),
+            Token::For => "for".to_string(),
+            Token::If => "if".to_string(),
+            Token::Match => "match".to_string(),
+            Token::Return => "return".to_string(),
+            Token::Struct => "struct".to_string(),
+            Token::Trait => "trait".to_string(),
+            Token::Type => "type".to_string(),
+            Token::Use => "use".to_string(),
+            Token::Var => "var".to_string(),
+
             Token::Int(i) => i.to_string(),
             Token::Float(f) => f.src.clone(),
             Token::Bool(b) => b.to_string(),
@@ -148,6 +204,7 @@ impl Token {
             Token::At => "@".to_string(),
             Token::Bang => "!".to_string(),
             Token::Dollar => "$".to_string(),
+            Token::Eq => "=".to_string(),
             Token::Plus => "+".to_string(),
             Token::Minus => "-".to_string(),
             Token::StarStar => "**".to_string(),

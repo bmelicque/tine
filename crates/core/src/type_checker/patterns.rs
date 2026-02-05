@@ -27,6 +27,7 @@ impl TypeChecker<'_> {
         variables: &mut TokenList,
     ) {
         match pattern {
+            ast::Pattern::Invalid { .. } => {}
             ast::Pattern::Identifier(id) => variables.insert(id.clone().into(), against),
             ast::Pattern::Literal(l) => self.match_literal_pattern(l, against),
             ast::Pattern::Struct(pattern) => self.match_struct_pattern(pattern, against, variables),

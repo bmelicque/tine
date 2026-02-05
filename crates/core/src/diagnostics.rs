@@ -103,6 +103,8 @@ pub enum DiagnosticKind {
     MissingConstructorName,
     MissingExpression,
     MissingFunctionName,
+    MissingName,
+    MissingPattern,
     NegativeTupleIndex,
     NonExhaustiveMatch {
         missing: Vec<String>,
@@ -254,6 +256,8 @@ impl Display for DiagnosticKind {
             Self::MissingConstructorName => write!(f, "expected constructor name"),
             Self::MissingExpression => write!(f, "expected expression"),
             Self::MissingFunctionName => write!(f, "expected function name"),
+            Self::MissingName => write!(f, "expected a name"),
+            Self::MissingPattern => write!(f, "expected pattern"),
             Self::NegativeTupleIndex => write!(f, "tuple index cannot be negative"),
             Self::NonExhaustiveMatch { missing } => {
                 let missing = if missing.len() > 2 {

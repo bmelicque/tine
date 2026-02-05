@@ -115,7 +115,7 @@ impl ParserEngine {
         let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
-        let prop = inner.next().unwrap().as_str().to_string();
+        let prop = self.parse_identifier(inner.next().unwrap());
         let value = self.parse_expression(inner.next().unwrap());
 
         ast::StructLiteralField { loc, prop, value }
@@ -227,10 +227,10 @@ mod tests {
                 assert_eq!(struct_literal.fields.len(), 2);
 
                 let field1 = &struct_literal.fields[0];
-                assert_eq!(field1.prop, "name");
+                assert_eq!(field1.prop.as_str(), "name");
 
                 let field2 = &struct_literal.fields[1];
-                assert_eq!(field2.prop, "age");
+                assert_eq!(field2.prop.as_str(), "age");
             }
             _ => panic!("Expected StructLiteral"),
         }
@@ -250,11 +250,11 @@ mod tests {
 
         // Check the first field
         let field1 = &result.fields[0];
-        assert_eq!(field1.prop, "name");
+        assert_eq!(field1.prop.as_str(), "name");
 
         // Check the second field
         let field2 = &result.fields[1];
-        assert_eq!(field2.prop, "age");
+        assert_eq!(field2.prop.as_str(), "age");
     }
 
     #[test]
@@ -275,7 +275,7 @@ mod tests {
 
                 // Check the first field
                 let field1 = &fields[0];
-                assert_eq!(field1.prop, "field1");
+                assert_eq!(field1.prop.as_str(), "field1");
                 assert!(
                     matches!(
                         field1.value,
@@ -287,7 +287,7 @@ mod tests {
 
                 // Check the second field
                 let field2 = &fields[1];
-                assert_eq!(field2.prop, "field2");
+                assert_eq!(field2.prop.as_str(), "field2");
                 assert!(matches!(
                     field2.value,
                     ast::Expression::IntLiteral(ast::IntLiteral { value, .. }) if value == 42

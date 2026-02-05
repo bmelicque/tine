@@ -1,4 +1,8 @@
 mod expressions;
+mod patterns;
+mod statements;
+mod types;
+
 #[cfg(test)]
 mod test_utils;
 mod tokens;
@@ -34,29 +38,44 @@ impl<'src> Parser<'src> {
         Location::new(self.module, Span::new(range.start as u32, range.end as u32))
     }
 
-    fn parse_expression(&mut self) -> Option<ast::Expression> {
-        let Some(peeked) = self.tokens.peek().cloned() else {
-            return None;
-        };
-        let Ok(peeked) = peeked.0.clone() else {
-            // FIXME: recover
-            return Some(ast::Expression::Invalid(ast::InvalidExpression {
-                loc: self.localize(peeked.1),
-            }));
-        };
-
-        match peeked {
-            Token::LBracket => Some(self.parse_array().into()),
-            _ => Some(self.parse_value_expression()),
+    pub(super) fn next_range(&mut self) -> Range<usize> {
+        match self.tokens.peek() {
+            Some((_, range)) => range.clone(),
+            None => {
+                let start = self.src.len();
+                start..start
+            }
         }
     }
 
-    fn parse_value_expression(&mut self) -> ast::Expression {
-        let lhs = self.parse_binary_expression(1);
-        lhs
+    pub(super) fn eat(&mut self, tokens: &[Token]) -> Range<usize> {
+        match self.tokens.next() {
+            Some((Ok(tok), range)) if tokens.contains(&tok) => range,
+            _ => panic!("expected one of {:?}", tokens),
+        }
     }
 
-    pub(super) fn recover_before(&mut self, tokens: &[Token]) -> Range<usize> {
+    pub(super) fn expect(&mut self, token: Token) -> Range<usize> {
+        match self.tokens.peek() {
+            Some((Ok(tok), r)) if tok == &token => {
+                let range = r.clone();
+                self.tokens.next(); // consume the token
+                range
+            }
+            _ => self.recover_at(&[token]),
+        }
+    }
+
+    pub(super) fn expect_either(&mut self, tokens: &[Token]) {
+        match self.tokens.peek() {
+            Some((Ok(tok), r)) if tokens.contains(tok) => {}
+            _ => {
+                self.recover_before(tokens, &[]);
+            }
+        }
+    }
+
+    pub(super) fn recover_before(&mut self, tokens: &[Token], sync: &[Token]) -> Range<usize> {
         let mut range = self
             .tokens
             .peek()
@@ -64,7 +83,7 @@ impl<'src> Parser<'src> {
             .unwrap_or(self.src.len()..self.src.len());
         while let Some(token) = &self.tokens.peek() {
             match token {
-                (Ok(t), r) if tokens.contains(t) => {
+                (Ok(t), r) if tokens.contains(t) || sync.contains(t) => {
                     break;
                 }
                 (_, r) => {
@@ -81,7 +100,7 @@ impl<'src> Parser<'src> {
     }
 
     pub(super) fn recover_at(&mut self, token: &[Token]) -> Range<usize> {
-        let mut range = self.recover_before(token);
+        let mut range = self.recover_before(token, &[]);
         let (_, r) = self.tokens.next().unwrap();
         range.end = r.end;
         range

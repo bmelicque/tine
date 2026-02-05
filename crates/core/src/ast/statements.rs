@@ -195,6 +195,7 @@ impl Into<StructDefinitionField> for StructOptionalField {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
+    pub docs: Option<Docs>,
     pub loc: Location,
     pub name: String,
     pub params: Option<Vec<String>>,

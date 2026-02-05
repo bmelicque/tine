@@ -6,9 +6,7 @@ use crate::{
 
 impl Parser<'_> {
     pub fn parse_array(&mut self) -> ast::ArrayExpression {
-        let Some((Ok(Token::LBracket), start_range)) = self.tokens.next() else {
-            panic!("expected [");
-        };
+        let start_range = self.eat(&[Token::LBracket]);
 
         let elements = self.parse_list(|p| p.parse_expression(), Token::Comma, Token::RBracket);
 

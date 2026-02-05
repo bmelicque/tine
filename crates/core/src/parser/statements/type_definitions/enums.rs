@@ -27,6 +27,7 @@ impl ParserEngine {
         }
         let variants = variants.unwrap();
         ast::EnumDefinition {
+            docs: None,
             loc,
             name,
             params,

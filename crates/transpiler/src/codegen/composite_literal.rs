@@ -130,7 +130,7 @@ impl CodeGenerator<'_> {
         let mut sorted_args = vec![];
         let params = self.find(&name.to_string()).unwrap().clone();
         for param in params {
-            let field = fields.iter().find(|field| *param == field.prop);
+            let field = fields.iter().find(|field| *param == field.prop.text);
             let expr = match field {
                 Some(field) => {
                     remaining -= 1;
