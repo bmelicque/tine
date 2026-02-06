@@ -241,20 +241,20 @@ mod tests {
             params: vec![
                 ast::FunctionParam {
                     name: ident("x"),
-                    type_annotation: ast::Type::Named(ast::NamedType {
+                    type_annotation: Some(ast::Type::Named(ast::NamedType {
                         name: "int".to_string(),
                         args: None,
                         loc: Location::dummy(),
-                    }),
+                    })),
                     loc: Location::dummy(),
                 },
                 ast::FunctionParam {
                     name: ident("y"),
-                    type_annotation: ast::Type::Named(ast::NamedType {
+                    type_annotation: Some(ast::Type::Named(ast::NamedType {
                         name: "int".to_string(),
                         args: None,
                         loc: Location::dummy(),
-                    }),
+                    })),
                     loc: Location::dummy(),
                 },
             ],

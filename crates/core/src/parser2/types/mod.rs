@@ -7,7 +7,7 @@ mod tuple;
 mod unary;
 
 impl Parser<'_> {
-    pub fn parse_type(&mut self) -> ast::Type {
+    pub fn parse_type(&mut self) -> Option<ast::Type> {
         unimplemented!()
     }
 }

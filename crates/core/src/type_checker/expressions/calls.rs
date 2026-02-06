@@ -120,7 +120,7 @@ impl TypeChecker<'_> {
                     });
                 }
                 ast::CallbackParam::Param(param) => {
-                    let ty = self.visit_type(&param.type_annotation);
+                    let ty = self.visit_type(param.type_annotation.as_ref().unwrap());
                     self.ctx.register_symbol(SymbolData {
                         name: param.name.as_str().into(),
                         ty,

@@ -14,6 +14,8 @@ impl Parser<'_> {
         }
     }
 
+    /// Parse a list of elements, separated by `separator` then an optional newline.
+    /// Parsing stops right before it finds a `terminator` token, without consuming it.
     pub(super) fn parse_list<F, R>(
         &mut self,
         parser: F,

@@ -518,5 +518,5 @@ impl Into<Expression> for FunctionExpression {
 pub struct FunctionParam {
     pub loc: Location,
     pub name: Identifier,
-    pub type_annotation: Type,
+    pub type_annotation: Option<Type>,
 }

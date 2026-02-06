@@ -43,7 +43,7 @@ impl ParserEngine {
         let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let name = self.parse_identifier(inner.next().unwrap());
-        let type_annotation = self.parse_type(inner.next().unwrap());
+        let type_annotation = self.parse_type(inner.next().unwrap()).into();
         ast::FunctionParam {
             loc,
             name,

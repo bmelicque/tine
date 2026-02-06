@@ -29,6 +29,7 @@ impl Parser<'_> {
         };
 
         match peeked {
+            Token::Fn => Some(self.parse_function_expression().into()),
             Token::If => Some(self.parse_condition().into()),
             Token::LBracket => Some(self.parse_array().into()),
             Token::LBrace => Some(self.parse_block().into()),

@@ -97,7 +97,6 @@ impl<'src> Parser<'src> {
         match self.tokens.peek() {
             Some((Ok(token), range)) => match test(token) {
                 Some(data) => {
-                    let token = token.clone();
                     let range = range.clone();
                     self.tokens.next();
                     return Ok((data, range));
