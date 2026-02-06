@@ -36,7 +36,16 @@ impl Parser<'_> {
             Token::Type => Some(self.parse_type_alias(docs).into()),
             _ => self.parse_assignment(),
         };
-        self.expect(Token::Newline);
+
+        match self.tokens.peek() {
+            Some((Ok(Token::Newline), _)) => {
+                self.tokens.next();
+            }
+            Some(_) => {
+                self.recover_at(&[Token::Newline]);
+            }
+            None => {}
+        }
 
         statement
     }

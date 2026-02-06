@@ -66,7 +66,7 @@ impl Parser<'_> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        parser2::test_utils::{run, Test},
+        parser2::test_utils::{test_expression, ExpressionTest},
         Span,
     };
 
@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn parse_binary_expression() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "1 + 2",
             expected: ast::Expression::Binary(ast::BinaryExpression {
                 loc: Location::new(0, Span::new(0, 5)),

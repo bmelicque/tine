@@ -20,7 +20,7 @@ impl Parser<'_> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        parser2::test_utils::{run, Test},
+        parser2::test_utils::{test_expression, ExpressionTest},
         Span,
     };
 
@@ -28,7 +28,7 @@ mod tests {
 
     #[test]
     fn test_parse_block() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "{}",
             expected: ast::Expression::Block(ast::BlockExpression {
                 loc: Location::new(0, Span::new(0, 2)),
@@ -40,7 +40,7 @@ mod tests {
 
     #[test]
     fn test_parse_block_with_statement() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "{\n1\n}",
             expected: ast::Expression::Block(ast::BlockExpression {
                 loc: Location::new(0, Span::new(0, 5)),

@@ -101,9 +101,16 @@ impl<'src> Parser<'src> {
 
     pub(super) fn recover_at(&mut self, token: &[Token]) -> Range<usize> {
         let mut range = self.recover_before(token, &[]);
-        let (_, r) = self.tokens.next().unwrap();
-        range.end = r.end;
-        range
+        match self.tokens.next() {
+            Some((_, r)) => {
+                range.end = r.end;
+                range
+            }
+            None => {
+                range.end = self.src.len();
+                range
+            }
+        }
     }
 
     pub fn error(&mut self, kind: DiagnosticKind, loc: Location) {

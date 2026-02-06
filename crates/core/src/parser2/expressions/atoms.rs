@@ -82,7 +82,7 @@ impl Parser<'_> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        parser2::test_utils::{run, Test},
+        parser2::test_utils::{test_expression, ExpressionTest},
         Location, Span,
     };
 
@@ -90,7 +90,7 @@ mod tests {
 
     #[test]
     fn test_parse_int() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "42",
             expected: ast::Expression::IntLiteral(ast::IntLiteral {
                 loc: Location::new(0, Span::new(0, 2)),
@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn parse_int_with_underscore() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "42_000",
             expected: ast::Expression::IntLiteral(ast::IntLiteral {
                 loc: Location::new(0, Span::new(0, 6)),
@@ -114,7 +114,7 @@ mod tests {
 
     #[test]
     fn test_parse_float() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "3.14",
             expected: ast::Expression::FloatLiteral(ast::FloatLiteral {
                 loc: Location::new(0, Span::new(0, 4)),
@@ -126,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_parse_float_no_decimals() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "3.",
             expected: ast::Expression::FloatLiteral(ast::FloatLiteral {
                 loc: Location::new(0, Span::new(0, 2)),
@@ -138,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_parse_float_with_underscore() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "3.14_000",
             expected: ast::Expression::FloatLiteral(ast::FloatLiteral {
                 loc: Location::new(0, Span::new(0, 8)),
@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn test_parse_float_only_decimals() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: ".14",
             expected: ast::Expression::FloatLiteral(ast::FloatLiteral {
                 loc: Location::new(0, Span::new(0, 3)),
@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn parse_bool_true() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "true",
             expected: ast::Expression::BooleanLiteral(ast::BooleanLiteral {
                 loc: Location::new(0, Span::new(0, 4)),
@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn parse_bool_false() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "false",
             expected: ast::Expression::BooleanLiteral(ast::BooleanLiteral {
                 loc: Location::new(0, Span::new(0, 5)),
@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn parse_string() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "\"hello world\"",
             expected: ast::Expression::StringLiteral(ast::StringLiteral {
                 loc: Location::new(0, Span::new(0, 13)),
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn parse_string_with_escaped_quote() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "\"hello \\\"world\\\"\"",
             expected: ast::Expression::StringLiteral(ast::StringLiteral {
                 loc: Location::new(0, Span::new(0, 17)),
@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     fn test_parse_identifier() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "x",
             expected: ast::Expression::Identifier(ast::Identifier {
                 loc: Location::new(0, Span::new(0, 1)),

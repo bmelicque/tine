@@ -30,7 +30,7 @@ impl Parser<'_> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        parser2::test_utils::{run, Test},
+        parser2::test_utils::{test_expression, ExpressionTest},
         Diagnostic, DiagnosticKind, DiagnosticLevel, Location, Span,
     };
 
@@ -38,7 +38,7 @@ mod tests {
 
     #[test]
     fn test_parse_empty_tuple() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "()",
             expected: ast::Expression::Tuple(ast::TupleExpression {
                 loc: Location::new(0, Span::new(0, 2)),
@@ -50,7 +50,7 @@ mod tests {
 
     #[test]
     fn test_parse_simple_tuple() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "(0)",
             expected: ast::Expression::Tuple(ast::TupleExpression {
                 loc: Location::new(0, Span::new(0, 3)),
@@ -65,7 +65,7 @@ mod tests {
 
     #[test]
     fn test_parse_tuple() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "(0, 1)",
             expected: ast::Expression::Tuple(ast::TupleExpression {
                 loc: Location::new(0, Span::new(0, 6)),
@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn test_parse_tuple_with_trailing_comma() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "(0,)",
             expected: ast::Expression::Tuple(ast::TupleExpression {
                 loc: Location::new(0, Span::new(0, 4)),
@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn test_parse_tuple_with_missing_comma() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "(0 1)",
             expected: ast::Expression::Tuple(ast::TupleExpression {
                 loc: Location::new(0, Span::new(0, 5)),

@@ -97,7 +97,7 @@ impl Parser<'_> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        parser2::test_utils::{run, Test},
+        parser2::test_utils::{test_expression, ExpressionTest},
         Diagnostic, DiagnosticLevel, Span,
     };
 
@@ -105,7 +105,7 @@ mod tests {
 
     #[test]
     fn test_parse_if_expression() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "if true {}",
             expected: ast::Expression::If(ast::IfExpression {
                 loc: Location::new(0, Span::new(0, 10)),
@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn test_parse_if_expression_with_alternate() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "if true {} else {}",
             expected: ast::Expression::If(ast::IfExpression {
                 loc: Location::new(0, Span::new(0, 18)),
@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn test_parse_if_expression_missing_consequent() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "if true",
             expected: ast::Expression::If(ast::IfExpression {
                 loc: Location::new(0, Span::new(0, 7)),

@@ -177,7 +177,7 @@ impl Parser<'_> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        parser2::test_utils::{run, Test},
+        parser2::test_utils::{test_expression, ExpressionTest},
         Diagnostic, DiagnosticLevel, Span,
     };
 
@@ -185,7 +185,7 @@ mod tests {
 
     #[test]
     fn parse_field_access() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "object.field",
             expected: ast::Expression::Member(ast::MemberExpression {
                 loc: Location::new(0, Span::new(0, 12)),
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn parse_tuple_index() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "object.0",
             expected: ast::Expression::Member(ast::MemberExpression {
                 loc: Location::new(0, Span::new(0, 8)),
@@ -223,7 +223,7 @@ mod tests {
 
     #[test]
     fn parse_two_indices() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "object.0.1",
             expected: ast::Expression::Member(ast::MemberExpression {
                 loc: Location::new(0, Span::new(0, 10)),
@@ -249,7 +249,7 @@ mod tests {
 
     #[test]
     fn parse_member_expression_with_trailing_dot() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "object.",
             expected: ast::Expression::Member(ast::MemberExpression {
                 loc: Location::new(0, Span::new(0, 7)),
@@ -269,7 +269,7 @@ mod tests {
 
     #[test]
     fn parse_call_expression_no_args() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "function()",
             expected: ast::Expression::Call(ast::CallExpression {
                 loc: Location::new(0, Span::new(0, 10)),
@@ -285,7 +285,7 @@ mod tests {
 
     #[test]
     fn parse_call_expression_one_arg() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "function(1)",
             expected: ast::Expression::Call(ast::CallExpression {
                 loc: Location::new(0, Span::new(0, 11)),

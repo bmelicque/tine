@@ -39,7 +39,7 @@ impl Parser<'_> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        parser2::test_utils::{run, Test},
+        parser2::test_utils::{test_expression, ExpressionTest},
         Diagnostic, DiagnosticLevel, Span,
     };
 
@@ -47,7 +47,7 @@ mod tests {
 
     #[test]
     fn test_parse_unary() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "&a",
             expected: ast::Expression::Unary(ast::UnaryExpression {
                 loc: Location::new(0, Span::new(0, 2)),
@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn test_parse_nested_unary() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "&*a",
             expected: ast::Expression::Unary(ast::UnaryExpression {
                 loc: Location::new(0, Span::new(0, 3)),
@@ -83,7 +83,7 @@ mod tests {
 
     #[test]
     fn test_parse_unary_with_missing_expression() {
-        run(Test {
+        test_expression(ExpressionTest {
             input: "&",
             expected: ast::Expression::Unary(ast::UnaryExpression {
                 loc: Location::new(0, Span::new(0, 1)),
