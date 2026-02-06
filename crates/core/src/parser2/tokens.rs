@@ -61,6 +61,10 @@ pub enum Token {
     EqEq,
     #[token("!=")]
     NotEq,
+    #[token("/>")]
+    TagClose,
+    #[token("</")]
+    LtSlash,
     #[token("<=")]
     Le,
     #[token("<")]
@@ -195,6 +199,8 @@ impl Token {
             Token::PipePipe => "||".to_string(),
             Token::EqEq => "==".to_string(),
             Token::NotEq => "!=".to_string(),
+            Token::TagClose => "/>".to_string(),
+            Token::LtSlash => "</".to_string(),
             Token::Le => "<=".to_string(),
             Token::Lt => "<".to_string(),
             Token::Ge => ">=".to_string(),

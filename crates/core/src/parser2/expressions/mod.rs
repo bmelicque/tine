@@ -9,6 +9,7 @@ mod binary;
 mod blocks;
 mod conditions;
 mod elements;
+mod functions;
 mod loops;
 mod matches;
 mod postfix;

@@ -75,6 +75,59 @@ impl<'src> Parser<'src> {
         }
     }
 
+    /// Eat the next token if it passes the given test.
+    ///
+    /// If the test is passed, this function returns `Ok((token, token_range))`.
+    ///
+    /// If the test doesn't pass, tokens will be consumed until either:
+    /// - a token that pass the test is found
+    /// - a 'sync' token is found (see `sync` parameter) (it is not consumed)
+    /// - the end of the file is reached
+    /// Then the function returns `Err(skipped_range)`
+    ///
+    /// This method does not push any diagnostic by itself, this should be handled by the calling method.
+    pub(super) fn better_expect<F, T>(
+        &mut self,
+        test: F,
+        sync: &[Token],
+    ) -> Result<(T, Range<usize>), Range<usize>>
+    where
+        F: Fn(&Token) -> Option<T>,
+    {
+        match self.tokens.peek() {
+            Some((Ok(token), range)) => match test(token) {
+                Some(data) => {
+                    let token = token.clone();
+                    let range = range.clone();
+                    self.tokens.next();
+                    return Ok((data, range));
+                }
+                None => {}
+            },
+            Some(_) => {}
+            None => return Err(self.next_range()),
+        }
+
+        let mut range = self
+            .tokens
+            .peek()
+            .map(|token| token.1.clone())
+            .unwrap_or(self.src.len()..self.src.len());
+
+        while let Some(token) = &self.tokens.peek() {
+            match token {
+                (Ok(t), r) if test(t).is_some() || sync.contains(t) => {
+                    break;
+                }
+                (_, r) => {
+                    range.end = r.end;
+                    self.tokens.next();
+                }
+            }
+        }
+        Err(range)
+    }
+
     pub(super) fn recover_before(&mut self, tokens: &[Token], sync: &[Token]) -> Range<usize> {
         let mut range = self
             .tokens

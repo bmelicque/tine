@@ -5,6 +5,7 @@ impl Parser<'_> {
         &mut self,
         docs: Option<ast::Docs>,
     ) -> ast::FunctionDefinition {
-        unimplemented!()
+        let definition = self.parse_function_expression();
+        ast::FunctionDefinition { docs, definition }
     }
 }
