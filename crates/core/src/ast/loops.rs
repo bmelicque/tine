@@ -26,8 +26,8 @@ impl Into<Expression> for Loop {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ForExpression {
     pub loc: Location,
-    pub condition: Box<Expression>,
-    pub body: BlockExpression,
+    pub condition: Option<Box<Expression>>,
+    pub body: Option<BlockExpression>,
 }
 
 impl Into<Loop> for ForExpression {
@@ -39,9 +39,9 @@ impl Into<Loop> for ForExpression {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ForInExpression {
     pub loc: Location,
-    pub pattern: Box<Pattern>,
-    pub iterable: Box<Expression>,
-    pub body: BlockExpression,
+    pub pattern: Option<Box<Pattern>>,
+    pub iterable: Option<Box<Expression>>,
+    pub body: Option<BlockExpression>,
 }
 
 impl Into<Loop> for ForInExpression {

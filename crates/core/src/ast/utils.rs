@@ -56,8 +56,14 @@ impl Alternate {
 impl Loop {
     pub fn find_breaks(&self, stmts: &mut Vec<BreakStatement>) {
         match self {
-            Loop::For(expr) => expr.body.find_breaks(stmts),
-            Loop::ForIn(expr) => expr.body.find_breaks(stmts),
+            Loop::For(expr) => match &expr.body {
+                Some(body) => body.find_breaks(stmts),
+                None => {}
+            },
+            Loop::ForIn(expr) => match &expr.body {
+                Some(body) => body.find_breaks(stmts),
+                None => {}
+            },
         }
     }
 }
@@ -115,8 +121,14 @@ impl Alternate {
 impl Loop {
     pub fn find_returns(&self, stmts: &mut Vec<ReturnStatement>) {
         match self {
-            Loop::For(expr) => expr.body.find_returns(stmts),
-            Loop::ForIn(expr) => expr.body.find_returns(stmts),
+            Loop::For(expr) => match &expr.body {
+                Some(body) => body.find_returns(stmts),
+                None => {}
+            },
+            Loop::ForIn(expr) => match &expr.body {
+                Some(body) => body.find_returns(stmts),
+                None => {}
+            },
         }
     }
 }

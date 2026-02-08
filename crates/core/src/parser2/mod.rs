@@ -47,6 +47,10 @@ impl<'src> Parser<'src> {
             }
         }
     }
+    pub(super) fn next_loc(&mut self) -> Location {
+        let range = self.next_range();
+        self.localize(range)
+    }
 
     pub(super) fn eat(&mut self, tokens: &[Token]) -> Range<usize> {
         match self.tokens.next() {

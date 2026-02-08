@@ -24,6 +24,8 @@ pub enum Token {
     For,
     #[token("if")]
     If,
+    #[token("in")]
+    In,
     #[token("match")]
     Match,
     #[token("return")]
@@ -181,6 +183,7 @@ impl Token {
             Token::Fn => "fn".to_string(),
             Token::For => "for".to_string(),
             Token::If => "if".to_string(),
+            Token::In => "in".to_string(),
             Token::Match => "match".to_string(),
             Token::Return => "return".to_string(),
             Token::Struct => "struct".to_string(),

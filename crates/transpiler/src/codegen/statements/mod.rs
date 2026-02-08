@@ -175,9 +175,12 @@ impl CodeGenerator<'_> {
         node: &ast::ForExpression,
         assign_to: AssignTo,
     ) -> swc::WhileStmt {
-        let test = Box::new(self.expr_to_swc(&node.condition));
+        let test = Box::new(self.expr_to_swc(node.condition.as_ref().unwrap()));
         // FIXME: no assign_to! and breaks should be `assignee = value; break;`
-        let body = Box::new(self.block_to_swc_stmt(&node.body, assign_to).into());
+        let body = Box::new(
+            self.block_to_swc_stmt(node.body.as_ref().unwrap(), assign_to)
+                .into(),
+        );
         swc::WhileStmt {
             span: DUMMY_SP,
             test,
@@ -200,12 +203,12 @@ impl CodeGenerator<'_> {
                 declare: false,
                 decls: vec![swc::VarDeclarator {
                     span: DUMMY_SP,
-                    name: self.get_for_in_element_name(node.pattern.as_ref()),
+                    name: self.get_for_in_element_name(node.pattern.as_ref().unwrap()),
                     init: None,
                     definite: false,
                 }],
             })),
-            right: Box::new(self.expr_to_swc(&node.iterable)),
+            right: Box::new(self.expr_to_swc(node.iterable.as_ref().unwrap())),
             body: Box::new(self.get_for_in_body(&node, assign_to).into()),
         }
     }
@@ -225,8 +228,9 @@ impl CodeGenerator<'_> {
         node: &ast::ForInExpression,
         assign_to: AssignTo,
     ) -> swc::BlockStmt {
-        let mut body = self.block_to_swc_stmt(&node.body, assign_to);
-        if matches!(*node.pattern, ast::Pattern::Identifier(_)) {
+        let mut body = self.block_to_swc_stmt(node.body.as_ref().unwrap(), assign_to);
+        let pattern = node.pattern.as_ref().unwrap();
+        if matches!(**pattern, ast::Pattern::Identifier(_)) {
             return body;
         }
         let guard = swc::Stmt::If(swc::IfStmt {
@@ -234,7 +238,10 @@ impl CodeGenerator<'_> {
             test: Box::new(swc::Expr::Unary(swc::UnaryExpr {
                 span: DUMMY_SP,
                 op: swc::UnaryOp::Bang,
-                arg: Box::new(self.pattern_to_swc_test(&node.pattern, &node.iterable)),
+                arg: Box::new(self.pattern_to_swc_test(
+                    node.pattern.as_ref().unwrap(),
+                    node.iterable.as_ref().unwrap(),
+                )),
             })),
             cons: Box::new(swc::Stmt::Continue(swc::ContinueStmt {
                 span: DUMMY_SP,
@@ -249,7 +256,7 @@ impl CodeGenerator<'_> {
             declare: false,
             decls: vec![swc::VarDeclarator {
                 span: DUMMY_SP,
-                name: self.pattern_to_swc(&node.pattern),
+                name: self.pattern_to_swc(node.pattern.as_ref().unwrap()),
                 init: Some(Box::new(create_ident("__").into())),
                 definite: false,
             }],

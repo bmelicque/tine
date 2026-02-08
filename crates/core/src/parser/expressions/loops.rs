@@ -22,18 +22,15 @@ impl ParserEngine {
         let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
         let condition = if inner.peek().unwrap().as_rule() == Rule::condition {
-            Box::new(self.parse_expression(inner.next().unwrap()))
+            Some(Box::new(self.parse_expression(inner.next().unwrap())))
         } else {
-            Box::new(ast::Expression::Empty)
+            None
         };
         let body = match inner.next() {
-            Some(pair) => self.parse_block(pair),
+            Some(pair) => Some(self.parse_block(pair)),
             None => {
                 self.error(DiagnosticKind::MissingConsequent, loc);
-                ast::BlockExpression {
-                    loc: loc.increment(),
-                    statements: vec![],
-                }
+                None
             }
         };
         ast::ForExpression {
@@ -47,9 +44,9 @@ impl ParserEngine {
         assert_eq!(pair.as_rule(), Rule::for_in_expression);
         let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
-        let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
-        let iterable = Box::new(self.parse_expression(inner.next().unwrap()));
-        let body = self.parse_block(inner.next().unwrap());
+        let pattern = Some(Box::new(self.parse_pattern(inner.next().unwrap())));
+        let iterable = Some(Box::new(self.parse_expression(inner.next().unwrap())));
+        let body = Some(self.parse_block(inner.next().unwrap()));
         ast::ForInExpression {
             loc,
             pattern,
@@ -85,7 +82,7 @@ mod tests {
         let input = "for i >= 0 {}";
         let expected = ast::Expression::Loop(ast::Loop::For(ast::ForExpression {
             loc: Location::new(0, Span::new(0, input.len() as u32)),
-            condition: Box::new(ast::Expression::Binary(ast::BinaryExpression {
+            condition: Some(Box::new(ast::Expression::Binary(ast::BinaryExpression {
                 loc: Location::new(0, Span::new(4, 10)),
                 operator: ast::BinaryOperator::Geq,
                 left: Box::new(ast::Expression::Identifier(ast::Identifier {
@@ -96,11 +93,11 @@ mod tests {
                     loc: Location::new(0, Span::new(9, 10)),
                     value: 0,
                 })),
-            })),
-            body: ast::BlockExpression {
+            }))),
+            body: Some(ast::BlockExpression {
                 loc: Location::new(0, Span::new(11, input.len() as u32)),
                 statements: vec![],
-            },
+            }),
         }));
         let (actual, diagnostics) = parse_expression_input(input);
         assert_eq!(expected, actual);
@@ -112,11 +109,11 @@ mod tests {
         let input = "for {}";
         let expected = ast::Expression::Loop(ast::Loop::For(ast::ForExpression {
             loc: Location::new(0, Span::new(0, input.len() as u32)),
-            condition: Box::new(ast::Expression::Empty),
-            body: ast::BlockExpression {
+            condition: None,
+            body: Some(ast::BlockExpression {
                 loc: Location::new(0, Span::new(4, input.len() as u32)),
                 statements: vec![],
-            },
+            }),
         }));
         let (actual, diagnostics) = parse_expression_input(input);
         assert_eq!(expected, actual);
@@ -128,7 +125,7 @@ mod tests {
         let input = "for i >= 0";
         let expected = ast::Expression::Loop(ast::Loop::For(ast::ForExpression {
             loc: Location::new(0, Span::new(0, input.len() as u32)),
-            condition: Box::new(ast::Expression::Binary(ast::BinaryExpression {
+            condition: Some(Box::new(ast::Expression::Binary(ast::BinaryExpression {
                 loc: Location::new(0, Span::new(4, 10)),
                 operator: ast::BinaryOperator::Geq,
                 left: Box::new(ast::Expression::Identifier(ast::Identifier {
@@ -139,11 +136,8 @@ mod tests {
                     loc: Location::new(0, Span::new(9, 10)),
                     value: 0,
                 })),
-            })),
-            body: ast::BlockExpression {
-                loc: Location::new(0, Span::new(10, 11 as u32)),
-                statements: vec![],
-            },
+            }))),
+            body: None,
         }));
         let (actual, diagnostics) = parse_expression_input(input);
         assert_eq!(expected, actual);
