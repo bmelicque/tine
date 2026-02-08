@@ -122,8 +122,8 @@ impl ParserEngine {
             .collect();
         ast::MatchExpression {
             loc,
-            scrutinee,
-            arms,
+            scrutinee: Some(scrutinee),
+            arms: Some(arms),
         }
     }
 
@@ -131,8 +131,8 @@ impl ParserEngine {
         assert!(pair.as_rule() == Rule::match_arm);
         let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
-        let pattern = Box::new(self.parse_pattern(inner.next().unwrap()));
-        let expression = Box::new(self.parse_expression(inner.next().unwrap()));
+        let pattern = Some(Box::new(self.parse_pattern(inner.next().unwrap())));
+        let expression = Some(Box::new(self.parse_expression(inner.next().unwrap())));
         ast::MatchArm {
             loc,
             pattern,

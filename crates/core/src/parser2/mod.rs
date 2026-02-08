@@ -169,6 +169,22 @@ impl<'src> Parser<'src> {
         }
     }
 
+    pub(super) fn sync(&mut self, before: &[Token]) -> Range<usize> {
+        let mut range = self.next_range();
+        while let Some(token) = &self.tokens.peek() {
+            match token {
+                (Ok(t), r) if before.contains(t) => {
+                    break;
+                }
+                (_, r) => {
+                    range.end = r.end;
+                    self.tokens.next();
+                }
+            }
+        }
+        range
+    }
+
     pub fn error(&mut self, kind: DiagnosticKind, loc: Location) {
         self.diagnostics.push(Diagnostic {
             level: DiagnosticLevel::Error,

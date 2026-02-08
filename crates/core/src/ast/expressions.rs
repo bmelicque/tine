@@ -192,8 +192,8 @@ impl Into<Expression> for InvalidExpression {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MatchExpression {
     pub loc: Location,
-    pub scrutinee: Box<Expression>,
-    pub arms: Vec<MatchArm>,
+    pub scrutinee: Option<Box<Expression>>,
+    pub arms: Option<Vec<MatchArm>>,
 }
 
 impl Into<Expression> for MatchExpression {
@@ -205,8 +205,8 @@ impl Into<Expression> for MatchExpression {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MatchArm {
     pub loc: Location,
-    pub pattern: Box<Pattern>,
-    pub expression: Box<Expression>,
+    pub pattern: Option<Box<Pattern>>,
+    pub expression: Option<Box<Expression>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -274,10 +274,16 @@ impl CodeGenerator<'_> {
     ) -> swc::IfStmt {
         let mut node = node.clone();
         // FIXME: extract scrutinee in case expensive or not idempotent
-        let mut stmt = self.arm_to_swc_if_stmt(&node.arms.pop().unwrap(), &node.scrutinee, None);
+        let arms = node.arms.as_mut().unwrap();
+        let mut stmt =
+            self.arm_to_swc_if_stmt(&arms.pop().unwrap(), node.scrutinee.as_ref().unwrap(), None);
 
-        for arm in node.arms.iter().rev() {
-            stmt = self.arm_to_swc_if_stmt(&arm, &node.scrutinee, Some(Box::new(stmt)));
+        for arm in node.arms.as_ref().unwrap().iter().rev() {
+            stmt = self.arm_to_swc_if_stmt(
+                &arm,
+                node.scrutinee.as_ref().unwrap(),
+                Some(Box::new(stmt)),
+            );
         }
 
         self.if_decl_to_swc_stmt(&stmt, assign_to)
@@ -290,14 +296,14 @@ impl CodeGenerator<'_> {
         alternate: Option<Box<ast::IfPatExpression>>,
     ) -> ast::IfPatExpression {
         let consequent = Box::new(ast::BlockExpression {
-            loc: node.expression.loc(),
+            loc: node.expression.as_ref().unwrap().loc(),
             statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
-                expression: node.expression.clone(),
+                expression: node.expression.as_ref().unwrap().clone(),
             })],
         });
         ast::IfPatExpression {
             loc: node.loc,
-            pattern: node.pattern.clone(),
+            pattern: node.pattern.as_ref().unwrap().clone(),
             scrutinee: scrutinee.clone(),
             consequent,
             alternate: alternate
