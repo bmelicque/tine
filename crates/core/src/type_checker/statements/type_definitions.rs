@@ -9,9 +9,13 @@ use super::TypeChecker;
 
 impl TypeChecker<'_> {
     pub fn visit_type_alias(&mut self, node: &ast::TypeAlias) -> TypeId {
-        let (ty, params) = self.visit_with_type_params(&node.params, node.loc, |checker| {
-            checker.visit_type(&node.definition)
-        });
+        let (ty, params) = if let Some(definition) = &node.definition {
+            self.visit_with_type_params(&node.params, node.loc, |checker| {
+                checker.visit_type(definition)
+            })
+        } else {
+            (TypeStore::UNKNOWN, vec![])
+        };
 
         let ty = match params.len() {
             0 => ty,
@@ -21,7 +25,9 @@ impl TypeChecker<'_> {
             })),
         };
 
-        self.add_type_to_scope(node.name.clone(), node.loc, ty);
+        if let Some(ref name) = node.name {
+            self.add_type_to_scope(name.text.clone(), node.loc, ty);
+        }
 
         TypeStore::UNIT
     }

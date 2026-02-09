@@ -92,10 +92,11 @@ pub struct MethodReceiver {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeAlias {
+    pub docs: Option<Docs>,
     pub loc: Location,
-    pub name: String,
+    pub name: Option<Identifier>,
     pub params: Option<Vec<String>>,
-    pub definition: Box<Type>,
+    pub definition: Option<Type>,
 }
 
 impl Into<Statement> for TypeAlias {
