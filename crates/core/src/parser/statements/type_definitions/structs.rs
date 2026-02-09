@@ -11,7 +11,7 @@ impl ParserEngine {
         let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
-        let name = inner.next().unwrap().as_str().to_string();
+        let name = Some(self.parse_identifier(inner.next().unwrap()));
 
         let mut params = None;
         let mut body = None;
@@ -26,9 +26,9 @@ impl ParserEngine {
                 _ => unreachable!(),
             }
         }
-        let body = body.unwrap();
 
         ast::StructDefinition {
+            docs: None,
             loc,
             name,
             params,
@@ -66,11 +66,11 @@ mod tests {
 
         assert!(errors.len() == 0);
 
-        assert_eq!(result.name, "Box");
+        assert_eq!(result.name.unwrap().as_str(), "Box");
         assert!(result.params.is_none());
 
         match result.body {
-            ast::TypeBody::Tuple(tuple) => {
+            Some(ast::TypeBody::Tuple(tuple)) => {
                 assert_eq!(tuple.elements.len(), 1);
             }
             _ => panic!("Expected tuple body"),
@@ -84,11 +84,11 @@ mod tests {
 
         assert!(errors.len() == 0);
 
-        assert_eq!(result.name, "Box");
+        assert_eq!(result.name.unwrap().as_str(), "Box");
         assert!(result.params.is_none());
 
         match result.body {
-            ast::TypeBody::Struct(st) => {
+            Some(ast::TypeBody::Struct(st)) => {
                 assert_eq!(st.fields.len(), 1);
                 assert_eq!(st.fields[0].as_name(), "value");
             }
@@ -103,7 +103,7 @@ mod tests {
 
         assert!(errors.len() == 0);
 
-        assert_eq!(result.name, "Box");
+        assert_eq!(result.name.unwrap().as_str(), "Box");
         assert!(result.params.is_some());
         let params = result.params.unwrap();
         assert_eq!(params.len(), 1);
@@ -115,7 +115,7 @@ mod tests {
         let input = "struct Box<T, T>(T)";
         let (result, errors) = parse_struct_input(input);
 
-        assert_eq!(result.name, "Box");
+        assert_eq!(result.name.unwrap().as_str(), "Box");
         assert!(result.params.is_some());
         let params = result.params.unwrap();
         assert_eq!(params.len(), 2);

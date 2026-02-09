@@ -33,9 +33,12 @@ impl TypeChecker<'_> {
     }
 
     pub fn visit_struct_definition(&mut self, node: &ast::StructDefinition) -> TypeId {
-        let (ty, params) = self.visit_with_type_params(&node.params, node.loc, |checker| {
-            checker.visit_type_body(&node.body)
-        });
+        let (ty, params) = match &node.body {
+            Some(body) => self.visit_with_type_params(&node.params, node.loc, |checker| {
+                checker.visit_type_body(body)
+            }),
+            None => (TypeStore::UNKNOWN, vec![]),
+        };
 
         let ty = match params.len() {
             0 => ty,
@@ -45,7 +48,9 @@ impl TypeChecker<'_> {
             })),
         };
 
-        self.add_type_to_scope(node.name.clone(), node.loc, ty);
+        if let Some(name) = &node.name {
+            self.add_type_to_scope(name.text.clone(), node.loc, ty);
+        }
 
         TypeStore::UNIT
     }

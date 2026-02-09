@@ -107,10 +107,11 @@ impl Into<Statement> for TypeAlias {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructDefinition {
+    pub docs: Option<Docs>,
     pub loc: Location,
-    pub name: String,
+    pub name: Option<Identifier>,
     pub params: Option<Vec<String>>,
-    pub body: TypeBody,
+    pub body: Option<TypeBody>,
 }
 
 impl Into<Statement> for StructDefinition {

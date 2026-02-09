@@ -68,7 +68,14 @@ impl Parser<'_> {
     }
 
     fn parse_type_param(&mut self) -> Option<String> {
-        unimplemented!()
+        match self.tokens.peek() {
+            Some((Ok(Token::Ident(ident)), _)) => {
+                let name = ident.to_owned();
+                self.tokens.next();
+                Some(name)
+            }
+            _ => None,
+        }
     }
 
     pub(super) fn report_missing(&mut self, diagnostic: DiagnosticKind) -> Range<usize> {

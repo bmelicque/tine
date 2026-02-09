@@ -9,7 +9,7 @@ impl Parser<'_> {
         let start_range = self.eat(&[Token::Type]);
         let mut loc = self.localize(start_range);
 
-        let Ok(type_name) = self.parse_type_name(Token::Eq) else {
+        let Ok(type_name) = self.parse_type_name(&[Token::Eq]) else {
             return ast::TypeAlias {
                 docs,
                 loc,

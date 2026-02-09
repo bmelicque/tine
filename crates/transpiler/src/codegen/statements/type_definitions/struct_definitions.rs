@@ -37,9 +37,9 @@ impl CodeGenerator<'_> {
     /// }
     /// ```
     pub fn struct_def_to_swc_class(&mut self, node: &ast::StructDefinition) -> swc::ClassDecl {
-        let body = match &node.body {
+        let body = match &node.body.as_ref().unwrap() {
             ast::TypeBody::Struct(body) => {
-                self.register_struct(&node.name, &body.fields);
+                self.register_struct(&node.name.as_ref().unwrap().text, &body.fields);
                 self.struct_body_to_swc_constructor(body)
             }
             ast::TypeBody::Tuple(_) => self.tuple_body_to_swc_constructor(),
@@ -47,7 +47,7 @@ impl CodeGenerator<'_> {
 
         swc::ClassDecl {
             declare: false,
-            ident: create_ident(&node.name),
+            ident: create_ident(&node.name.as_ref().unwrap().text),
             class: Box::new(swc::Class {
                 span: DUMMY_SP,
                 ctxt: SyntaxContext::empty(),
