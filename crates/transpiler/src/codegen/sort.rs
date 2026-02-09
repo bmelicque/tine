@@ -45,7 +45,7 @@ impl CodeGenerator<'_> {
 
         let sorted_names = mandatory_fields
             .chain(optional_fields)
-            .map(|field| field.as_name())
+            .map(|field| field.as_name().unwrap().text)
             .collect::<Vec<_>>();
 
         self.add_to_scope(name.clone(), sorted_names);

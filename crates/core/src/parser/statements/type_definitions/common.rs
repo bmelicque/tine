@@ -57,12 +57,12 @@ impl ParserEngine {
             .collect();
 
         let mut field_names = std::collections::HashSet::new();
-        fields.iter().for_each(|field| {
-            if !field_names.insert(field.as_name()) {
+        fields.iter().filter_map(|f| f.as_name()).for_each(|name| {
+            if !field_names.insert(name.text.clone()) {
                 let error = DiagnosticKind::DuplicateFieldName {
-                    name: field.as_name(),
+                    name: name.text.clone(),
                 };
-                self.error(error, field.loc());
+                self.error(error, name.loc);
             }
         });
 
@@ -85,8 +85,8 @@ impl ParserEngine {
         let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
-        let name = inner.next().unwrap().as_str().to_string();
-        let definition = self.parse_type(inner.next().unwrap());
+        let name = Some(self.parse_identifier(inner.next().unwrap()));
+        let definition = Some(self.parse_type(inner.next().unwrap()));
 
         ast::StructMandatoryField {
             loc,
@@ -100,8 +100,8 @@ impl ParserEngine {
         let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
 
-        let name = inner.next().unwrap().as_str().to_string();
-        let default = self.parse_expression(inner.next().unwrap());
+        let name = Some(self.parse_identifier(inner.next().unwrap()));
+        let default = Some(self.parse_expression(inner.next().unwrap()));
 
         ast::StructOptionalField { loc, name, default }
     }

@@ -90,7 +90,7 @@ mod tests {
         match result.body {
             Some(ast::TypeBody::Struct(st)) => {
                 assert_eq!(st.fields.len(), 1);
-                assert_eq!(st.fields[0].as_name(), "value");
+                assert_eq!(st.fields[0].as_name().unwrap().as_str(), "value");
             }
             _ => panic!("Expected struct body"),
         }

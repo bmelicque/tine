@@ -136,7 +136,7 @@ impl TypeChecker<'_> {
         let fields = body
             .fields
             .iter()
-            .map(|field| self.visit_struct_definition_field(field))
+            .filter_map(|field| self.visit_struct_definition_field(field))
             .collect();
         let id = 0;
         self.intern_unique(Type::Struct(StructType { id, fields }))
@@ -145,16 +145,25 @@ impl TypeChecker<'_> {
     fn visit_struct_definition_field(
         &mut self,
         field: &ast::StructDefinitionField,
-    ) -> types::StructField {
+    ) -> Option<types::StructField> {
         let name = field.as_name();
         let def = match field {
-            ast::StructDefinitionField::Mandatory(ref field) => self.visit_type(&field.definition),
-            ast::StructDefinitionField::Optional(field) => self.visit_expression(&field.default),
+            ast::StructDefinitionField::Mandatory(ref field) => match &field.definition {
+                Some(def) => self.visit_type(def),
+                None => TypeStore::UNKNOWN,
+            },
+            ast::StructDefinitionField::Optional(field) => match &field.default {
+                Some(def) => self.visit_expression(def),
+                None => TypeStore::UNKNOWN,
+            },
         };
-        types::StructField {
-            name,
-            def,
-            optional: field.is_optional(),
+        match name {
+            Some(name) => Some(types::StructField {
+                name: name.text.clone(),
+                def,
+                optional: field.is_optional(),
+            }),
+            None => None,
         }
     }
 

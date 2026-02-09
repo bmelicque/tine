@@ -67,7 +67,7 @@ impl Parser<'_> {
         }
     }
 
-    pub(super) fn parse_identifier(&mut self) -> ast::Identifier {
+    pub fn parse_identifier(&mut self) -> ast::Identifier {
         let Some((Ok(Token::Ident(text)), span)) = self.tokens.next() else {
             panic!()
         };

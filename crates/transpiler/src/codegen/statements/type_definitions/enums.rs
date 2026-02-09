@@ -117,7 +117,12 @@ impl CodeGenerator<'_> {
                 .fields
                 .iter()
                 .enumerate()
-                .map(|(i, field)| self.this_assignement_from_values(&field.as_name(), i as f64))
+                .map(|(i, field)| {
+                    self.this_assignement_from_values(
+                        field.as_name().as_ref().unwrap().as_str(),
+                        i as f64,
+                    )
+                })
                 .collect::<Vec<_>>(),
             Some(ast::TypeBody::Tuple(_)) => vec![swc::Stmt::Expr(swc::ExprStmt {
                 span: DUMMY_SP,

@@ -117,17 +117,17 @@ impl CodeGenerator<'_> {
             let pattern = match field {
                 ast::StructDefinitionField::Mandatory(field) => {
                     swc::Pat::Ident(swc::BindingIdent {
-                        id: create_ident(&field.name),
+                        id: create_ident(field.name.as_ref().unwrap().as_str()),
                         type_ann: None,
                     })
                 }
                 ast::StructDefinitionField::Optional(field) => swc::Pat::Assign(swc::AssignPat {
                     span: DUMMY_SP,
                     left: Box::new(swc::Pat::Ident(swc::BindingIdent {
-                        id: create_ident(&field.name),
+                        id: create_ident(field.name.as_ref().unwrap().as_str()),
                         type_ann: None,
                     })),
-                    right: Box::new(self.expr_to_swc(&field.default)),
+                    right: Box::new(self.expr_to_swc(field.default.as_ref().unwrap())),
                 }),
             };
 
@@ -170,6 +170,6 @@ impl CodeGenerator<'_> {
 fn struct_to_swc_constructor_stmts(fields: &Vec<ast::StructDefinitionField>) -> Vec<swc::Stmt> {
     fields
         .iter()
-        .map(|field| this_assignment(&field.as_name()))
+        .map(|field| this_assignment(field.as_name().as_ref().unwrap().as_str()))
         .collect()
 }

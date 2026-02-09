@@ -150,10 +150,10 @@ pub enum StructDefinitionField {
 }
 
 impl StructDefinitionField {
-    pub fn as_name(&self) -> String {
+    pub fn as_name(&self) -> Option<Identifier> {
         match self {
-            Self::Mandatory(m) => m.name.clone(),
-            Self::Optional(o) => o.name.clone(),
+            Self::Mandatory(m) => m.name.as_ref().map(|i| i.clone()),
+            Self::Optional(o) => o.name.as_ref().map(|i| i.clone()),
         }
     }
 
@@ -172,8 +172,8 @@ impl StructDefinitionField {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructMandatoryField {
     pub loc: Location,
-    pub name: String,
-    pub definition: Type,
+    pub name: Option<Identifier>,
+    pub definition: Option<Type>,
 }
 
 impl Into<StructDefinitionField> for StructMandatoryField {
@@ -185,8 +185,8 @@ impl Into<StructDefinitionField> for StructMandatoryField {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructOptionalField {
     pub loc: Location,
-    pub name: String,
-    pub default: Expression,
+    pub name: Option<Identifier>,
+    pub default: Option<Expression>,
 }
 
 impl Into<StructDefinitionField> for StructOptionalField {
