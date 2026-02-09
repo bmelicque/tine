@@ -1,6 +1,10 @@
 use crate::{ast, parser2::Parser, DiagnosticKind, Location};
 
 impl Parser<'_> {
+    pub fn parse_pattern(&mut self) -> Option<ast::Pattern> {
+        self.parse_expression().map(|e| self.expr_to_pattern(e))
+    }
+
     pub fn expr_to_pattern(&mut self, expr: ast::Expression) -> ast::Pattern {
         match expr {
             ast::Expression::Identifier(id) => ast::Pattern::Identifier(ast::IdentifierPattern(id)),
