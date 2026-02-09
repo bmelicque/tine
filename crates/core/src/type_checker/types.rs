@@ -51,7 +51,10 @@ impl TypeChecker<'_> {
     }
 
     fn visit_listener_type(&mut self, node: &ast::ListenerType) -> TypeId {
-        let inner = self.visit_type(&node.inner);
+        let inner = match &node.inner {
+            Some(inner) => self.visit_type(inner),
+            None => TypeStore::UNKNOWN,
+        };
         self.intern(Type::Listener(ListenerType { inner }))
     }
 
@@ -136,7 +139,10 @@ impl TypeChecker<'_> {
     }
 
     pub fn visit_reference_type(&mut self, node: &ast::ReferenceType) -> TypeId {
-        let target = self.visit_type(&node.target);
+        let target = match &node.target {
+            Some(target) => self.visit_type(target),
+            None => return TypeStore::UNKNOWN,
+        };
         self.intern(Type::Reference(ReferenceType { target }))
     }
 
@@ -320,11 +326,11 @@ mod tests {
         let session = Session::new();
         let mut checker = TypeChecker::new(&session, 0);
         let reference_type = ast::ReferenceType {
-            target: Box::new(ast::Type::Named(ast::NamedType {
+            target: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "str".to_string(),
                 args: None,
                 loc: Location::dummy(),
-            })),
+            }))),
             loc: Location::dummy(),
         };
 

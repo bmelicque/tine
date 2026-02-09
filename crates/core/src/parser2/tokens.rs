@@ -99,6 +99,8 @@ pub enum Token {
     Slash,
     #[token("%")]
     Mod,
+    #[token("?")]
+    QMark,
 
     // --- punctuation ---
     #[token("(")]
@@ -220,6 +222,7 @@ impl Token {
             Token::Star => "*".to_string(),
             Token::Slash => "/".to_string(),
             Token::Mod => "%".to_string(),
+            Token::QMark => "?".to_string(),
 
             Token::LParen => "(".to_string(),
             Token::RParen => ")".to_string(),

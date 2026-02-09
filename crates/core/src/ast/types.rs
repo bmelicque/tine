@@ -85,7 +85,7 @@ impl Into<Type> for SignalType {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ListenerType {
     pub loc: Location,
-    pub inner: Box<Type>,
+    pub inner: Option<Box<Type>>,
 }
 
 impl Into<Type> for ListenerType {
@@ -97,7 +97,7 @@ impl Into<Type> for ListenerType {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ReferenceType {
     pub loc: Location,
-    pub target: Box<Type>,
+    pub target: Option<Box<Type>>,
 }
 
 impl Into<Type> for ReferenceType {

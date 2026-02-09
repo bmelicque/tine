@@ -44,7 +44,7 @@ impl ParserEngine {
         assert!(pair.as_rule() == Rule::listener_type);
         let loc = self.localize(pair.as_span());
         let inner_pair = pair.into_inner().next().unwrap();
-        let inner = Box::new(self.parse_type(inner_pair));
+        let inner = Some(Box::new(self.parse_type(inner_pair)));
         ast::ListenerType { loc, inner }
     }
 
@@ -62,7 +62,7 @@ impl ParserEngine {
         assert!(pair.as_rule() == Rule::reference_type);
         let loc = self.localize(pair.as_span());
         let inner = pair.into_inner().next().unwrap();
-        let target = Box::new(self.parse_type(inner));
+        let target = Some(Box::new(self.parse_type(inner)));
         ast::ReferenceType { loc, target }
     }
 
