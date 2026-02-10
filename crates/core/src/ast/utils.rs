@@ -27,8 +27,10 @@ impl BlockExpression {
 
 impl IfExpression {
     pub fn find_breaks(&self, stmts: &mut Vec<BreakStatement>) {
-        self.consequent.find_breaks(stmts);
-        if let Some(ref alternate) = self.alternate {
+        if let Some(consequent) = &self.consequent {
+            consequent.find_breaks(stmts);
+        }
+        if let Some(alternate) = &self.alternate {
             alternate.find_breaks(stmts);
         }
     }
@@ -36,8 +38,10 @@ impl IfExpression {
 
 impl IfPatExpression {
     pub fn find_breaks(&self, stmts: &mut Vec<BreakStatement>) {
-        self.consequent.find_breaks(stmts);
-        if let Some(ref alternate) = self.alternate {
+        if let Some(consequent) = &self.consequent {
+            consequent.find_breaks(stmts);
+        }
+        if let Some(alternate) = &self.alternate {
             alternate.find_breaks(stmts);
         }
     }
@@ -92,8 +96,10 @@ impl BlockExpression {
 
 impl IfExpression {
     pub fn find_returns(&self, stmts: &mut Vec<ReturnStatement>) {
-        self.consequent.find_returns(stmts);
-        if let Some(ref alternate) = self.alternate {
+        if let Some(consequent) = &self.consequent {
+            consequent.find_returns(stmts);
+        }
+        if let Some(alternate) = &self.alternate {
             alternate.find_returns(stmts);
         }
     }
@@ -101,8 +107,10 @@ impl IfExpression {
 
 impl IfPatExpression {
     pub fn find_returns(&self, stmts: &mut Vec<ReturnStatement>) {
-        self.consequent.find_returns(stmts);
-        if let Some(ref alternate) = self.alternate {
+        if let Some(consequent) = &self.consequent {
+            consequent.find_returns(stmts);
+        }
+        if let Some(alternate) = &self.alternate {
             alternate.find_returns(stmts);
         }
     }

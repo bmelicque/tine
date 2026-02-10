@@ -31,7 +31,7 @@ impl Parser<'_> {
         let loc = Location::merge(object.loc(), self.localize(dot_range));
         match self.tokens.peek().cloned() {
             Some((Ok(Token::Ident(_)), range)) => ast::MemberExpression {
-                loc: Location::merge(loc, self.localize(range.clone())),
+                loc: Location::merge(loc, self.localize(range)),
                 object: Box::new(object),
                 prop: Some(ast::MemberProp::FieldName(self.parse_identifier())),
             },
@@ -116,7 +116,7 @@ impl Parser<'_> {
         self.tokens.next(); // consume '('
         let args = self.parse_list(|p| p.parse_argument(), Token::Comma, Token::RParen);
         let end_range = match self.tokens.peek() {
-            Some((Ok(Token::RParen), r)) => r.clone(),
+            Some((Ok(Token::RParen), _)) => self.eat(&[Token::RParen]),
             _ => self.recover_at(&[Token::RParen]),
         };
         let loc = Location::merge(callee.loc(), self.localize(end_range));

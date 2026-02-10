@@ -104,7 +104,7 @@ pub struct IfPatExpression {
     pub loc: Location,
     pub pattern: Box<Pattern>,
     pub scrutinee: Box<Expression>,
-    pub consequent: Box<BlockExpression>,
+    pub consequent: Option<BlockExpression>,
     pub alternate: Option<Box<Alternate>>,
 }
 
@@ -118,7 +118,7 @@ impl Into<Expression> for IfPatExpression {
 pub struct IfExpression {
     pub loc: Location,
     pub condition: Box<Expression>,
-    pub consequent: Box<BlockExpression>,
+    pub consequent: Option<BlockExpression>,
     pub alternate: Option<Box<Alternate>>,
 }
 

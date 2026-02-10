@@ -23,15 +23,16 @@ impl Parser<'_> {
             Some((Ok(Token::Else), _)) => self.parse_alternate(),
             _ => None,
         };
-        let end_loc = match &alternate {
-            Some(alternate) => alternate.loc(),
-            None => body.loc,
+        let end_loc = match (&alternate, &body) {
+            (Some(alternate), _) => alternate.loc(),
+            (None, Some(consequent)) => consequent.loc,
+            _ => declaration.loc,
         };
         ast::IfPatExpression {
             loc: Location::merge(kw, end_loc),
             pattern: declaration.pattern,
             scrutinee: declaration.value,
-            consequent: Box::new(body),
+            consequent: body,
             alternate: alternate.map(|a| Box::new(a)),
         }
     }
@@ -45,33 +46,30 @@ impl Parser<'_> {
             }
         };
         let consequent = self.parse_if_body();
-        println!("{:?}", self.tokens.peek());
         let alternate = match self.tokens.peek() {
             Some((Ok(Token::Else), _)) => self.parse_alternate(),
             _ => None,
         };
-        let end_loc = match &alternate {
-            Some(alternate) => alternate.loc(),
-            None => consequent.loc,
+        let end_loc = match (&alternate, &consequent) {
+            (Some(alternate), _) => alternate.loc(),
+            (None, Some(consequent)) => consequent.loc,
+            _ => condition.loc(),
         };
         ast::IfExpression {
             loc: Location::merge(kw, end_loc),
             condition: Box::new(condition),
-            consequent: Box::new(consequent),
+            consequent,
             alternate: alternate.map(|a| Box::new(a)),
         }
     }
 
-    fn parse_if_body(&mut self) -> ast::BlockExpression {
+    fn parse_if_body(&mut self) -> Option<ast::BlockExpression> {
         if let Some((Ok(Token::LBrace), _)) = self.tokens.peek() {
-            self.parse_block()
+            Some(self.parse_block())
         } else {
-            self.recover_before(&[Token::LBrace], &[Token::Newline]);
-            let range = self.next_range();
-            ast::BlockExpression {
-                statements: vec![],
-                loc: self.localize(range),
-            }
+            let error_loc = self.next_loc();
+            self.error(DiagnosticKind::MissingConsequent, error_loc);
+            None
         }
     }
 
@@ -113,7 +111,7 @@ mod tests {
                     loc: Location::new(0, Span::new(3, 7)),
                     value: true,
                 })),
-                consequent: Box::new(ast::BlockExpression {
+                consequent: Some(ast::BlockExpression {
                     statements: vec![],
                     loc: Location::new(0, Span::new(8, 10)),
                 }),
@@ -133,7 +131,7 @@ mod tests {
                     loc: Location::new(0, Span::new(3, 7)),
                     value: true,
                 })),
-                consequent: Box::new(ast::BlockExpression {
+                consequent: Some(ast::BlockExpression {
                     statements: vec![],
                     loc: Location::new(0, Span::new(8, 10)),
                 }),
@@ -156,17 +154,12 @@ mod tests {
                     loc: Location::new(0, Span::new(3, 7)),
                     value: true,
                 })),
-                consequent: Box::new(ast::BlockExpression {
-                    statements: vec![],
-                    loc: Location::new(0, Span::new(7, 7)),
-                }),
+                consequent: None,
                 alternate: None,
             }),
             diagnostics: vec![Diagnostic {
                 loc: Location::new(0, Span::new(7, 7)),
-                kind: DiagnosticKind::ExpectedToken {
-                    expected: vec!["{".to_string()],
-                },
+                kind: DiagnosticKind::MissingConsequent,
                 level: DiagnosticLevel::Error,
             }],
         })

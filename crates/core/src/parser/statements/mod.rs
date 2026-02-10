@@ -37,15 +37,15 @@ impl Parser<'_> {
             _ => self.parse_assignment(),
         };
 
-        match self.tokens.peek() {
-            Some((Ok(Token::Newline), _)) => {
-                self.tokens.next();
-            }
-            Some(_) => {
-                self.recover_at(&[Token::Newline]);
-            }
-            None => {}
-        }
+        // match self.tokens.peek() {
+        //     Some((Ok(Token::Newline), _)) => {
+        //         self.tokens.next();
+        //     }
+        //     Some(_) => {
+        //         self.recover_at(&[Token::Newline]);
+        //     }
+        //     None => {}
+        // }
 
         statement
     }

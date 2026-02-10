@@ -16,7 +16,7 @@ impl Parser<'_> {
         );
 
         let end_range = match self.tokens.peek() {
-            Some((Ok(Token::RParen), r)) => r.clone(),
+            Some((Ok(Token::RParen), _)) => self.eat(&[Token::RParen]),
             _ => self.recover_at(&[Token::RParen]),
         };
 

@@ -101,7 +101,7 @@ impl CodeGenerator<'_> {
 
     /// assign_to is Some if the last stmt has to be assigned (used for extracted blocks)
     pub fn if_to_swc_stmt(&mut self, node: &ast::IfExpression, assign_to: AssignTo) -> swc::IfStmt {
-        let block = self.block_to_swc_stmt(&node.consequent, assign_to.clone());
+        let block = self.block_to_swc_stmt(node.consequent.as_ref().unwrap(), assign_to.clone());
         let test = Box::new(self.expr_to_swc(&node.condition));
         let cons = Box::new(block.into());
         let alt = node
@@ -123,7 +123,8 @@ impl CodeGenerator<'_> {
         node: &ast::IfPatExpression,
         assign_to: AssignTo,
     ) -> swc::IfStmt {
-        let mut block = self.block_to_swc_stmt(&node.consequent, assign_to.clone());
+        let mut block =
+            self.block_to_swc_stmt(node.consequent.as_ref().unwrap(), assign_to.clone());
         let test = Box::new(self.pattern_to_swc_test(&node.pattern, &node.scrutinee));
         block.stmts.push(
             swc::Decl::Var(Box::new(swc::VarDecl {
@@ -295,7 +296,7 @@ impl CodeGenerator<'_> {
         scrutinee: &Box<ast::Expression>,
         alternate: Option<Box<ast::IfPatExpression>>,
     ) -> ast::IfPatExpression {
-        let consequent = Box::new(ast::BlockExpression {
+        let consequent = Some(ast::BlockExpression {
             loc: node.expression.as_ref().unwrap().loc(),
             statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
                 expression: node.expression.as_ref().unwrap().clone(),

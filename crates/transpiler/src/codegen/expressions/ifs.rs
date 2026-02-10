@@ -8,7 +8,7 @@ use tine_core::ast;
 
 impl CodeGenerator<'_> {
     pub fn if_to_swc_expr(&mut self, node: &ast::IfExpression) -> swc::Expr {
-        if node.consequent.statements.len() == 0 && node.alternate.is_none() {
+        if node.consequent.as_ref().unwrap().statements.len() == 0 && node.alternate.is_none() {
             undefined()
         } else if can_ifexpr_be_inlined(node) {
             self.if_to_swc_inlined(node).into()
@@ -30,11 +30,16 @@ impl CodeGenerator<'_> {
             swc::Expr::Cond(swc::CondExpr {
                 span: DUMMY_SP,
                 test: Box::new(self.expr_to_swc(&node.condition)),
-                cons: Box::new(self.block_to_swc_inlined(&node.consequent).into()),
+                cons: Box::new(
+                    self.block_to_swc_inlined(node.consequent.as_ref().unwrap())
+                        .into(),
+                ),
                 alt,
             })
         } else {
-            let cons = self.block_to_swc_inlined(&node.consequent).into();
+            let cons = self
+                .block_to_swc_inlined(node.consequent.as_ref().unwrap())
+                .into();
             swc::Expr::Cond(swc::CondExpr {
                 span: DUMMY_SP,
                 test: Box::new(self.expr_to_swc(&node.condition)),
@@ -98,7 +103,7 @@ mod tests {
     fn mock_if_expr(with_alt: bool) -> ast::IfExpression {
         ast::IfExpression {
             condition: mock_expr().into(),
-            consequent: Box::new(mock_block()),
+            consequent: Some(mock_block()),
             alternate: if with_alt {
                 Some(Box::new(ast::Alternate::Block(mock_block())))
             } else {
@@ -122,7 +127,7 @@ mod tests {
         let mut gen = CodeGenerator::new_for_test();
         let node = ast::IfExpression {
             condition: mock_expr().into(),
-            consequent: Box::new(ast::BlockExpression {
+            consequent: Some(ast::BlockExpression {
                 statements: vec![],
                 loc: Location::dummy(),
             }),

@@ -7,7 +7,28 @@ use crate::{
 impl Parser<'_> {
     pub fn parse_block(&mut self) -> ast::BlockExpression {
         let start_range = self.eat(&[Token::LBrace]);
-        let statements = self.parse_list(|p| p.parse_statement(), Token::Newline, Token::RBrace);
+
+        let mut statements = Vec::new();
+        while let Some((Ok(token), _)) = self.tokens.peek().cloned() {
+            match token.clone() {
+                Token::Newline => {
+                    self.tokens.next();
+                }
+                Token::RBrace => break,
+                _ => {
+                    if let Some(element) = self.parse_statement() {
+                        statements.push(element);
+                    }
+                    match self.tokens.peek() {
+                        Some((Ok(Token::Newline | Token::RBrace), _)) => {}
+                        _ => {
+                            self.recover_before(&[Token::Newline, Token::RBrace], &[]);
+                        }
+                    }
+                }
+            }
+        }
+
         let end_range = self.expect(Token::RBrace);
 
         ast::BlockExpression {

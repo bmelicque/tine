@@ -49,6 +49,16 @@ impl<'src> Parser<'src> {
                 Some(item) => items.push(item),
                 None => {}
             }
+
+            match self.tokens.peek() {
+                Some((Ok(Token::Newline), _)) => {
+                    self.tokens.next();
+                }
+                Some(_) => {
+                    self.recover_at(&[Token::Newline]);
+                }
+                None => {}
+            }
         }
 
         ParseResult {
@@ -84,11 +94,7 @@ impl<'src> Parser<'src> {
 
     pub(super) fn expect(&mut self, token: Token) -> Range<usize> {
         match self.tokens.peek() {
-            Some((Ok(tok), r)) if tok == &token => {
-                let range = r.clone();
-                self.tokens.next(); // consume the token
-                range
-            }
+            Some((Ok(tok), r)) if tok == &token => self.eat(&[token]),
             _ => self.recover_at(&[token]),
         }
     }

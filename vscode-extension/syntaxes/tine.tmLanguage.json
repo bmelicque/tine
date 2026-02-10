@@ -103,6 +103,10 @@
                 {
                     "name": "keyword.declaration.variable.tine",
                     "match": "\\b(const|var)\\b"
+                },
+                {
+                    "name": "keyword.declaration.function.tine",
+                    "match": "\\b(fn)\\b"
                 }
             ]
         },

@@ -8,7 +8,8 @@ impl Parser<'_> {
     pub fn parse_item(&mut self) -> Option<ast::Item> {
         match self.tokens.peek() {
             Some((Ok(Token::Use), _)) => {}
-            _ => return self.parse_assignment().map(|st| st.into()),
+            Some((Ok(Token::Newline), _)) => return None,
+            _ => return self.parse_statement().map(|st| st.into()),
         };
 
         let start_range = self.eat(&[Token::Use]);
@@ -26,15 +27,15 @@ impl Parser<'_> {
             self.error(DiagnosticKind::MissingName, error_loc);
         }
 
-        match self.tokens.peek() {
-            Some((Ok(Token::Newline), _)) => {
-                self.tokens.next();
-            }
-            Some(_) => {
-                self.recover_at(&[Token::Newline]);
-            }
-            None => {}
-        }
+        // match self.tokens.peek() {
+        //     Some((Ok(Token::Newline), _)) => {
+        //         self.tokens.next();
+        //     }
+        //     Some(_) => {
+        //         self.recover_at(&[Token::Newline]);
+        //     }
+        //     None => {}
+        // }
 
         Some(ast::Item::UseDeclaration(ast::UseDeclaration {
             loc: Location::merge(start_loc, self.next_loc()),
@@ -81,9 +82,5 @@ impl Parser<'_> {
             _ => vec![],
         };
         Some(ast::UseTree { path, sub_trees })
-    }
-
-    fn parse_path_element(&mut self) -> Option<ast::PathElement> {
-        unimplemented!()
     }
 }

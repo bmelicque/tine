@@ -85,14 +85,6 @@ impl Parser<'_> {
     }
 }
 
-pub fn is_type_name(name: &str) -> bool {
-    name.chars()
-        .filter(|c| *c != '_')
-        .next()
-        .map(|c| c.is_ascii_uppercase())
-        .unwrap_or(false)
-}
-
 pub fn normalize_doc_comment(input: &str) -> String {
     let mut paragraphs = Vec::new();
     let mut current = Vec::new();
@@ -117,18 +109,4 @@ pub fn normalize_doc_comment(input: &str) -> String {
     }
 
     paragraphs.join("\n\n")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_type_name() {
-        assert!(is_type_name("FooBar"));
-        assert!(is_type_name("FooBar123"));
-        assert!(is_type_name("_FooBar"));
-        assert!(!is_type_name("foo_bar"));
-        assert!(!is_type_name("_foo_bar"));
-    }
 }

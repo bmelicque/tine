@@ -27,6 +27,7 @@ impl Parser<'_> {
         if let Some((Ok(Token::Ident(ident)), range)) = self.tokens.peek() {
             let name = ident.to_owned();
             let range = range.clone();
+            self.tokens.next();
             Some(ast::Identifier {
                 loc: self.localize(range),
                 text: name,

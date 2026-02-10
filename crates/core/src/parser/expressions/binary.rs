@@ -27,8 +27,7 @@ impl Parser<'_> {
         }
         let mut expression = self.parse_binary_expression(min_precedence + 1);
         while let Some((Ok(token), op_range)) = self.tokens.peek().cloned() {
-            if token.precedence() <= min_precedence || !Self::LTR_BINARY_OPERATORS.contains(&token)
-            {
+            if token.precedence() < min_precedence || !Self::LTR_BINARY_OPERATORS.contains(&token) {
                 break;
             }
             self.tokens.next(); // consume the operator
@@ -101,6 +100,26 @@ mod tests {
                 right: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
                     loc: Location::new(0, Span::new(4, 5)),
                     value: 2,
+                })),
+            }),
+            diagnostics: vec![],
+        });
+    }
+
+    #[test]
+    fn parse_binary_logical_expression() {
+        test_expression(ExpressionTest {
+            input: "true || false",
+            expected: ast::Expression::Binary(ast::BinaryExpression {
+                loc: Location::new(0, Span::new(0, 13)),
+                left: Box::new(ast::Expression::BooleanLiteral(ast::BooleanLiteral {
+                    loc: Location::new(0, Span::new(0, 4)),
+                    value: true,
+                })),
+                operator: ast::BinaryOperator::LOr,
+                right: Box::new(ast::Expression::BooleanLiteral(ast::BooleanLiteral {
+                    loc: Location::new(0, Span::new(8, 13)),
+                    value: false,
                 })),
             }),
             diagnostics: vec![],

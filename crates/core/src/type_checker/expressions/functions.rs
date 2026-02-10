@@ -52,7 +52,7 @@ impl TypeChecker<'_> {
         node.body.find_returns(&mut returns);
         for ret in returns {
             let ty = match ret.value {
-                Some(value) => self.get_type_at(value.loc()).unwrap(),
+                Some(value) => self.get_type_at(value.loc()).unwrap_or(TypeStore::UNKNOWN),
                 None => TypeStore::UNIT,
             };
             self.check_assigned_type(return_type, ty, ret.loc);
