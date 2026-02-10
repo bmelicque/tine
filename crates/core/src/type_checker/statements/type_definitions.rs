@@ -60,7 +60,7 @@ impl TypeChecker<'_> {
             let variants: Vec<types::Variant> = node
                 .variants
                 .iter()
-                .map(|variant| checker.visit_enum_variant(variant))
+                .filter_map(|variant| checker.visit_enum_variant(variant))
                 .collect();
 
             checker.intern_unique(Type::Enum(EnumType { id: 0, variants }))
@@ -79,15 +79,16 @@ impl TypeChecker<'_> {
         TypeStore::UNIT
     }
 
-    fn visit_enum_variant(&mut self, variant: &ast::VariantDefinition) -> types::Variant {
+    fn visit_enum_variant(&mut self, variant: &ast::VariantDefinition) -> Option<types::Variant> {
         let ty = match &variant.body {
             Some(body) => self.visit_type_body(body),
             None => TypeStore::UNIT,
         };
-        types::Variant {
-            name: variant.name.clone(),
+
+        variant.name.as_ref().map(|name| types::Variant {
+            name: name.text.clone(),
             def: ty,
-        }
+        })
     }
 
     fn visit_with_type_params<F>(

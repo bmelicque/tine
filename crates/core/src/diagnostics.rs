@@ -141,6 +141,7 @@ pub enum DiagnosticKind {
     UnexpectedToken {
         token: String,
     },
+    UnexpectedTypeParams,
     UnknownMember {
         member: String,
     },
@@ -314,6 +315,7 @@ impl Display for DiagnosticKind {
             Self::UnexpectedToken { token } => {
                 write!(f, "unexpected token: {}", token)
             }
+            Self::UnexpectedTypeParams => write!(f, "unexpected type parameters"),
             Self::UnknownMember { member } => {
                 write!(f, "unknown member `{}`", member)
             }

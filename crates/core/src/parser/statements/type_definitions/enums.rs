@@ -46,7 +46,7 @@ impl ParserEngine {
         debug_assert_eq!(pair.as_rule(), Rule::enum_variant);
         let loc = self.localize(pair.as_span());
         let mut inner = pair.into_inner();
-        let name = inner.next().unwrap().as_str().to_string();
+        let name = Some(self.parse_identifier(inner.next().unwrap()));
         let body = inner
             .next()
             .map(|body_pair| self.parse_type_body(body_pair));

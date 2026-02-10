@@ -126,6 +126,14 @@ pub enum TypeBody {
     Tuple(TupleType),
 }
 
+impl TypeBody {
+    pub fn loc(&self) -> Location {
+        match self {
+            Self::Struct(body) => body.loc,
+            Self::Tuple(body) => body.loc,
+        }
+    }
+}
 impl From<StructBody> for TypeBody {
     fn from(value: StructBody) -> Self {
         Self::Struct(value)
@@ -213,7 +221,7 @@ impl Into<Statement> for EnumDefinition {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariantDefinition {
     pub loc: Location,
-    pub name: String,
+    pub name: Option<Identifier>,
     pub body: Option<TypeBody>,
 }
 

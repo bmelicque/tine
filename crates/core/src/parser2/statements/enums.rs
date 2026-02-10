@@ -1,7 +1,7 @@
 use crate::{
     ast,
-    parser2::{tokens::Token, Parser},
-    Location,
+    parser2::{statements::utils::TypeName, tokens::Token, Parser},
+    DiagnosticKind, Location,
 };
 
 impl Parser<'_> {
@@ -34,8 +34,29 @@ impl Parser<'_> {
     }
 
     fn parse_variant_definition(&mut self) -> Option<ast::VariantDefinition> {
-        let name_result = self.try_parse_type_name();
-        // TODO: parse body
-        unimplemented!()
+        let Ok(type_name) = self.parse_type_name(&[Token::LBrace, Token::LParen, Token::Newline])
+        else {
+            return None;
+        };
+        if let Some(TypeName {
+            params: Some(_),
+            loc,
+            ..
+        }) = type_name
+        {
+            self.error(DiagnosticKind::UnexpectedTypeParams, loc);
+        }
+        let body = self.parse_type_body();
+        let loc = match (&type_name, &body) {
+            (Some(type_name), Some(body)) => Location::merge(type_name.loc, body.loc()),
+            (Some(type_name), None) => type_name.loc,
+            (None, Some(body)) => body.loc(),
+            (None, None) => return None,
+        };
+        Some(ast::VariantDefinition {
+            loc,
+            body,
+            name: type_name.map(|t| t.name),
+        })
     }
 }
