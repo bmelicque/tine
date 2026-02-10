@@ -1,4 +1,7 @@
-use crate::{ast, parser2::Parser};
+use crate::{
+    ast,
+    parser2::{tokens::Token, Parser},
+};
 
 mod atom;
 mod binary;
@@ -8,6 +11,9 @@ mod unary;
 
 impl Parser<'_> {
     pub fn parse_type(&mut self) -> Option<ast::Type> {
-        unimplemented!()
+        match self.tokens.peek() {
+            Some((Ok(Token::Fn), _)) => Some(self.parse_function_type().into()),
+            _ => self.parse_binary_type(1),
+        }
     }
 }

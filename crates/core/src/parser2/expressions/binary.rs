@@ -5,13 +5,30 @@ use crate::{
 };
 
 impl Parser<'_> {
+    const LTR_BINARY_OPERATORS: [Token; 13] = [
+        Token::Plus,
+        Token::Minus,
+        Token::Star,
+        Token::Slash,
+        Token::Mod,
+        Token::AndAnd,
+        Token::PipePipe,
+        Token::EqEq,
+        Token::NotEq,
+        Token::Lt,
+        Token::Le,
+        Token::Gt,
+        Token::Ge,
+    ];
+
     pub fn parse_binary_expression(&mut self, min_precedence: u8) -> ast::Expression {
         if min_precedence == Token::StarStar.precedence() {
             return self.parse_exponentiation();
         }
         let mut expression = self.parse_binary_expression(min_precedence + 1);
         while let Some((Ok(token), op_range)) = self.tokens.peek().cloned() {
-            if token.precedence() <= min_precedence {
+            if token.precedence() <= min_precedence || !Self::LTR_BINARY_OPERATORS.contains(&token)
+            {
                 break;
             }
             self.tokens.next(); // consume the operator
@@ -38,28 +55,26 @@ impl Parser<'_> {
 
     fn parse_exponentiation(&mut self) -> ast::Expression {
         let lhs = self.parse_unary_expression();
-        match self.tokens.peek().cloned() {
-            Some((Ok(Token::StarStar), op_range)) => {
-                self.tokens.next(); // consume the operator
-                let rhs = self.parse_exponentiation();
-                let loc = if rhs.is_empty() {
-                    self.error(
-                        DiagnosticKind::MissingExpression,
-                        self.localize(op_range.clone()).increment(),
-                    );
-                    Location::merge(lhs.loc(), self.localize(op_range))
-                } else {
-                    Location::merge(lhs.loc(), rhs.loc())
-                };
-                ast::Expression::Binary(ast::BinaryExpression {
-                    loc,
-                    left: Box::new(lhs),
-                    operator: ast::BinaryOperator::Pow,
-                    right: Box::new(rhs),
-                })
-            }
-            _ => lhs,
-        }
+        let Some((Ok(Token::StarStar), op_range)) = self.tokens.peek().cloned() else {
+            return lhs;
+        };
+        self.tokens.next(); // consume the operator
+        let rhs = self.parse_exponentiation();
+        let loc = if rhs.is_empty() {
+            self.error(
+                DiagnosticKind::MissingExpression,
+                self.localize(op_range.clone()).increment(),
+            );
+            Location::merge(lhs.loc(), self.localize(op_range))
+        } else {
+            Location::merge(lhs.loc(), rhs.loc())
+        };
+        ast::Expression::Binary(ast::BinaryExpression {
+            loc,
+            left: Box::new(lhs),
+            operator: ast::BinaryOperator::Pow,
+            right: Box::new(rhs),
+        })
     }
 }
 

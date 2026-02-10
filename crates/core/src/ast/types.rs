@@ -160,7 +160,7 @@ impl Into<Type> for ResultType {
 pub struct FunctionType {
     pub loc: Location,
     pub params: Vec<Type>,
-    pub returned: Box<Type>,
+    pub returned: Option<Box<Type>>,
 }
 
 impl Into<Type> for FunctionType {

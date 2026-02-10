@@ -42,7 +42,11 @@ impl TypeChecker<'_> {
             .map(|param| self.visit_type(param))
             .collect();
 
-        let return_type = self.visit_type(&node.returned);
+        let return_type = node
+            .returned
+            .as_ref()
+            .map(|t| self.visit_type(t))
+            .unwrap_or(TypeStore::UNIT);
 
         self.intern(Type::Function(FunctionType {
             params,
@@ -224,11 +228,11 @@ mod tests {
                     loc: Location::dummy(),
                 }),
             ],
-            returned: Box::new(ast::Type::Named(ast::NamedType {
+            returned: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "bool".to_string(),
                 args: None,
                 loc: Location::dummy(),
-            })),
+            }))),
             loc: Location::dummy(),
         };
 

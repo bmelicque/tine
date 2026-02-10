@@ -124,7 +124,7 @@ impl ParserEngine {
             .map(|sub_pair| self.parse_type(sub_pair))
             .collect();
 
-        let returned = Box::new(self.parse_type(inner.next().unwrap()));
+        let returned = Some(Box::new(self.parse_type(inner.next().unwrap())));
 
         ast::FunctionType {
             loc,
@@ -237,7 +237,7 @@ mod tests {
                     ast::Type::Named(named) => assert_eq!(named.name, "str"),
                     _ => panic!("Expected NamedType as second function parameter"),
                 }
-                match *function.returned {
+                match *(function.returned.unwrap()) {
                     ast::Type::Named(named) => assert_eq!(named.name, "bool"),
                     _ => panic!("Expected NamedType as function return type"),
                 }
@@ -252,7 +252,7 @@ mod tests {
         let result = parse_type_input(input, Rule::function_type);
 
         match result {
-            ast::Type::Function(function) => match *function.returned {
+            ast::Type::Function(function) => match *function.returned.unwrap() {
                 ast::Type::Named(named) => assert_eq!(named.name, "bool"),
                 _ => panic!("Expected NamedType as function return type"),
             },
