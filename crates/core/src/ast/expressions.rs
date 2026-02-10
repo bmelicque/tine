@@ -2,7 +2,7 @@ use std::fmt;
 
 use ordered_float::OrderedFloat;
 
-use crate::{analyzer::ModuleId, ast::ElementExpression, Location};
+use crate::{ast::ElementExpression, Location};
 
 use super::{composite_literals::CompositeLiteral, types::Type, Loop, Pattern, Statement};
 
@@ -88,13 +88,6 @@ pub struct Identifier {
 }
 
 impl Identifier {
-    pub fn from_pest(module: ModuleId, span: pest::Span<'_>) -> Self {
-        Self {
-            loc: Location::new(module, span.into()),
-            text: span.as_str().to_string(),
-        }
-    }
-
     pub fn as_str(&self) -> &str {
         self.text.as_str()
     }

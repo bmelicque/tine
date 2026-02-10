@@ -60,15 +60,6 @@ impl Span {
     }
 }
 
-impl From<pest::Span<'_>> for Span {
-    fn from(value: pest::Span) -> Self {
-        Self {
-            start: value.start() as u32,
-            end: value.end() as u32,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Location {
     module: ModuleId,

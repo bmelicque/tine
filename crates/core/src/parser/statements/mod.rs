@@ -1,159 +1,69 @@
+mod aliases;
 mod assignments;
+mod diverging;
+mod enums;
 mod functions;
-mod type_definitions;
-mod variable_declarations;
+mod structs;
+mod utils;
+mod variables;
 
-use pest::iterators::Pair;
+use crate::{
+    ast,
+    parser::{tokens::Token, utils::normalize_doc_comment, Parser},
+};
 
-use crate::ast;
-
-use super::{parser::Rule, ParserEngine};
-
-impl ParserEngine {
-    pub fn parse_statement(&mut self, pair: Pair<'_, Rule>) -> ast::Statement {
-        match pair.as_rule() {
-            Rule::statement => {
-                let inner_pair = pair.into_inner().next().unwrap();
-                self.parse_statement(inner_pair)
+impl Parser<'_> {
+    pub fn parse_statement(&mut self) -> Option<ast::Statement> {
+        let docs = match self.tokens.peek() {
+            Some((Ok(Token::LineComment(_)), range)) => {
+                let start = range.start.clone();
+                Some(self.parse_docs(start))
             }
-            Rule::variable_declaration => self.parse_variable_declaration(pair).into(),
-            Rule::assignment => self.parse_assignment(pair).into(),
-            Rule::enum_definition => self.parse_enum_definition(pair).into(),
-            Rule::function_definition => self.parse_function_definition(pair).into(),
-            Rule::struct_definition => self.parse_struct_definition(pair).into(),
-            Rule::type_alias => self.parse_type_alias(pair).into(),
-            Rule::break_statement => self.parse_break_statement(pair).into(),
-            Rule::method_definition => self.parse_method_definition(pair).into(),
-            Rule::return_statement => self.parse_return_statement(pair).into(),
-            Rule::expression_statement => self.parse_expression_statement(pair),
-            _ => ast::Statement::Empty,
-        }
-    }
-
-    fn parse_break_statement(&mut self, pair: Pair<'_, Rule>) -> ast::BreakStatement {
-        assert_eq!(pair.as_rule(), Rule::break_statement);
-        let loc = self.localize(pair.as_span());
-        let value = pair
-            .into_inner()
-            .next()
-            .map(|inner| self.parse_expression(inner))
-            .map(Box::new);
-
-        ast::BreakStatement { loc, value }
-    }
-
-    fn parse_method_definition(&mut self, pair: Pair<'_, Rule>) -> ast::MethodDefinition {
-        assert_eq!(pair.as_rule(), Rule::method_definition);
-        let loc = self.localize(pair.as_span());
-        let mut inner = pair.into_inner();
-        let receiver = self.parse_method_receiver(inner.next().unwrap());
-        let next = inner.next().unwrap();
-        let name = ast::Identifier {
-            loc: self.localize(next.as_span()),
-            text: next.as_str().to_string(),
+            Some((Err(_), _)) | None => return None,
+            _ => None,
         };
-        let definition = self.parse_function_expression(inner.next().unwrap());
-        ast::MethodDefinition {
-            loc,
-            receiver,
-            name,
-            definition,
-        }
-    }
-
-    fn parse_method_receiver(&mut self, pair: Pair<'_, Rule>) -> ast::MethodReceiver {
-        assert_eq!(pair.as_rule(), Rule::method_receiver);
-        let loc = self.localize(pair.as_span());
-        let mut inner = pair.into_inner();
-        let next = inner.next().unwrap();
-        let name = ast::Identifier {
-            loc: self.localize(next.as_span()),
-            text: next.as_str().to_string(),
+        let Some((Ok(token), _)) = self.tokens.peek() else {
+            // This is unreachable because other cases have been handled just above
+            unreachable!()
         };
-        let ty = self.parse_named_type(inner.next().unwrap());
-        ast::MethodReceiver { loc, name, ty }
-    }
-
-    fn parse_return_statement(&mut self, pair: Pair<'_, Rule>) -> ast::ReturnStatement {
-        let loc = self.localize(pair.as_span());
-        let value = pair
-            .into_inner()
-            .next()
-            .map(|inner| self.parse_expression(inner))
-            .map(Box::new);
-
-        ast::ReturnStatement { loc, value }
-    }
-
-    fn parse_expression_statement(&mut self, pair: Pair<'_, Rule>) -> ast::Statement {
-        let mut inner = pair.into_inner();
-        if inner.peek().unwrap().as_rule() == Rule::comment {
-            inner.next();
-        }
-        let expression = self.parse_expression(inner.next().unwrap());
-        if let Some(err) = inner.next() {
-            self.parse_expression_error(err);
-        }
-        ast::Statement::Expression(ast::ExpressionStatement {
-            expression: Box::new(expression),
-        })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::parser::parser::{Rule, TineParser};
-    use pest::Parser;
-
-    fn parse_statement_input(input: &'static str, rule: Rule) -> ast::Statement {
-        let pair = TineParser::parse(rule, input).unwrap().next().unwrap();
-        let mut parser_engine = ParserEngine::new(0);
-        parser_engine.parse_statement(pair)
-    }
-
-    #[test]
-    fn test_parse_return_statement() {
-        let input = "return 42";
-        let result = parse_statement_input(input, Rule::return_statement);
-
-        match result {
-            ast::Statement::Return(return_stmt) => match *return_stmt.value.unwrap() {
-                ast::Expression::IntLiteral(literal) => assert_eq!(literal.value, 42),
-                _ => panic!("Expected IntLiteral as return value"),
-            },
-            _ => panic!("Expected ReturnStatement"),
-        }
-    }
-
-    #[test]
-    fn test_parse_expression_statement() {
-        let input = "42";
-        let result = parse_statement_input(input, Rule::expression_statement);
-
-        let ast::Statement::Expression(expr_stmt) = result else {
-            panic!("Expected ExpressionStatement");
+        let statement = match token {
+            Token::Break => Some(self.parse_break_statement().into()),
+            Token::Const | Token::Var => Some(self.parse_variable_declaration(docs).into()),
+            Token::Enum => Some(self.parse_enum(docs).into()),
+            Token::Fn => Some(self.parse_function_definition(docs).into()),
+            Token::Return => Some(self.parse_return_statement().into()),
+            Token::Struct => Some(self.parse_struct_definition(docs).into()),
+            Token::Type => Some(self.parse_type_alias(docs).into()),
+            _ => self.parse_assignment(),
         };
 
-        match *expr_stmt.expression {
-            ast::Expression::IntLiteral(literal) => assert_eq!(literal.value, 42),
-            _ => panic!("Expected IntLiteral as expression"),
+        match self.tokens.peek() {
+            Some((Ok(Token::Newline), _)) => {
+                self.tokens.next();
+            }
+            Some(_) => {
+                self.recover_at(&[Token::Newline]);
+            }
+            None => {}
         }
+
+        statement
     }
 
-    #[test]
-    fn test_parse_expression_statement_with_comment() {
-        let input = r#"// useless comment
-42"#;
-        let result = parse_statement_input(input, Rule::expression_statement);
-
-        let ast::Statement::Expression(expr_stmt) = result else {
-            panic!("Expected ExpressionStatement");
-        };
-
-        match *expr_stmt.expression {
-            ast::Expression::IntLiteral(literal) => assert_eq!(literal.value, 42),
-            _ => panic!("Expected IntLiteral as expression"),
+    fn parse_docs(&mut self, start: usize) -> ast::Docs {
+        let mut text = String::new();
+        let mut end = start;
+        while let Some((Ok(Token::LineComment(_)), _)) = self.tokens.peek() {
+            let Some((Ok(Token::LineComment(line)), range)) = self.tokens.next() else {
+                unreachable!()
+            };
+            text += &normalize_doc_comment(&line);
+            end = range.end;
+            self.skip_next_if(&Token::Newline);
+        }
+        ast::Docs {
+            text,
+            loc: self.localize(start..end),
         }
     }
 }

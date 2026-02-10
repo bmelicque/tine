@@ -1,66 +1,89 @@
-use pest::iterators::Pair;
-
 use crate::{
     ast,
-    parser::{parser::Rule, ParserEngine},
+    parser::{tokens::Token, Parser},
+    DiagnosticKind, Location,
 };
 
-impl ParserEngine {
-    pub fn parse_item(&mut self, pair: Pair<'_, Rule>) -> ast::Item {
-        assert_eq!(pair.as_rule(), Rule::item);
-        let pair = pair.into_inner().next().unwrap();
-        match pair.as_rule() {
-            Rule::invalid => ast::Item::Invalid(ast::InvalidItem {
-                loc: self.localize(pair.as_span()),
-            }),
-            Rule::statement => self.parse_statement(pair).into(),
-            Rule::use_declaration => self.parse_use_declaration(pair).into(),
-            rule => unreachable!("unexpected rule {:?}", rule),
+impl Parser<'_> {
+    pub fn parse_item(&mut self) -> Option<ast::Item> {
+        match self.tokens.peek() {
+            Some((Ok(Token::Use), _)) => {}
+            _ => return self.parse_assignment().map(|st| st.into()),
+        };
+
+        let start_range = self.eat(&[Token::Use]);
+        let start_loc = self.localize(start_range);
+
+        let mut relative_count = 0;
+        while let Some((Ok(Token::Dot), _)) = self.tokens.peek() {
+            self.eat(&[Token::Dot]);
+            relative_count += 1;
         }
-    }
 
-    fn parse_use_declaration(&mut self, pair: Pair<'_, Rule>) -> ast::UseDeclaration {
-        assert_eq!(pair.as_rule(), Rule::use_declaration);
-        let loc = self.localize(pair.as_span());
-        let mut inner = pair.into_inner();
+        let tree = self.parse_use_tree();
+        if tree.is_none() {
+            let error_loc = self.next_loc();
+            self.error(DiagnosticKind::MissingName, error_loc);
+        }
 
-        let tree = self.parse_use_tree(inner.next_back().unwrap());
-        let relative_count = self.parse_relative_count(inner.next());
+        match self.tokens.peek() {
+            Some((Ok(Token::Newline), _)) => {
+                self.tokens.next();
+            }
+            Some(_) => {
+                self.recover_at(&[Token::Newline]);
+            }
+            None => {}
+        }
 
-        ast::UseDeclaration {
-            loc,
+        Some(ast::Item::UseDeclaration(ast::UseDeclaration {
+            loc: Location::merge(start_loc, self.next_loc()),
             relative_count,
-            tree,
-        }
+            tree: tree.unwrap_or(ast::UseTree {
+                path: vec![],
+                sub_trees: vec![],
+            }),
+        }))
     }
 
-    fn parse_relative_count(&mut self, pair: Option<Pair<'_, Rule>>) -> usize {
-        let Some(pair) = pair else { return 0 };
-        assert_eq!(pair.as_rule(), Rule::relative_count);
-        pair.as_str().len()
-    }
-
-    fn parse_use_tree(&mut self, pair: Pair<'_, Rule>) -> ast::UseTree {
-        assert_eq!(pair.as_rule(), Rule::use_tree);
+    fn parse_use_tree(&mut self) -> Option<ast::UseTree> {
         let mut path = Vec::new();
-        let mut sub_trees = Vec::new();
-        for pair in pair.into_inner() {
-            match pair.as_rule() {
-                Rule::file_name => path.push(self.parse_file_name(pair)),
-                Rule::use_tree => sub_trees.push(self.parse_use_tree(pair)),
-                rule => unreachable!("unexpected rule {:?}", rule),
+        match self.tokens.peek() {
+            Some((Ok(Token::Ident(_)), _)) => {
+                path.push(ast::PathElement(self.parse_identifier()));
+            }
+            _ => return None,
+        }
+        while let Some((Ok(Token::Dot), _)) = self.tokens.peek() {
+            self.tokens.next(); // consume the dot
+            match self.tokens.peek() {
+                Some((Ok(Token::Ident(_)), _)) => {
+                    path.push(ast::PathElement(self.parse_identifier()));
+                }
+                Some((Ok(Token::LBrace), _)) => break,
+                _ => {
+                    let error_loc = self.next_loc();
+                    self.error(DiagnosticKind::MissingName, error_loc);
+                }
             }
         }
-        ast::UseTree { path, sub_trees }
+        let sub_trees = match self.tokens.peek() {
+            Some((Ok(Token::LBrace), _)) => {
+                self.eat(&[Token::LBrace]);
+                let sub_trees =
+                    self.parse_list(|p| p.parse_use_tree(), Token::Comma, Token::RBrace);
+                match self.tokens.peek() {
+                    Some((Ok(Token::RBrace), r)) => r.clone(),
+                    _ => self.recover_at(&[Token::RBrace]),
+                };
+                sub_trees
+            }
+            _ => vec![],
+        };
+        Some(ast::UseTree { path, sub_trees })
     }
 
-    fn parse_file_name(&mut self, pair: Pair<'_, Rule>) -> ast::PathElement {
-        assert_eq!(pair.as_rule(), Rule::file_name);
-        let loc = self.localize(pair.as_span());
-        let ident = ast::Identifier {
-            loc,
-            text: pair.as_str().to_string(),
-        };
-        ast::PathElement(ident)
+    fn parse_path_element(&mut self) -> Option<ast::PathElement> {
+        unimplemented!()
     }
 }

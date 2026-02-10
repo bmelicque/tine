@@ -1,147 +1,94 @@
-use pest::iterators::Pair;
-
 use crate::{
     ast,
-    parser::{parser::Rule, ParserEngine},
-    DiagnosticKind,
+    parser::{tokens::Token, Parser},
+    DiagnosticKind, Location,
 };
 
-impl ParserEngine {
-    pub fn parse_loop(&mut self, pair: Pair<'_, Rule>) -> ast::Loop {
-        assert_eq!(pair.as_rule(), Rule::loop_expression);
-        let pair = pair.into_inner().next().unwrap();
-        match pair.as_rule() {
-            Rule::for_expression => self.parse_for_expression(pair).into(),
-            Rule::for_in_expression => self.parse_for_in_expression(pair).into(),
-            rule => unreachable!("unexpected rule {:?}", rule),
+impl Parser<'_> {
+    pub fn parse_loop_expression(&mut self) -> ast::Loop {
+        let start_range = self.eat(&[Token::For]);
+        let start_loc = self.localize(start_range);
+        let expression = self.parse_expression_without_block();
+        let mut loc = match &expression {
+            Some(e) => Location::merge(start_loc, e.loc()),
+            None => start_loc,
+        };
+        match self.tokens.peek() {
+            Some((Ok(Token::In), _)) => {
+                let pattern = expression.map(|e| self.expr_to_pattern(e));
+                if pattern.is_none() {
+                    let error_loc = self.next_loc();
+                    self.error(DiagnosticKind::MissingPattern, error_loc);
+                }
+                self.tokens.next(); // consume the 'in' token
+                let iterable = self.parse_expression_without_block();
+
+                let body = self.parse_loop_body();
+                loc = match &body {
+                    Some(b) => Location::merge(loc, b.loc),
+                    None => loc,
+                };
+                ast::Loop::ForIn(ast::ForInExpression {
+                    loc,
+                    pattern: pattern.map(|p| Box::new(p)),
+                    iterable: iterable.map(|i| Box::new(i)),
+                    body,
+                })
+            }
+            _ => {
+                let body = self.parse_loop_body();
+                loc = match &body {
+                    Some(b) => Location::merge(loc, b.loc),
+                    None => loc,
+                };
+                ast::Loop::For(ast::ForExpression {
+                    loc,
+                    condition: expression.map(|e| Box::new(e)),
+                    body,
+                })
+            }
         }
     }
 
-    fn parse_for_expression(&mut self, pair: Pair<'_, Rule>) -> ast::ForExpression {
-        debug_assert_eq!(pair.as_rule(), Rule::for_expression);
-        let loc = self.localize(pair.as_span());
-        let mut inner = pair.into_inner();
-        let condition = if inner.peek().unwrap().as_rule() == Rule::condition {
-            Some(Box::new(self.parse_expression(inner.next().unwrap())))
-        } else {
-            None
-        };
-        let body = match inner.next() {
-            Some(pair) => Some(self.parse_block(pair)),
-            None => {
-                self.error(DiagnosticKind::MissingConsequent, loc);
+    fn parse_loop_body(&mut self) -> Option<ast::BlockExpression> {
+        match self.tokens.peek() {
+            Some((Ok(Token::LBrace), _)) => Some(self.parse_block()),
+            _ => {
+                let error_loc = self.next_loc();
+                self.error(DiagnosticKind::MissingConsequent, error_loc);
                 None
             }
-        };
-        ast::ForExpression {
-            loc,
-            condition,
-            body,
-        }
-    }
-
-    fn parse_for_in_expression(&mut self, pair: Pair<'_, Rule>) -> ast::ForInExpression {
-        assert_eq!(pair.as_rule(), Rule::for_in_expression);
-        let loc = self.localize(pair.as_span());
-        let mut inner = pair.into_inner();
-        let pattern = Some(Box::new(self.parse_pattern(inner.next().unwrap())));
-        let iterable = Some(Box::new(self.parse_expression(inner.next().unwrap())));
-        let body = Some(self.parse_block(inner.next().unwrap()));
-        ast::ForInExpression {
-            loc,
-            pattern,
-            iterable,
-            body,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{
-        parser::parser::{Rule, TineParser},
-        Diagnostic, DiagnosticKind, Location, Span,
+        parser::test_utils::{test_expression, ExpressionTest},
+        Span,
     };
-    use pest::Parser;
 
-    fn parse_expression_input(input: &'static str) -> (ast::Expression, Vec<Diagnostic>) {
-        let pair = TineParser::parse(Rule::expression, input)
-            .unwrap()
-            .next()
-            .unwrap();
-        let mut parser_engine = ParserEngine::new(0);
-        (
-            parser_engine.parse_expression(pair),
-            parser_engine.diagnostics,
-        )
-    }
+    use super::*;
 
     #[test]
-    fn test_parse_for_loop() {
-        let input = "for i >= 0 {}";
-        let expected = ast::Expression::Loop(ast::Loop::For(ast::ForExpression {
-            loc: Location::new(0, Span::new(0, input.len() as u32)),
-            condition: Some(Box::new(ast::Expression::Binary(ast::BinaryExpression {
-                loc: Location::new(0, Span::new(4, 10)),
-                operator: ast::BinaryOperator::Geq,
-                left: Box::new(ast::Expression::Identifier(ast::Identifier {
-                    loc: Location::new(0, Span::new(4, 5)),
-                    text: "i".to_string(),
-                })),
-                right: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
-                    loc: Location::new(0, Span::new(9, 10)),
-                    value: 0,
-                })),
-            }))),
-            body: Some(ast::BlockExpression {
-                loc: Location::new(0, Span::new(11, input.len() as u32)),
-                statements: vec![],
-            }),
-        }));
-        let (actual, diagnostics) = parse_expression_input(input);
-        assert_eq!(expected, actual);
-        assert_eq!(diagnostics.len(), 0);
-    }
-
-    #[test]
-    fn parse_for_loop_without_condition() {
-        let input = "for {}";
-        let expected = ast::Expression::Loop(ast::Loop::For(ast::ForExpression {
-            loc: Location::new(0, Span::new(0, input.len() as u32)),
-            condition: None,
-            body: Some(ast::BlockExpression {
-                loc: Location::new(0, Span::new(4, input.len() as u32)),
-                statements: vec![],
-            }),
-        }));
-        let (actual, diagnostics) = parse_expression_input(input);
-        assert_eq!(expected, actual);
-        assert_eq!(diagnostics.len(), 0);
-    }
-
-    #[test]
-    fn test_parse_for_loop_missing_body() {
-        let input = "for i >= 0";
-        let expected = ast::Expression::Loop(ast::Loop::For(ast::ForExpression {
-            loc: Location::new(0, Span::new(0, input.len() as u32)),
-            condition: Some(Box::new(ast::Expression::Binary(ast::BinaryExpression {
-                loc: Location::new(0, Span::new(4, 10)),
-                operator: ast::BinaryOperator::Geq,
-                left: Box::new(ast::Expression::Identifier(ast::Identifier {
-                    loc: Location::new(0, Span::new(4, 5)),
-                    text: "i".to_string(),
-                })),
-                right: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
-                    loc: Location::new(0, Span::new(9, 10)),
-                    value: 0,
-                })),
-            }))),
-            body: None,
-        }));
-        let (actual, diagnostics) = parse_expression_input(input);
-        assert_eq!(expected, actual);
-        assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].kind, DiagnosticKind::MissingConsequent);
+    fn parse_for_loop() {
+        test_expression(ExpressionTest {
+            input: "for true {}",
+            expected: ast::Expression::Loop(ast::Loop::For(ast::ForExpression {
+                loc: Location::new(0, Span::new(0, 11)),
+                condition: Some(Box::new(ast::Expression::BooleanLiteral(
+                    ast::BooleanLiteral {
+                        loc: Location::new(0, Span::new(4, 8)),
+                        value: true,
+                    },
+                ))),
+                body: Some(ast::BlockExpression {
+                    loc: Location::new(0, Span::new(9, 11)),
+                    statements: vec![],
+                }),
+            })),
+            diagnostics: vec![],
+        });
     }
 }

@@ -10,7 +10,7 @@ use crate::{
     },
     ast::Program,
     common::use_decl_to_paths,
-    parser::{parser::ParseResult, ParserEngine},
+    parser::{ParseResult, Parser},
 };
 
 impl Session {
@@ -54,8 +54,7 @@ impl Session {
     fn parse_real_module(&mut self, path: &PathBuf) -> anyhow::Result<(ModuleId, ParseResult)> {
         let src = std::fs::read_to_string(path)?;
         let module_id = self.module_graph.next_id();
-        let mut parser = ParserEngine::new(module_id);
-        let result = parser.parse(&src);
+        let result = Parser::new(module_id, &src).parse();
         let module = Module {
             name: path.into(),
             src: src.into(),
