@@ -12,6 +12,7 @@ impl CodeGenerator<'_> {
     /// Used to build a destructuring expression, like the `{ name }` part of `const { name } = user;`
     pub fn pattern_to_swc(&mut self, node: &ast::Pattern) -> swc::Pat {
         match node {
+            ast::Pattern::Invalid { .. } => panic!(),
             ast::Pattern::Identifier(pattern) => self.identifier_pattern_to_swc(pattern),
             ast::Pattern::Literal(pattern) => {
                 // TODO: this is probably useless (investigate)
@@ -129,6 +130,7 @@ impl CodeGenerator<'_> {
         against: &ast::Expression,
     ) -> swc::Expr {
         match pattern {
+            ast::Pattern::Invalid { .. } => panic!(),
             ast::Pattern::Identifier(_) => true_lit(),
             ast::Pattern::Literal(l) => self.literal_pattern_to_swc_test(l, against),
             ast::Pattern::Struct(s) => self.struct_pattern_to_swc_test(&s.fields, against),

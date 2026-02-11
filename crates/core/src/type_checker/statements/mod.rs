@@ -49,11 +49,11 @@ impl TypeChecker<'_> {
     fn visit_function_definition(&mut self, node: &ast::FunctionDefinition) -> TypeId {
         let ast::FunctionDefinition { docs, definition } = node;
         let docs = docs.as_ref().map(|d| d.text.clone());
-        let Some(ref name) = definition.name else {
-            panic!("parser phase should've ensured that name is not None")
-        };
         let (ty, dependencies) =
             self.with_dependencies(|checker| checker.visit_function_expression(definition));
+        let Some(ref name) = definition.name else {
+            return TypeStore::UNIT;
+        };
         match self.ctx.find_in_current_scope(name.as_str()) {
             Some(symbol) => {
                 let error = DiagnosticKind::DuplicateIdentifier {

@@ -9,7 +9,10 @@ use crate::{
 impl TypeChecker<'_> {
     pub fn visit_if_expression(&mut self, node: &ast::IfExpression) -> TypeId {
         self.visit_condition(&node.condition);
-        let ty = self.with_scope(|s| s.visit_block_expression(&node.consequent));
+        let ty = match &node.consequent {
+            Some(consequent) => self.with_scope(|s| s.visit_block_expression(consequent)),
+            None => TypeStore::UNKNOWN,
+        };
         let ty = if let Some(ref alternate) = node.alternate {
             self.visit_alternate(alternate, ty);
             ty
@@ -39,18 +42,22 @@ impl TypeChecker<'_> {
                 s.with_dependencies(|s| s.visit_expression(&node.scrutinee));
             let mut variables = TokenList::new();
             s.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
-            for (name, ty) in variables.0 {
-                s.ctx.register_symbol(SymbolData {
-                    name: name.as_str().into(),
-                    ty,
-                    kind: SymbolKind::constant(),
-                    defined_at: node.pattern.loc(),
-                    dependencies: dependencies.clone(),
-                    ..Default::default()
-                });
-                s.ctx.save_expression_type(name.loc, ty);
+            if let Some(consequent) = &node.consequent {
+                for (name, ty) in variables.0 {
+                    s.ctx.register_symbol(SymbolData {
+                        name: name.as_str().into(),
+                        ty,
+                        kind: SymbolKind::constant(),
+                        defined_at: node.pattern.loc(),
+                        dependencies: dependencies.clone(),
+                        ..Default::default()
+                    });
+                    s.ctx.save_expression_type(name.loc, ty);
+                }
+                s.visit_block_expression(consequent)
+            } else {
+                TypeStore::UNKNOWN
             }
-            s.visit_block_expression(&node.consequent)
         });
 
         let ty = if let Some(ref alternate) = node.alternate {
@@ -132,7 +139,7 @@ mod tests {
         let node = ast::IfExpression {
             loc: Location::dummy(),
             condition: Box::new(mock_condition()),
-            consequent: Box::new(int_block_expression()),
+            consequent: Some(int_block_expression()),
             alternate: None,
         };
         let (ty, checker) = visit_if_expression(node);
@@ -150,7 +157,7 @@ mod tests {
         let node = ast::IfExpression {
             loc: Location::dummy(),
             condition: Box::new(mock_bad_condition()),
-            consequent: Box::new(int_block_expression()),
+            consequent: Some(int_block_expression()),
             alternate: None,
         };
         let (_, checker) = visit_if_expression(node);
@@ -166,7 +173,7 @@ mod tests {
         let node = ast::IfExpression {
             loc: Location::dummy(),
             condition: Box::new(mock_condition()),
-            consequent: Box::new(int_block_expression()),
+            consequent: Some(int_block_expression()),
             alternate: Some(Box::new(int_block_expression().into())),
         };
         let (ty, checker) = visit_if_expression(node);
@@ -179,7 +186,7 @@ mod tests {
         let node = ast::IfExpression {
             loc: Location::dummy(),
             condition: Box::new(mock_condition()),
-            consequent: Box::new(int_block_expression()),
+            consequent: Some(int_block_expression()),
             alternate: Some(Box::new(bool_block_expression().into())),
         };
         let (_, checker) = visit_if_expression(node);

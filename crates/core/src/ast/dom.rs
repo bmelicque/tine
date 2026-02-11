@@ -106,6 +106,14 @@ impl From<VoidElement> for ElementChild {
         ElementChild::VoidElement(v)
     }
 }
+impl From<ElementExpression> for ElementChild {
+    fn from(value: ElementExpression) -> Self {
+        match value {
+            ElementExpression::Element(e) => e.into(),
+            ElementExpression::Void(v) => v.into(),
+        }
+    }
+}
 impl From<TextNode> for ElementChild {
     fn from(t: TextNode) -> Self {
         ElementChild::Text(t)

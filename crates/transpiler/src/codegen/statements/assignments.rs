@@ -1,7 +1,7 @@
 use crate::codegen::{utils::create_ident, CodeGenerator};
-use tine_core::ast;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
+use tine_core::ast;
 
 impl CodeGenerator<'_> {
     pub fn assignment_to_swc(&mut self, node: &ast::Assignment) -> swc::ExprStmt {
@@ -31,6 +31,7 @@ impl CodeGenerator<'_> {
             ast::Assignee::Indirection(_) => unreachable!(),
 
             ast::Assignee::Pattern(pat) => match pat {
+                ast::Pattern::Invalid { .. } => unreachable!(),
                 ast::Pattern::Identifier(id) => {
                     swc::SimpleAssignTarget::Ident(create_ident(id.as_str()).into()).into()
                 }

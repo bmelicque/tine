@@ -23,7 +23,11 @@ impl TypeChecker<'_> {
     fn visit_function_params(&mut self, node: &ast::FunctionExpression) -> Vec<TypeId> {
         let mut param_types = Vec::with_capacity(node.params.len());
         for param in node.params.iter() {
-            let ty = self.visit_type(&param.type_annotation);
+            let ty = param
+                .type_annotation
+                .as_ref()
+                .map(|t| self.visit_type(t))
+                .unwrap_or(TypeStore::UNKNOWN);
             self.ctx.register_symbol(SymbolData {
                 name: param.name.as_str().into(),
                 ty,
@@ -48,7 +52,7 @@ impl TypeChecker<'_> {
         node.body.find_returns(&mut returns);
         for ret in returns {
             let ty = match ret.value {
-                Some(value) => self.get_type_at(value.loc()).unwrap(),
+                Some(value) => self.get_type_at(value.loc()).unwrap_or(TypeStore::UNKNOWN),
                 None => TypeStore::UNIT,
             };
             self.check_assigned_type(return_type, ty, ret.loc);

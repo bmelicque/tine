@@ -44,21 +44,19 @@ impl Span {
         Self::new(start, end)
     }
 
+    /// Get the char at `pos` (0-based index)
+    pub fn nth_char(&self, pos: u32) -> Self {
+        let start = self.start + pos;
+        let end = start + 1;
+        Self { start, end }
+    }
+
     pub fn is_within(&self, test: Self) -> bool {
         self.start >= test.start && self.end <= test.end
     }
 
     pub fn contains(&self, test: u32) -> bool {
         self.start <= test && self.end >= test
-    }
-}
-
-impl From<pest::Span<'_>> for Span {
-    fn from(value: pest::Span) -> Self {
-        Self {
-            start: value.start() as u32,
-            end: value.end() as u32,
-        }
     }
 }
 
@@ -113,6 +111,14 @@ impl Location {
 
     pub fn decrement(&self) -> Location {
         let span = self.span.decrement();
+        Location {
+            module: self.module,
+            span,
+        }
+    }
+
+    pub fn nth_char(&self, pos: u32) -> Self {
+        let span = self.span.nth_char(pos);
         Location {
             module: self.module,
             span,

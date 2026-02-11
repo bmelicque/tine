@@ -50,7 +50,10 @@ impl CodeGenerator<'_> {
     pub fn enum_to_swc(&mut self, node: &ast::EnumDefinition) -> swc::ClassDecl {
         for variant in node.variants.iter() {
             if let Some(ast::TypeBody::Struct(ast::StructBody { ref fields, .. })) = variant.body {
-                self.register_struct(&format!("{}.{}", node.name, &variant.name), fields);
+                self.register_struct(
+                    &format!("{}.{}", node.name, variant.name.as_ref().unwrap().text),
+                    fields,
+                );
             }
         }
 
@@ -117,7 +120,12 @@ impl CodeGenerator<'_> {
                 .fields
                 .iter()
                 .enumerate()
-                .map(|(i, field)| self.this_assignement_from_values(&field.as_name(), i as f64))
+                .map(|(i, field)| {
+                    self.this_assignement_from_values(
+                        field.as_name().as_ref().unwrap().as_str(),
+                        i as f64,
+                    )
+                })
                 .collect::<Vec<_>>(),
             Some(ast::TypeBody::Tuple(_)) => vec![swc::Stmt::Expr(swc::ExprStmt {
                 span: DUMMY_SP,
@@ -134,7 +142,7 @@ impl CodeGenerator<'_> {
             span: DUMMY_SP,
             test: Some(Box::new(swc::Expr::Lit(swc::Lit::Str(swc::Str {
                 span: DUMMY_SP,
-                value: variant.name.clone().into(),
+                value: variant.name.as_ref().unwrap().as_str().into(),
                 raw: None,
             })))),
             cons: stmts,

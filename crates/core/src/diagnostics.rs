@@ -2,14 +2,14 @@ use std::fmt::Display;
 
 use crate::{ast, Location};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
     pub level: DiagnosticLevel,
     pub loc: Location,
     pub kind: DiagnosticKind,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum DiagnosticLevel {
     Info,
     Warning,
@@ -57,6 +57,9 @@ pub enum DiagnosticKind {
     ExpectedStruct {
         got: String,
     },
+    ExpectedToken {
+        expected: Vec<String>,
+    },
     ExpectedTuple {
         got: String,
     },
@@ -100,6 +103,10 @@ pub enum DiagnosticKind {
     MissingConstructorName,
     MissingExpression,
     MissingFunctionName,
+    MissingName,
+    MissingParams,
+    MissingPattern,
+    MissingType,
     NegativeTupleIndex,
     NonExhaustiveMatch {
         missing: Vec<String>,
@@ -132,6 +139,10 @@ pub enum DiagnosticKind {
     UnexpectedStruct {
         expected: String,
     },
+    UnexpectedToken {
+        token: String,
+    },
+    UnexpectedTypeParams,
     UnknownMember {
         member: String,
     },
@@ -177,6 +188,11 @@ impl Display for DiagnosticKind {
             Self::ExpectedEnum { got } => write!(f, "expected enum but got type `{}`", got),
             Self::ExpectedNumber { got } => write!(f, "expected number but got `{}`", got),
             Self::ExpectedStruct { got } => write!(f, "expected struct but got type `{}`", got),
+            Self::ExpectedToken { expected } => write!(
+                f,
+                "expected one of the following tokens: `{}`",
+                expected.join(", ")
+            ),
             Self::ExpectedTuple { got } => write!(f, "expected tuple but got type `{}`", got),
             Self::ExpectedTuplePattern => write!(f, "expected tuple pattern"),
             Self::ExpectedVariantStruct => write!(f, "expected struct variant"),
@@ -243,6 +259,10 @@ impl Display for DiagnosticKind {
             Self::MissingConstructorName => write!(f, "expected constructor name"),
             Self::MissingExpression => write!(f, "expected expression"),
             Self::MissingFunctionName => write!(f, "expected function name"),
+            Self::MissingName => write!(f, "expected a name"),
+            Self::MissingParams => write!(f, "expected function parameters"),
+            Self::MissingPattern => write!(f, "expected pattern"),
+            Self::MissingType => write!(f, "expected type"),
             Self::NegativeTupleIndex => write!(f, "tuple index cannot be negative"),
             Self::NonExhaustiveMatch { missing } => {
                 let missing = if missing.len() > 2 {
@@ -294,6 +314,10 @@ impl Display for DiagnosticKind {
             Self::UnexpectedStruct { expected } => {
                 write!(f, "expected type `{}` but got a struct", expected)
             }
+            Self::UnexpectedToken { token } => {
+                write!(f, "unexpected token: {}", token)
+            }
+            Self::UnexpectedTypeParams => write!(f, "unexpected type parameters"),
             Self::UnknownMember { member } => {
                 write!(f, "unknown member `{}`", member)
             }

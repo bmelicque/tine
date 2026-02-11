@@ -92,10 +92,11 @@ pub struct MethodReceiver {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeAlias {
+    pub docs: Option<Docs>,
     pub loc: Location,
-    pub name: String,
+    pub name: Option<Identifier>,
     pub params: Option<Vec<String>>,
-    pub definition: Box<Type>,
+    pub definition: Option<Type>,
 }
 
 impl Into<Statement> for TypeAlias {
@@ -106,10 +107,11 @@ impl Into<Statement> for TypeAlias {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructDefinition {
+    pub docs: Option<Docs>,
     pub loc: Location,
-    pub name: String,
+    pub name: Option<Identifier>,
     pub params: Option<Vec<String>>,
-    pub body: TypeBody,
+    pub body: Option<TypeBody>,
 }
 
 impl Into<Statement> for StructDefinition {
@@ -124,6 +126,14 @@ pub enum TypeBody {
     Tuple(TupleType),
 }
 
+impl TypeBody {
+    pub fn loc(&self) -> Location {
+        match self {
+            Self::Struct(body) => body.loc,
+            Self::Tuple(body) => body.loc,
+        }
+    }
+}
 impl From<StructBody> for TypeBody {
     fn from(value: StructBody) -> Self {
         Self::Struct(value)
@@ -148,10 +158,10 @@ pub enum StructDefinitionField {
 }
 
 impl StructDefinitionField {
-    pub fn as_name(&self) -> String {
+    pub fn as_name(&self) -> Option<Identifier> {
         match self {
-            Self::Mandatory(m) => m.name.clone(),
-            Self::Optional(o) => o.name.clone(),
+            Self::Mandatory(m) => m.name.as_ref().map(|i| i.clone()),
+            Self::Optional(o) => o.name.as_ref().map(|i| i.clone()),
         }
     }
 
@@ -170,8 +180,8 @@ impl StructDefinitionField {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructMandatoryField {
     pub loc: Location,
-    pub name: String,
-    pub definition: Type,
+    pub name: Option<Identifier>,
+    pub definition: Option<Type>,
 }
 
 impl Into<StructDefinitionField> for StructMandatoryField {
@@ -183,8 +193,8 @@ impl Into<StructDefinitionField> for StructMandatoryField {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructOptionalField {
     pub loc: Location,
-    pub name: String,
-    pub default: Expression,
+    pub name: Option<Identifier>,
+    pub default: Option<Expression>,
 }
 
 impl Into<StructDefinitionField> for StructOptionalField {
@@ -195,6 +205,7 @@ impl Into<StructDefinitionField> for StructOptionalField {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
+    pub docs: Option<Docs>,
     pub loc: Location,
     pub name: String,
     pub params: Option<Vec<String>>,
@@ -210,7 +221,7 @@ impl Into<Statement> for EnumDefinition {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariantDefinition {
     pub loc: Location,
-    pub name: String,
+    pub name: Option<Identifier>,
     pub body: Option<TypeBody>,
 }
 

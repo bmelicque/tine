@@ -7,6 +7,8 @@ use super::{BooleanLiteral, NamedType, StringLiteral};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Pattern {
+    Invalid { loc: Location },
+
     Identifier(IdentifierPattern),
     Literal(LiteralPattern),
     Struct(StructPattern),
@@ -17,6 +19,7 @@ pub enum Pattern {
 impl Pattern {
     pub fn loc(&self) -> Location {
         match self {
+            Pattern::Invalid { loc } => *loc,
             Pattern::Identifier(p) => p.0.loc,
             Pattern::Literal(l) => l.loc(),
             Pattern::Struct(p) => p.loc,
@@ -32,8 +35,16 @@ impl Pattern {
         }
     }
 
+    pub fn is_valid(&self) -> bool {
+        match self {
+            Pattern::Invalid { .. } => false,
+            _ => true,
+        }
+    }
+
     pub fn is_refutable(&self) -> bool {
         match self {
+            Pattern::Invalid { .. } => false,
             Pattern::Identifier(_) => false,
             Pattern::Literal(_) => true,
             Pattern::Struct(s) => s
@@ -57,6 +68,7 @@ impl Pattern {
 
     pub fn list_identifiers(&self) -> Vec<&IdentifierPattern> {
         match self {
+            Pattern::Invalid { .. } => vec![],
             Pattern::Identifier(p) => vec![p],
             Pattern::Literal(_) => vec![],
             Pattern::Struct(s) => s

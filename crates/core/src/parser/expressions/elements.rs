@@ -1,0 +1,275 @@
+use crate::{
+    ast,
+    parser::{tokens::Token, Parser},
+    DiagnosticKind, Location,
+};
+
+impl Parser<'_> {
+    pub fn parse_element_expression(&mut self) -> ast::ElementExpression {
+        let start_range = self.eat(&[Token::Lt]);
+        let start_loc = self.localize(start_range);
+
+        let tag_name = self.parse_tag_name();
+        let attributes = self.parse_attributes();
+
+        match self.tokens.peek().cloned() {
+            Some((Ok(Token::Gt), _)) => {
+                self.tokens.next();
+            }
+            Some((Ok(Token::TagClose), close_range)) => {
+                self.tokens.next();
+                return ast::ElementExpression::Void(ast::VoidElement {
+                    loc: Location::merge(start_loc, self.localize(close_range)),
+                    tag_name,
+                    attributes,
+                });
+            }
+            _ => {
+                todo!("handle error")
+            }
+        }
+
+        let children = self.parse_children();
+        let (end_tag, end_loc) = self.parse_end_tag();
+        if end_tag != tag_name {
+            self.error(
+                DiagnosticKind::MismatchedTags {
+                    open: tag_name.clone(),
+                    close: end_tag.clone(),
+                },
+                end_loc,
+            )
+        }
+        let loc = Location::merge(start_loc, end_loc);
+        ast::ElementExpression::Element(ast::Element {
+            loc,
+            tag_name,
+            attributes,
+            children,
+        })
+    }
+
+    fn parse_tag_name(&mut self) -> String {
+        let result = self.better_expect(
+            |t| match t {
+                Token::Ident(ident) => Some(ident.to_owned()),
+                _ => None,
+            },
+            &[Token::Newline, Token::Gt, Token::TagClose],
+        );
+        match result {
+            Ok(r) => r.0,
+            Err(range) => {
+                let loc = self.localize(range);
+                self.error(DiagnosticKind::MissingName, loc);
+                "".to_owned()
+            }
+        }
+    }
+
+    fn parse_attributes(&mut self) -> Vec<ast::Attribute> {
+        let mut attributes = Vec::new();
+
+        while let Some((Ok(token), _)) = self.tokens.peek().cloned() {
+            match token.clone() {
+                Token::Newline => {
+                    self.tokens.next();
+                }
+                t if t == Token::Gt || t == Token::TagClose => break,
+                _ => {
+                    if let Some(attribute) = self.parse_attribute() {
+                        attributes.push(attribute);
+                    }
+                }
+            }
+        }
+
+        attributes
+    }
+
+    fn parse_attribute(&mut self) -> Option<ast::Attribute> {
+        let result = self.better_expect(
+            |t| match t {
+                Token::Ident(ident) => Some(ident.to_owned()),
+                _ => None,
+            },
+            &[Token::Newline, Token::Gt, Token::TagClose],
+        );
+        let (name, name_range) = match result {
+            Ok(r) => r,
+            Err(range) => {
+                let expected = vec![Token::Gt, Token::TagClose]
+                    .into_iter()
+                    .map(|t| t.to_string())
+                    .collect();
+                let loc = self.localize(range);
+                self.error(DiagnosticKind::ExpectedToken { expected }, loc);
+                return None;
+            }
+        };
+
+        let Some((Ok(Token::Eq), eq_range)) = self.tokens.peek() else {
+            return Some(ast::Attribute {
+                loc: self.localize(name_range),
+                name,
+                value: None,
+            });
+        };
+        let eq_range = eq_range.to_owned();
+
+        let mut loc = self.localize(name_range.start..eq_range.end);
+
+        let result = self.better_expect(
+            |t| match t {
+                Token::String(_) | Token::LBrace => Some(t.clone()),
+                _ => None,
+            },
+            &[Token::Gt, Token::TagClose, Token::Newline],
+        );
+        let (token, value_range) = match result {
+            Ok(r) => r,
+            Err(range) => {
+                let error = DiagnosticKind::ExpectedToken {
+                    expected: vec!["string".to_owned(), "{".to_owned()],
+                };
+                let loc = self.localize(range);
+                self.error(error, loc);
+                return None;
+            }
+        };
+        let attribute = match token {
+            Token::String(value) => {
+                loc = Location::merge(loc, self.localize(value_range));
+                ast::AttributeValue::String(value)
+            }
+            Token::LBrace => {
+                let expression = match self.parse_expression() {
+                    Some(e) => e,
+                    None => {
+                        let range = self.next_range();
+                        let loc = self.localize(range);
+                        self.error(DiagnosticKind::MissingExpression, loc);
+                        ast::Expression::Empty
+                    }
+                };
+                let res = self.better_expect(
+                    |t| match t {
+                        Token::RBrace => Some(()),
+                        _ => None,
+                    },
+                    &[Token::Gt, Token::TagClose],
+                );
+                let end_loc = match res {
+                    Ok((_, r)) => self.localize(r),
+                    Err(r) => self.localize(r).decrement(),
+                };
+                loc = Location::merge(loc, end_loc);
+                expression.into()
+            }
+            // unreachable thanks to `better_expect` above
+            _ => unreachable!(),
+        };
+
+        Some(ast::Attribute {
+            loc,
+            name,
+            value: Some(attribute),
+        })
+    }
+
+    fn parse_children(&mut self) -> Vec<ast::ElementChild> {
+        let mut children = Vec::new();
+
+        while let Some((Ok(token), _)) = self.tokens.peek().cloned() {
+            match token {
+                Token::LtSlash => break,
+
+                Token::Lt => {
+                    children.push(self.parse_element_expression().into());
+                }
+
+                // Expression child: { expr }
+                Token::LBrace => {
+                    self.tokens.next(); // eat '{'
+
+                    let expression = match self.parse_expression() {
+                        Some(e) => e,
+                        None => {
+                            let range = self.next_range();
+                            let loc = self.localize(range);
+                            self.error(DiagnosticKind::MissingExpression, loc);
+                            ast::Expression::Empty
+                        }
+                    };
+                    let _ = self.better_expect(
+                        |t| match t {
+                            Token::RBrace => Some(()),
+                            _ => None,
+                        },
+                        &[Token::Gt, Token::TagClose],
+                    );
+
+                    children.push(ast::ElementChild::Expression(expression));
+                }
+
+                Token::Newline => {
+                    self.tokens.next();
+                }
+
+                _ => {
+                    children.push(self.parse_raw_text().into());
+                }
+            }
+        }
+
+        children
+    }
+
+    fn parse_raw_text(&mut self) -> ast::TextNode {
+        let mut range = self.next_range();
+        while let Some((token, r)) = self.tokens.peek() {
+            match token {
+                Ok(Token::LBrace | Token::Lt | Token::LtSlash) => break,
+                _ => range.end = r.end,
+            }
+        }
+        let loc = self.localize(range.clone());
+        let text = self.src[range].to_string();
+        ast::TextNode { loc, text }
+    }
+
+    fn parse_end_tag(&mut self) -> (String, Location) {
+        let start_range = self.eat(&[Token::LtSlash]);
+        let start_loc = self.localize(start_range);
+
+        let result = self.better_expect(
+            |t| match t {
+                Token::Ident(name) => Some(name.to_owned()),
+                _ => None,
+            },
+            &[Token::Gt, Token::Newline],
+        );
+        let tag_name = match result {
+            Ok(r) => r.0,
+            Err(range) => {
+                let loc = self.localize(range);
+                self.error(DiagnosticKind::MissingName, loc);
+                "".to_owned()
+            }
+        };
+
+        let res = self.better_expect(
+            |t| match t {
+                Token::LtSlash => Some(()),
+                _ => None,
+            },
+            &[Token::Gt, Token::Newline],
+        );
+        let end_loc = match res {
+            Ok((_, range)) => self.localize(range),
+            Err(range) => self.localize(range).decrement(),
+        };
+
+        (tag_name, Location::merge(start_loc, end_loc))
+    }
+}

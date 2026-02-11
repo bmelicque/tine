@@ -1,100 +1,100 @@
-use pest::iterators::Pair;
-
 use crate::{
     ast,
-    parser::{parser::Rule, ParserEngine},
+    parser::{tokens::Token, Parser},
+    DiagnosticKind, Location,
 };
 
-impl ParserEngine {
-    pub fn parse_unary_expression(&mut self, pair: Pair<'_, Rule>) -> ast::UnaryExpression {
-        assert!(pair.as_rule() == Rule::unary);
-        let loc = self.localize(pair.as_span());
-        let mut inner = pair.into_inner();
-        let operator = self.parse_unary_operator(inner.next().unwrap());
-        let operand = Box::new(self.parse_expression(inner.next().unwrap()));
-        ast::UnaryExpression {
-            loc,
-            operator,
-            operand,
-        }
-    }
+impl Parser<'_> {
+    const UNARY_OPERATORS: [Token; 6] = [
+        Token::And,
+        Token::At,
+        Token::Bang,
+        Token::Dollar,
+        Token::Minus,
+        Token::Star,
+    ];
 
-    fn parse_unary_operator(&mut self, pair: Pair<'_, Rule>) -> ast::UnaryOperator {
-        debug_assert_eq!(pair.as_rule(), Rule::unary_op);
-        match pair.as_str() {
-            "&" => ast::UnaryOperator::Ampersand,
-            "@" => ast::UnaryOperator::At,
-            "!" => ast::UnaryOperator::Bang,
-            "$" => ast::UnaryOperator::Dollar,
-            "-" => ast::UnaryOperator::Minus,
-            "*" => ast::UnaryOperator::Star,
-            op => {
-                panic!("Unknown unary operator: {}", op);
+    pub fn parse_unary_expression(&mut self) -> ast::Expression {
+        match self.tokens.peek().cloned() {
+            Some((Ok(token), op_range)) if Self::UNARY_OPERATORS.contains(&token) => {
+                self.tokens.next(); // consume the operator
+                let expr = Box::new(self.parse_unary_expression());
+                if expr.is_empty() {
+                    self.error(
+                        DiagnosticKind::MissingExpression,
+                        self.localize(op_range.clone()).increment(),
+                    );
+                }
+                ast::Expression::Unary(ast::UnaryExpression {
+                    loc: Location::merge(self.localize(op_range), expr.loc()),
+                    operator: token.to_string().into(),
+                    operand: expr,
+                })
             }
+            _ => self.parse_postfix(),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        parser::test_utils::{test_expression, ExpressionTest},
+        Diagnostic, DiagnosticLevel, Span,
+    };
+
     use super::*;
-    use crate::parser::parser::{Rule, TineParser};
-    use pest::Parser;
 
-    fn parse_expression_input(input: &'static str) -> ast::Expression {
-        let pair = TineParser::parse(Rule::expression, input)
-            .unwrap()
-            .next()
-            .unwrap();
-        let mut parser_engine = ParserEngine::new(0);
-        parser_engine.parse_expression(pair)
+    #[test]
+    fn test_parse_unary() {
+        test_expression(ExpressionTest {
+            input: "&a",
+            expected: ast::Expression::Unary(ast::UnaryExpression {
+                loc: Location::new(0, Span::new(0, 2)),
+                operator: ast::UnaryOperator::Ampersand,
+                operand: Box::new(ast::Expression::Identifier(ast::Identifier {
+                    loc: Location::new(0, Span::new(1, 2)),
+                    text: "a".into(),
+                })),
+            }),
+            diagnostics: vec![],
+        });
     }
 
     #[test]
-    fn test_parse_dereference() {
-        let input = "*ref";
-        let result = parse_expression_input(input);
-
-        let ast::Expression::Unary(unary) = result else {
-            panic!("Expected UnaryExpression");
-        };
-        assert_eq!(unary.operator, ast::UnaryOperator::Star);
-
-        match *unary.operand {
-            ast::Expression::Identifier(id) if id.as_str() == "ref" => {}
-            _ => panic!("Expected operand to be 'ref'"),
-        }
+    fn test_parse_nested_unary() {
+        test_expression(ExpressionTest {
+            input: "&*a",
+            expected: ast::Expression::Unary(ast::UnaryExpression {
+                loc: Location::new(0, Span::new(0, 3)),
+                operator: ast::UnaryOperator::Ampersand,
+                operand: Box::new(ast::Expression::Unary(ast::UnaryExpression {
+                    loc: Location::new(0, Span::new(1, 3)),
+                    operator: ast::UnaryOperator::Star,
+                    operand: Box::new(ast::Expression::Identifier(ast::Identifier {
+                        loc: Location::new(0, Span::new(2, 3)),
+                        text: "a".into(),
+                    })),
+                })),
+            }),
+            diagnostics: vec![],
+        });
     }
 
     #[test]
-    fn test_parse_immutable_reference() {
-        let input = "@value";
-        let result = parse_expression_input(input);
-
-        let ast::Expression::Unary(unary) = result else {
-            panic!("Expected UnaryExpression");
-        };
-        assert_eq!(unary.operator, ast::UnaryOperator::At);
-
-        match *unary.operand {
-            ast::Expression::Identifier(id) if id.as_str() == "value" => {}
-            _ => panic!("Expected operand to be 'value'"),
-        }
-    }
-
-    #[test]
-    fn test_parse_mutable_reference() {
-        let input = "@value";
-        let result = parse_expression_input(input);
-
-        let ast::Expression::Unary(unary) = result else {
-            panic!("Expected UnaryExpression");
-        };
-        assert_eq!(unary.operator, ast::UnaryOperator::At);
-
-        match *unary.operand {
-            ast::Expression::Identifier(id) if id.as_str() == "value" => {}
-            _ => panic!("Expected operand to be 'value'"),
-        }
+    fn test_parse_unary_with_missing_expression() {
+        test_expression(ExpressionTest {
+            input: "&",
+            expected: ast::Expression::Unary(ast::UnaryExpression {
+                loc: Location::new(0, Span::new(0, 1)),
+                operator: ast::UnaryOperator::Ampersand,
+                operand: Box::new(ast::Expression::Empty),
+            }),
+            diagnostics: vec![Diagnostic {
+                kind: DiagnosticKind::MissingExpression,
+                loc: Location::new(0, Span::new(1, 2)),
+                level: DiagnosticLevel::Error,
+            }],
+        });
     }
 }

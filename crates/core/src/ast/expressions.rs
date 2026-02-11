@@ -2,7 +2,7 @@ use std::fmt;
 
 use ordered_float::OrderedFloat;
 
-use crate::{analyzer::ModuleId, ast::ElementExpression, Location};
+use crate::{ast::ElementExpression, Location};
 
 use super::{composite_literals::CompositeLiteral, types::Type, Loop, Pattern, Statement};
 
@@ -88,13 +88,6 @@ pub struct Identifier {
 }
 
 impl Identifier {
-    pub fn from_pest(module: ModuleId, span: pest::Span<'_>) -> Self {
-        Self {
-            loc: Location::new(module, span.into()),
-            text: span.as_str().to_string(),
-        }
-    }
-
     pub fn as_str(&self) -> &str {
         self.text.as_str()
     }
@@ -111,7 +104,7 @@ pub struct IfPatExpression {
     pub loc: Location,
     pub pattern: Box<Pattern>,
     pub scrutinee: Box<Expression>,
-    pub consequent: Box<BlockExpression>,
+    pub consequent: Option<BlockExpression>,
     pub alternate: Option<Box<Alternate>>,
 }
 
@@ -125,7 +118,7 @@ impl Into<Expression> for IfPatExpression {
 pub struct IfExpression {
     pub loc: Location,
     pub condition: Box<Expression>,
-    pub consequent: Box<BlockExpression>,
+    pub consequent: Option<BlockExpression>,
     pub alternate: Option<Box<Alternate>>,
 }
 
@@ -192,8 +185,8 @@ impl Into<Expression> for InvalidExpression {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MatchExpression {
     pub loc: Location,
-    pub scrutinee: Box<Expression>,
-    pub arms: Vec<MatchArm>,
+    pub scrutinee: Option<Box<Expression>>,
+    pub arms: Option<Vec<MatchArm>>,
 }
 
 impl Into<Expression> for MatchExpression {
@@ -205,8 +198,8 @@ impl Into<Expression> for MatchExpression {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MatchArm {
     pub loc: Location,
-    pub pattern: Box<Pattern>,
-    pub expression: Box<Expression>,
+    pub pattern: Option<Box<Pattern>>,
+    pub expression: Option<Box<Expression>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -384,7 +377,7 @@ impl From<Callback> for CallArgument {
 pub struct Callback {
     pub loc: Location,
     pub params: Vec<CallbackParam>,
-    pub body: BlockExpression,
+    pub body: Box<Expression>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -485,6 +478,20 @@ pub enum UnaryOperator {
     Bang,      // !
 }
 
+impl From<String> for UnaryOperator {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "*" => Self::Star,
+            "&" => Self::Ampersand,
+            "$" => Self::Dollar,
+            "@" => Self::At,
+            "-" => Self::Minus,
+            "!" => Self::Bang,
+            _ => panic!("Unknown unary operator: {}", value),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionExpression {
     pub loc: Location,
@@ -504,5 +511,5 @@ impl Into<Expression> for FunctionExpression {
 pub struct FunctionParam {
     pub loc: Location,
     pub name: Identifier,
-    pub type_annotation: Type,
+    pub type_annotation: Option<Type>,
 }

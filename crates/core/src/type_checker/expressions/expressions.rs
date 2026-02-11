@@ -98,14 +98,20 @@ impl TypeChecker<'_> {
     }
 
     fn visit_tuple_expression(&mut self, node: &ast::TupleExpression) -> TypeId {
-        let ty = TupleType {
-            elements: node
-                .elements
-                .iter()
-                .map(|el| self.visit_expression(el))
-                .collect(),
+        let ty = match node.elements.len() {
+            0 => TypeStore::UNIT,
+            1 => self.visit_expression(&node.elements[0]),
+            _ => {
+                let ty = Type::Tuple(TupleType {
+                    elements: node
+                        .elements
+                        .iter()
+                        .map(|el| self.visit_expression(el))
+                        .collect(),
+                });
+                self.intern(ty)
+            }
         };
-        let ty = self.intern(ty.into());
         self.ctx.save_expression_type(node.loc, ty)
     }
 }
@@ -241,20 +247,20 @@ mod tests {
             params: vec![
                 ast::FunctionParam {
                     name: ident("x"),
-                    type_annotation: ast::Type::Named(ast::NamedType {
+                    type_annotation: Some(ast::Type::Named(ast::NamedType {
                         name: "int".to_string(),
                         args: None,
                         loc: Location::dummy(),
-                    }),
+                    })),
                     loc: Location::dummy(),
                 },
                 ast::FunctionParam {
                     name: ident("y"),
-                    type_annotation: ast::Type::Named(ast::NamedType {
+                    type_annotation: Some(ast::Type::Named(ast::NamedType {
                         name: "int".to_string(),
                         args: None,
                         loc: Location::dummy(),
-                    }),
+                    })),
                     loc: Location::dummy(),
                 },
             ],
@@ -316,7 +322,7 @@ mod tests {
 
         let result = checker.visit_tuple_expression(&tuple_expression);
         let result = checker.resolve(result);
-        assert_eq!(result, Type::Tuple(TupleType { elements: vec![] }));
+        assert_eq!(result, Type::Unit);
         assert!(checker.diagnostics.is_empty());
     }
 

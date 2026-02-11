@@ -1,4 +1,4 @@
-use crate::Location;
+use crate::{ast::Identifier, Location};
 
 use super::{
     expressions::Expression,
@@ -102,7 +102,7 @@ impl Into<CompositeLiteral> for AnonymousStructLiteral {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructLiteralField {
     pub loc: Location,
-    pub prop: String,
+    pub prop: Identifier,
     pub value: Expression,
 }
 

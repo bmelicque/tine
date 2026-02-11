@@ -36,7 +36,7 @@ impl TypeChecker<'_> {
             .fields
             .iter()
             .map(|field| {
-                let name = field.prop.clone();
+                let name = field.prop.text.clone();
                 let def = self.visit_expression(&field.value);
                 types::StructField {
                     name,
@@ -175,11 +175,11 @@ impl TypeChecker<'_> {
         for field in got_fields {
             let name = &field.prop;
             let value = self.visit_expression(&field.value);
-            let expected_field = expected.fields.iter().find(|field| field.name == *name);
+            let expected_field = expected.fields.iter().find(|field| field.name == name.text);
             let expected = expected_field.map(|field| field.def);
             let Some(mut expected) = expected else {
                 let error = DiagnosticKind::UnknownMember {
-                    member: name.clone(),
+                    member: name.as_str().to_string(),
                 };
                 self.error(error, field.loc);
                 continue;
@@ -197,7 +197,7 @@ impl TypeChecker<'_> {
                 }
             }
             fields.push(StructField {
-                name: name.clone(),
+                name: name.text.clone(),
                 def: expected,
                 optional: expected_field.map(|f| f.optional).unwrap_or(false),
             });
@@ -341,7 +341,10 @@ mod tests {
         let struct_literal = ast::AnonymousStructLiteral {
             fields: vec![
                 ast::StructLiteralField {
-                    prop: "name".to_string(),
+                    prop: ast::Identifier {
+                        loc: Location::dummy(),
+                        text: "name".to_string(),
+                    },
                     value: ast::Expression::StringLiteral(ast::StringLiteral {
                         loc: Location::dummy(),
                         text: "John".into(),
@@ -349,7 +352,10 @@ mod tests {
                     loc: Location::dummy(),
                 },
                 ast::StructLiteralField {
-                    prop: "age".to_string(),
+                    prop: ast::Identifier {
+                        loc: Location::dummy(),
+                        text: "age".to_string(),
+                    },
                     value: ast::Expression::IntLiteral(ast::IntLiteral {
                         value: 30,
                         loc: Location::dummy(),
@@ -538,7 +544,10 @@ mod tests {
             },
             fields: vec![
                 ast::StructLiteralField {
-                    prop: "name".to_string(),
+                    prop: ast::Identifier {
+                        loc: Location::dummy(),
+                        text: "name".to_string(),
+                    },
                     value: ast::Expression::StringLiteral(ast::StringLiteral {
                         loc: Location::dummy(),
                         text: "John".into(),
@@ -546,7 +555,10 @@ mod tests {
                     loc: Location::dummy(),
                 },
                 ast::StructLiteralField {
-                    prop: "age".to_string(),
+                    prop: ast::Identifier {
+                        loc: Location::dummy(),
+                        text: "age".to_string(),
+                    },
                     value: ast::Expression::IntLiteral(ast::IntLiteral {
                         value: 30,
                         loc: Location::dummy(),
@@ -625,7 +637,10 @@ mod tests {
             name: "Circle".to_string(),
             body: Some(ast::VariantLiteralBody::Struct(vec![
                 ast::StructLiteralField {
-                    prop: "radius".to_string(),
+                    prop: ast::Identifier {
+                        loc: Location::dummy(),
+                        text: "radius".to_string(),
+                    },
                     value: ast::Expression::IntLiteral(ast::IntLiteral {
                         value: 10,
                         loc: Location::dummy(),

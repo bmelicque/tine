@@ -9,9 +9,13 @@ use super::TypeChecker;
 
 impl TypeChecker<'_> {
     pub fn visit_type_alias(&mut self, node: &ast::TypeAlias) -> TypeId {
-        let (ty, params) = self.visit_with_type_params(&node.params, node.loc, |checker| {
-            checker.visit_type(&node.definition)
-        });
+        let (ty, params) = if let Some(definition) = &node.definition {
+            self.visit_with_type_params(&node.params, node.loc, |checker| {
+                checker.visit_type(definition)
+            })
+        } else {
+            (TypeStore::UNKNOWN, vec![])
+        };
 
         let ty = match params.len() {
             0 => ty,
@@ -21,15 +25,20 @@ impl TypeChecker<'_> {
             })),
         };
 
-        self.add_type_to_scope(node.name.clone(), node.loc, ty);
+        if let Some(ref name) = node.name {
+            self.add_type_to_scope(name.text.clone(), node.loc, ty);
+        }
 
         TypeStore::UNIT
     }
 
     pub fn visit_struct_definition(&mut self, node: &ast::StructDefinition) -> TypeId {
-        let (ty, params) = self.visit_with_type_params(&node.params, node.loc, |checker| {
-            checker.visit_type_body(&node.body)
-        });
+        let (ty, params) = match &node.body {
+            Some(body) => self.visit_with_type_params(&node.params, node.loc, |checker| {
+                checker.visit_type_body(body)
+            }),
+            None => (TypeStore::UNKNOWN, vec![]),
+        };
 
         let ty = match params.len() {
             0 => ty,
@@ -39,7 +48,9 @@ impl TypeChecker<'_> {
             })),
         };
 
-        self.add_type_to_scope(node.name.clone(), node.loc, ty);
+        if let Some(name) = &node.name {
+            self.add_type_to_scope(name.text.clone(), node.loc, ty);
+        }
 
         TypeStore::UNIT
     }
@@ -49,7 +60,7 @@ impl TypeChecker<'_> {
             let variants: Vec<types::Variant> = node
                 .variants
                 .iter()
-                .map(|variant| checker.visit_enum_variant(variant))
+                .filter_map(|variant| checker.visit_enum_variant(variant))
                 .collect();
 
             checker.intern_unique(Type::Enum(EnumType { id: 0, variants }))
@@ -68,15 +79,16 @@ impl TypeChecker<'_> {
         TypeStore::UNIT
     }
 
-    fn visit_enum_variant(&mut self, variant: &ast::VariantDefinition) -> types::Variant {
+    fn visit_enum_variant(&mut self, variant: &ast::VariantDefinition) -> Option<types::Variant> {
         let ty = match &variant.body {
             Some(body) => self.visit_type_body(body),
             None => TypeStore::UNIT,
         };
-        types::Variant {
-            name: variant.name.clone(),
+
+        variant.name.as_ref().map(|name| types::Variant {
+            name: name.text.clone(),
             def: ty,
-        }
+        })
     }
 
     fn visit_with_type_params<F>(
@@ -125,7 +137,7 @@ impl TypeChecker<'_> {
         let fields = body
             .fields
             .iter()
-            .map(|field| self.visit_struct_definition_field(field))
+            .filter_map(|field| self.visit_struct_definition_field(field))
             .collect();
         let id = 0;
         self.intern_unique(Type::Struct(StructType { id, fields }))
@@ -134,16 +146,25 @@ impl TypeChecker<'_> {
     fn visit_struct_definition_field(
         &mut self,
         field: &ast::StructDefinitionField,
-    ) -> types::StructField {
+    ) -> Option<types::StructField> {
         let name = field.as_name();
         let def = match field {
-            ast::StructDefinitionField::Mandatory(ref field) => self.visit_type(&field.definition),
-            ast::StructDefinitionField::Optional(field) => self.visit_expression(&field.default),
+            ast::StructDefinitionField::Mandatory(ref field) => match &field.definition {
+                Some(def) => self.visit_type(def),
+                None => TypeStore::UNKNOWN,
+            },
+            ast::StructDefinitionField::Optional(field) => match &field.default {
+                Some(def) => self.visit_expression(def),
+                None => TypeStore::UNKNOWN,
+            },
         };
-        types::StructField {
-            name,
-            def,
-            optional: field.is_optional(),
+        match name {
+            Some(name) => Some(types::StructField {
+                name: name.text.clone(),
+                def,
+                optional: field.is_optional(),
+            }),
+            None => None,
         }
     }
 

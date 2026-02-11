@@ -42,7 +42,11 @@ impl TypeChecker<'_> {
             .map(|param| self.visit_type(param))
             .collect();
 
-        let return_type = self.visit_type(&node.returned);
+        let return_type = node
+            .returned
+            .as_ref()
+            .map(|t| self.visit_type(t))
+            .unwrap_or(TypeStore::UNIT);
 
         self.intern(Type::Function(FunctionType {
             params,
@@ -51,7 +55,10 @@ impl TypeChecker<'_> {
     }
 
     fn visit_listener_type(&mut self, node: &ast::ListenerType) -> TypeId {
-        let inner = self.visit_type(&node.inner);
+        let inner = match &node.inner {
+            Some(inner) => self.visit_type(inner),
+            None => TypeStore::UNKNOWN,
+        };
         self.intern(Type::Listener(ListenerType { inner }))
     }
 
@@ -136,7 +143,10 @@ impl TypeChecker<'_> {
     }
 
     pub fn visit_reference_type(&mut self, node: &ast::ReferenceType) -> TypeId {
-        let target = self.visit_type(&node.target);
+        let target = match &node.target {
+            Some(target) => self.visit_type(target),
+            None => return TypeStore::UNKNOWN,
+        };
         self.intern(Type::Reference(ReferenceType { target }))
     }
 
@@ -218,11 +228,11 @@ mod tests {
                     loc: Location::dummy(),
                 }),
             ],
-            returned: Box::new(ast::Type::Named(ast::NamedType {
+            returned: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "bool".to_string(),
                 args: None,
                 loc: Location::dummy(),
-            })),
+            }))),
             loc: Location::dummy(),
         };
 
@@ -320,11 +330,11 @@ mod tests {
         let session = Session::new();
         let mut checker = TypeChecker::new(&session, 0);
         let reference_type = ast::ReferenceType {
-            target: Box::new(ast::Type::Named(ast::NamedType {
+            target: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "str".to_string(),
                 args: None,
                 loc: Location::dummy(),
-            })),
+            }))),
             loc: Location::dummy(),
         };
 
