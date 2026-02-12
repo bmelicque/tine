@@ -108,14 +108,14 @@ impl Parser<'_> {
             }
         };
 
-        let Some((Ok(Token::Eq), eq_range)) = self.tokens.peek() else {
+        let Some((Ok(Token::Eq), _)) = self.tokens.peek() else {
             return Some(ast::Attribute {
                 loc: self.localize(name_range),
                 name,
                 value: None,
             });
         };
-        let eq_range = eq_range.to_owned();
+        let eq_range = self.eat(&[Token::Eq]);
 
         let mut loc = self.localize(name_range.start..eq_range.end);
 
@@ -224,11 +224,18 @@ impl Parser<'_> {
 
     fn parse_raw_text(&mut self) -> ast::TextNode {
         let mut range = self.next_range();
+        if range.start >= 1 && &self.src[range.start - 1..range.start] == " " {
+            range.start -= 1;
+        }
         while let Some((token, r)) = self.tokens.peek() {
             match token {
-                Ok(Token::LBrace | Token::Lt | Token::LtSlash) => break,
+                Ok(Token::LBrace | Token::Lt | Token::LtSlash) => {
+                    range.end = r.start;
+                    break;
+                }
                 _ => range.end = r.end,
             }
+            self.tokens.next();
         }
         let loc = self.localize(range.clone());
         let text = self.src[range].to_string();
@@ -257,10 +264,10 @@ impl Parser<'_> {
 
         let res = self.better_expect(
             |t| match t {
-                Token::LtSlash => Some(()),
+                Token::Gt => Some(()),
                 _ => None,
             },
-            &[Token::Gt, Token::Newline],
+            &[Token::Newline],
         );
         let end_loc = match res {
             Ok((_, range)) => self.localize(range),
@@ -268,5 +275,115 @@ impl Parser<'_> {
         };
 
         (tag_name, Location::merge(start_loc, end_loc))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        parser::test_utils::{test_expression, ExpressionTest},
+        Span,
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_parse_void_element() {
+        test_expression(ExpressionTest {
+            input: "<img />",
+            expected: ast::Expression::Element(ast::ElementExpression::Void(ast::VoidElement {
+                loc: Location::new(0, Span::new(0, 7)),
+                tag_name: "img".to_owned(),
+                attributes: vec![],
+            })),
+            diagnostics: vec![],
+        });
+    }
+
+    #[test]
+    fn test_parse_void_element_with_bool_attribute() {
+        test_expression(ExpressionTest {
+            input: "<img foo />",
+            expected: ast::Expression::Element(ast::ElementExpression::Void(ast::VoidElement {
+                loc: Location::new(0, Span::new(0, 11)),
+                tag_name: "img".to_owned(),
+                attributes: vec![ast::Attribute {
+                    loc: Location::new(0, Span::new(5, 8)),
+                    name: "foo".to_owned(),
+                    value: None,
+                }],
+            })),
+            diagnostics: vec![],
+        });
+    }
+
+    #[test]
+    fn test_parse_void_element_with_string_attribute() {
+        test_expression(ExpressionTest {
+            input: "<img src=\"foo\" />",
+            expected: ast::Expression::Element(ast::ElementExpression::Void(ast::VoidElement {
+                loc: Location::new(0, Span::new(0, 17)),
+                tag_name: "img".to_owned(),
+                attributes: vec![ast::Attribute {
+                    loc: Location::new(0, Span::new(5, 14)),
+                    name: "src".to_owned(),
+                    value: Some(ast::AttributeValue::String("foo".to_string())),
+                }],
+            })),
+            diagnostics: vec![],
+        });
+    }
+
+    #[test]
+    fn test_parse_void_element_with_expr_attribute() {
+        test_expression(ExpressionTest {
+            input: "<img src={foo} />",
+            expected: ast::Expression::Element(ast::ElementExpression::Void(ast::VoidElement {
+                loc: Location::new(0, Span::new(0, 17)),
+                tag_name: "img".to_owned(),
+                attributes: vec![ast::Attribute {
+                    loc: Location::new(0, Span::new(5, 14)),
+                    name: "src".to_owned(),
+                    value: Some(ast::AttributeValue::Expression(
+                        ast::Expression::Identifier(ast::Identifier {
+                            loc: Location::new(0, Span::new(10, 13)),
+                            text: "foo".to_owned(),
+                        }),
+                    )),
+                }],
+            })),
+            diagnostics: vec![],
+        });
+    }
+
+    #[test]
+    fn test_parse_element() {
+        test_expression(ExpressionTest {
+            input: "<tag></tag>",
+            expected: ast::Expression::Element(ast::ElementExpression::Element(ast::Element {
+                loc: Location::new(0, Span::new(0, 11)),
+                tag_name: "tag".to_owned(),
+                attributes: vec![],
+                children: vec![],
+            })),
+            diagnostics: vec![],
+        });
+    }
+
+    #[test]
+    fn test_parse_element_with_text_child() {
+        test_expression(ExpressionTest {
+            input: "<tag>foo</tag>",
+            expected: ast::Expression::Element(ast::ElementExpression::Element(ast::Element {
+                loc: Location::new(0, Span::new(0, 14)),
+                tag_name: "tag".to_owned(),
+                attributes: vec![],
+                children: vec![ast::ElementChild::Text(ast::TextNode {
+                    loc: Location::new(0, Span::new(5, 8)),
+                    text: "foo".to_string(),
+                })],
+            })),
+            diagnostics: vec![],
+        });
     }
 }

@@ -157,8 +157,7 @@ pub struct StringLiteral {
 
 impl StringLiteral {
     pub fn as_str(&self) -> &str {
-        let str = self.text.as_str();
-        &str[1..(str.len() - 1)]
+        self.text.as_str()
     }
 }
 
