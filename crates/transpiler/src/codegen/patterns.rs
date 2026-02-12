@@ -163,7 +163,7 @@ impl CodeGenerator<'_> {
             .map(|field| {
                 let against = ast::MemberExpression {
                     loc: against.loc(),
-                    object: Box::new(against.clone()),
+                    object: Some(Box::new(against.clone())),
                     prop: Some(ast::MemberProp::FieldName(field.identifier.clone())),
                 };
                 self.pattern_to_swc_test(&field.pattern.as_ref().unwrap(), &against.into())
@@ -192,7 +192,7 @@ impl CodeGenerator<'_> {
         self.tuple_to_swc_test_helper(pattern, |i| {
             ast::MemberExpression {
                 loc: against.loc(),
-                object: Box::new(against.clone()),
+                object: Some(Box::new(against.clone())),
                 prop: Some(ast::MemberProp::Index(ast::IntLiteral {
                     loc: against.loc(),
                     value: i as i64,
@@ -255,7 +255,7 @@ impl CodeGenerator<'_> {
             let leaked_id: &'static str = Box::leak(id.into_boxed_str());
             ast::MemberExpression {
                 loc: against.loc(),
-                object: Box::new(against.clone()),
+                object: Some(Box::new(against.clone())),
                 prop: Some(ast::MemberProp::FieldName(ast::Identifier {
                     loc: Location::new(module, Span::new(0, leaked_id.len() as u32)),
                     text: leaked_id.to_string(),

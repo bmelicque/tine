@@ -32,7 +32,6 @@ impl CodeGenerator<'_> {
             ast::Expression::Block(node) => self.block_expr_to_swc(node).into(),
             ast::Expression::Call(node) => self.call_expr_to_swc(node).into(),
             ast::Expression::CompositeLiteral(node) => self.composite_literal_to_swc_expr(node),
-            ast::Expression::Empty => panic!("shouldn't have empty expressions at codegen step"),
             ast::Expression::Element(node) => self.element_expression_to_swc(node),
             ast::Expression::FloatLiteral(node) => swc::Expr::Lit(swc::Lit::Num(swc::Number {
                 span: DUMMY_SP,
@@ -78,8 +77,8 @@ impl CodeGenerator<'_> {
     }
 
     fn binary_expression_to_swc_expr(&mut self, node: &ast::BinaryExpression) -> swc::Expr {
-        let left_expr = self.expr_to_swc(&node.left);
-        let right_expr = self.expr_to_swc(&node.right);
+        let left_expr = self.expr_to_swc(node.left.as_ref().unwrap());
+        let right_expr = self.expr_to_swc(node.right.as_ref().unwrap());
 
         let op = match node.operator {
             ast::BinaryOperator::Add => swc::BinaryOp::Add,
@@ -219,7 +218,7 @@ impl CodeGenerator<'_> {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
             params,
-            body: Box::new(match &*node.body {
+            body: Box::new(match &**node.body.as_ref().unwrap() {
                 ast::Expression::Block(b) => self.function_body_to_swc(b),
                 expr => swc::BlockStmtOrExpr::Expr(Box::new(self.expr_to_swc(expr))),
             }),

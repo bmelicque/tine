@@ -37,7 +37,11 @@ impl TypeChecker<'_> {
             .iter()
             .map(|field| {
                 let name = field.prop.text.clone();
-                let def = self.visit_expression(&field.value);
+                let def = field
+                    .value
+                    .as_ref()
+                    .map(|e| self.visit_expression(e))
+                    .unwrap_or(TypeStore::UNKNOWN);
                 types::StructField {
                     name,
                     def,
@@ -152,9 +156,12 @@ impl TypeChecker<'_> {
         let st = match self.resolve(ty).clone() {
             Type::Struct(st) => st,
             Type::Unknown => {
-                node.fields.iter().for_each(|f| {
-                    self.visit_expression(&f.value);
-                });
+                node.fields
+                    .iter()
+                    .filter_map(|f| f.value.clone())
+                    .for_each(|ref value| {
+                        self.visit_expression(value);
+                    });
                 return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
             }
             _ => panic!("Expected a named type"),
@@ -174,7 +181,7 @@ impl TypeChecker<'_> {
         let mut substitutions = HashMap::new();
         for field in got_fields {
             let name = &field.prop;
-            let value = self.visit_expression(&field.value);
+            let value = self.visit_expression_option(&field.value);
             let expected_field = expected.fields.iter().find(|field| field.name == name.text);
             let expected = expected_field.map(|field| field.def);
             let Some(mut expected) = expected else {
@@ -187,7 +194,9 @@ impl TypeChecker<'_> {
             if self.resolve(expected).is_unresolved() {
                 expected = match substitutions.get(&expected) {
                     Some(e) => {
-                        self.check_assigned_type(*e, value, field.value.loc());
+                        if let Some(v) = &field.value {
+                            self.check_assigned_type(*e, value, v.loc());
+                        }
                         *e
                     }
                     None => {
@@ -345,10 +354,10 @@ mod tests {
                         loc: Location::dummy(),
                         text: "name".to_string(),
                     },
-                    value: ast::Expression::StringLiteral(ast::StringLiteral {
+                    value: Some(ast::Expression::StringLiteral(ast::StringLiteral {
                         loc: Location::dummy(),
                         text: "John".into(),
-                    }),
+                    })),
                     loc: Location::dummy(),
                 },
                 ast::StructLiteralField {
@@ -356,10 +365,10 @@ mod tests {
                         loc: Location::dummy(),
                         text: "age".to_string(),
                     },
-                    value: ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                         value: 30,
                         loc: Location::dummy(),
-                    }),
+                    })),
                     loc: Location::dummy(),
                 },
             ],
@@ -548,10 +557,10 @@ mod tests {
                         loc: Location::dummy(),
                         text: "name".to_string(),
                     },
-                    value: ast::Expression::StringLiteral(ast::StringLiteral {
+                    value: Some(ast::Expression::StringLiteral(ast::StringLiteral {
                         loc: Location::dummy(),
                         text: "John".into(),
-                    }),
+                    })),
                     loc: Location::dummy(),
                 },
                 ast::StructLiteralField {
@@ -559,10 +568,10 @@ mod tests {
                         loc: Location::dummy(),
                         text: "age".to_string(),
                     },
-                    value: ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                         value: 30,
                         loc: Location::dummy(),
-                    }),
+                    })),
                     loc: Location::dummy(),
                 },
             ],
@@ -641,10 +650,10 @@ mod tests {
                         loc: Location::dummy(),
                         text: "radius".to_string(),
                     },
-                    value: ast::Expression::IntLiteral(ast::IntLiteral {
+                    value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                         value: 10,
                         loc: Location::dummy(),
-                    }),
+                    })),
                     loc: Location::dummy(),
                 },
             ])),

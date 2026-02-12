@@ -153,7 +153,7 @@ pub fn root_identifier(expr: &Expression) -> Option<Identifier> {
         _ => return None,
     };
     match root {
-        Expression::Identifier(expr) => Some(expr.clone()),
+        Some(Expression::Identifier(expr)) => Some(expr.clone()),
         _ => None,
     }
 }

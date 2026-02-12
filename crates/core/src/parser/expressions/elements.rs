@@ -143,15 +143,11 @@ impl Parser<'_> {
                 ast::AttributeValue::String(value)
             }
             Token::LBrace => {
-                let expression = match self.parse_expression() {
-                    Some(e) => e,
-                    None => {
-                        let range = self.next_range();
-                        let loc = self.localize(range);
-                        self.error(DiagnosticKind::MissingExpression, loc);
-                        ast::Expression::Empty
-                    }
-                };
+                let expression = self.parse_expression();
+                if expression.is_none() {
+                    let loc = self.next_loc();
+                    self.error(DiagnosticKind::MissingExpression, loc);
+                }
                 let res = self.better_expect(
                     |t| match t {
                         Token::RBrace => Some(()),
@@ -164,7 +160,10 @@ impl Parser<'_> {
                     Err(r) => self.localize(r).decrement(),
                 };
                 loc = Location::merge(loc, end_loc);
-                expression.into()
+                match expression {
+                    Some(expression) => expression.into(),
+                    None => return None,
+                }
             }
             // unreachable thanks to `better_expect` above
             _ => unreachable!(),
@@ -192,15 +191,11 @@ impl Parser<'_> {
                 Token::LBrace => {
                     self.tokens.next(); // eat '{'
 
-                    let expression = match self.parse_expression() {
-                        Some(e) => e,
-                        None => {
-                            let range = self.next_range();
-                            let loc = self.localize(range);
-                            self.error(DiagnosticKind::MissingExpression, loc);
-                            ast::Expression::Empty
-                        }
-                    };
+                    let expression = self.parse_expression();
+                    if expression.is_none() {
+                        let loc = self.next_loc();
+                        self.error(DiagnosticKind::MissingExpression, loc);
+                    }
                     let _ = self.better_expect(
                         |t| match t {
                             Token::RBrace => Some(()),
@@ -209,7 +204,9 @@ impl Parser<'_> {
                         &[Token::Gt, Token::TagClose],
                     );
 
-                    children.push(ast::ElementChild::Expression(expression));
+                    if let Some(expression) = expression {
+                        children.push(ast::ElementChild::Expression(expression));
+                    }
                 }
 
                 Token::Newline => {

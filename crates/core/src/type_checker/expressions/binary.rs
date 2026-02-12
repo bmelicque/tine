@@ -8,8 +8,16 @@ use crate::{
 
 impl TypeChecker<'_> {
     pub fn visit_binary_expression(&mut self, node: &ast::BinaryExpression) -> TypeId {
-        let left_type = self.visit_expression(&node.left);
-        let right_type = self.visit_expression(&node.right);
+        let left_type = node
+            .left
+            .as_ref()
+            .map(|e| self.visit_expression(&e))
+            .unwrap_or(TypeStore::UNKNOWN);
+        let right_type = node
+            .right
+            .as_ref()
+            .map(|e| self.visit_expression(&e))
+            .unwrap_or(TypeStore::UNKNOWN);
 
         match node.operator {
             ast::BinaryOperator::Add => {
@@ -20,10 +28,20 @@ impl TypeChecker<'_> {
                     || right_type == TypeStore::FLOAT
                     || right_type == TypeStore::STRING;
                 if !left_is_ok && left_type != TypeStore::UNKNOWN {
-                    self.push_binary_error(node.operator, left_type, node.left.loc());
+                    // Can unwrap safely because `None` results in `UNKNOWN`
+                    self.push_binary_error(
+                        node.operator,
+                        left_type,
+                        node.left.as_ref().unwrap().loc(),
+                    );
                 };
                 if !right_is_ok && right_type != TypeStore::UNKNOWN {
-                    self.push_binary_error(node.operator, right_type, node.right.loc());
+                    // Can unwrap safely because `None` results in `UNKNOWN`
+                    self.push_binary_error(
+                        node.operator,
+                        right_type,
+                        node.right.as_ref().unwrap().loc(),
+                    );
                 };
                 if left_is_ok && right_is_ok && left_type != right_type {
                     let error = DiagnosticKind::MismatchedTypes {
@@ -46,10 +64,20 @@ impl TypeChecker<'_> {
                 let right_is_num =
                     right_type == TypeStore::INTEGER || right_type == TypeStore::FLOAT;
                 if left_type != TypeStore::UNKNOWN && !left_is_num {
-                    self.push_binary_error(node.operator, left_type, node.left.loc());
+                    // Can unwrap safely because `None` results in `UNKNOWN`
+                    self.push_binary_error(
+                        node.operator,
+                        left_type,
+                        node.left.as_ref().unwrap().loc(),
+                    );
                 };
                 if right_type != TypeStore::UNKNOWN && !right_is_num {
-                    self.push_binary_error(node.operator, right_type, node.right.loc());
+                    // Can unwrap safely because `None` results in `UNKNOWN`
+                    self.push_binary_error(
+                        node.operator,
+                        right_type,
+                        node.right.as_ref().unwrap().loc(),
+                    );
                 };
                 if left_is_num && right_is_num && left_type != right_type {
                     let error = DiagnosticKind::MismatchedTypes {
@@ -73,10 +101,20 @@ impl TypeChecker<'_> {
             }
             ast::BinaryOperator::LAnd | ast::BinaryOperator::LOr => {
                 if left_type != TypeStore::UNKNOWN && left_type != TypeStore::BOOLEAN {
-                    self.push_binary_error(node.operator, left_type, node.left.loc());
+                    // Can unwrap safely because `None` results in `UNKNOWN`
+                    self.push_binary_error(
+                        node.operator,
+                        left_type,
+                        node.left.as_ref().unwrap().loc(),
+                    );
                 };
                 if right_type != TypeStore::UNKNOWN && right_type != TypeStore::BOOLEAN {
-                    self.push_binary_error(node.operator, right_type, node.right.loc());
+                    // Can unwrap safely because `None` results in `UNKNOWN`
+                    self.push_binary_error(
+                        node.operator,
+                        right_type,
+                        node.right.as_ref().unwrap().loc(),
+                    );
                 };
             }
         };
@@ -142,14 +180,14 @@ mod tests {
         let (ty, errors) = visit_binary_expression(ast::BinaryExpression {
             loc: Location::dummy(),
             operator: ast::BinaryOperator::Add,
-            left: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+            left: Some(Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
-            })),
-            right: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+            }))),
+            right: Some(Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 2,
                 loc: Location::dummy(),
-            })),
+            }))),
         });
         assert_eq!(ty, TypeStore::INTEGER);
         assert_eq!(errors.len(), 0);
@@ -160,14 +198,14 @@ mod tests {
         let (ty, errors) = visit_binary_expression(ast::BinaryExpression {
             loc: Location::dummy(),
             operator: ast::BinaryOperator::Add,
-            left: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+            left: Some(Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
-            })),
-            right: Box::new(ast::Expression::FloatLiteral(ast::FloatLiteral {
+            }))),
+            right: Some(Box::new(ast::Expression::FloatLiteral(ast::FloatLiteral {
                 value: ordered_float::OrderedFloat(2.0),
                 loc: Location::dummy(),
-            })),
+            }))),
         });
         assert_eq!(ty, TypeStore::UNKNOWN);
         assert_eq!(errors.len(), 1);
@@ -182,14 +220,18 @@ mod tests {
         let (ty, errors) = visit_binary_expression(ast::BinaryExpression {
             loc: Location::dummy(),
             operator: ast::BinaryOperator::Add,
-            left: Box::new(ast::Expression::StringLiteral(ast::StringLiteral {
-                text: "hello".to_string(),
-                loc: Location::dummy(),
-            })),
-            right: Box::new(ast::Expression::StringLiteral(ast::StringLiteral {
-                text: "world".to_string(),
-                loc: Location::dummy(),
-            })),
+            left: Some(Box::new(ast::Expression::StringLiteral(
+                ast::StringLiteral {
+                    text: "hello".to_string(),
+                    loc: Location::dummy(),
+                },
+            ))),
+            right: Some(Box::new(ast::Expression::StringLiteral(
+                ast::StringLiteral {
+                    text: "world".to_string(),
+                    loc: Location::dummy(),
+                },
+            ))),
         });
         assert_eq!(ty, TypeStore::STRING);
         assert_eq!(errors.len(), 0);

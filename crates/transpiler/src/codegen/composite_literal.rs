@@ -27,7 +27,7 @@ impl CodeGenerator<'_> {
         let swc_args = node
             .fields
             .iter()
-            .map(|field| self.expr_to_swc(&field.value).into())
+            .map(|field| self.expr_to_swc(field.value.as_ref().unwrap()).into())
             .collect();
         swc::NewExpr {
             span: DUMMY_SP,
@@ -134,7 +134,7 @@ impl CodeGenerator<'_> {
             let expr = match field {
                 Some(field) => {
                     remaining -= 1;
-                    self.expr_to_swc(&field.value)
+                    self.expr_to_swc(field.value.as_ref().unwrap())
                 }
                 None => swc::Expr::Ident(create_ident("undefined")),
             };

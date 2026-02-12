@@ -79,12 +79,14 @@ impl TypeChecker<'_> {
                 s.error(error, node.loc);
             }
             s.define_params(&node.params, &params);
-            match &*node.body {
-                ast::Expression::Block(b) => s.visit_callback_body(&b, return_type),
-                _ => {
-                    s.visit_expression(&node.body);
+            if let Some(body) = &node.body {
+                match &**body {
+                    ast::Expression::Block(b) => s.visit_callback_body(&b, return_type),
+                    _ => {
+                        s.visit_expression(body);
+                    }
                 }
-            }
+            };
         });
     }
 

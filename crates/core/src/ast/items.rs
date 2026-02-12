@@ -1,9 +1,11 @@
+use enum_from_derive::EnumFrom;
+
 use crate::{
     ast::{Identifier, InvalidStatement, Statement},
     Location,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, EnumFrom, Clone, PartialEq)]
 pub enum Item {
     Invalid(InvalidItem),
     UseDeclaration(UseDeclaration),
@@ -19,20 +21,9 @@ impl Item {
     }
 }
 
-impl From<Statement> for Item {
-    fn from(value: Statement) -> Self {
-        Self::Statement(value)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct InvalidItem {
     pub loc: Location,
-}
-impl Into<Item> for InvalidItem {
-    fn into(self) -> Item {
-        Item::Invalid(self)
-    }
 }
 impl From<InvalidStatement> for InvalidItem {
     fn from(value: InvalidStatement) -> Self {
@@ -45,12 +36,6 @@ pub struct UseDeclaration {
     pub loc: Location,
     pub relative_count: usize,
     pub tree: UseTree,
-}
-
-impl Into<Item> for UseDeclaration {
-    fn into(self) -> Item {
-        Item::UseDeclaration(self)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

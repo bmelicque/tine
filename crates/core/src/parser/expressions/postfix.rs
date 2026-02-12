@@ -5,18 +5,20 @@ use crate::{
 };
 
 impl Parser<'_> {
-    pub fn parse_postfix(&mut self) -> ast::Expression {
+    pub fn parse_postfix(&mut self) -> Option<ast::Expression> {
         let mut expression = self.parse_atom();
         while let Some((Ok(token), _)) = self.tokens.peek() {
             match token {
                 Token::Dot => {
-                    expression = self.parse_member_expression(expression).into();
+                    expression = Some(self.parse_member_expression(expression).into());
                 }
                 Token::Float(float) if *float.value < 1. => {
-                    expression = self.parse_member_from_float(expression).into();
+                    expression = Some(self.parse_member_from_float(expression).into());
                 }
                 Token::LParen => {
-                    expression = self.parse_call_expression(expression).into();
+                    // Expression cannot be `None` here:
+                    // if expression started with params, it would be parsed as a tuple and not going through this branch
+                    expression = Some(self.parse_call_expression(expression.unwrap()).into());
                 }
                 _ => return expression,
             }
@@ -24,20 +26,24 @@ impl Parser<'_> {
         expression
     }
 
-    fn parse_member_expression(&mut self, object: ast::Expression) -> ast::MemberExpression {
-        let Some((Ok(Token::Dot), dot_range)) = self.tokens.next() else {
-            panic!("Expected '.'");
+    fn parse_member_expression(
+        &mut self,
+        object: Option<ast::Expression>,
+    ) -> ast::MemberExpression {
+        let dot_range = self.eat(&[Token::Dot]);
+        let loc = match &object {
+            Some(object) => Location::merge(object.loc(), self.localize(dot_range)),
+            None => self.localize(dot_range),
         };
-        let loc = Location::merge(object.loc(), self.localize(dot_range));
         match self.tokens.peek().cloned() {
             Some((Ok(Token::Ident(_)), range)) => ast::MemberExpression {
                 loc: Location::merge(loc, self.localize(range)),
-                object: Box::new(object),
+                object: object.map(|o| Box::new(o)),
                 prop: Some(ast::MemberProp::FieldName(self.parse_identifier())),
             },
             Some((Ok(Token::Int(_)), range)) => ast::MemberExpression {
                 loc: Location::merge(loc, self.localize(range.clone())),
-                object: Box::new(object),
+                object: object.map(|o| Box::new(o)),
                 prop: Some(ast::MemberProp::Index(self.parse_int())),
             },
             Some((Ok(Token::Float(float)), range)) => {
@@ -56,7 +62,7 @@ impl Parser<'_> {
                 };
                 let inner = ast::MemberExpression {
                     loc: Location::merge(loc, self.localize(left_range)),
-                    object: Box::new(object),
+                    object: object.map(|o| Box::new(o)),
                     prop: inner_prop,
                 };
 
@@ -73,7 +79,7 @@ impl Parser<'_> {
                 };
                 ast::MemberExpression {
                     loc: Location::merge(loc, self.localize(range.clone())),
-                    object: Box::new(inner.into()),
+                    object: Some(Box::new(inner.into())),
                     prop: outer_prop,
                 }
             }
@@ -81,19 +87,25 @@ impl Parser<'_> {
                 self.error(DiagnosticKind::InvalidMember, loc.increment());
                 return ast::MemberExpression {
                     loc,
-                    object: Box::new(object),
+                    object: object.map(|o| Box::new(o)),
                     prop: None,
                 };
             }
         }
     }
 
-    fn parse_member_from_float(&mut self, object: ast::Expression) -> ast::MemberExpression {
+    fn parse_member_from_float(
+        &mut self,
+        object: Option<ast::Expression>,
+    ) -> ast::MemberExpression {
         let Some((Ok(Token::Float(float)), float_range)) = self.tokens.next() else {
             panic!("Expected '.'");
         };
         let index_range = float_range.start + 1..float_range.end;
-        let loc = Location::merge(object.loc(), self.localize(float_range));
+        let loc = match &object {
+            Some(object) => Location::merge(object.loc(), self.localize(float_range)),
+            None => self.localize(float_range),
+        };
         let (_, right) = float.src.split_once(".").unwrap();
         let prop = if right == "" {
             let loc = self.localize(index_range);
@@ -107,7 +119,7 @@ impl Parser<'_> {
         };
         ast::MemberExpression {
             loc,
-            object: Box::new(object),
+            object: object.map(|o| Box::new(o)),
             prop,
         }
     }
@@ -142,16 +154,12 @@ impl Parser<'_> {
         self.tokens.next(); // consume '=>'
         let mut loc = Location::merge(tuple.loc, self.localize(arrow_range));
 
-        let body = match self.parse_expression() {
-            Some(expr) => {
-                loc = Location::merge(loc, expr.loc());
-                expr
-            }
-            None => {
-                self.error(DiagnosticKind::MissingExpression, loc.increment());
-                ast::Expression::Empty
-            }
-        };
+        let body = self.parse_expression();
+        if let Some(body) = &body {
+            loc = Location::merge(loc, body.loc());
+        } else {
+            self.error(DiagnosticKind::MissingExpression, loc.increment());
+        }
 
         let params = tuple
             .elements
@@ -169,7 +177,7 @@ impl Parser<'_> {
         Some(ast::CallArgument::Callback(ast::Callback {
             loc,
             params,
-            body: Box::new(body),
+            body: body.map(|b| Box::new(b)),
         }))
     }
 }
@@ -189,10 +197,10 @@ mod tests {
             input: "object.field",
             expected: ast::Expression::Member(ast::MemberExpression {
                 loc: Location::new(0, Span::new(0, 12)),
-                object: Box::new(ast::Expression::Identifier(ast::Identifier {
+                object: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
                     loc: Location::new(0, Span::new(0, 6)),
                     text: "object".to_string(),
-                })),
+                }))),
                 prop: Some(ast::MemberProp::FieldName(ast::Identifier {
                     loc: Location::new(0, Span::new(7, 12)),
                     text: "field".to_string(),
@@ -208,10 +216,10 @@ mod tests {
             input: "object.0",
             expected: ast::Expression::Member(ast::MemberExpression {
                 loc: Location::new(0, Span::new(0, 8)),
-                object: Box::new(ast::Expression::Identifier(ast::Identifier {
+                object: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
                     loc: Location::new(0, Span::new(0, 6)),
                     text: "object".to_string(),
-                })),
+                }))),
                 prop: Some(ast::MemberProp::Index(ast::IntLiteral {
                     loc: Location::new(0, Span::new(7, 8)),
                     value: 0,
@@ -227,17 +235,17 @@ mod tests {
             input: "object.0.1",
             expected: ast::Expression::Member(ast::MemberExpression {
                 loc: Location::new(0, Span::new(0, 10)),
-                object: Box::new(ast::Expression::Member(ast::MemberExpression {
+                object: Some(Box::new(ast::Expression::Member(ast::MemberExpression {
                     loc: Location::new(0, Span::new(0, 8)),
-                    object: Box::new(ast::Expression::Identifier(ast::Identifier {
+                    object: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
                         loc: Location::new(0, Span::new(0, 6)),
                         text: "object".to_string(),
-                    })),
+                    }))),
                     prop: Some(ast::MemberProp::Index(ast::IntLiteral {
                         loc: Location::new(0, Span::new(7, 8)),
                         value: 0,
                     })),
-                })),
+                }))),
                 prop: Some(ast::MemberProp::Index(ast::IntLiteral {
                     loc: Location::new(0, Span::new(9, 10)),
                     value: 1,
@@ -253,10 +261,10 @@ mod tests {
             input: "object.",
             expected: ast::Expression::Member(ast::MemberExpression {
                 loc: Location::new(0, Span::new(0, 7)),
-                object: Box::new(ast::Expression::Identifier(ast::Identifier {
+                object: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
                     loc: Location::new(0, Span::new(0, 6)),
                     text: "object".to_string(),
-                })),
+                }))),
                 prop: None,
             }),
             diagnostics: vec![Diagnostic {

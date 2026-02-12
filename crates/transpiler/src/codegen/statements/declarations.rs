@@ -5,12 +5,14 @@ use tine_core::ast;
 
 impl CodeGenerator<'_> {
     pub fn declaration_to_swc(&mut self, node: &ast::VariableDeclaration) -> Vec<swc::Stmt> {
-        if let ast::Pattern::Identifier(_) = *node.pattern {
+        if let ast::Pattern::Identifier(_) = node.pattern.as_ref().unwrap() {
             return vec![self.identifier_declaration_to_swc(node).into()];
         };
 
         let wrappers: Vec<swc::Stmt> = node
             .pattern
+            .as_ref()
+            .unwrap()
             .list_identifiers()
             .into_iter()
             .filter_map(|id| self.find_symbol(id.loc()))
@@ -18,19 +20,19 @@ impl CodeGenerator<'_> {
             .map(|var| wrap_identifier(&var.borrow().name).into())
             .collect();
 
-        let pattern = self.pattern_to_swc(&node.pattern);
-        let init = self.expr_to_swc(&node.value);
+        let pattern = self.pattern_to_swc(node.pattern.as_ref().unwrap());
+        let init = self.expr_to_swc(node.value.as_ref().unwrap());
         let decl = create_declaration(swc::VarDeclKind::Let, pattern, init);
 
         vec![vec![decl.into()], wrappers].concat()
     }
 
     fn identifier_declaration_to_swc(&mut self, node: &ast::VariableDeclaration) -> swc::Decl {
-        let ast::Pattern::Identifier(id) = node.pattern.as_ref() else {
+        let ast::Pattern::Identifier(id) = node.pattern.as_ref().unwrap() else {
             panic!()
         };
 
-        let mut init = self.expr_to_swc(&node.value);
+        let mut init = self.expr_to_swc(node.value.as_ref().unwrap());
         let Some(info) = self.find_symbol(id.loc()) else {
             panic!(
                 "expected to find symbol with name '{}' at location {:?}",

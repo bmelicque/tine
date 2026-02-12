@@ -23,34 +23,36 @@ impl Parser<'_> {
             None => eq_loc,
         };
         let assignee = match expr {
-            Some(ast::Expression::Member(expr)) => ast::Assignee::Member(expr),
+            Some(ast::Expression::Member(expr)) => Some(ast::Assignee::Member(expr)),
             Some(ast::Expression::Unary(unary)) if unary.operator == ast::UnaryOperator::Star => {
-                if let ast::Expression::Identifier(ident) = *unary.operand {
-                    ast::Assignee::Indirection(ast::IndirectionAssignee {
-                        loc: unary.loc,
-                        identifier: ident,
-                    })
-                } else {
-                    self.expr_to_pattern(unary.into()).into()
+                match &unary.operand {
+                    Some(operand) => match &**operand {
+                        ast::Expression::Identifier(ident) => {
+                            Some(ast::Assignee::Indirection(ast::IndirectionAssignee {
+                                loc: unary.loc,
+                                identifier: ident.clone(),
+                            }))
+                        }
+                        expr => Some(self.expr_to_pattern(expr.clone()).into()),
+                    },
+                    None => None,
                 }
             }
-            Some(expr) => self.expr_to_pattern(expr).into(),
-            None => {
-                self.error(DiagnosticKind::MissingPattern, eq_loc);
-                ast::Pattern::Invalid { loc: eq_loc }.into()
-            }
+            Some(expr) => Some(self.expr_to_pattern(expr).into()),
+            None => None,
         };
+        if assignee.is_none() {
+            self.error(DiagnosticKind::MissingPattern, eq_loc);
+        }
 
-        let value = match self.parse_expression() {
-            Some(value) => value,
-            None => {
-                self.error(DiagnosticKind::MissingExpression, eq_loc.increment());
-                ast::Expression::Empty
-            }
-        };
-        let loc = match value {
-            ast::Expression::Empty => loc,
-            _ => Location::merge(loc, value.loc()),
+        let value = self.parse_expression();
+        if value.is_none() {
+            self.error(DiagnosticKind::MissingExpression, eq_loc.increment());
+        }
+
+        let loc = match &value {
+            Some(value) => Location::merge(loc, value.loc()),
+            None => loc,
         };
 
         Some(ast::Statement::Assignment(ast::Assignment {
@@ -76,16 +78,16 @@ mod tests {
             input: "x = 42",
             expected: ast::Statement::Assignment(ast::Assignment {
                 loc: Location::new(0, Span::new(0, 6)),
-                pattern: ast::Assignee::Pattern(ast::Pattern::Identifier(ast::IdentifierPattern(
-                    ast::Identifier {
+                pattern: Some(ast::Assignee::Pattern(ast::Pattern::Identifier(
+                    ast::IdentifierPattern(ast::Identifier {
                         loc: Location::new(0, Span::new(0, 1)),
                         text: "x".into(),
-                    },
+                    }),
                 ))),
-                value: ast::Expression::IntLiteral(ast::IntLiteral {
+                value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                     loc: Location::new(0, Span::new(4, 6)),
                     value: 42,
-                }),
+                })),
             }),
             diagnostics: vec![],
         });
@@ -97,13 +99,13 @@ mod tests {
             input: "x =",
             expected: ast::Statement::Assignment(ast::Assignment {
                 loc: Location::new(0, Span::new(0, 3)),
-                pattern: ast::Assignee::Pattern(ast::Pattern::Identifier(ast::IdentifierPattern(
-                    ast::Identifier {
+                pattern: Some(ast::Assignee::Pattern(ast::Pattern::Identifier(
+                    ast::IdentifierPattern(ast::Identifier {
                         loc: Location::new(0, Span::new(0, 1)),
                         text: "x".into(),
-                    },
+                    }),
                 ))),
-                value: ast::Expression::Empty,
+                value: None,
             }),
             diagnostics: vec![Diagnostic {
                 kind: DiagnosticKind::MissingExpression,
@@ -119,21 +121,21 @@ mod tests {
             input: "x.y = 42",
             expected: ast::Statement::Assignment(ast::Assignment {
                 loc: Location::new(0, Span::new(0, 8)),
-                pattern: ast::Assignee::Member(ast::MemberExpression {
+                pattern: Some(ast::Assignee::Member(ast::MemberExpression {
                     loc: Location::new(0, Span::new(0, 3)),
-                    object: Box::new(ast::Expression::Identifier(ast::Identifier {
+                    object: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
                         loc: Location::new(0, Span::new(0, 1)),
                         text: "x".into(),
-                    })),
+                    }))),
                     prop: Some(ast::MemberProp::FieldName(ast::Identifier {
                         loc: Location::new(0, Span::new(2, 3)),
                         text: "y".into(),
                     })),
-                }),
-                value: ast::Expression::IntLiteral(ast::IntLiteral {
+                })),
+                value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                     loc: Location::new(0, Span::new(6, 8)),
                     value: 42,
-                }),
+                })),
             }),
             diagnostics: vec![],
         });

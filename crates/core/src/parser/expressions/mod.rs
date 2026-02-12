@@ -36,7 +36,7 @@ impl Parser<'_> {
             Token::Lt => Some(self.parse_element_expression().into()),
             Token::Match => Some(self.parse_match_expression().into()),
             Token::For => Some(self.parse_loop_expression().into()),
-            _ => Some(self.parse_binary_expression(1)),
+            _ => self.parse_binary_expression(1),
         }
     }
 
@@ -53,7 +53,7 @@ impl Parser<'_> {
 
         match peeked {
             Token::LBracket => Some(self.parse_array().into()),
-            _ => Some(self.parse_binary_expression(1)),
+            _ => self.parse_binary_expression(1),
         }
     }
 }

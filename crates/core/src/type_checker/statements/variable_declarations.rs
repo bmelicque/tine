@@ -7,19 +7,21 @@ use crate::{
 
 impl TypeChecker<'_> {
     pub fn visit_variable_declaration(&mut self, node: &ast::VariableDeclaration) -> TypeId {
-        let (inferred_type, dependencies) =
-            self.with_dependencies(|s| s.visit_expression(&node.value));
+        let (inferred_type, dependencies) = match &node.value {
+            Some(value) => self.with_dependencies(|s| s.visit_expression(value)),
+            None => (TypeStore::UNKNOWN, vec![]),
+        };
+        let Some(pattern) = &node.pattern else {
+            return TypeStore::UNIT;
+        };
 
         let mutable = node.keyword == ast::DeclarationKeyword::Var;
-        if node.pattern.is_refutable() {
-            self.error(
-                DiagnosticKind::IrrefutablePatternExpected,
-                node.pattern.loc(),
-            );
+        if pattern.is_refutable() {
+            self.error(DiagnosticKind::IrrefutablePatternExpected, pattern.loc());
         }
         let mut variables = TokenList::new();
         let docs = node.docs.clone().map(|d| d.text);
-        self.match_pattern(&node.pattern, inferred_type, &mut variables);
+        self.match_pattern(pattern, inferred_type, &mut variables);
         for (id, ty) in variables.0 {
             match self.ctx.find_in_current_scope(id.as_str()) {
                 Some(symbol) => {
@@ -34,7 +36,7 @@ impl TypeChecker<'_> {
                     ty,
                     kind: SymbolKind::Value { mutable },
                     docs: docs.clone(),
-                    defined_at: node.pattern.loc(),
+                    defined_at: pattern.loc(),
                     dependencies: dependencies.clone(),
                     ..Default::default()
                 }),
@@ -64,13 +66,13 @@ mod tests {
             docs: None,
             loc: Location::dummy(),
             keyword: ast::DeclarationKeyword::Var,
-            pattern: Box::new(ast::Pattern::Identifier(ast::IdentifierPattern(
+            pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
                 ast::Identifier {
                     text: "a".to_string(),
                     loc: Location::dummy(),
                 },
             ))),
-            value: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+            value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
             })),
@@ -93,13 +95,13 @@ mod tests {
             docs: None,
             loc: Location::dummy(),
             keyword: ast::DeclarationKeyword::Const,
-            pattern: Box::new(ast::Pattern::Identifier(ast::IdentifierPattern(
+            pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
                 ast::Identifier {
                     loc: Location::dummy(),
                     text: "a".to_string(),
                 },
             ))),
-            value: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+            value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
             })),
@@ -130,13 +132,13 @@ mod tests {
             docs: None,
             loc: Location::dummy(),
             keyword: ast::DeclarationKeyword::Var,
-            pattern: Box::new(ast::Pattern::Identifier(ast::IdentifierPattern(
+            pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
                 ast::Identifier {
                     loc: Location::dummy(),
                     text: "a".to_string(),
                 },
             ))),
-            value: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+            value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
             })),

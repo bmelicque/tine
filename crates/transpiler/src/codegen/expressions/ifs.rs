@@ -29,7 +29,7 @@ impl CodeGenerator<'_> {
             let alt = Box::new(alt);
             swc::Expr::Cond(swc::CondExpr {
                 span: DUMMY_SP,
-                test: Box::new(self.expr_to_swc(&node.condition)),
+                test: Box::new(self.expr_to_swc(node.condition.as_ref().unwrap())),
                 cons: Box::new(
                     self.block_to_swc_inlined(node.consequent.as_ref().unwrap())
                         .into(),
@@ -42,7 +42,7 @@ impl CodeGenerator<'_> {
                 .into();
             swc::Expr::Cond(swc::CondExpr {
                 span: DUMMY_SP,
-                test: Box::new(self.expr_to_swc(&node.condition)),
+                test: Box::new(self.expr_to_swc(node.condition.as_ref().unwrap())),
                 cons: Box::new(self.some(cons).into()),
                 alt: Box::new(self.none().into()),
             })
@@ -102,7 +102,7 @@ mod tests {
 
     fn mock_if_expr(with_alt: bool) -> ast::IfExpression {
         ast::IfExpression {
-            condition: mock_expr().into(),
+            condition: Some(Box::new(mock_expr())),
             consequent: Some(mock_block()),
             alternate: if with_alt {
                 Some(Box::new(ast::Alternate::Block(mock_block())))
@@ -126,7 +126,7 @@ mod tests {
     fn returns_undefined_for_empty_if() {
         let mut gen = CodeGenerator::new_for_test();
         let node = ast::IfExpression {
-            condition: mock_expr().into(),
+            condition: Some(Box::new(mock_expr())),
             consequent: Some(ast::BlockExpression {
                 statements: vec![],
                 loc: Location::dummy(),

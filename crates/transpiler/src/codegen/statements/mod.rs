@@ -13,7 +13,6 @@ impl CodeGenerator<'_> {
         match node {
             ast::Statement::Assignment(node) => vec![self.assignment_to_swc(node).into()],
             ast::Statement::Break(_) => vec![self.break_to_swc_stmt().into()],
-            ast::Statement::Empty => vec![],
             ast::Statement::Enum(node) => vec![self.enum_to_swc(node).into()],
             ast::Statement::Expression(node) => match node.expression.as_ref() {
                 ast::Expression::Block(block) => {
@@ -102,7 +101,7 @@ impl CodeGenerator<'_> {
     /// assign_to is Some if the last stmt has to be assigned (used for extracted blocks)
     pub fn if_to_swc_stmt(&mut self, node: &ast::IfExpression, assign_to: AssignTo) -> swc::IfStmt {
         let block = self.block_to_swc_stmt(node.consequent.as_ref().unwrap(), assign_to.clone());
-        let test = Box::new(self.expr_to_swc(&node.condition));
+        let test = Box::new(self.expr_to_swc(node.condition.as_ref().unwrap()));
         let cons = Box::new(block.into());
         let alt = node
             .alternate
@@ -125,7 +124,10 @@ impl CodeGenerator<'_> {
     ) -> swc::IfStmt {
         let mut block =
             self.block_to_swc_stmt(node.consequent.as_ref().unwrap(), assign_to.clone());
-        let test = Box::new(self.pattern_to_swc_test(&node.pattern, &node.scrutinee));
+        let test = Box::new(self.pattern_to_swc_test(
+            node.pattern.as_ref().unwrap(),
+            node.scrutinee.as_ref().unwrap(),
+        ));
         block.stmts.push(
             swc::Decl::Var(Box::new(swc::VarDecl {
                 span: DUMMY_SP,
@@ -134,8 +136,8 @@ impl CodeGenerator<'_> {
                 declare: false,
                 decls: vec![swc::VarDeclarator {
                     span: DUMMY_SP,
-                    name: self.pattern_to_swc(&node.pattern),
-                    init: Some(Box::new(self.expr_to_swc(&node.scrutinee))),
+                    name: self.pattern_to_swc(node.pattern.as_ref().unwrap()),
+                    init: Some(Box::new(self.expr_to_swc(node.scrutinee.as_ref().unwrap()))),
                     definite: false,
                 }],
             }))
@@ -304,8 +306,8 @@ impl CodeGenerator<'_> {
         });
         ast::IfPatExpression {
             loc: node.loc,
-            pattern: node.pattern.as_ref().unwrap().clone(),
-            scrutinee: scrutinee.clone(),
+            pattern: node.pattern.as_deref().cloned(),
+            scrutinee: Some(scrutinee.clone()),
             consequent,
             alternate: alternate
                 .map(|alt| ast::Alternate::IfDecl(*alt))

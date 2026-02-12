@@ -17,12 +17,6 @@ impl ElementExpression {
     }
 }
 
-impl Into<Expression> for ElementExpression {
-    fn into(self) -> Expression {
-        Expression::Element(self)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Element {
     pub loc: Location,

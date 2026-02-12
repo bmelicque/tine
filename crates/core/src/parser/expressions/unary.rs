@@ -14,22 +14,26 @@ impl Parser<'_> {
         Token::Star,
     ];
 
-    pub fn parse_unary_expression(&mut self) -> ast::Expression {
+    pub fn parse_unary_expression(&mut self) -> Option<ast::Expression> {
         match self.tokens.peek().cloned() {
             Some((Ok(token), op_range)) if Self::UNARY_OPERATORS.contains(&token) => {
                 self.tokens.next(); // consume the operator
-                let expr = Box::new(self.parse_unary_expression());
-                if expr.is_empty() {
+                let expr = self.parse_unary_expression();
+                if expr.is_none() {
                     self.error(
                         DiagnosticKind::MissingExpression,
                         self.localize(op_range.clone()).increment(),
                     );
                 }
-                ast::Expression::Unary(ast::UnaryExpression {
-                    loc: Location::merge(self.localize(op_range), expr.loc()),
+                let loc = match &expr {
+                    Some(expr) => Location::merge(self.localize(op_range), expr.loc()),
+                    None => self.localize(op_range),
+                };
+                Some(ast::Expression::Unary(ast::UnaryExpression {
+                    loc,
                     operator: token.to_string().into(),
-                    operand: expr,
-                })
+                    operand: expr.map(|e| Box::new(e)),
+                }))
             }
             _ => self.parse_postfix(),
         }
@@ -52,10 +56,10 @@ mod tests {
             expected: ast::Expression::Unary(ast::UnaryExpression {
                 loc: Location::new(0, Span::new(0, 2)),
                 operator: ast::UnaryOperator::Ampersand,
-                operand: Box::new(ast::Expression::Identifier(ast::Identifier {
+                operand: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
                     loc: Location::new(0, Span::new(1, 2)),
                     text: "a".into(),
-                })),
+                }))),
             }),
             diagnostics: vec![],
         });
@@ -68,14 +72,14 @@ mod tests {
             expected: ast::Expression::Unary(ast::UnaryExpression {
                 loc: Location::new(0, Span::new(0, 3)),
                 operator: ast::UnaryOperator::Ampersand,
-                operand: Box::new(ast::Expression::Unary(ast::UnaryExpression {
+                operand: Some(Box::new(ast::Expression::Unary(ast::UnaryExpression {
                     loc: Location::new(0, Span::new(1, 3)),
                     operator: ast::UnaryOperator::Star,
-                    operand: Box::new(ast::Expression::Identifier(ast::Identifier {
+                    operand: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
                         loc: Location::new(0, Span::new(2, 3)),
                         text: "a".into(),
-                    })),
-                })),
+                    }))),
+                }))),
             }),
             diagnostics: vec![],
         });
@@ -88,7 +92,7 @@ mod tests {
             expected: ast::Expression::Unary(ast::UnaryExpression {
                 loc: Location::new(0, Span::new(0, 1)),
                 operator: ast::UnaryOperator::Ampersand,
-                operand: Box::new(ast::Expression::Empty),
+                operand: None,
             }),
             diagnostics: vec![Diagnostic {
                 kind: DiagnosticKind::MissingExpression,

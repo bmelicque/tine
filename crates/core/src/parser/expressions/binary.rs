@@ -21,7 +21,7 @@ impl Parser<'_> {
         Token::Ge,
     ];
 
-    pub fn parse_binary_expression(&mut self, min_precedence: u8) -> ast::Expression {
+    pub fn parse_binary_expression(&mut self, min_precedence: u8) -> Option<ast::Expression> {
         if min_precedence == Token::StarStar.precedence() {
             return self.parse_exponentiation();
         }
@@ -33,47 +33,53 @@ impl Parser<'_> {
             self.tokens.next(); // consume the operator
             let operator = token.to_string().into();
             let right = self.parse_binary_expression(min_precedence + 1);
-            let loc = if right.is_empty() {
+            if right.is_none() {
                 self.error(
                     DiagnosticKind::MissingExpression,
                     self.localize(op_range.clone()).increment(),
                 );
-                Location::merge(expression.loc(), self.localize(op_range))
-            } else {
-                Location::merge(expression.loc(), right.loc())
+            }
+            let loc = match (&expression, &right) {
+                (Some(lhs), Some(rhs)) => Location::merge(lhs.loc(), rhs.loc()),
+                (Some(lhs), None) => Location::merge(lhs.loc(), self.localize(op_range)),
+                (None, Some(rhs)) => Location::merge(self.localize(op_range), rhs.loc()),
+                (None, None) => self.localize(op_range),
             };
-            expression = ast::Expression::Binary(ast::BinaryExpression {
+            expression = Some(ast::Expression::Binary(ast::BinaryExpression {
                 loc,
-                left: Box::new(expression),
+                left: expression.map(|e| Box::new(e)),
                 operator,
-                right: Box::new(right),
-            })
+                right: right.map(|r| Box::new(r)),
+            }))
         }
         expression
     }
 
-    fn parse_exponentiation(&mut self) -> ast::Expression {
+    fn parse_exponentiation(&mut self) -> Option<ast::Expression> {
         let lhs = self.parse_unary_expression();
-        let Some((Ok(Token::StarStar), op_range)) = self.tokens.peek().cloned() else {
+        let Some((Ok(Token::StarStar), _)) = self.tokens.peek() else {
             return lhs;
         };
-        self.tokens.next(); // consume the operator
+        let op_range = self.eat(&[Token::StarStar]);
         let rhs = self.parse_exponentiation();
-        let loc = if rhs.is_empty() {
+        if rhs.is_none() {
             self.error(
                 DiagnosticKind::MissingExpression,
                 self.localize(op_range.clone()).increment(),
             );
-            Location::merge(lhs.loc(), self.localize(op_range))
-        } else {
-            Location::merge(lhs.loc(), rhs.loc())
+        }
+        let loc = match (&lhs, &rhs) {
+            (Some(lhs), Some(rhs)) => Location::merge(lhs.loc(), rhs.loc()),
+            (Some(lhs), None) => Location::merge(lhs.loc(), self.localize(op_range)),
+            (None, Some(rhs)) => Location::merge(self.localize(op_range), rhs.loc()),
+            (None, None) => self.localize(op_range),
         };
-        ast::Expression::Binary(ast::BinaryExpression {
+        Some(ast::Expression::Binary(ast::BinaryExpression {
             loc,
-            left: Box::new(lhs),
+            left: lhs.map(|lhs| Box::new(lhs)),
             operator: ast::BinaryOperator::Pow,
-            right: Box::new(rhs),
-        })
+            right: rhs.map(|rhs| Box::new(rhs)),
+        }))
     }
 }
 
@@ -92,15 +98,15 @@ mod tests {
             input: "1 + 2",
             expected: ast::Expression::Binary(ast::BinaryExpression {
                 loc: Location::new(0, Span::new(0, 5)),
-                left: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+                left: Some(Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
                     loc: Location::new(0, Span::new(0, 1)),
                     value: 1,
-                })),
+                }))),
                 operator: ast::BinaryOperator::Add,
-                right: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+                right: Some(Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
                     loc: Location::new(0, Span::new(4, 5)),
                     value: 2,
-                })),
+                }))),
             }),
             diagnostics: vec![],
         });
@@ -112,15 +118,19 @@ mod tests {
             input: "true || false",
             expected: ast::Expression::Binary(ast::BinaryExpression {
                 loc: Location::new(0, Span::new(0, 13)),
-                left: Box::new(ast::Expression::BooleanLiteral(ast::BooleanLiteral {
-                    loc: Location::new(0, Span::new(0, 4)),
-                    value: true,
-                })),
+                left: Some(Box::new(ast::Expression::BooleanLiteral(
+                    ast::BooleanLiteral {
+                        loc: Location::new(0, Span::new(0, 4)),
+                        value: true,
+                    },
+                ))),
                 operator: ast::BinaryOperator::LOr,
-                right: Box::new(ast::Expression::BooleanLiteral(ast::BooleanLiteral {
-                    loc: Location::new(0, Span::new(8, 13)),
-                    value: false,
-                })),
+                right: Some(Box::new(ast::Expression::BooleanLiteral(
+                    ast::BooleanLiteral {
+                        loc: Location::new(0, Span::new(8, 13)),
+                        value: false,
+                    },
+                ))),
             }),
             diagnostics: vec![],
         });

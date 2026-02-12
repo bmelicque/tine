@@ -1,3 +1,5 @@
+use enum_from_derive::EnumFrom;
+
 use crate::{
     ast::{FloatLiteral, Identifier, IntLiteral},
     Location,
@@ -5,9 +7,9 @@ use crate::{
 
 use super::{BooleanLiteral, NamedType, StringLiteral};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
 pub enum Pattern {
-    Invalid { loc: Location },
+    Invalid(InvalidPattern),
 
     Identifier(IdentifierPattern),
     Literal(LiteralPattern),
@@ -19,7 +21,7 @@ pub enum Pattern {
 impl Pattern {
     pub fn loc(&self) -> Location {
         match self {
-            Pattern::Invalid { loc } => *loc,
+            Pattern::Invalid(p) => p.loc,
             Pattern::Identifier(p) => p.0.loc,
             Pattern::Literal(l) => l.loc(),
             Pattern::Struct(p) => p.loc,
@@ -116,6 +118,11 @@ impl Pattern {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct InvalidPattern {
+    pub loc: Location,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IdentifierPattern(pub Identifier);
 
 impl IdentifierPattern {
@@ -128,19 +135,13 @@ impl IdentifierPattern {
     }
 }
 
-impl Into<Pattern> for IdentifierPattern {
-    fn into(self) -> Pattern {
-        Pattern::Identifier(self)
-    }
-}
-
 impl Into<Identifier> for IdentifierPattern {
     fn into(self) -> Identifier {
         self.0
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
 pub enum LiteralPattern {
     Boolean(BooleanLiteral),
     Float(FloatLiteral),
@@ -159,43 +160,11 @@ impl LiteralPattern {
     }
 }
 
-impl From<BooleanLiteral> for LiteralPattern {
-    fn from(value: BooleanLiteral) -> Self {
-        Self::Boolean(value)
-    }
-}
-impl From<FloatLiteral> for LiteralPattern {
-    fn from(value: FloatLiteral) -> Self {
-        Self::Float(value)
-    }
-}
-impl From<IntLiteral> for LiteralPattern {
-    fn from(value: IntLiteral) -> Self {
-        Self::Integer(value)
-    }
-}
-impl From<StringLiteral> for LiteralPattern {
-    fn from(value: StringLiteral) -> Self {
-        Self::String(value)
-    }
-}
-impl Into<Pattern> for LiteralPattern {
-    fn into(self) -> Pattern {
-        Pattern::Literal(self)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructPattern {
     pub loc: Location,
     pub ty: Box<NamedType>,
     pub fields: Vec<StructPatternField>,
-}
-
-impl Into<Pattern> for StructPattern {
-    fn into(self) -> Pattern {
-        Pattern::Struct(self)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -211,11 +180,6 @@ pub struct TuplePattern {
     pub elements: Vec<Pattern>,
 }
 
-impl Into<Pattern> for TuplePattern {
-    fn into(self) -> Pattern {
-        Pattern::Tuple(self)
-    }
-}
 impl From<Vec<Pattern>> for TuplePattern {
     fn from(elements: Vec<Pattern>) -> Self {
         let loc = Location::merge(
@@ -232,12 +196,6 @@ pub struct VariantPattern {
     pub ty: Box<NamedType>,
     pub name: String,
     pub body: Option<VariantPatternBody>,
-}
-
-impl Into<Pattern> for VariantPattern {
-    fn into(self) -> Pattern {
-        Pattern::Variant(self)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

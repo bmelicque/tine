@@ -27,7 +27,7 @@ impl CodeGenerator<'_> {
             ctxt: SyntaxContext::empty(),
             callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
-                obj: Box::new(self.expr_to_swc(&node.operand)),
+                obj: Box::new(self.expr_to_swc(node.operand.as_ref().unwrap())),
                 prop: swc::MemberProp::Ident(create_ident("get").into()),
             }))),
             args: vec![],
@@ -36,12 +36,12 @@ impl CodeGenerator<'_> {
     }
 
     fn ref_to_swc_expr(&mut self, node: &ast::UnaryExpression) -> swc::Expr {
-        let (ctx, value) = match node.operand.as_ref() {
+        let (ctx, value) = match &**node.operand.as_ref().unwrap() {
             ast::Expression::Identifier(expr) => {
                 (self.ident_to_swc(expr).into(), create_number(0.0))
             }
             ast::Expression::Member(expr) => (
-                self.expr_to_swc(&expr.object),
+                self.expr_to_swc(expr.object.as_ref().unwrap()),
                 match expr.prop.clone().unwrap() {
                     ast::MemberProp::FieldName(i) => create_str(i.as_str().into()),
                     ast::MemberProp::Index(n) => create_number(n.value as f64),
@@ -62,7 +62,7 @@ impl CodeGenerator<'_> {
     }
 
     fn signal_to_swc_expr(&mut self, node: &ast::UnaryExpression) -> swc::Expr {
-        let init = self.expr_to_swc(&node.operand);
+        let init = self.expr_to_swc(node.operand.as_ref().unwrap());
         swc::Expr::New(swc::NewExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
@@ -77,7 +77,7 @@ impl CodeGenerator<'_> {
     }
 
     fn listener_to_swc_expr(&mut self, node: &ast::UnaryExpression) -> swc::Expr {
-        let getter = self.listener_expr_to_swc_getter(&node.operand);
+        let getter = self.listener_expr_to_swc_getter(node.operand.as_ref().unwrap());
         let dependencies = swc::Expr::Array(self.listener_deps_to_swc_array(node.loc));
 
         swc::Expr::New(swc::NewExpr {
@@ -125,7 +125,7 @@ impl CodeGenerator<'_> {
         swc::Expr::Unary(swc::UnaryExpr {
             span: DUMMY_SP,
             op: swc::UnaryOp::Minus,
-            arg: Box::new(self.expr_to_swc(&node.operand)),
+            arg: Box::new(self.expr_to_swc(node.operand.as_ref().unwrap())),
         })
     }
 
@@ -133,7 +133,7 @@ impl CodeGenerator<'_> {
         swc::Expr::Unary(swc::UnaryExpr {
             span: DUMMY_SP,
             op: swc::UnaryOp::Bang,
-            arg: Box::new(self.expr_to_swc(&node.operand)),
+            arg: Box::new(self.expr_to_swc(node.operand.as_ref().unwrap())),
         })
     }
 }

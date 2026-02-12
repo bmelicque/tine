@@ -103,7 +103,7 @@ impl Into<CompositeLiteral> for AnonymousStructLiteral {
 pub struct StructLiteralField {
     pub loc: Location,
     pub prop: Identifier,
-    pub value: Expression,
+    pub value: Option<Expression>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -166,13 +166,6 @@ impl ExpressionOrAnonymous {
         match self {
             Self::Expression(expr) => expr.loc(),
             Self::Struct(s) => s.loc,
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        match self {
-            ExpressionOrAnonymous::Expression(Expression::Empty) => true,
-            _ => false,
         }
     }
 }

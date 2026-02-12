@@ -8,7 +8,9 @@ use crate::{
 impl TypeChecker<'_> {
     pub fn visit_member_expression(&mut self, expr: &ast::MemberExpression) -> TypeId {
         let Some(ref member) = expr.prop else {
-            self.visit_expression(&expr.object);
+            if let Some(object) = &expr.object {
+                self.visit_expression(object);
+            }
             // missing member already reported during parsing phase
             return TypeStore::UNKNOWN;
         };
@@ -20,7 +22,7 @@ impl TypeChecker<'_> {
 
     fn visit_field_access(&mut self, expr: &ast::MemberExpression) -> TypeId {
         debug_assert!(matches!(expr.prop, Some(ast::MemberProp::FieldName(_))));
-        let root_type = self.visit_expression(&expr.object);
+        let root_type = self.visit_expression_box_option(&expr.object);
         let Some(ast::MemberProp::FieldName(ref field_name)) = expr.prop else {
             unreachable!()
         };
@@ -56,12 +58,15 @@ impl TypeChecker<'_> {
     }
 
     pub fn visit_tuple_indexing(&mut self, expr: &ast::MemberExpression) -> TypeId {
-        let root_type = self.visit_expression(&expr.object);
+        let root_type = self.visit_expression_box_option(&expr.object);
         let Type::Tuple(tuple) = self.resolve(root_type) else {
-            let error = DiagnosticKind::ExpectedTuple {
-                got: self.session.display_type(root_type),
-            };
-            self.error(error, expr.object.loc());
+            if root_type != TypeStore::UNKNOWN {
+                let error = DiagnosticKind::ExpectedTuple {
+                    got: self.session.display_type(root_type),
+                };
+                // unwrap is safe by checking if not `UNKNOWN`
+                self.error(error, expr.object.as_ref().unwrap().loc());
+            }
             return self.save_member_type(expr, TypeStore::UNKNOWN);
         };
 
@@ -144,7 +149,7 @@ mod tests {
         });
 
         let field_access_expression = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ident("user"))),
+            object: Some(Box::new(ast::Expression::Identifier(ident("user")))),
             prop: Some(ident("name").into()),
             loc: Location::dummy(),
         };
@@ -181,7 +186,7 @@ mod tests {
         });
 
         let tuple_indexing = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
+            object: Some(Box::new(ast::Expression::Identifier(ident("my_tuple")))),
             prop: Some(ast::MemberProp::Index(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
@@ -206,7 +211,7 @@ mod tests {
         });
 
         let tuple_indexing = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ident("not_a_tuple"))),
+            object: Some(Box::new(ast::Expression::Identifier(ident("not_a_tuple")))),
             prop: Some(ast::MemberProp::Index(ast::IntLiteral {
                 value: 0,
                 loc: Location::dummy(),
@@ -235,7 +240,7 @@ mod tests {
         });
 
         let tuple_indexing = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
+            object: Some(Box::new(ast::Expression::Identifier(ident("my_tuple")))),
             prop: Some(ast::MemberProp::Index(ast::IntLiteral {
                 value: 2,
                 loc: Location::dummy(),
@@ -268,7 +273,7 @@ mod tests {
         });
 
         let tuple_indexing = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
+            object: Some(Box::new(ast::Expression::Identifier(ident("my_tuple")))),
             prop: Some(ast::MemberProp::Index(ast::IntLiteral {
                 value: -1,
                 loc: Location::dummy(),

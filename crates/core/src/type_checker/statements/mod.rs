@@ -16,7 +16,6 @@ impl TypeChecker<'_> {
         match node {
             ast::Statement::Assignment(node) => self.visit_assignment(node),
             ast::Statement::Break(node) => self.visit_break_statement(node),
-            ast::Statement::Empty => TypeStore::UNIT,
             ast::Statement::Enum(node) => self.visit_enum_definition(node),
             ast::Statement::Expression(node) => self.visit_expression(&node.expression),
             ast::Statement::Function(node) => self.visit_function_definition(node),
@@ -30,11 +29,10 @@ impl TypeChecker<'_> {
     }
 
     fn visit_assignment(&mut self, node: &ast::Assignment) -> TypeId {
-        let value_type = match &node.value {
-            ast::Expression::Empty => TypeStore::UNKNOWN,
-            value => self.visit_expression(value),
-        };
-        self.visit_assignee(&node.pattern, value_type);
+        let value_type = self.visit_expression_option(&node.value);
+        if let Some(pattern) = &node.pattern {
+            self.visit_assignee(pattern, value_type);
+        }
 
         TypeStore::UNIT
     }

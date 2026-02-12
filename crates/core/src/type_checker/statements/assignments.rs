@@ -41,11 +41,13 @@ impl TypeChecker<'_> {
     }
 
     fn visit_expr_assignee(&mut self, expr: &ast::MemberExpression, against: TypeId) {
-        let ty = self.visit_expression(&expr.object);
+        let ty = self.visit_expression_box_option(&expr.object);
         self.check_assigned_type(against, ty, expr.loc);
         let root = expr.root_expression();
-        let ast::Expression::Identifier(root) = root else {
-            self.error(DiagnosticKind::InvalidRootAssignee, root.loc());
+        let Some(ast::Expression::Identifier(root)) = root else {
+            if let Some(root) = &root {
+                self.error(DiagnosticKind::InvalidRootAssignee, root.loc());
+            }
             return;
         };
         let Some(info) = self.lookup_mut(root.as_str()) else {
@@ -109,16 +111,16 @@ mod tests {
     fn dummy_assignment() -> ast::Assignment {
         ast::Assignment {
             loc: Location::dummy(),
-            pattern: ast::Assignee::Pattern(ast::Pattern::Identifier(ast::IdentifierPattern(
-                ast::Identifier {
+            pattern: Some(ast::Assignee::Pattern(ast::Pattern::Identifier(
+                ast::IdentifierPattern(ast::Identifier {
                     loc: Location::dummy(),
                     text: "a".to_string(),
-                },
+                }),
             ))),
-            value: ast::Expression::IntLiteral(ast::IntLiteral {
+            value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 loc: Location::dummy(),
                 value: 1,
-            }),
+            })),
         }
     }
 

@@ -38,7 +38,7 @@ impl Parser<'_> {
                 }),
                 _ => {
                     self.error(DiagnosticKind::InvalidPattern, lit.loc());
-                    ast::Pattern::Invalid { loc: lit.loc() }
+                    ast::Pattern::Invalid(ast::InvalidPattern { loc: lit.loc() })
                 }
             },
             ast::Expression::Tuple(tuple) => ast::Pattern::Tuple(ast::TuplePattern {
@@ -51,7 +51,7 @@ impl Parser<'_> {
             }),
             _ => {
                 self.error(DiagnosticKind::InvalidPattern, expr.loc());
-                ast::Pattern::Invalid { loc: expr.loc() }
+                ast::Pattern::Invalid(ast::InvalidPattern { loc: expr.loc() })
             }
         }
     }
@@ -63,10 +63,7 @@ impl Parser<'_> {
         ast::StructPatternField {
             loc: field.loc,
             identifier: field.prop,
-            pattern: match field.value {
-                ast::Expression::Empty => None,
-                expr => Some(self.expr_to_pattern(expr)),
-            },
+            pattern: field.value.map(|v| self.expr_to_pattern(v)),
         }
     }
 
@@ -96,7 +93,7 @@ impl Parser<'_> {
             ast::ExpressionOrAnonymous::Expression(e) => self.expr_to_pattern(e),
             _ => {
                 self.error(DiagnosticKind::InvalidPattern, expr.loc());
-                ast::Pattern::Invalid { loc: expr.loc() }
+                ast::Pattern::Invalid(ast::InvalidPattern { loc: expr.loc() })
             }
         }
     }

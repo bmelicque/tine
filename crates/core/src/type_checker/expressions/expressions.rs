@@ -17,7 +17,6 @@ impl TypeChecker<'_> {
             ast::Expression::Call(node) => self.visit_call_expression(node),
             ast::Expression::CompositeLiteral(node) => self.visit_composite_literal(node),
             ast::Expression::Element(node) => self.visit_element_expression(node),
-            ast::Expression::Empty => TypeStore::UNIT,
             ast::Expression::FloatLiteral(_) => TypeStore::FLOAT,
             ast::Expression::Member(node) => self.visit_member_expression(node),
             ast::Expression::Function(node) => self.visit_function_expression(node).into(),
@@ -32,6 +31,17 @@ impl TypeChecker<'_> {
             ast::Expression::Tuple(node) => self.visit_tuple_expression(node).into(),
             ast::Expression::Unary(node) => self.visit_unary_expression(&node),
         }
+    }
+
+    pub fn visit_expression_option(&mut self, expr: &Option<ast::Expression>) -> TypeId {
+        expr.as_ref()
+            .map(|e| self.visit_expression(e))
+            .unwrap_or(TypeStore::UNKNOWN)
+    }
+    pub fn visit_expression_box_option(&mut self, expr: &Option<Box<ast::Expression>>) -> TypeId {
+        expr.as_ref()
+            .map(|e| self.visit_expression(e))
+            .unwrap_or(TypeStore::UNKNOWN)
     }
 
     pub fn visit_expression_or_anonymous(
@@ -217,14 +227,14 @@ mod tests {
     fn test_visit_binary_expression() {
         let mut checker = create_type_checker();
         let binary_expression = ast::BinaryExpression {
-            left: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+            left: Some(Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
-            })),
-            right: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+            }))),
+            right: Some(Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 2,
                 loc: Location::dummy(),
-            })),
+            }))),
             operator: ast::BinaryOperator::Add,
             loc: Location::dummy(),
         };
@@ -273,8 +283,8 @@ mod tests {
                 loc: Location::dummy(),
                 statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
                     expression: Box::new(ast::Expression::Binary(ast::BinaryExpression {
-                        left: Box::new(ast::Expression::Identifier(ident("x"))),
-                        right: Box::new(ast::Expression::Identifier(ident("y"))),
+                        left: Some(Box::new(ast::Expression::Identifier(ident("x")))),
+                        right: Some(Box::new(ast::Expression::Identifier(ident("y")))),
                         operator: ast::BinaryOperator::Add,
                         loc: Location::dummy(),
                     })),

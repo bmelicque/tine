@@ -8,7 +8,9 @@ use crate::{
 
 impl TypeChecker<'_> {
     pub fn visit_if_expression(&mut self, node: &ast::IfExpression) -> TypeId {
-        self.visit_condition(&node.condition);
+        if let Some(condition) = &node.condition {
+            self.visit_condition(condition);
+        }
         let ty = match &node.consequent {
             Some(consequent) => self.with_scope(|s| s.visit_block_expression(consequent)),
             None => TypeStore::UNKNOWN,
@@ -33,22 +35,28 @@ impl TypeChecker<'_> {
     }
 
     pub fn visit_if_decl_expression(&mut self, node: &ast::IfPatExpression) -> TypeId {
-        if !node.pattern.is_refutable() {
-            self.error(DiagnosticKind::RefutablePatternExpected, node.pattern.loc());
-        };
+        if let Some(pattern) = &node.pattern {
+            if !pattern.is_refutable() {
+                self.error(DiagnosticKind::RefutablePatternExpected, pattern.loc());
+            };
+        }
 
         let ty = self.with_scope(|s| {
-            let (inferred_type, dependencies) =
-                s.with_dependencies(|s| s.visit_expression(&node.scrutinee));
+            let (inferred_type, dependencies) = match &node.scrutinee {
+                Some(e) => s.with_dependencies(|s| s.visit_expression(e)),
+                None => (TypeStore::UNKNOWN, vec![]),
+            };
             let mut variables = TokenList::new();
-            s.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
+            if let Some(pattern) = &node.pattern {
+                s.match_pattern(pattern, inferred_type.clone(), &mut variables);
+            }
             if let Some(consequent) = &node.consequent {
                 for (name, ty) in variables.0 {
                     s.ctx.register_symbol(SymbolData {
                         name: name.as_str().into(),
                         ty,
                         kind: SymbolKind::constant(),
-                        defined_at: node.pattern.loc(),
+                        defined_at: name.loc,
                         dependencies: dependencies.clone(),
                         ..Default::default()
                     });
@@ -138,7 +146,7 @@ mod tests {
     fn test_visit_if_expression() {
         let node = ast::IfExpression {
             loc: Location::dummy(),
-            condition: Box::new(mock_condition()),
+            condition: Some(Box::new(mock_condition())),
             consequent: Some(int_block_expression()),
             alternate: None,
         };
@@ -156,7 +164,7 @@ mod tests {
     fn test_visit_if_expression_with_bad_condition() {
         let node = ast::IfExpression {
             loc: Location::dummy(),
-            condition: Box::new(mock_bad_condition()),
+            condition: Some(Box::new(mock_bad_condition())),
             consequent: Some(int_block_expression()),
             alternate: None,
         };
@@ -172,7 +180,7 @@ mod tests {
     fn test_visit_if_expression_with_alternate() {
         let node = ast::IfExpression {
             loc: Location::dummy(),
-            condition: Box::new(mock_condition()),
+            condition: Some(Box::new(mock_condition())),
             consequent: Some(int_block_expression()),
             alternate: Some(Box::new(int_block_expression().into())),
         };
@@ -185,7 +193,7 @@ mod tests {
     fn test_visit_if_expression_with_alternate_mismatch() {
         let node = ast::IfExpression {
             loc: Location::dummy(),
-            condition: Box::new(mock_condition()),
+            condition: Some(Box::new(mock_condition())),
             consequent: Some(int_block_expression()),
             alternate: Some(Box::new(bool_block_expression().into())),
         };

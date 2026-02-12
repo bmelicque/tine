@@ -31,33 +31,35 @@ impl Parser<'_> {
         ast::IfPatExpression {
             loc: Location::merge(kw, end_loc),
             pattern: declaration.pattern,
-            scrutinee: declaration.value,
+            scrutinee: declaration.value.map(|v| Box::new(v)),
             consequent: body,
             alternate: alternate.map(|a| Box::new(a)),
         }
     }
 
     fn parse_if_expression(&mut self, kw: Location) -> ast::IfExpression {
-        let condition = match self.parse_expression_without_block() {
-            Some(expr) => expr,
-            None => {
-                self.report_missing(DiagnosticKind::MissingExpression);
-                ast::Expression::Empty
-            }
-        };
+        let condition = self.parse_expression_without_block();
+        if condition.is_none() {
+            self.report_missing(DiagnosticKind::MissingExpression);
+        }
         let consequent = self.parse_if_body();
         let alternate = match self.tokens.peek() {
             Some((Ok(Token::Else), _)) => self.parse_alternate(),
             _ => None,
         };
-        let end_loc = match (&alternate, &consequent) {
-            (Some(alternate), _) => alternate.loc(),
-            (None, Some(consequent)) => consequent.loc,
-            _ => condition.loc(),
+        let end_loc = if let Some(alt) = &alternate {
+            alt.loc()
+        } else if let Some(consequent) = &consequent {
+            consequent.loc
+        } else if let Some(condition) = &condition {
+            condition.loc()
+        } else {
+            kw
         };
+
         ast::IfExpression {
             loc: Location::merge(kw, end_loc),
-            condition: Box::new(condition),
+            condition: condition.map(|c| Box::new(c)),
             consequent,
             alternate: alternate.map(|a| Box::new(a)),
         }
@@ -107,10 +109,12 @@ mod tests {
             input: "if true {}",
             expected: ast::Expression::If(ast::IfExpression {
                 loc: Location::new(0, Span::new(0, 10)),
-                condition: Box::new(ast::Expression::BooleanLiteral(ast::BooleanLiteral {
-                    loc: Location::new(0, Span::new(3, 7)),
-                    value: true,
-                })),
+                condition: Some(Box::new(ast::Expression::BooleanLiteral(
+                    ast::BooleanLiteral {
+                        loc: Location::new(0, Span::new(3, 7)),
+                        value: true,
+                    },
+                ))),
                 consequent: Some(ast::BlockExpression {
                     statements: vec![],
                     loc: Location::new(0, Span::new(8, 10)),
@@ -127,10 +131,12 @@ mod tests {
             input: "if true {} else {}",
             expected: ast::Expression::If(ast::IfExpression {
                 loc: Location::new(0, Span::new(0, 18)),
-                condition: Box::new(ast::Expression::BooleanLiteral(ast::BooleanLiteral {
-                    loc: Location::new(0, Span::new(3, 7)),
-                    value: true,
-                })),
+                condition: Some(Box::new(ast::Expression::BooleanLiteral(
+                    ast::BooleanLiteral {
+                        loc: Location::new(0, Span::new(3, 7)),
+                        value: true,
+                    },
+                ))),
                 consequent: Some(ast::BlockExpression {
                     statements: vec![],
                     loc: Location::new(0, Span::new(8, 10)),
@@ -150,10 +156,12 @@ mod tests {
             input: "if true",
             expected: ast::Expression::If(ast::IfExpression {
                 loc: Location::new(0, Span::new(0, 7)),
-                condition: Box::new(ast::Expression::BooleanLiteral(ast::BooleanLiteral {
-                    loc: Location::new(0, Span::new(3, 7)),
-                    value: true,
-                })),
+                condition: Some(Box::new(ast::Expression::BooleanLiteral(
+                    ast::BooleanLiteral {
+                        loc: Location::new(0, Span::new(3, 7)),
+                        value: true,
+                    },
+                ))),
                 consequent: None,
                 alternate: None,
             }),

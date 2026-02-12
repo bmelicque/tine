@@ -5,7 +5,7 @@ use tine_core::ast;
 
 impl CodeGenerator<'_> {
     pub fn assignment_to_swc(&mut self, node: &ast::Assignment) -> swc::ExprStmt {
-        if let ast::Assignee::Indirection(_) = node.pattern {
+        if let ast::Assignee::Indirection(_) = node.pattern.as_ref().unwrap() {
             return swc::ExprStmt {
                 span: DUMMY_SP,
                 expr: Box::new(self.indirected_assignment_to_swc(node)),
@@ -17,8 +17,8 @@ impl CodeGenerator<'_> {
             expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
                 span: DUMMY_SP,
                 op: swc::AssignOp::Assign,
-                left: self.assign_target_to_swc(&node.pattern),
-                right: Box::new(self.expr_to_swc(&node.value)),
+                left: self.assign_target_to_swc(node.pattern.as_ref().unwrap()),
+                right: Box::new(self.expr_to_swc(node.value.as_ref().unwrap())),
             })),
         }
     }
@@ -63,7 +63,7 @@ impl CodeGenerator<'_> {
     ```ref.set(value)```
     */
     fn indirected_assignment_to_swc(&mut self, node: &ast::Assignment) -> swc::Expr {
-        let ast::Assignee::Indirection(assignee) = &node.pattern else {
+        let ast::Assignee::Indirection(assignee) = node.pattern.as_ref().unwrap() else {
             panic!("Expected assignment to indirection")
         };
 
@@ -75,7 +75,7 @@ impl CodeGenerator<'_> {
                 obj: Box::new(self.ident_to_swc(&assignee.identifier)),
                 prop: swc::MemberProp::Ident(create_ident("set").into()),
             }))),
-            args: vec![self.expr_to_swc(&node.value).into()],
+            args: vec![self.expr_to_swc(node.value.as_ref().unwrap()).into()],
             type_args: None,
         })
     }

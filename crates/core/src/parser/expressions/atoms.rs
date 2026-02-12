@@ -4,22 +4,22 @@ use crate::{
 };
 
 impl Parser<'_> {
-    pub fn parse_atom(&mut self) -> ast::Expression {
+    pub fn parse_atom(&mut self) -> Option<ast::Expression> {
         let Some(ranged_token) = self.tokens.peek() else {
-            return ast::Expression::Empty;
+            return None;
         };
         let (Ok(token), _) = ranged_token else {
             // TODO: handle error with InvalidExpression
             panic!()
         };
         match token {
-            Token::Bool(_) => self.parse_bool().into(),
-            Token::Int(_) => self.parse_int().into(),
-            Token::Float(_) => self.parse_float().into(),
-            Token::String(_) => self.parse_string().into(),
-            Token::Ident(_) => self.parse_identifier().into(),
-            Token::LParen => self.parse_tuple().into(),
-            _ => ast::Expression::Empty,
+            Token::Bool(_) => Some(self.parse_bool().into()),
+            Token::Int(_) => Some(self.parse_int().into()),
+            Token::Float(_) => Some(self.parse_float().into()),
+            Token::String(_) => Some(self.parse_string().into()),
+            Token::Ident(_) => Some(self.parse_identifier().into()),
+            Token::LParen => Some(self.parse_tuple().into()),
+            _ => None,
         }
     }
 

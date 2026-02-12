@@ -18,39 +18,31 @@ impl Parser<'_> {
             _ => panic!(),
         };
 
-        let pattern = match self.parse_pattern() {
-            Some(p) => p,
-            None => {
-                let loc = self.localize(start_range).increment();
-                self.error(DiagnosticKind::MissingPattern, loc);
-                todo!("Pattern should be allowed to be None here");
-            }
-        };
+        let pattern = self.parse_pattern();
+        if pattern.is_none() {
+            let loc = self.localize(start_range.clone()).increment();
+            self.error(DiagnosticKind::MissingPattern, loc);
+        }
 
         let op_range = self.expect(Token::Eq);
-        let (value, loc) = match self.parse_expression() {
-            Some(v) => {
-                let loc = v.loc();
-                (v, Location::merge(self.localize(start_range), loc))
-            }
-            None => {
-                self.error(
-                    DiagnosticKind::MissingExpression,
-                    self.localize(op_range.clone()).increment(),
-                );
-                (
-                    ast::Expression::Empty,
-                    Location::merge(self.localize(start_range), self.localize(op_range)),
-                )
-            }
+        let value = self.parse_expression();
+        if value.is_none() {
+            self.error(
+                DiagnosticKind::MissingExpression,
+                self.localize(op_range.clone()).increment(),
+            );
+        }
+        let loc = match &value {
+            Some(v) => Location::merge(self.localize(start_range), v.loc()),
+            None => Location::merge(self.localize(start_range), self.localize(op_range)),
         };
 
         ast::VariableDeclaration {
             docs,
             loc,
             keyword,
-            pattern: Box::new(pattern),
-            value: Box::new(value),
+            pattern,
+            value: value.into(),
         }
     }
 }
