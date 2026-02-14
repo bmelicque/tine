@@ -5,6 +5,7 @@ mod patterns;
 mod statements;
 mod type_checker;
 mod types;
+mod utils;
 
 pub use analysis_context::{
     type_store::TypeStore, MemberToken, SymbolData, SymbolHandle, SymbolKind, SymbolRef,

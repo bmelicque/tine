@@ -10,7 +10,7 @@ impl Parser<'_> {
         while let Some((Ok(token), _)) = self.tokens.peek() {
             match token {
                 Token::Dot => {
-                    expression = Some(self.parse_member_expression(expression).into());
+                    expression = Some(self.parse_dot_expression(expression).into());
                 }
                 Token::Float(float) if *float.value < 1. => {
                     expression = Some(self.parse_member_from_float(expression).into());
@@ -26,26 +26,23 @@ impl Parser<'_> {
         expression
     }
 
-    fn parse_member_expression(
-        &mut self,
-        object: Option<ast::Expression>,
-    ) -> ast::MemberExpression {
+    fn parse_dot_expression(&mut self, object: Option<ast::Expression>) -> ast::Expression {
         let dot_range = self.eat(&[Token::Dot]);
         let loc = match &object {
             Some(object) => Location::merge(object.loc(), self.localize(dot_range)),
             None => self.localize(dot_range),
         };
         match self.tokens.peek().cloned() {
-            Some((Ok(Token::Ident(_)), range)) => ast::MemberExpression {
+            Some((Ok(Token::Ident(_)), range)) => ast::Expression::Member(ast::MemberExpression {
                 loc: Location::merge(loc, self.localize(range)),
                 object: object.map(|o| Box::new(o)),
                 prop: Some(ast::MemberProp::FieldName(self.parse_identifier())),
-            },
-            Some((Ok(Token::Int(_)), range)) => ast::MemberExpression {
+            }),
+            Some((Ok(Token::Int(_)), range)) => ast::Expression::Member(ast::MemberExpression {
                 loc: Location::merge(loc, self.localize(range.clone())),
                 object: object.map(|o| Box::new(o)),
                 prop: Some(ast::MemberProp::Index(self.parse_int())),
-            },
+            }),
             Some((Ok(Token::Float(float)), range)) => {
                 // this is actually two indices
                 let (left, right) = float.src.split_once(".").unwrap();
@@ -77,19 +74,22 @@ impl Parser<'_> {
                         value: right.replace("_", "").parse().unwrap(),
                     }))
                 };
-                ast::MemberExpression {
+                ast::Expression::Member(ast::MemberExpression {
                     loc: Location::merge(loc, self.localize(range.clone())),
                     object: Some(Box::new(inner.into())),
                     prop: outer_prop,
-                }
+                })
             }
+            Some((Ok(Token::Lt), _)) => self
+                .parse_call_expression_with_type_args(object, loc)
+                .into(),
             _ => {
                 self.error(DiagnosticKind::InvalidMember, loc.increment());
-                return ast::MemberExpression {
+                ast::Expression::Member(ast::MemberExpression {
                     loc,
                     object: object.map(|o| Box::new(o)),
                     prop: None,
-                };
+                })
             }
         }
     }
@@ -125,7 +125,7 @@ impl Parser<'_> {
     }
 
     fn parse_call_expression(&mut self, callee: ast::Expression) -> ast::CallExpression {
-        self.tokens.next(); // consume '('
+        self.eat(&[Token::LParen]);
         let args = self.parse_list(|p| p.parse_argument(), Token::Comma, Token::RParen);
         let end_range = match self.tokens.peek() {
             Some((Ok(Token::RParen), _)) => self.eat(&[Token::RParen]),
@@ -134,7 +134,42 @@ impl Parser<'_> {
         let loc = Location::merge(callee.loc(), self.localize(end_range));
         ast::CallExpression {
             loc,
-            callee: Box::new(callee),
+            callee: Some(Box::new(callee)),
+            type_args: None,
+            args,
+        }
+    }
+
+    fn parse_call_expression_with_type_args(
+        &mut self,
+        callee: Option<ast::Expression>,
+        start_loc: Location,
+    ) -> ast::CallExpression {
+        self.eat(&[Token::Lt]);
+        let type_args = self.parse_list(|p| p.parse_type(), Token::Comma, Token::Gt);
+        let close_range = self.expect(Token::Gt);
+        let Some((Ok(Token::LParen), _)) = self.tokens.peek() else {
+            let error_loc = self.next_loc();
+            self.error(DiagnosticKind::MissingParams, error_loc);
+            let close_loc = self.localize(close_range);
+            return ast::CallExpression {
+                loc: Location::merge(start_loc, close_loc),
+                callee: callee.map(|c| Box::new(c)),
+                type_args: Some(type_args),
+                args: vec![],
+            };
+        };
+        self.eat(&[Token::LParen]);
+        let args = self.parse_list(|p| p.parse_argument(), Token::Comma, Token::RParen);
+        let end_range = match self.tokens.peek() {
+            Some((Ok(Token::RParen), _)) => self.eat(&[Token::RParen]),
+            _ => self.recover_at(&[Token::RParen]),
+        };
+        let loc = Location::merge(start_loc, self.localize(end_range));
+        ast::CallExpression {
+            loc,
+            callee: callee.map(|c| Box::new(c)),
+            type_args: Some(type_args),
             args,
         }
     }
@@ -281,10 +316,11 @@ mod tests {
             input: "function()",
             expected: ast::Expression::Call(ast::CallExpression {
                 loc: Location::new(0, Span::new(0, 10)),
-                callee: Box::new(ast::Expression::Identifier(ast::Identifier {
+                callee: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
                     loc: Location::new(0, Span::new(0, 8)),
                     text: "function".to_string(),
-                })),
+                }))),
+                type_args: None,
                 args: vec![],
             }),
             diagnostics: vec![],
@@ -297,16 +333,38 @@ mod tests {
             input: "function(1)",
             expected: ast::Expression::Call(ast::CallExpression {
                 loc: Location::new(0, Span::new(0, 11)),
-                callee: Box::new(ast::Expression::Identifier(ast::Identifier {
+                callee: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
                     loc: Location::new(0, Span::new(0, 8)),
                     text: "function".to_string(),
-                })),
+                }))),
+                type_args: None,
                 args: vec![ast::CallArgument::Expression(ast::Expression::IntLiteral(
                     ast::IntLiteral {
                         loc: Location::new(0, Span::new(9, 10)),
                         value: 1,
                     },
                 ))],
+            }),
+            diagnostics: vec![],
+        });
+    }
+
+    #[test]
+    fn parse_call_expression_with_type_args() {
+        test_expression(ExpressionTest {
+            input: "function.<T>()",
+            expected: ast::Expression::Call(ast::CallExpression {
+                loc: Location::new(0, Span::new(0, 14)),
+                callee: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
+                    loc: Location::new(0, Span::new(0, 8)),
+                    text: "function".to_string(),
+                }))),
+                type_args: Some(vec![ast::Type::Named(ast::NamedType {
+                    loc: Location::new(0, Span::new(10, 11)),
+                    name: "T".to_string(),
+                    args: None,
+                })]),
+                args: vec![],
             }),
             diagnostics: vec![],
         });

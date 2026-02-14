@@ -10,9 +10,7 @@ use super::TypeChecker;
 impl TypeChecker<'_> {
     pub fn visit_type_alias(&mut self, node: &ast::TypeAlias) -> TypeId {
         let (ty, params) = if let Some(definition) = &node.definition {
-            self.visit_with_type_params(&node.params, node.loc, |checker| {
-                checker.visit_type(definition)
-            })
+            self.with_type_params(&node.params, |checker| checker.visit_type(definition))
         } else {
             (TypeStore::UNKNOWN, vec![])
         };
@@ -34,9 +32,9 @@ impl TypeChecker<'_> {
 
     pub fn visit_struct_definition(&mut self, node: &ast::StructDefinition) -> TypeId {
         let (ty, params) = match &node.body {
-            Some(body) => self.visit_with_type_params(&node.params, node.loc, |checker| {
-                checker.visit_type_body(body)
-            }),
+            Some(body) => {
+                self.with_type_params(&node.params, |checker| checker.visit_type_body(body))
+            }
             None => (TypeStore::UNKNOWN, vec![]),
         };
 
@@ -56,7 +54,7 @@ impl TypeChecker<'_> {
     }
 
     pub fn visit_enum_definition(&mut self, node: &ast::EnumDefinition) -> TypeId {
-        let (ty, params) = self.visit_with_type_params(&node.params, node.loc, |checker| {
+        let (ty, params) = self.with_type_params(&node.params, |checker| {
             let variants: Vec<types::Variant> = node
                 .variants
                 .iter()
@@ -88,41 +86,6 @@ impl TypeChecker<'_> {
         variant.name.as_ref().map(|name| types::Variant {
             name: name.text.clone(),
             def: ty,
-        })
-    }
-
-    fn visit_with_type_params<F>(
-        &mut self,
-        params: &Option<Vec<String>>,
-        loc: Location,
-        mut visit: F,
-    ) -> (u32, Vec<u32>)
-    where
-        F: FnMut(&mut Self) -> TypeId,
-    {
-        let params = match params {
-            Some(ref params) => params,
-            None => &vec![],
-        };
-        self.with_scope(|checker| {
-            let mut param_types = Vec::new();
-            for (i, param) in params.iter().enumerate() {
-                let ty = types::TypeParam {
-                    name: param.clone(),
-                    idx: i,
-                };
-                let ty = checker.intern(ty.into());
-                param_types.push(ty);
-                // FIXME: spans
-                checker.ctx.register_symbol(SymbolData {
-                    name: param.clone(),
-                    ty,
-                    kind: SymbolKind::Type { members: vec![] },
-                    defined_at: loc,
-                    ..Default::default()
-                });
-            }
-            (visit(checker), param_types)
         })
     }
 

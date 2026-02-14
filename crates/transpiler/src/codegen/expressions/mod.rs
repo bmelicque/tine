@@ -186,7 +186,7 @@ impl CodeGenerator<'_> {
     }
 
     fn call_expr_to_swc(&mut self, node: &ast::CallExpression) -> swc::CallExpr {
-        let callee = swc::Callee::Expr(Box::new(self.expr_to_swc(&node.callee)));
+        let callee = swc::Callee::Expr(Box::new(self.expr_to_swc(node.callee.as_ref().unwrap())));
         let args = node
             .args
             .iter()

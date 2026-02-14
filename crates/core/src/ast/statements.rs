@@ -78,7 +78,7 @@ pub struct TypeAlias {
     pub docs: Option<Docs>,
     pub loc: Location,
     pub name: Option<Identifier>,
-    pub params: Option<Vec<String>>,
+    pub params: Option<Vec<Identifier>>,
     pub definition: Option<Type>,
 }
 
@@ -87,7 +87,7 @@ pub struct StructDefinition {
     pub docs: Option<Docs>,
     pub loc: Location,
     pub name: Option<Identifier>,
-    pub params: Option<Vec<String>>,
+    pub params: Option<Vec<Identifier>>,
     pub body: Option<TypeBody>,
 }
 
@@ -157,7 +157,7 @@ pub struct EnumDefinition {
     pub docs: Option<Docs>,
     pub loc: Location,
     pub name: String,
-    pub params: Option<Vec<String>>,
+    pub params: Option<Vec<Identifier>>,
     pub variants: Vec<VariantDefinition>,
 }
 

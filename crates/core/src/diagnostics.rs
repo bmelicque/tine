@@ -128,6 +128,10 @@ pub enum DiagnosticKind {
     ReservedName {
         name: String,
     },
+    TooManyParams {
+        expected: usize,
+        got: usize,
+    },
     TupleElementCountMismatch {
         expected: usize,
         got: usize,
@@ -304,6 +308,9 @@ impl Display for DiagnosticKind {
             ),
             Self::ReservedName { name } => {
                 write!(f, "invalid identifier: `{}` is a reserved keyword", name)
+            }
+            Self::TooManyParams { expected, got } => {
+                write!(f, "expected {} parameter(s) but got {}", expected, got)
             }
             Self::TupleElementCountMismatch { expected, got } => {
                 write!(f, "expected {} element(s) but got {}", expected, got)

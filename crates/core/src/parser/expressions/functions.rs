@@ -9,6 +9,7 @@ impl Parser<'_> {
         let start_range = self.eat(&[Token::Fn]);
         let start_loc = self.localize(start_range);
         let name = self.parse_function_name();
+        let type_params = self.parse_function_type_params();
         let params = self.parse_function_params();
         let return_type = self.parse_type();
         let body = self.parse_function_body();
@@ -17,6 +18,7 @@ impl Parser<'_> {
         ast::FunctionExpression {
             loc,
             name,
+            type_params,
             params,
             return_type,
             body,
@@ -34,6 +36,13 @@ impl Parser<'_> {
             })
         } else {
             None
+        }
+    }
+
+    fn parse_function_type_params(&mut self) -> Option<Vec<ast::Identifier>> {
+        match self.tokens.peek() {
+            Some((Ok(Token::Lt), _)) => Some(self.parse_type_params()),
+            _ => None,
         }
     }
 
@@ -153,6 +162,7 @@ mod tests {
             expected: ast::Expression::Function(ast::FunctionExpression {
                 loc: Location::new(0, Span::new(0, 7)),
                 name: None,
+                type_params: None,
                 params: vec![],
                 return_type: None,
                 body: ast::BlockExpression {
