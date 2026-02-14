@@ -11,7 +11,11 @@ use crate::{
 
 impl TypeChecker<'_> {
     pub fn visit_call_expression(&mut self, node: &ast::CallExpression) -> TypeId {
-        let callee_type = self.visit_expression(&node.callee);
+        let callee_type = node
+            .callee
+            .as_ref()
+            .map(|c| self.visit_expression(c))
+            .unwrap_or(TypeStore::UNKNOWN);
         let callee_type = match self.resolve(callee_type) {
             types::Type::Function(t) => t.clone(),
             types::Type::Unknown => {
@@ -21,7 +25,9 @@ impl TypeChecker<'_> {
                 let error = DiagnosticKind::NotCallable {
                     type_name: self.session.display_type(callee_type),
                 };
-                self.error(error, node.callee.loc());
+                // unwrapping is safe because `None` callee results in an `unknown` type
+                // which is handled above
+                self.error(error, node.callee.as_ref().unwrap().loc());
                 return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
             }
         };

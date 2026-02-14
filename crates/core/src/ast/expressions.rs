@@ -263,7 +263,8 @@ pub struct BlockExpression {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CallExpression {
     pub loc: Location,
-    pub callee: Box<Expression>,
+    pub callee: Option<Box<Expression>>,
+    pub type_args: Option<Vec<Type>>,
     pub args: Vec<CallArgument>,
 }
 
