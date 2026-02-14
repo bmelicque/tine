@@ -6,12 +6,12 @@ use crate::{
 
 pub(super) struct TypeName {
     pub name: ast::Identifier,
-    pub params: Option<Vec<String>>,
+    pub params: Option<Vec<ast::Identifier>>,
     pub loc: Location,
 }
 
 impl Parser<'_> {
-    pub(super) fn try_parse_type_name(&mut self) -> Option<(String, Option<Vec<String>>)> {
+    pub(super) fn try_parse_type_name(&mut self) -> Option<(String, Option<Vec<ast::Identifier>>)> {
         let name = match self.tokens.peek() {
             Some((Ok(Token::Ident(_)), _)) => {
                 let Some((Ok(Token::Ident(name)), _)) = self.tokens.next() else {

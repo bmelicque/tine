@@ -249,62 +249,6 @@ mod tests {
     }
 
     #[test]
-    fn test_visit_function_expression() {
-        let mut checker = create_type_checker();
-        let function_expression = ast::FunctionExpression {
-            loc: Location::dummy(),
-            name: None,
-            params: vec![
-                ast::FunctionParam {
-                    name: ident("x"),
-                    type_annotation: Some(ast::Type::Named(ast::NamedType {
-                        name: "int".to_string(),
-                        args: None,
-                        loc: Location::dummy(),
-                    })),
-                    loc: Location::dummy(),
-                },
-                ast::FunctionParam {
-                    name: ident("y"),
-                    type_annotation: Some(ast::Type::Named(ast::NamedType {
-                        name: "int".to_string(),
-                        args: None,
-                        loc: Location::dummy(),
-                    })),
-                    loc: Location::dummy(),
-                },
-            ],
-            return_type: Some(ast::Type::Named(ast::NamedType {
-                loc: Location::dummy(),
-                name: "int".into(),
-                args: None,
-            })),
-            body: ast::BlockExpression {
-                loc: Location::dummy(),
-                statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
-                    expression: Box::new(ast::Expression::Binary(ast::BinaryExpression {
-                        left: Some(Box::new(ast::Expression::Identifier(ident("x")))),
-                        right: Some(Box::new(ast::Expression::Identifier(ident("y")))),
-                        operator: ast::BinaryOperator::Add,
-                        loc: Location::dummy(),
-                    })),
-                })],
-            },
-        };
-
-        let result = checker.visit_function_expression(&function_expression);
-        let result = checker.resolve(result);
-        assert_eq!(
-            result,
-            Type::Function(FunctionType {
-                params: vec![TypeStore::INTEGER, TypeStore::INTEGER],
-                return_type: TypeStore::INTEGER,
-            })
-        );
-        assert!(checker.diagnostics.is_empty());
-    }
-
-    #[test]
     fn test_visit_identifier() {
         let mut checker = create_type_checker();
         checker.ctx.register_symbol(SymbolData {

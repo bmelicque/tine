@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use crate::{
+    ast,
     parser::{tokens::Token, Parser},
     DiagnosticKind,
 };
@@ -60,20 +61,16 @@ impl Parser<'_> {
         elements
     }
 
-    pub(super) fn parse_type_params(&mut self) -> Vec<String> {
+    pub(super) fn parse_type_params(&mut self) -> Vec<ast::Identifier> {
         self.eat(&[Token::Lt]);
         let params = self.parse_list(|p| p.parse_type_param(), Token::Comma, Token::Gt);
         self.expect(Token::Gt);
         params
     }
 
-    fn parse_type_param(&mut self) -> Option<String> {
+    fn parse_type_param(&mut self) -> Option<ast::Identifier> {
         match self.tokens.peek() {
-            Some((Ok(Token::Ident(ident)), _)) => {
-                let name = ident.to_owned();
-                self.tokens.next();
-                Some(name)
-            }
+            Some((Ok(Token::Ident(_)), _)) => Some(self.parse_identifier()),
             _ => None,
         }
     }
