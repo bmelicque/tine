@@ -224,13 +224,19 @@ export class WritableComputed extends Listener {
  * Reactive DOM node
  */
 export class ReactiveNode extends Listener {
+	static signalKey = Symbol();
+
 	constructor(deps, getter) {
 		super(deps, getter);
 		this.node = this.toNode();
 	}
 
 	toNode() {
-		return this.value instanceof Node ? this.value : new Text(String(this.value ?? ""));
+		const node = this.value instanceof Node ? this.value : new Text(String(this.value ?? ""));
+		// This prevents the ReactiveNode from being garbage collected
+		// while the associated node is still in the DOM
+		node[ReactiveNode.signalKey] = this;
+		return node;
 	}
 
 	update() {
