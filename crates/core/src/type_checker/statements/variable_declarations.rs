@@ -23,6 +23,7 @@ impl TypeChecker<'_> {
         let docs = node.docs.clone().map(|d| d.text);
         self.match_pattern(pattern, inferred_type, &mut variables);
         for (id, ty) in variables.0 {
+            self.check_identifier_sanity(&id);
             match self.ctx.find_in_current_scope(id.as_str()) {
                 Some(symbol) => {
                     let error = DiagnosticKind::DuplicateIdentifier {
@@ -43,6 +44,12 @@ impl TypeChecker<'_> {
             };
         }
         TypeStore::UNIT
+    }
+
+    fn check_identifier_sanity(&mut self, identifier: &ast::Identifier) {
+        if identifier.as_str().contains("$") {
+            self.error(DiagnosticKind::InvalidIdentifierDollar, identifier.loc);
+        }
     }
 }
 
@@ -149,5 +156,30 @@ mod tests {
             tc.diagnostics[0].kind,
             DiagnosticKind::DuplicateIdentifier { .. }
         ));
+    }
+
+    #[test]
+    fn test_dollar_declaration() {
+        let node = ast::VariableDeclaration {
+            docs: None,
+            loc: Location::dummy(),
+            keyword: ast::DeclarationKeyword::Const,
+            pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
+                ast::Identifier {
+                    loc: Location::dummy(),
+                    text: "derived$".to_string(),
+                },
+            ))),
+            value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
+                value: 1,
+                loc: Location::dummy(),
+            })),
+        };
+        let tc = visit_variable_declaration(&node);
+        assert_eq!(tc.diagnostics.len(), 1);
+        assert_eq!(
+            tc.diagnostics[0].kind,
+            DiagnosticKind::InvalidIdentifierDollar
+        );
     }
 }
