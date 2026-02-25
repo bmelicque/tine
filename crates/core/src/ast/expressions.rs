@@ -274,6 +274,15 @@ pub enum CallArgument {
     Callback(Callback),
 }
 
+impl CallArgument {
+    pub fn as_expression(&self) -> Option<&Expression> {
+        match self {
+            CallArgument::Expression(expr) => Some(expr),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Callback {
     pub loc: Location,

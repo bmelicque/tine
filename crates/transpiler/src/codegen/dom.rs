@@ -109,56 +109,7 @@ impl CodeGenerator<'_> {
                 value: t.text.clone().into(),
                 raw: None,
             })),
-            ast::ElementChild::Expression(e) => self.expression_child_to_swc(e),
-        }
-    }
-
-    fn expression_child_to_swc(&mut self, child: &ast::Expression) -> swc::Expr {
-        let Some(ty) = self.get_expr_type(&child) else {
-            panic!("expression should have a type!")
-        };
-        if !ty.is_reactive() {
-            return self.expr_to_swc(child);
-        }
-
-        let dependencies = swc::Expr::Array(self.listener_deps_to_swc_array(child.loc()));
-        let getter = self.reactive_to_swc_getter(child);
-
-        swc::Expr::New(swc::NewExpr {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
-            callee: Box::new(swc::Expr::Member(swc::MemberExpr {
-                span: DUMMY_SP,
-                obj: Box::new(swc::Expr::Ident(create_ident("__"))),
-                prop: swc::MemberProp::Ident(create_ident("ReactiveNode").into()),
-            })),
-            args: Some(vec![dependencies.into(), swc::Expr::Arrow(getter).into()]),
-            type_args: None,
-        })
-    }
-
-    pub fn reactive_to_swc_getter(&mut self, expr: &ast::Expression) -> swc::ArrowExpr {
-        let expr = swc::Expr::Call(swc::CallExpr {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
-            callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
-                span: DUMMY_SP,
-                obj: Box::new(self.expr_to_swc(expr)),
-                prop: swc::MemberProp::Ident(create_ident("get").into()),
-            }))),
-            args: Vec::new(),
-            type_args: None,
-        });
-
-        swc::ArrowExpr {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
-            params: Vec::new(),
-            body: Box::new(expr.into()),
-            is_async: false,
-            is_generator: false,
-            type_params: None,
-            return_type: None,
+            ast::ElementChild::Expression(e) => self.expr_to_swc(e),
         }
     }
 }

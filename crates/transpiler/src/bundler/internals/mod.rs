@@ -37,3 +37,7 @@ pub fn parse_internals() -> ModuleData {
 pub fn parse_dom() -> ModuleData {
     parse("dom", include_str!("dom.js"))
 }
+
+pub fn parse_signals() -> ModuleData {
+    parse("signals", include_str!("signals.js"))
+}

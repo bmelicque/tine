@@ -1,10 +1,10 @@
 use crate::{
-    bundler::internals::{parse_dom, parse_internals},
+    bundler::internals::{parse_dom, parse_internals, parse_signals},
     codegen::CodeGenerator,
 };
-use tine_core::{ModulePath, Session};
 use std::sync::Arc;
 use swc_common::{FileName, SourceMap};
+use tine_core::{ModulePath, Session};
 
 pub struct SwcLoader<'sess> {
     session: &'sess Session,
@@ -55,6 +55,7 @@ impl swc_bundler::Load for SwcLoader<'_> {
             FileName::Custom(name) => match name.as_str() {
                 "dom" => Ok(parse_dom()),
                 "internals" => Ok(parse_internals()),
+                "signals" => Ok(parse_signals()),
                 name => panic!("unexpected name '{}'", name),
             },
             _ => unreachable!("unexpected FileName variant"),

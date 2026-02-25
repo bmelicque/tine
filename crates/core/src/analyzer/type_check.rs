@@ -4,8 +4,8 @@ use crate::{
     analyzer::{session::Session, ModuleId, ModulePath},
     locations::Span,
     type_checker::{CheckResult, TypeChecker},
-    types::{DuckType, FunctionType, Type, TypeId},
-    SymbolData, SymbolKind, SymbolRef, Token, TypeStore,
+    types::{Type, TypeId},
+    SymbolRef, Token, TypeStore,
 };
 
 #[derive(Debug, Clone)]
@@ -52,49 +52,8 @@ impl Session {
     fn check_virtual_module(&mut self, id: ModuleId, name: &str) -> CheckResult {
         match name {
             "dom" => self.check_dom_module(id),
+            "signals" => self.check_signals_module(id),
             _ => panic!("unexpected module name '{}'", name),
-        }
-    }
-
-    fn check_dom_module(&mut self, id: ModuleId) -> CheckResult {
-        let mut checker = TypeChecker::new(&self, id);
-        let element_trait = checker.intern(Type::Duck(DuckType {
-            like: TypeStore::ELEMENT,
-        }));
-        let render_type = checker.intern(Type::Function(FunctionType {
-            params: vec![TypeStore::STRING, element_trait],
-            return_type: TypeStore::UNIT,
-        }));
-
-        checker.ctx.register_symbol(SymbolData {
-            name: "render".into(),
-            docs: Some(
-                r#"Renders a UI element into a target container in the DOM
-
-# Example
-```tine
-render("body", <article>Content</article>)
-```
-
-In this example, the `<article>` element is rendered inside the document's body.
-        "#
-                .into(),
-            ),
-            ty: render_type,
-            kind: SymbolKind::Function {
-                param_names: vec!["selector".into(), "element".into()],
-            },
-            ..Default::default()
-        });
-
-        let main_scope = &checker.ctx.scopes[0];
-
-        CheckResult {
-            symbols: checker.ctx.symbols,
-            exports: main_scope.bindings.clone(),
-            expressions: HashMap::new(),
-            dependencies: HashMap::new(),
-            diagnostics: vec![],
         }
     }
 }
