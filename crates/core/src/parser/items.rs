@@ -74,7 +74,7 @@ impl Parser<'_> {
                 let sub_trees =
                     self.parse_list(|p| p.parse_use_tree(), Token::Comma, Token::RBrace);
                 match self.tokens.peek() {
-                    Some((Ok(Token::RBrace), r)) => r.clone(),
+                    Some((Ok(Token::RBrace), _)) => self.eat(&[Token::RBrace]),
                     _ => self.recover_at(&[Token::RBrace]),
                 };
                 sub_trees

@@ -67,7 +67,7 @@ impl Session {
     fn parse_virtual_module(&mut self, name: &String) -> anyhow::Result<(ModuleId, ParseResult)> {
         let src = Source::new("");
         let module = match name.as_str() {
-            "dom" => Module {
+            "dom" | "signals" => Module {
                 src,
                 name: ModulePath::Virtual(name.to_string()),
             },

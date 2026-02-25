@@ -219,4 +219,16 @@ mod tests {
             diagnostics: vec![],
         })
     }
+
+    #[test]
+    fn test_parse_complex_identifier() {
+        test_expression(ExpressionTest {
+            input: "x_92$",
+            expected: ast::Expression::Identifier(ast::Identifier {
+                loc: Location::new(0, Span::new(0, 5)),
+                text: "x_92$".to_string(),
+            }),
+            diagnostics: vec![],
+        })
+    }
 }

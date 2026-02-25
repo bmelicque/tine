@@ -15,6 +15,15 @@ use crate::{
 
 impl TypeChecker<'_> {
     pub fn visit_call_expression(&mut self, node: &ast::CallExpression) -> TypeId {
+        if let Some(callee) = &node.callee {
+            if let ast::Expression::Identifier(id) = callee.as_ref() {
+                match id.as_str() {
+                    "derived$" => return self.visit_derived_call(node),
+                    _ => {}
+                }
+            }
+        }
+
         let Ok((callee_type, type_params)) = self.resolve_callee(&node.callee) else {
             return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
         };
@@ -221,5 +230,46 @@ impl TypeChecker<'_> {
                 }
             }
         }
+    }
+
+    fn visit_derived_call(&mut self, node: &ast::CallExpression) -> TypeId {
+        if self.lookup("derived$").is_none() {
+            let error = DiagnosticKind::CannotFindName {
+                name: "derived$".to_string(),
+            };
+            // unwrapping is safe because callee has to be `Some` identifier for this function to be called.
+            self.error(error, node.callee.as_ref().unwrap().loc());
+        }
+
+        if node.args.len() != 1 {
+            let error = DiagnosticKind::ArgumentCountMismatch {
+                expected: 1,
+                got: node.args.len(),
+            };
+            self.error(error, node.loc);
+        }
+
+        let (ty, deps) = match node.args.first() {
+            Some(ast::CallArgument::Expression(e)) => {
+                self.with_dependencies(|s| s.visit_expression(e))
+            }
+            Some(ast::CallArgument::Callback(c)) => {
+                let error = DiagnosticKind::UnexpectedCallback {
+                    expected: "expression".to_string(),
+                };
+                self.error(error, c.loc);
+                (TypeStore::UNKNOWN, vec![])
+            }
+            None => (TypeStore::UNKNOWN, vec![]),
+        };
+
+        let count = self.save_reactive_dependencies(&deps, node.loc);
+        if count == 0 {
+            self.error(DiagnosticKind::NonReactiveExpression, node.loc);
+        }
+        self.ctx.add_dependencies(deps);
+
+        let return_type = self.intern(types::Type::Listener(types::ListenerType { inner: ty }));
+        self.ctx.save_expression_type(node.loc, return_type)
     }
 }

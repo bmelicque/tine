@@ -3,6 +3,7 @@ mod graph;
 mod modules;
 mod parse;
 pub mod session;
+mod std_modules;
 mod type_check;
 
 use std::path::PathBuf;
