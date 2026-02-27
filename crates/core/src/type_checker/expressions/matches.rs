@@ -103,10 +103,7 @@ impl TypeChecker<'_> {
             names.insert(variant.name.clone());
         }
         for arm in arms {
-            let Some(ast::Pattern::Variant(ref variant)) = arm.pattern.as_deref() else {
-                continue;
-            };
-            names.remove(&variant.name);
+            // TODO
         }
         if names.len() > 0 {
             let error = DiagnosticKind::NonExhaustiveMatch {

@@ -1,4 +1,4 @@
-use crate::{ast, parser::Parser, DiagnosticKind, Location};
+use crate::{ast, parser::Parser, DiagnosticKind};
 
 impl Parser<'_> {
     pub fn parse_pattern(&mut self) -> Option<ast::Pattern> {
@@ -20,35 +20,30 @@ impl Parser<'_> {
             ast::Expression::FloatLiteral(lit) => {
                 ast::Pattern::Literal(ast::LiteralPattern::Float(lit))
             }
-            ast::Expression::CompositeLiteral(lit) => match lit {
-                ast::CompositeLiteral::Struct(lit) => ast::Pattern::Struct(ast::StructPattern {
+            ast::Expression::ConstructorLiteral(lit) => {
+                ast::Pattern::Constructor(ast::ConstructorPattern {
                     loc: lit.loc,
-                    ty: Box::new(lit.ty),
-                    fields: lit
-                        .fields
-                        .into_iter()
-                        .map(|f| self.struct_field_to_pattern(f))
-                        .collect(),
-                }),
-                ast::CompositeLiteral::Variant(lit) => ast::Pattern::Variant(ast::VariantPattern {
-                    loc: lit.loc,
-                    ty: Box::new(lit.ty),
-                    name: lit.name,
-                    body: lit.body.map(|b| self.variant_body_to_pattern(b)),
-                }),
-                _ => {
-                    self.error(DiagnosticKind::InvalidPattern, lit.loc());
-                    ast::Pattern::Invalid(ast::InvalidPattern { loc: lit.loc() })
-                }
-            },
-            ast::Expression::Tuple(tuple) => ast::Pattern::Tuple(ast::TuplePattern {
-                loc: tuple.loc,
-                elements: tuple
-                    .elements
-                    .into_iter()
-                    .map(|e| self.expr_to_pattern(e))
-                    .collect(),
-            }),
+                    qualifiers: lit.qualifiers,
+                    constructor: lit.constructor,
+                    body: match lit.body {
+                        Some(ast::ConstructorBody::Struct(s)) => Some(
+                            ast::ConstructorPatternBody::Struct(ast::StructPatternBody {
+                                loc: s.loc,
+                                fields: s
+                                    .fields
+                                    .into_iter()
+                                    .map(|f| self.struct_field_to_pattern(f))
+                                    .collect(),
+                            }),
+                        ),
+                        Some(ast::ConstructorBody::Tuple(t)) => {
+                            Some(self.tuple_to_pattern(t).into())
+                        }
+                        None => None,
+                    },
+                })
+            }
+            ast::Expression::Tuple(tuple) => ast::Pattern::Tuple(self.tuple_to_pattern(tuple)),
             _ => {
                 self.error(DiagnosticKind::InvalidPattern, expr.loc());
                 ast::Pattern::Invalid(ast::InvalidPattern { loc: expr.loc() })
@@ -56,45 +51,30 @@ impl Parser<'_> {
         }
     }
 
-    fn struct_field_to_pattern(
-        &mut self,
-        field: ast::StructLiteralField,
-    ) -> ast::StructPatternField {
+    fn tuple_to_pattern(&mut self, tuple: ast::TupleExpression) -> ast::TuplePattern {
+        ast::TuplePattern {
+            loc: tuple.loc,
+            elements: tuple
+                .elements
+                .into_iter()
+                .map(|e| self.expr_to_pattern(e))
+                .collect(),
+        }
+    }
+
+    fn struct_field_to_pattern(&mut self, field: ast::ConstructorField) -> ast::StructPatternField {
+        let identifier = match field.key {
+            Some(ast::ConstructorKey::Name(ident)) => Some(ident),
+            Some(ast::ConstructorKey::MapKey(key)) => {
+                self.error(DiagnosticKind::InvalidPattern, key.loc());
+                None
+            }
+            None => None,
+        };
         ast::StructPatternField {
             loc: field.loc,
-            identifier: field.prop,
+            identifier,
             pattern: field.value.map(|v| self.expr_to_pattern(v)),
-        }
-    }
-
-    fn variant_body_to_pattern(
-        &mut self,
-        body: ast::VariantLiteralBody,
-    ) -> ast::VariantPatternBody {
-        match body {
-            ast::VariantLiteralBody::Struct(b) => ast::VariantPatternBody::Struct(
-                b.into_iter()
-                    .map(|f| self.struct_field_to_pattern(f))
-                    .collect(),
-            ),
-            ast::VariantLiteralBody::Tuple(b) => {
-                let loc = Location::merge(b.first().unwrap().loc(), b.last().unwrap().loc());
-                let elements = b
-                    .into_iter()
-                    .map(|e| self.expr_or_anonymous_to_pattern(e))
-                    .collect();
-                ast::VariantPatternBody::Tuple(ast::TuplePattern { loc, elements })
-            }
-        }
-    }
-
-    fn expr_or_anonymous_to_pattern(&mut self, expr: ast::ExpressionOrAnonymous) -> ast::Pattern {
-        match expr {
-            ast::ExpressionOrAnonymous::Expression(e) => self.expr_to_pattern(e),
-            _ => {
-                self.error(DiagnosticKind::InvalidPattern, expr.loc());
-                ast::Pattern::Invalid(ast::InvalidPattern { loc: expr.loc() })
-            }
         }
     }
 }

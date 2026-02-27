@@ -1,7 +1,7 @@
 use enum_from_derive::EnumFrom;
 
 use crate::{
-    ast::{FloatLiteral, Identifier, IntLiteral},
+    ast::{Constructor, FloatLiteral, Identifier, IntLiteral},
     Location,
 };
 
@@ -12,10 +12,9 @@ pub enum Pattern {
     Invalid(InvalidPattern),
 
     Identifier(IdentifierPattern),
+    Constructor(ConstructorPattern),
     Literal(LiteralPattern),
-    Struct(StructPattern),
     Tuple(TuplePattern),
-    Variant(VariantPattern),
 }
 
 impl Pattern {
@@ -23,10 +22,9 @@ impl Pattern {
         match self {
             Pattern::Invalid(p) => p.loc,
             Pattern::Identifier(p) => p.0.loc,
+            Pattern::Constructor(p) => p.loc,
             Pattern::Literal(l) => l.loc(),
-            Pattern::Struct(p) => p.loc,
             Pattern::Tuple(p) => p.loc,
-            Pattern::Variant(p) => p.loc,
         }
     }
 
@@ -49,22 +47,8 @@ impl Pattern {
             Pattern::Invalid { .. } => false,
             Pattern::Identifier(_) => false,
             Pattern::Literal(_) => true,
-            Pattern::Struct(s) => s
-                .fields
-                .iter()
-                .find(|field| {
-                    let Some(ref pattern) = field.pattern else {
-                        return false;
-                    };
-                    pattern.is_refutable()
-                })
-                .is_some(),
-            Pattern::Tuple(p) => p
-                .elements
-                .iter()
-                .find(|pattern| pattern.is_refutable())
-                .is_some(),
-            Pattern::Variant(_) => true,
+            Pattern::Constructor(pattern) => pattern.is_refutable(),
+            Pattern::Tuple(p) => p.is_refutable(),
         }
     }
 
@@ -73,28 +57,11 @@ impl Pattern {
             Pattern::Invalid { .. } => vec![],
             Pattern::Identifier(p) => vec![p],
             Pattern::Literal(_) => vec![],
-            Pattern::Struct(s) => s
-                .fields
-                .iter()
-                .filter_map(|field| {
-                    if let Some(pattern) = &field.pattern {
-                        Some(pattern.list_identifiers())
-                    } else {
-                        None
-                    }
-                })
-                .flatten()
-                .collect(),
-            Pattern::Tuple(t) => t
-                .elements
-                .iter()
-                .map(|pattern| pattern.list_identifiers())
-                .flatten()
-                .collect(),
-            Pattern::Variant(v) => {
-                let Some(body) = &v.body else { return vec![] };
+            Pattern::Constructor(p) => {
+                let Some(body) = &p.body else { return vec![] };
                 match body {
-                    VariantPatternBody::Struct(fields) => fields
+                    ConstructorPatternBody::Struct(body) => body
+                        .fields
                         .iter()
                         .filter_map(|field| {
                             if let Some(pattern) = &field.pattern {
@@ -105,14 +72,10 @@ impl Pattern {
                         })
                         .flatten()
                         .collect(),
-                    VariantPatternBody::Tuple(t) => t
-                        .elements
-                        .iter()
-                        .map(|pattern| pattern.list_identifiers())
-                        .flatten()
-                        .collect(),
+                    ConstructorPatternBody::Tuple(t) => t.list_identifiers(),
                 }
             }
+            Pattern::Tuple(t) => t.list_identifiers(),
         }
     }
 }
@@ -161,6 +124,45 @@ impl LiteralPattern {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ConstructorPattern {
+    pub loc: Location,
+    pub qualifiers: Vec<Identifier>,
+    pub constructor: Constructor,
+    pub body: Option<ConstructorPatternBody>,
+}
+
+impl ConstructorPattern {
+    pub fn is_refutable(&self) -> bool {
+        if let Constructor::Variant(_) = &self.constructor {
+            return true;
+        }
+
+        match &self.body {
+            Some(ConstructorPatternBody::Tuple(t)) => t.is_refutable(),
+            Some(ConstructorPatternBody::Struct(s)) => s.fields.iter().any(|field| {
+                let Some(ref pattern) = field.pattern else {
+                    return false;
+                };
+                pattern.is_refutable()
+            }),
+            None => false,
+        }
+    }
+}
+
+#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
+pub enum ConstructorPatternBody {
+    Tuple(TuplePattern),
+    Struct(StructPatternBody),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StructPatternBody {
+    pub loc: Location,
+    pub fields: Vec<StructPatternField>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructPattern {
     pub loc: Location,
     pub ty: Box<NamedType>,
@@ -170,7 +172,7 @@ pub struct StructPattern {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructPatternField {
     pub loc: Location,
-    pub identifier: Identifier,
+    pub identifier: Option<Identifier>,
     pub pattern: Option<Pattern>,
 }
 
@@ -178,6 +180,20 @@ pub struct StructPatternField {
 pub struct TuplePattern {
     pub loc: Location,
     pub elements: Vec<Pattern>,
+}
+
+impl TuplePattern {
+    pub fn is_refutable(&self) -> bool {
+        self.elements.iter().any(|e| e.is_refutable())
+    }
+
+    pub fn list_identifiers(&self) -> Vec<&IdentifierPattern> {
+        self.elements
+            .iter()
+            .map(|pattern| pattern.list_identifiers())
+            .flatten()
+            .collect()
+    }
 }
 
 impl From<Vec<Pattern>> for TuplePattern {

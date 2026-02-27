@@ -103,6 +103,8 @@ pub enum Token {
     QMark,
     #[token("#")]
     Hash,
+    #[token(":")]
+    Colon,
 
     // --- punctuation ---
     #[token("(")]
@@ -226,6 +228,7 @@ impl Token {
             Token::Mod => "%".to_string(),
             Token::QMark => "?".to_string(),
             Token::Hash => "#".to_string(),
+            Token::Colon => ":".to_string(),
 
             Token::LParen => "(".to_string(),
             Token::RParen => ")".to_string(),

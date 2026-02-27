@@ -8,18 +8,20 @@ use tine_core::ast;
 use super::utils::create_ident;
 
 impl CodeGenerator<'_> {
-    pub fn composite_literal_to_swc_expr(&mut self, node: &ast::CompositeLiteral) -> swc::Expr {
+    pub fn composite_literal_to_swc_expr(&mut self, node: &ast::ConstructorLiteral) -> swc::Expr {
         match node {
-            ast::CompositeLiteral::AnonymousStruct(node) => {
+            ast::ConstructorLiteral::AnonymousStruct(node) => {
                 self.anonymous_struct_to_swc(node).into()
             }
-            ast::CompositeLiteral::Array(node) => self.array_literal_to_swc_array(node).into(),
-            ast::CompositeLiteral::Map(node) => self.map_literal_to_swc_new_map(node).into(),
-            ast::CompositeLiteral::Option(node) => {
+            ast::ConstructorLiteral::Array(node) => self.array_literal_to_swc_array(node).into(),
+            ast::ConstructorLiteral::Map(node) => self.map_literal_to_swc_new_map(node).into(),
+            ast::ConstructorLiteral::Option(node) => {
                 self.option_literal_to_swc_new_option(node).into()
             }
-            ast::CompositeLiteral::Struct(node) => self.struct_literal_to_swc_new_expr(node).into(),
-            ast::CompositeLiteral::Variant(node) => self.variant_literal_to_swc(node).into(),
+            ast::ConstructorLiteral::Struct(node) => {
+                self.struct_literal_to_swc_new_expr(node).into()
+            }
+            ast::ConstructorLiteral::Variant(node) => self.variant_literal_to_swc(node).into(),
         }
     }
 

@@ -5,7 +5,7 @@ use ordered_float::OrderedFloat;
 
 use crate::{ast::ElementExpression, Location};
 
-use super::{composite_literals::CompositeLiteral, types::Type, Loop, Pattern, Statement};
+use super::{constructor_literals::ConstructorLiteral, types::Type, Loop, Pattern, Statement};
 
 #[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
 pub enum Expression {
@@ -14,7 +14,7 @@ pub enum Expression {
     BooleanLiteral(BooleanLiteral),
     Block(BlockExpression),
     Call(CallExpression),
-    CompositeLiteral(CompositeLiteral),
+    ConstructorLiteral(ConstructorLiteral),
     Element(ElementExpression),
     Function(FunctionExpression),
     Identifier(Identifier),
@@ -39,7 +39,7 @@ impl Expression {
             Self::BooleanLiteral(e) => e.loc,
             Self::Block(e) => e.loc,
             Self::Call(e) => e.loc,
-            Self::CompositeLiteral(e) => e.loc(),
+            Self::ConstructorLiteral(e) => e.loc,
             Self::Element(e) => e.loc(),
             Self::FloatLiteral(e) => e.loc,
             Self::Member(e) => e.loc,
