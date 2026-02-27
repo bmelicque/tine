@@ -14,13 +14,6 @@ use swc_ecma_ast as swc;
 use tine_core::{ast, types};
 
 impl CodeGenerator<'_> {
-    pub fn expr_or_an_to_swc(&mut self, node: &ast::ExpressionOrAnonymous) -> swc::Expr {
-        match node {
-            ast::ExpressionOrAnonymous::Expression(node) => self.expr_to_swc(node),
-            ast::ExpressionOrAnonymous::Struct(node) => self.anonymous_struct_to_swc(node).into(),
-        }
-    }
-
     pub fn expr_to_swc(&mut self, node: &ast::Expression) -> swc::Expr {
         match node {
             ast::Expression::Array(node) => self.array_to_swc(node).into(),
@@ -32,7 +25,7 @@ impl CodeGenerator<'_> {
             .into(),
             ast::Expression::Block(node) => self.block_expr_to_swc(node).into(),
             ast::Expression::Call(node) => self.call_expr_to_swc(node).into(),
-            ast::Expression::CompositeLiteral(node) => self.composite_literal_to_swc_expr(node),
+            ast::Expression::ConstructorLiteral(node) => self.constructor_literal_to_swc_expr(node),
             ast::Expression::Element(node) => self.element_expression_to_swc(node),
             ast::Expression::FloatLiteral(node) => swc::Expr::Lit(swc::Lit::Num(swc::Number {
                 span: DUMMY_SP,

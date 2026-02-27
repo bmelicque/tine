@@ -3,62 +3,37 @@ use swc_ecma_ast as swc;
 
 use crate::codegen::{utils::create_str, CodeGenerator};
 
-use tine_core::ast;
+use tine_core::{ast, types};
 
 use super::utils::create_ident;
 
 impl CodeGenerator<'_> {
-    pub fn composite_literal_to_swc_expr(&mut self, node: &ast::ConstructorLiteral) -> swc::Expr {
-        match node {
-            ast::ConstructorLiteral::AnonymousStruct(node) => {
-                self.anonymous_struct_to_swc(node).into()
-            }
-            ast::ConstructorLiteral::Array(node) => self.array_literal_to_swc_array(node).into(),
-            ast::ConstructorLiteral::Map(node) => self.map_literal_to_swc_new_map(node).into(),
-            ast::ConstructorLiteral::Option(node) => {
-                self.option_literal_to_swc_new_option(node).into()
-            }
-            ast::ConstructorLiteral::Struct(node) => {
-                self.struct_literal_to_swc_new_expr(node).into()
-            }
-            ast::ConstructorLiteral::Variant(node) => self.variant_literal_to_swc(node).into(),
+    pub fn constructor_literal_to_swc_expr(&mut self, node: &ast::ConstructorLiteral) -> swc::Expr {
+        if let types::Type::Map(_) = self.get_type_at(node.loc).unwrap() {
+            return self.map_literal_to_swc_new_map(node).into();
+        }
+
+        match &node.constructor {
+            ast::Constructor::Variant(variant) => self.variant_literal_to_swc(node, variant).into(),
+            ast::Constructor::Named(name) => self.struct_literal_to_swc_new_expr(node, name).into(),
+            _ => panic!(),
         }
     }
 
-    pub fn anonymous_struct_to_swc(&mut self, node: &ast::AnonymousStructLiteral) -> swc::NewExpr {
-        let swc_args = node
+    pub fn map_literal_to_swc_new_map(&mut self, node: &ast::ConstructorLiteral) -> swc::NewExpr {
+        let Some(ast::ConstructorBody::Struct(body)) = &node.body else {
+            panic!("This should not be allowed after checking")
+        };
+
+        let swc_args = body
             .fields
             .iter()
-            .map(|field| self.expr_to_swc(field.value.as_ref().unwrap()).into())
-            .collect();
-        swc::NewExpr {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
-            callee: Box::new("FIXME:".into()),
-            args: Some(swc_args),
-            type_args: None,
-        }
-    }
-
-    pub fn array_literal_to_swc_array(&mut self, node: &ast::ArrayLiteral) -> swc::ArrayLit {
-        let swc_elements = node
-            .elements
-            .iter()
-            .map(|node| Some(self.expr_or_an_to_swc(&node).into()))
-            .collect::<Vec<_>>();
-        swc::ArrayLit {
-            span: DUMMY_SP,
-            elems: swc_elements,
-        }
-    }
-
-    pub fn map_literal_to_swc_new_map(&mut self, node: &ast::MapLiteral) -> swc::NewExpr {
-        let swc_args = node
-            .entries
-            .iter()
-            .map(|entry| {
-                let key = self.expr_to_swc(&entry.key);
-                let value = self.expr_or_an_to_swc(&entry.value);
+            .map(|f| {
+                let key = match f.key.as_ref().unwrap() {
+                    ast::ConstructorKey::MapKey(expr) => self.expr_to_swc(expr),
+                    _ => panic!("Should've been catch during checking"),
+                };
+                let value = self.expr_to_swc(f.value.as_ref().unwrap());
                 Some(swc::ExprOrSpread {
                     spread: None,
                     expr: Box::new(swc::Expr::Array(swc::ArrayLit {
@@ -68,6 +43,7 @@ impl CodeGenerator<'_> {
                 })
             })
             .collect::<Vec<_>>();
+
         swc::NewExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
@@ -83,37 +59,13 @@ impl CodeGenerator<'_> {
         }
     }
 
-    pub fn option_literal_to_swc_new_option(&mut self, node: &ast::OptionLiteral) -> swc::NewExpr {
-        let exprs = match &node.value {
-            Some(value) => {
-                vec![create_str("Some"), self.expr_or_an_to_swc(value)]
-            }
-            None => vec![create_str("None")],
-        };
-        let args = exprs
-            .into_iter()
-            .map(|expr| swc::ExprOrSpread {
-                spread: None,
-                expr: Box::new(expr),
-            })
-            .collect();
-
-        swc::NewExpr {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
-            callee: Box::new(swc::Expr::Member(swc::MemberExpr {
-                span: DUMMY_SP,
-                obj: Box::new(swc::Expr::Ident(create_ident("__"))),
-                prop: swc::MemberProp::Ident(create_ident("Option").into()),
-            })),
-            args: Some(args),
-            type_args: None,
-        }
-    }
-
-    pub fn struct_literal_to_swc_new_expr(&mut self, node: &ast::StructLiteral) -> swc::NewExpr {
-        let name = &node.ty.name;
-        let swc_args = self.get_sorted_args(name, &node.fields);
+    pub fn struct_literal_to_swc_new_expr(
+        &mut self,
+        node: &ast::ConstructorLiteral,
+        name: &ast::NamedType,
+    ) -> swc::NewExpr {
+        let name = &name.name;
+        let swc_args = self.constructor_body_to_swc(name, node.body.as_ref().unwrap());
         swc::NewExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
@@ -123,16 +75,40 @@ impl CodeGenerator<'_> {
         }
     }
 
+    fn constructor_body_to_swc(
+        &mut self,
+        name: &str,
+        body: &ast::ConstructorBody,
+    ) -> Vec<swc::ExprOrSpread> {
+        match body {
+            ast::ConstructorBody::Struct(st) => self.get_sorted_args(name, &st.fields),
+            ast::ConstructorBody::Tuple(t) => t
+                .elements
+                .iter()
+                .map(|e| swc::ExprOrSpread {
+                    spread: None,
+                    expr: Box::new(self.expr_to_swc(e)),
+                })
+                .collect(),
+        }
+    }
+
     fn get_sorted_args(
         &mut self,
         name: &str,
-        fields: &Vec<ast::StructLiteralField>,
+        fields: &Vec<ast::ConstructorField>,
     ) -> Vec<swc::ExprOrSpread> {
         let mut remaining = fields.len();
         let mut sorted_args = vec![];
         let params = self.find(&name.to_string()).unwrap().clone();
         for param in params {
-            let field = fields.iter().find(|field| *param == field.prop.text);
+            let field = fields.iter().find(|field| {
+                let key = match &field.key {
+                    Some(ast::ConstructorKey::Name(id)) => id.as_str(),
+                    _ => panic!(),
+                };
+                param == key
+            });
             let expr = match field {
                 Some(field) => {
                     remaining -= 1;
@@ -152,29 +128,30 @@ impl CodeGenerator<'_> {
         sorted_args
     }
 
-    fn variant_literal_to_swc(&mut self, node: &ast::VariantLiteral) -> swc::NewExpr {
-        let name = &node.ty.name;
+    fn variant_literal_to_swc(
+        &mut self,
+        node: &ast::ConstructorLiteral,
+        variant: &ast::VariantConstructor,
+    ) -> swc::NewExpr {
+        let name = &variant.enum_name.name;
 
         let mut args = Vec::<swc::ExprOrSpread>::new();
         args.push(
             swc::Expr::Lit(swc::Lit::Str(swc::Str {
                 span: DUMMY_SP,
-                value: node.name.clone().into(),
+                value: name.to_owned().into(),
                 raw: None,
             }))
             .into(),
         );
-        match &node.body {
-            Some(ast::VariantLiteralBody::Struct(body)) => {
-                let name = format!("{}.{}", name, node.name.clone());
-                args.extend(self.get_sorted_args(&name, body));
-            }
-            Some(ast::VariantLiteralBody::Tuple(body)) => {
-                for arg in body {
-                    args.push(self.expr_or_an_to_swc(arg).into());
-                }
-            }
-            None => {}
+        let swc_name = format!(
+            "{}.{}",
+            name,
+            variant.variant_name.as_ref().unwrap().as_str()
+        );
+        if let Some(body) = &node.body {
+            let swc_args = self.constructor_body_to_swc(&swc_name, body);
+            args.extend(swc_args);
         }
 
         swc::NewExpr {
