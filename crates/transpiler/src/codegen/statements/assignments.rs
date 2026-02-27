@@ -36,22 +36,30 @@ impl CodeGenerator<'_> {
                     swc::SimpleAssignTarget::Ident(create_ident(id.as_str()).into()).into()
                 }
                 ast::Pattern::Literal(_) => unreachable!(),
-                ast::Pattern::Struct(pat) => {
-                    swc::AssignTargetPat::Object(self.struct_pattern_to_swc(&pat.fields)).into()
-                }
                 ast::Pattern::Tuple(pat) => {
                     swc::AssignTargetPat::Array(self.tuple_pattern_to_swc(pat)).into()
                 }
-                ast::Pattern::Variant(pat) => match pat.body {
-                    Some(ast::VariantPatternBody::Struct(ref fields)) => {
-                        self.struct_pattern_to_swc(fields).into()
-                    }
-                    Some(ast::VariantPatternBody::Tuple(ref body)) => {
-                        self.tuple_pattern_to_swc(body).into()
-                    }
-                    None => swc::SimpleAssignTarget::Ident(create_ident("__").into()).into(),
+                ast::Pattern::Constructor(pat) => match &pat.constructor {
+                    ast::Constructor::Invalid(_) => panic!(),
+                    ast::Constructor::Map(_) => unimplemented!(),
+                    ast::Constructor::Named(_) | ast::Constructor::Variant(_) => match &pat.body {
+                        Some(body) => self.constructor_pattern_body_to_swc(body),
+                        None => swc::SimpleAssignTarget::Ident(create_ident("__").into()).into(),
+                    },
                 },
             },
+        }
+    }
+
+    fn constructor_pattern_body_to_swc(
+        &mut self,
+        body: &ast::ConstructorPatternBody,
+    ) -> swc::AssignTarget {
+        match body {
+            ast::ConstructorPatternBody::Struct(st) => {
+                self.struct_pattern_to_swc(&st.fields).into()
+            }
+            ast::ConstructorPatternBody::Tuple(t) => self.tuple_pattern_to_swc(t).into(),
         }
     }
 

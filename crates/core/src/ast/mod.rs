@@ -1,4 +1,4 @@
-pub mod composite_literals;
+pub mod constructor_literals;
 pub mod dom;
 pub mod expressions;
 pub mod items;
@@ -9,7 +9,7 @@ pub mod statements;
 pub mod types;
 pub mod utils;
 
-pub use self::composite_literals::*;
+pub use self::constructor_literals::*;
 pub use self::dom::*;
 pub use self::expressions::*;
 pub use self::items::*;

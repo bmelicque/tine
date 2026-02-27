@@ -15,7 +15,7 @@ impl TypeChecker<'_> {
             ast::Expression::BooleanLiteral(_) => TypeStore::BOOLEAN,
             ast::Expression::Block(node) => self.visit_block_expression(node),
             ast::Expression::Call(node) => self.visit_call_expression(node),
-            ast::Expression::CompositeLiteral(node) => self.visit_composite_literal(node),
+            ast::Expression::ConstructorLiteral(node) => self.visit_constructor_literal(node),
             ast::Expression::Element(node) => self.visit_element_expression(node),
             ast::Expression::FloatLiteral(_) => TypeStore::FLOAT,
             ast::Expression::Member(node) => self.visit_member_expression(node),
@@ -42,19 +42,6 @@ impl TypeChecker<'_> {
         expr.as_ref()
             .map(|e| self.visit_expression(e))
             .unwrap_or(TypeStore::UNKNOWN)
-    }
-
-    pub fn visit_expression_or_anonymous(
-        &mut self,
-        node: &ast::ExpressionOrAnonymous,
-        expected_type: TypeId,
-    ) -> TypeId {
-        match node {
-            ast::ExpressionOrAnonymous::Expression(node) => self.visit_expression(node),
-            ast::ExpressionOrAnonymous::Struct(node) => self
-                .visit_anonymous_struct_literal(node, expected_type)
-                .into(),
-        }
     }
 
     fn visit_array_expression(&mut self, node: &ast::ArrayExpression) -> TypeId {
@@ -107,7 +94,7 @@ impl TypeChecker<'_> {
         self.ctx.save_expression_type(node.loc, ty)
     }
 
-    fn visit_tuple_expression(&mut self, node: &ast::TupleExpression) -> TypeId {
+    pub fn visit_tuple_expression(&mut self, node: &ast::TupleExpression) -> TypeId {
         let ty = match node.elements.len() {
             0 => TypeStore::UNIT,
             1 => self.visit_expression(&node.elements[0]),

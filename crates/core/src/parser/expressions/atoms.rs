@@ -1,6 +1,6 @@
 use crate::{
     ast,
-    parser::{Parser, Token},
+    parser::{expressions::utils::is_type_identifier, Parser, Token},
 };
 
 impl Parser<'_> {
@@ -17,6 +17,9 @@ impl Parser<'_> {
             Token::Int(_) => Some(self.parse_int().into()),
             Token::Float(_) => Some(self.parse_float().into()),
             Token::String(_) => Some(self.parse_string().into()),
+            Token::Ident(text) if is_type_identifier(&text) => {
+                Some(self.parse_constructor_literal(vec![]).into())
+            }
             Token::Ident(_) => Some(self.parse_identifier().into()),
             Token::LParen => Some(self.parse_tuple().into()),
             _ => None,

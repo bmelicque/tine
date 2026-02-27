@@ -51,22 +51,26 @@ pub enum DiagnosticKind {
     ExpectedEnum {
         got: String,
     },
+    ExpectedMapKey,
     ExpectedNumber {
         got: String,
     },
     ExpectedStruct {
         got: String,
     },
+    ExpectedStructLikeBody,
     ExpectedToken {
         expected: Vec<String>,
     },
     ExpectedTuple {
         got: String,
     },
+    ExpectedTupleLikeBody,
     ExpectedTuplePattern,
     ExpectedVariantStruct,
     ExpectedVariantTuple,
     ExpectedVariantUnit,
+    ExpectedValueGotType,
     InvalidCondition {
         type_name: String,
     },
@@ -83,6 +87,7 @@ pub enum DiagnosticKind {
         operator: ast::BinaryOperator,
         type_name: String,
     },
+    InvalidTypeConstructor,
     InvalidTypeName,
     InvalidVariantKind,
     IrrefutablePatternExpected,
@@ -103,6 +108,9 @@ pub enum DiagnosticKind {
     MissingConsequent,
     MissingConstructorName,
     MissingExpression,
+    MissingField {
+        name: String,
+    },
     MissingFunctionName,
     MissingName,
     MissingParams,
@@ -191,18 +199,26 @@ impl Display for DiagnosticKind {
             }
             Self::ExpectedBool { got } => write!(f, "expected bool but got `{}`", got),
             Self::ExpectedEnum { got } => write!(f, "expected enum but got type `{}`", got),
+            Self::ExpectedMapKey => write!(f, "expected map key but got an identifier"),
             Self::ExpectedNumber { got } => write!(f, "expected number but got `{}`", got),
             Self::ExpectedStruct { got } => write!(f, "expected struct but got type `{}`", got),
+            Self::ExpectedStructLikeBody => {
+                write!(f, "expected struct-like body, got tuple-like body")
+            }
             Self::ExpectedToken { expected } => write!(
                 f,
                 "expected one of the following tokens: `{}`",
                 expected.join(", ")
             ),
             Self::ExpectedTuple { got } => write!(f, "expected tuple but got type `{}`", got),
+            Self::ExpectedTupleLikeBody => {
+                write!(f, "expected tuple-like body but got a struct-like body")
+            }
             Self::ExpectedTuplePattern => write!(f, "expected tuple pattern"),
             Self::ExpectedVariantStruct => write!(f, "expected struct variant"),
             Self::ExpectedVariantTuple => write!(f, "expected tuple variant"),
             Self::ExpectedVariantUnit => write!(f, "expected unit variant"),
+            Self::ExpectedValueGotType => write!(f, "expected a value but got a type"),
             Self::InvalidCondition { type_name } => {
                 write!(
                     f,
@@ -234,6 +250,10 @@ impl Display for DiagnosticKind {
                     type_name, operator
                 )
             }
+            Self::InvalidTypeConstructor => write!(
+                f,
+                "invalid type constructor, expected a name, a map or a variant"
+            ),
             Self::InvalidTypeName => write!(f, "invalid type name: name should be in PascalCase"),
             Self::InvalidVariantKind => write!(f, "invalid variant kind (unit, tuple or struct)"),
             Self::IrrefutablePatternExpected => write!(f, "irrefutable pattern expected"),
@@ -265,6 +285,7 @@ impl Display for DiagnosticKind {
             Self::MissingConsequent => write!(f, "expected consequent"),
             Self::MissingConstructorName => write!(f, "expected constructor name"),
             Self::MissingExpression => write!(f, "expected expression"),
+            Self::MissingField { name } => write!(f, "missing field `{}`", name),
             Self::MissingFunctionName => write!(f, "expected function name"),
             Self::MissingName => write!(f, "expected a name"),
             Self::MissingParams => write!(f, "expected function parameters"),

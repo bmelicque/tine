@@ -1,7 +1,7 @@
 mod binary;
 mod calls;
-mod composite_literals;
 mod conditions;
+mod constructor_literals;
 mod dom;
 mod expressions;
 mod functions;

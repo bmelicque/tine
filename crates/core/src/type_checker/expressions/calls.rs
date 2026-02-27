@@ -28,7 +28,8 @@ impl TypeChecker<'_> {
             return self.ctx.save_expression_type(node.loc, TypeStore::UNKNOWN);
         };
 
-        let mut substitutions = self.get_explicit_substitutions(node, &type_params);
+        let mut substitutions =
+            self.get_explicit_substitutions(&node.type_args, &type_params, node.loc);
 
         if node.args.len() != callee_type.params.len() {
             let error = DiagnosticKind::ArgumentCountMismatch {
@@ -92,31 +93,6 @@ impl TypeChecker<'_> {
         Err(anyhow!(""))
     }
 
-    fn get_explicit_substitutions(
-        &mut self,
-        node: &ast::CallExpression,
-        expected_type_params: &[TypeId],
-    ) -> HashMap<types::TypeParam, TypeId> {
-        let mut substitutions = HashMap::new();
-        if let Some(type_args) = &node.type_args {
-            if type_args.len() > expected_type_params.len() {
-                let error = DiagnosticKind::TooManyParams {
-                    expected: expected_type_params.len(),
-                    got: type_args.len(),
-                };
-                self.error(error, node.loc);
-            }
-
-            for (param, arg) in expected_type_params.iter().zip(type_args) {
-                let type_arg = self.visit_type(arg);
-                if let types::Type::Param(p) = self.resolve(*param) {
-                    substitutions.insert(p, type_arg);
-                }
-            }
-        }
-        substitutions
-    }
-
     fn check_argument(
         &mut self,
         node: &ast::CallArgument,
@@ -125,20 +101,10 @@ impl TypeChecker<'_> {
     ) {
         match node {
             ast::CallArgument::Expression(expr) => {
-                self.check_expression_argument(expr, expected, substitutions)
+                self.check_expression_against(expr, expected, substitutions)
             }
             ast::CallArgument::Callback(node) => self.check_callback(node, expected, substitutions),
         }
-    }
-
-    fn check_expression_argument(
-        &mut self,
-        node: &ast::Expression,
-        expected: TypeId,
-        substitutions: &mut HashMap<types::TypeParam, TypeId>,
-    ) {
-        let got = self.visit_expression(node);
-        self.unify(expected, got, node.loc(), substitutions);
     }
 
     fn check_callback(
