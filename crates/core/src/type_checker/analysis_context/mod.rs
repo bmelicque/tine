@@ -1,4 +1,4 @@
-mod symbols;
+pub mod symbols;
 pub mod type_store;
 
 pub use symbols::{SymbolData, SymbolHandle, SymbolKind, SymbolRef};

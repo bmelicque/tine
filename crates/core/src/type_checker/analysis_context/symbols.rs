@@ -3,6 +3,13 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use crate::{types::TypeId, Location, TypeStore};
 
 #[derive(Clone, Debug)]
+pub enum TypeSymbolKind {
+    Struct,
+    Enum,
+    Alias,
+}
+
+#[derive(Clone, Debug)]
 pub enum SymbolKind {
     Value {
         mutable: bool,
@@ -14,6 +21,7 @@ pub enum SymbolKind {
         param_names: Vec<String>,
     },
     Type {
+        kind: TypeSymbolKind,
         /// These could be members or methods
         members: Vec<SymbolRef>,
     },

@@ -102,7 +102,8 @@ impl TypeChecker<'_> {
 mod tests {
     use super::*;
     use crate::{
-        analyzer::session::Session, ast, locations::Span, types::*, Location, SymbolData,
+        analyzer::session::Session, ast, locations::Span,
+        type_checker::analysis_context::symbols::TypeSymbolKind, types::*, Location, SymbolData,
         SymbolKind,
     };
 
@@ -144,7 +145,10 @@ mod tests {
         checker.ctx.register_symbol(SymbolData {
             name: "User".into(),
             ty: id,
-            kind: SymbolKind::Type { members: vec![] },
+            kind: SymbolKind::Type {
+                kind: TypeSymbolKind::Struct,
+                members: vec![],
+            },
             ..Default::default()
         });
 

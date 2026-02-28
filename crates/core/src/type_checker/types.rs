@@ -182,6 +182,7 @@ mod tests {
     use super::*;
     use crate::analyzer::session::Session;
     use crate::ast;
+    use crate::type_checker::analysis_context::symbols::TypeSymbolKind;
     use crate::types::StructType;
     use crate::types::Type;
     use crate::Location;
@@ -287,7 +288,10 @@ mod tests {
         checker.ctx.register_symbol(SymbolData {
             name: "Box".into(),
             ty: def,
-            kind: SymbolKind::Type { members: vec![] },
+            kind: SymbolKind::Type {
+                kind: TypeSymbolKind::Struct,
+                members: vec![],
+            },
             ..Default::default()
         });
 

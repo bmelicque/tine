@@ -1,4 +1,8 @@
-use crate::{ast, type_checker::TypeChecker, types, SymbolData, SymbolKind};
+use crate::{
+    ast,
+    type_checker::{analysis_context::symbols::TypeSymbolKind, TypeChecker},
+    types, SymbolData, SymbolKind,
+};
 
 impl TypeChecker<'_> {
     pub fn with_type_params<F, R>(
@@ -26,7 +30,10 @@ impl TypeChecker<'_> {
                 checker.ctx.register_symbol(SymbolData {
                     name: param.text.clone(),
                     ty,
-                    kind: SymbolKind::Type { members: vec![] },
+                    kind: SymbolKind::Type {
+                        kind: TypeSymbolKind::Alias,
+                        members: vec![],
+                    },
                     defined_at: param.loc,
                     ..Default::default()
                 });

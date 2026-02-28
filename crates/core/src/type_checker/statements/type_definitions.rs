@@ -1,6 +1,6 @@
 use crate::{
     ast,
-    type_checker::analysis_context::type_store::TypeStore,
+    type_checker::analysis_context::{symbols::TypeSymbolKind, type_store::TypeStore},
     types::{self, EnumType, GenericType, StructType, TupleType, Type, TypeId},
     DiagnosticKind, Location, SymbolData, SymbolKind,
 };
@@ -24,7 +24,7 @@ impl TypeChecker<'_> {
         };
 
         if let Some(ref name) = node.name {
-            self.add_type_to_scope(name.text.clone(), node.loc, ty);
+            self.add_type_to_scope(name.text.clone(), node.loc, ty, TypeSymbolKind::Alias);
         }
 
         TypeStore::UNIT
@@ -47,7 +47,7 @@ impl TypeChecker<'_> {
         };
 
         if let Some(name) = &node.name {
-            self.add_type_to_scope(name.text.clone(), node.loc, ty);
+            self.add_type_to_scope(name.text.clone(), node.loc, ty, TypeSymbolKind::Struct);
         }
 
         TypeStore::UNIT
@@ -72,7 +72,7 @@ impl TypeChecker<'_> {
             })),
         };
 
-        self.add_type_to_scope(node.name.clone(), node.loc, ty);
+        self.add_type_to_scope(node.name.clone(), node.loc, ty, TypeSymbolKind::Enum);
 
         TypeStore::UNIT
     }
@@ -137,7 +137,7 @@ impl TypeChecker<'_> {
     }
 
     // OLD
-    fn add_type_to_scope(&mut self, name: String, loc: Location, ty: TypeId) {
+    fn add_type_to_scope(&mut self, name: String, loc: Location, ty: TypeId, kind: TypeSymbolKind) {
         if self.ctx.find_in_current_scope(&name).is_some() {
             let error = DiagnosticKind::DuplicateIdentifier { name: name.clone() };
             self.error(error, loc);
@@ -147,7 +147,10 @@ impl TypeChecker<'_> {
         self.ctx.register_symbol(SymbolData {
             name: name.clone(),
             ty,
-            kind: SymbolKind::Type { members: vec![] },
+            kind: SymbolKind::Type {
+                kind,
+                members: vec![],
+            },
             defined_at: loc,
             ..Default::default()
         });

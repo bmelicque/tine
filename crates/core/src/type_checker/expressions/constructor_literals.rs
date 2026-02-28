@@ -365,6 +365,7 @@ impl TypeChecker<'_> {
 mod tests {
     use super::*;
     use crate::analyzer::session::Session;
+    use crate::type_checker::analysis_context::symbols::TypeSymbolKind;
     use crate::types::{MapType, StructField, Type, Variant};
     use crate::{ast, Location, SymbolData, SymbolKind};
 
@@ -443,7 +444,10 @@ mod tests {
         checker.ctx.register_symbol(SymbolData {
             name: "User".into(),
             ty: user_type_id,
-            kind: SymbolKind::Type { members: vec![] },
+            kind: SymbolKind::Type {
+                kind: TypeSymbolKind::Struct,
+                members: vec![],
+            },
             ..Default::default()
         });
 
@@ -538,7 +542,10 @@ mod tests {
         checker.ctx.register_symbol(SymbolData {
             name: "Shape".into(),
             ty: shape_type_id,
-            kind: SymbolKind::Type { members: vec![] },
+            kind: SymbolKind::Type {
+                kind: TypeSymbolKind::Enum,
+                members: vec![],
+            },
             ..Default::default()
         });
 

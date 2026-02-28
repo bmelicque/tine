@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use tine_core::{
     types::{FunctionType, Type, TypeId},
-    ModuleId, Source, SymbolData, SymbolKind, SymbolRef,
+    ModuleId, Source, SymbolData, SymbolKind, SymbolRef, TypeSymbolKind,
 };
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
@@ -138,29 +138,33 @@ impl Backend {
                     _ => panic!(),
                 };
                 match session.types().get(return_type) {
-                    Type::Unit => format!("{}({})", name, params),
+                    Type::Unit => format!("fn {}({})", name, params),
                     _ => format!(
-                        "{}({}) => {}",
+                        "fn {}({}) {}",
                         name,
                         params,
                         session.types().display_type(return_type)
                     ),
                 }
             }
-            SymbolKind::Type { .. } => {
+            SymbolKind::Type { kind, .. } => {
                 let ty = session.types().display_raw_type(ty);
-                format!("{} :: {}", name, ty)
+                match kind {
+                    TypeSymbolKind::Alias => format!("type {} = {}", name, ty),
+                    TypeSymbolKind::Enum => format!("enum {} {}", name, ty),
+                    TypeSymbolKind::Struct => format!("struct {} {}", name, ty),
+                }
             }
             SymbolKind::Value { mutable } => {
                 let ty = session.types().display_type(ty);
-                let operator = if *mutable { ":=" } else { "::" };
-                format!("{} {} {}(..)", name, operator, ty)
+                let operator = if *mutable { "var" } else { "const" };
+                format!("{} {} {}", operator, name, ty)
             }
             SymbolKind::Member { owner } => {
                 let owner_name = &owner.borrow().name;
                 let member_name = name;
                 let displayed_type = session.types().display_type(ty);
-                format!("{}.{}: {}", owner_name, member_name, displayed_type)
+                format!("{}.{} {}", owner_name, member_name, displayed_type)
             }
             SymbolKind::Method { owner, param_names } => {
                 let owner_name = &owner.borrow().name;
@@ -171,9 +175,9 @@ impl Backend {
                     _ => panic!(),
                 };
                 match session.types().get(return_type) {
-                    Type::Unit => format!("{}.{}({})", owner_name, method_name, params),
+                    Type::Unit => format!("fn {}.{}({})", owner_name, method_name, params),
                     _ => format!(
-                        "{}.{}({}) => {}",
+                        "fn {}.{}({}) {}",
                         owner_name,
                         method_name,
                         params,
