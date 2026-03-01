@@ -82,7 +82,7 @@ impl CodeGenerator<'_> {
 mod tests {
     use super::*;
     use swc_ecma_ast as swc;
-    use tine_core::{ast, Location, Session};
+    use tine_core::{ast, Location, ModuleLoader, Session};
 
     fn mock_expr() -> ast::Expression {
         ast::Expression::IntLiteral(ast::IntLiteral {
@@ -113,9 +113,16 @@ mod tests {
         }
     }
 
+    struct MockLoader;
+    impl ModuleLoader for MockLoader {
+        fn load(&self, _: &tine_core::ModulePath) -> anyhow::Result<String> {
+            Ok("".to_string())
+        }
+    }
+
     impl CodeGenerator<'_> {
         fn new_for_test() -> Self {
-            let session = Box::leak(Box::new(Session::new()));
+            let session = Box::leak(Box::new(Session::new(Box::new(MockLoader))));
             let mut gen = CodeGenerator::new(session, 0);
             gen.enter_block();
             gen

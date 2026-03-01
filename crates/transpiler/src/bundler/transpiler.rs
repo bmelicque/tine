@@ -1,9 +1,8 @@
 use crate::bundler::{bundler::bundle_entry, loader::SwcLoader, resolver::SwcResolver};
-use tine_core::{analyze, pretty_print_error};
-use std::path::PathBuf;
+use tine_core::{analyze, pretty_print_error, ModulePath, SessionLoader};
 
-pub fn transpile(entry_point: PathBuf, out: &str) {
-    let session = analyze(entry_point.clone());
+pub fn transpile(entry_point: &ModulePath, loader: Box<SessionLoader>) -> anyhow::Result<String> {
+    let session = analyze(entry_point.clone(), loader);
 
     let mut has_errors = false;
     for (&module_id, diagnostics) in session.diagnostics() {
@@ -14,10 +13,10 @@ pub fn transpile(entry_point: PathBuf, out: &str) {
         }
     }
     if has_errors {
-        return;
+        anyhow::bail!("");
     }
 
     let resolver = SwcResolver::new();
     let loader = SwcLoader::new(&session);
-    let _ = bundle_entry(entry_point, out, loader, resolver);
+    bundle_entry(entry_point, loader, resolver)
 }

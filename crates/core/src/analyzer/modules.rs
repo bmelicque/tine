@@ -1,6 +1,8 @@
+use enum_from_derive::EnumFrom;
+
 use crate::locations::Span;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ModulePath {
     /// A file path to a file in the project.
     ///
@@ -10,19 +12,9 @@ pub enum ModulePath {
     /// project dependency
     Virtual(String),
 }
-impl From<std::path::PathBuf> for ModulePath {
-    fn from(value: std::path::PathBuf) -> Self {
-        Self::Real(value)
-    }
-}
 impl From<&std::path::PathBuf> for ModulePath {
     fn from(value: &std::path::PathBuf) -> Self {
         Self::Real(value.clone())
-    }
-}
-impl From<String> for ModulePath {
-    fn from(value: String) -> Self {
-        Self::Virtual(value)
     }
 }
 impl From<&str> for ModulePath {

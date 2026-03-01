@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use anyhow::bail;
 
 use crate::{
@@ -16,16 +14,16 @@ use crate::{
 impl Session {
     /// Parse a package starting from the given entry point, which should be
     /// the program's main entry.
-    pub fn parse_project(&mut self, entry_point: PathBuf) -> anyhow::Result<()> {
-        debug_assert!(std::path::Path::is_absolute(&entry_point));
-        let filename = ModulePath::Real(std::fs::canonicalize(entry_point)?);
-        self.parse_module(&filename)?;
+    /// Entry point should be a real, canonical file path.
+    pub fn parse_project(&mut self, entry_point: ModulePath) -> anyhow::Result<()> {
+        assert!(matches!(entry_point, ModulePath::Real(_)));
+        self.parse_module(&entry_point)?;
         Ok(())
     }
 
     fn parse_module(&mut self, path: &ModulePath) -> anyhow::Result<ModuleId> {
         let (module_id, result) = match path {
-            ModulePath::Real(p) => self.parse_real_module(p)?,
+            ModulePath::Real(_) => self.parse_real_module(path)?,
             ModulePath::Virtual(c) => self.parse_virtual_module(c)?,
         };
         let file_names = get_dependencies(&self.entry_point, &result.node);
@@ -51,13 +49,13 @@ impl Session {
         self.module_graph.add_edge(dependency, parent_id);
     }
 
-    fn parse_real_module(&mut self, path: &PathBuf) -> anyhow::Result<(ModuleId, ParseResult)> {
-        let src = std::fs::read_to_string(path)?;
+    fn parse_real_module(&mut self, path: &ModulePath) -> anyhow::Result<(ModuleId, ParseResult)> {
+        let src = self.loader.load(path)?;
         let module_id = self.module_graph.next_id();
         let result = Parser::new(module_id, &src).parse();
         let module = Module {
-            name: path.into(),
-            src: src.into(),
+            name: path.to_owned(),
+            src: Source::new(&src),
         };
         self.module_graph.add_module(module);
 

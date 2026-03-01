@@ -99,12 +99,13 @@ impl TypeChecker<'_> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ast, type_checker::TypeChecker, DiagnosticKind, Location, Session, SymbolData, SymbolKind,
-        TypeStore,
+        ast,
+        type_checker::{test_utils::MockLoader, TypeChecker},
+        DiagnosticKind, Location, Session, SymbolData, SymbolKind, TypeStore,
     };
 
     fn make_type_checker() -> TypeChecker<'static> {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         TypeChecker::new(Box::leak(Box::new(session)), 0)
     }
 

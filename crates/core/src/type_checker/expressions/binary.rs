@@ -164,12 +164,12 @@ fn get_binary_expression_type(op: ast::BinaryOperator, left: TypeId, right: Type
 
 #[cfg(test)]
 mod tests {
-    use crate::{Diagnostic, Session};
+    use crate::{type_checker::test_utils::MockLoader, Diagnostic, Session};
 
     use super::*;
 
     fn visit_binary_expression(node: ast::BinaryExpression) -> (TypeId, Vec<Diagnostic>) {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let ty = checker.visit_binary_expression(&node);
         (ty, checker.diagnostics)

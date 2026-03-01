@@ -9,7 +9,8 @@ pub mod types;
 mod utils;
 
 pub use analyzer::{
-    analyze, session::Session, Module, ModuleId, ModulePath, ModuleTypeData, Source,
+    analyze, Module, ModuleId, ModuleLoader, ModulePath, ModuleTypeData, Session, SessionLoader,
+    Source,
 };
 pub use common::{use_decl_to_paths, ModuleImports};
 pub use diagnostics::*;

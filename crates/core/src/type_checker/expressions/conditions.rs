@@ -95,12 +95,12 @@ impl TypeChecker<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Location, Session};
+    use crate::{type_checker::test_utils::MockLoader, Location, Session};
 
     use super::*;
 
     fn visit_if_expression(node: ast::IfExpression) -> (TypeId, TypeChecker<'static>) {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(Box::leak(Box::new(session)), 0);
         let ty = checker.visit_if_expression(&node);
         (ty, checker)

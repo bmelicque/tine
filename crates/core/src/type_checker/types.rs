@@ -183,6 +183,7 @@ mod tests {
     use crate::analyzer::session::Session;
     use crate::ast;
     use crate::type_checker::analysis_context::symbols::TypeSymbolKind;
+    use crate::type_checker::test_utils::MockLoader;
     use crate::types::StructType;
     use crate::types::Type;
     use crate::Location;
@@ -191,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_visit_array_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let array_type = ast::ArrayType {
             element: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -214,7 +215,7 @@ mod tests {
 
     #[test]
     fn test_visit_function_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let function_type = ast::FunctionType {
             params: vec![
@@ -250,7 +251,7 @@ mod tests {
 
     #[test]
     fn test_visit_map_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let map_type = ast::MapType {
             key: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -279,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_visit_named_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let def = checker.intern(Type::Struct(StructType {
             id: 7,
@@ -308,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_visit_option_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let option_type = ast::OptionType {
             base: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -331,7 +332,7 @@ mod tests {
 
     #[test]
     fn test_visit_reference_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let reference_type = ast::ReferenceType {
             target: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -355,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_visit_result_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let result_type = ast::ResultType {
             ok: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -384,7 +385,7 @@ mod tests {
 
     #[test]
     fn test_visit_tuple_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let tuple_type = ast::TupleType {
             elements: vec![

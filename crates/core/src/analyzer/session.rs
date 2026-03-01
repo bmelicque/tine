@@ -1,13 +1,12 @@
 use std::{
     collections::HashMap,
-    path::PathBuf,
     sync::{Mutex, MutexGuard},
 };
 
 use anyhow::anyhow;
 
 use crate::{
-    analyzer::{graph::ModuleGraph, modules::Module, ModuleId},
+    analyzer::{graph::ModuleGraph, loader::ModuleLoader, modules::Module, ModuleId},
     ast::Program,
     pretty_print_error,
     type_checker::SymbolHandle,
@@ -15,9 +14,12 @@ use crate::{
     Diagnostic, Location, ModulePath, SymbolKind, SymbolRef, TypeStore,
 };
 
+pub type SessionLoader = dyn ModuleLoader + Sync + Send;
+
 pub struct Session {
     /// The entry point of the project. It should be a `ModulePath::Real`.
     pub(super) entry_point: ModulePath,
+    pub(super) loader: Box<SessionLoader>,
     pub(super) module_graph: ModuleGraph,
     /// The parsed AST for each module.
     pub(super) parsed: HashMap<ModuleId, Program>,
@@ -41,9 +43,10 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new() -> Self {
+    pub fn new(loader: Box<SessionLoader>) -> Self {
         let mut session = Self {
             entry_point: ModulePath::Virtual("".into()),
+            loader,
             module_graph: ModuleGraph::new(),
             parsed: HashMap::new(),
             types: Mutex::new(TypeStore::new()),
@@ -60,9 +63,9 @@ impl Session {
 
     /// Analyze the whole project, starting from the entry_point.
     /// Returns the `ModuleId` of the entry point.
-    pub fn analyze(&mut self, entry_point: PathBuf) -> anyhow::Result<ModuleId> {
-        let filename = ModulePath::Real(entry_point.canonicalize().unwrap());
-        self.entry_point = filename;
+    pub fn analyze(&mut self, entry_point: ModulePath) -> anyhow::Result<ModuleId> {
+        assert!(matches!(entry_point, ModulePath::Real(_)));
+        self.entry_point = entry_point.clone();
         self.parse_project(entry_point)?;
 
         let sort_result = self.module_graph.try_sorted_vec();

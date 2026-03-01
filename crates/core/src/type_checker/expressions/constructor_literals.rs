@@ -366,12 +366,13 @@ mod tests {
     use super::*;
     use crate::analyzer::session::Session;
     use crate::type_checker::analysis_context::symbols::TypeSymbolKind;
+    use crate::type_checker::test_utils::MockLoader;
     use crate::types::{MapType, StructField, Type, Variant};
     use crate::{ast, Location, SymbolData, SymbolKind};
 
     #[test]
     fn test_visit_map_literal() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let map_literal = ast::ConstructorLiteral {
             loc: Location::dummy(),
@@ -421,7 +422,7 @@ mod tests {
 
     #[test]
     fn test_visit_struct_literal() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         // Define the User struct type properly
         let user_type = types::Type::Struct(types::StructType {
@@ -500,7 +501,7 @@ mod tests {
 
     #[test]
     fn test_visit_variant_literal_valid() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         // Define a sum type with variants
         let enum_type = types::Type::Enum(types::EnumType {

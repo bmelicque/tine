@@ -1,6 +1,8 @@
+mod loader;
 mod tokens;
 mod utils;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use tine_core::{analyze, ModuleId, Session, Source, Span};
@@ -10,6 +12,7 @@ use tower_lsp::Client;
 use tower_lsp::{lsp_types::*, LspService, Server};
 use url::Url;
 
+use crate::loader::LspLoader;
 use crate::utils::normalize_file_url;
 
 #[derive(Debug, Clone)]
@@ -25,6 +28,7 @@ struct Backend {
     client: Client,
     session: Arc<RwLock<Session>>,
     semantic_legend: SemanticTokensLegend,
+    open_files: Arc<RwLock<HashMap<Url, String>>>,
 }
 
 #[tower_lsp::async_trait]
@@ -66,7 +70,11 @@ impl tower_lsp::LanguageServer for Backend {
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let uri = params.text_document.uri;
+        let uri = normalize_file_url(&params.text_document.uri).unwrap();
+        self.open_files
+            .write()
+            .unwrap()
+            .insert(uri.clone(), params.text_document.text);
         if let Ok(path) = uri.to_file_path() {
             self.run_project_analysis(path).await;
         } else {
@@ -79,11 +87,19 @@ impl tower_lsp::LanguageServer for Backend {
         }
     }
 
-    async fn did_save(&self, params: DidSaveTextDocumentParams) {
-        let uri = params.text_document.uri;
+    async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        let uri = normalize_file_url(&params.text_document.uri).unwrap();
+        if let Some(file) = self.open_files.write().unwrap().get_mut(&uri) {
+            *file = params.content_changes[0].text.clone();
+        }
         if let Ok(path) = uri.to_file_path() {
             self.run_project_analysis(path).await;
         }
+    }
+
+    async fn did_close(&self, params: DidCloseTextDocumentParams) {
+        let uri = normalize_file_url(&params.text_document.uri).unwrap();
+        self.open_files.write().unwrap().remove(&uri);
     }
 
     async fn semantic_tokens_full(
@@ -162,11 +178,19 @@ impl Backend {
             ],
             token_modifiers: vec![SemanticTokenModifier::READONLY],
         };
+        let open_files = Arc::new(RwLock::new(HashMap::new()));
         Self {
             semantic_legend,
             client,
-            session: Arc::new(RwLock::new(Session::new())),
+            session: Arc::new(RwLock::new(Session::new(Box::new(LspLoader::new(
+                open_files.clone(),
+            ))))),
+            open_files,
         }
+    }
+
+    pub fn loader(&self) -> LspLoader {
+        LspLoader::new(self.open_files.clone())
     }
 
     async fn run_project_analysis(&self, entry_path: PathBuf) {
@@ -174,7 +198,8 @@ impl Backend {
 
         {
             let mut session = self.session.write().unwrap();
-            *session = analyze(entry_path);
+            let loader = self.loader();
+            *session = analyze(entry_path.into(), Box::new(loader));
         }
 
         let diagnostics = self.get_diagnostics();

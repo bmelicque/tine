@@ -3,6 +3,7 @@ mod expressions;
 mod items;
 mod patterns;
 mod statements;
+mod test_utils;
 mod type_checker;
 mod types;
 mod utils;

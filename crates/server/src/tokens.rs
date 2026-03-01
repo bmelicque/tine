@@ -134,7 +134,9 @@ impl Backend {
             SymbolKind::Function { param_names } => {
                 let params = self.display_function_params(ty, param_names);
                 let return_type = match session.types().get(ty) {
-                    Type::Function(FunctionType { return_type, .. }) => *return_type,
+                    Type::Function(FunctionType {
+                        ref return_type, ..
+                    }) => *return_type,
                     _ => panic!(),
                 };
                 match session.types().get(return_type) {
@@ -171,7 +173,9 @@ impl Backend {
                 let method_name = name;
                 let params = self.display_function_params(ty, param_names);
                 let return_type = match session.types().get(ty) {
-                    Type::Function(FunctionType { return_type, .. }) => *return_type,
+                    Type::Function(FunctionType {
+                        ref return_type, ..
+                    }) => *return_type,
                     _ => panic!(),
                 };
                 match session.types().get(return_type) {

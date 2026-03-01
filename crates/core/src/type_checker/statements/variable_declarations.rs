@@ -56,12 +56,13 @@ impl TypeChecker<'_> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ast, type_checker::TypeChecker, DiagnosticKind, Location, Session, SymbolData, SymbolKind,
-        TypeStore,
+        ast,
+        type_checker::{test_utils::MockLoader, TypeChecker},
+        DiagnosticKind, Location, Session, SymbolData, SymbolKind, TypeStore,
     };
 
     fn visit_variable_declaration(node: &ast::VariableDeclaration) -> TypeChecker<'_> {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut tc = TypeChecker::new(Box::leak(Box::new(session)), 0);
         tc.visit_variable_declaration(node);
         tc
@@ -127,7 +128,7 @@ mod tests {
 
     #[test]
     fn test_duplicate_declaration() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut tc = TypeChecker::new(&session, 0);
         tc.ctx.register_symbol(SymbolData {
             name: "a".to_string(),

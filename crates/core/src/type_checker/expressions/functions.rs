@@ -82,11 +82,12 @@ mod tests {
     use crate::analyzer::session::Session;
     use crate::ast;
     use crate::locations::Span;
+    use crate::type_checker::test_utils::MockLoader;
     use crate::types::*;
     use crate::Location;
 
     fn create_type_checker() -> TypeChecker<'static> {
-        let session = Box::leak(Box::new(Session::new()));
+        let session = Box::leak(Box::new(Session::new(Box::new(MockLoader))));
         TypeChecker::new(session, 0)
     }
 

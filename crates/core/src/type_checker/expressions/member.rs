@@ -102,13 +102,16 @@ impl TypeChecker<'_> {
 mod tests {
     use super::*;
     use crate::{
-        analyzer::session::Session, ast, locations::Span,
-        type_checker::analysis_context::symbols::TypeSymbolKind, types::*, Location, SymbolData,
-        SymbolKind,
+        analyzer::session::Session,
+        ast,
+        locations::Span,
+        type_checker::{analysis_context::symbols::TypeSymbolKind, test_utils::MockLoader},
+        types::*,
+        Location, SymbolData, SymbolKind,
     };
 
     fn create_type_checker() -> TypeChecker<'static> {
-        let session = Box::leak(Box::new(Session::new()));
+        let session = Box::leak(Box::new(Session::new(Box::new(MockLoader))));
         TypeChecker::new(session, 0)
     }
 
