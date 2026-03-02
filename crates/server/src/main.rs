@@ -132,9 +132,13 @@ impl tower_lsp::LanguageServer for Backend {
 
         let position = params.text_document_position_params.position;
         for symbol in &session.symbols() {
+            eprintln!("trying symbol '{}'", symbol.borrow().name);
             for loc in symbol.uses().iter().filter(|l| l.module() == module_id) {
+                eprintln!("at {:?}", loc);
                 if position_in_span(src, loc.span(), position) {
+                    eprintln!("found it!");
                     let type_display = self.display_signature(&symbol.into());
+                    eprintln!("displayed as '{}'", &type_display);
 
                     let docs = symbol.borrow().docs.clone().unwrap_or("".into());
 

@@ -199,12 +199,18 @@ impl TypeChecker<'_> {
     }
 
     fn visit_derived_call(&mut self, node: &ast::CallExpression) -> TypeId {
-        if self.lookup("derived$").is_none() {
-            let error = DiagnosticKind::CannotFindName {
-                name: "derived$".to_string(),
-            };
-            // unwrapping is safe because callee has to be `Some` identifier for this function to be called.
-            self.error(error, node.callee.as_ref().unwrap().loc());
+        // unwrapping is safe because callee has to be `Some` identifier for this function to be called.
+        let callee_loc = node.callee.as_ref().unwrap().loc();
+        match self.lookup("derived$") {
+            Some(symbol) => {
+                symbol.borrow().access.read(callee_loc);
+            }
+            None => {
+                let error = DiagnosticKind::CannotFindName {
+                    name: "derived$".to_string(),
+                };
+                self.error(error, callee_loc);
+            }
         }
 
         if node.args.len() != 1 {
