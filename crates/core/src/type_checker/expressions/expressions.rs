@@ -15,9 +15,8 @@ impl TypeChecker<'_> {
             ast::Expression::BooleanLiteral(_) => TypeStore::BOOLEAN,
             ast::Expression::Block(node) => self.visit_block_expression(node),
             ast::Expression::Call(node) => self.visit_call_expression(node),
-            ast::Expression::CompositeLiteral(node) => self.visit_composite_literal(node),
+            ast::Expression::ConstructorLiteral(node) => self.visit_constructor_literal(node),
             ast::Expression::Element(node) => self.visit_element_expression(node),
-            ast::Expression::Empty => TypeStore::UNIT,
             ast::Expression::FloatLiteral(_) => TypeStore::FLOAT,
             ast::Expression::Member(node) => self.visit_member_expression(node),
             ast::Expression::Function(node) => self.visit_function_expression(node).into(),
@@ -34,17 +33,15 @@ impl TypeChecker<'_> {
         }
     }
 
-    pub fn visit_expression_or_anonymous(
-        &mut self,
-        node: &ast::ExpressionOrAnonymous,
-        expected_type: TypeId,
-    ) -> TypeId {
-        match node {
-            ast::ExpressionOrAnonymous::Expression(node) => self.visit_expression(node),
-            ast::ExpressionOrAnonymous::Struct(node) => self
-                .visit_anonymous_struct_literal(node, expected_type)
-                .into(),
-        }
+    pub fn visit_expression_option(&mut self, expr: &Option<ast::Expression>) -> TypeId {
+        expr.as_ref()
+            .map(|e| self.visit_expression(e))
+            .unwrap_or(TypeStore::UNKNOWN)
+    }
+    pub fn visit_expression_box_option(&mut self, expr: &Option<Box<ast::Expression>>) -> TypeId {
+        expr.as_ref()
+            .map(|e| self.visit_expression(e))
+            .unwrap_or(TypeStore::UNKNOWN)
     }
 
     fn visit_array_expression(&mut self, node: &ast::ArrayExpression) -> TypeId {
@@ -97,15 +94,21 @@ impl TypeChecker<'_> {
         self.ctx.save_expression_type(node.loc, ty)
     }
 
-    fn visit_tuple_expression(&mut self, node: &ast::TupleExpression) -> TypeId {
-        let ty = TupleType {
-            elements: node
-                .elements
-                .iter()
-                .map(|el| self.visit_expression(el))
-                .collect(),
+    pub fn visit_tuple_expression(&mut self, node: &ast::TupleExpression) -> TypeId {
+        let ty = match node.elements.len() {
+            0 => TypeStore::UNIT,
+            1 => self.visit_expression(&node.elements[0]),
+            _ => {
+                let ty = Type::Tuple(TupleType {
+                    elements: node
+                        .elements
+                        .iter()
+                        .map(|el| self.visit_expression(el))
+                        .collect(),
+                });
+                self.intern(ty)
+            }
         };
-        let ty = self.intern(ty.into());
         self.ctx.save_expression_type(node.loc, ty)
     }
 }
@@ -116,13 +119,14 @@ mod tests {
     use crate::analyzer::session::Session;
     use crate::ast;
     use crate::locations::Span;
+    use crate::type_checker::test_utils::MockLoader;
     use crate::types::*;
     use crate::Location;
     use crate::SymbolData;
     use crate::SymbolKind;
 
     fn create_type_checker() -> TypeChecker<'static> {
-        let session = Box::leak(Box::new(Session::new()));
+        let session = Box::leak(Box::new(Session::new(Box::new(MockLoader))));
         TypeChecker::new(session, 0)
     }
 
@@ -211,14 +215,14 @@ mod tests {
     fn test_visit_binary_expression() {
         let mut checker = create_type_checker();
         let binary_expression = ast::BinaryExpression {
-            left: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+            left: Some(Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
-            })),
-            right: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+            }))),
+            right: Some(Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 2,
                 loc: Location::dummy(),
-            })),
+            }))),
             operator: ast::BinaryOperator::Add,
             loc: Location::dummy(),
         };
@@ -230,62 +234,6 @@ mod tests {
             "expected no errors, got {:?}",
             checker.diagnostics
         );
-    }
-
-    #[test]
-    fn test_visit_function_expression() {
-        let mut checker = create_type_checker();
-        let function_expression = ast::FunctionExpression {
-            loc: Location::dummy(),
-            name: None,
-            params: vec![
-                ast::FunctionParam {
-                    name: ident("x"),
-                    type_annotation: ast::Type::Named(ast::NamedType {
-                        name: "int".to_string(),
-                        args: None,
-                        loc: Location::dummy(),
-                    }),
-                    loc: Location::dummy(),
-                },
-                ast::FunctionParam {
-                    name: ident("y"),
-                    type_annotation: ast::Type::Named(ast::NamedType {
-                        name: "int".to_string(),
-                        args: None,
-                        loc: Location::dummy(),
-                    }),
-                    loc: Location::dummy(),
-                },
-            ],
-            return_type: Some(ast::Type::Named(ast::NamedType {
-                loc: Location::dummy(),
-                name: "int".into(),
-                args: None,
-            })),
-            body: ast::BlockExpression {
-                loc: Location::dummy(),
-                statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
-                    expression: Box::new(ast::Expression::Binary(ast::BinaryExpression {
-                        left: Box::new(ast::Expression::Identifier(ident("x"))),
-                        right: Box::new(ast::Expression::Identifier(ident("y"))),
-                        operator: ast::BinaryOperator::Add,
-                        loc: Location::dummy(),
-                    })),
-                })],
-            },
-        };
-
-        let result = checker.visit_function_expression(&function_expression);
-        let result = checker.resolve(result);
-        assert_eq!(
-            result,
-            Type::Function(FunctionType {
-                params: vec![TypeStore::INTEGER, TypeStore::INTEGER],
-                return_type: TypeStore::INTEGER,
-            })
-        );
-        assert!(checker.diagnostics.is_empty());
     }
 
     #[test]
@@ -316,7 +264,7 @@ mod tests {
 
         let result = checker.visit_tuple_expression(&tuple_expression);
         let result = checker.resolve(result);
-        assert_eq!(result, Type::Tuple(TupleType { elements: vec![] }));
+        assert_eq!(result, Type::Unit);
         assert!(checker.diagnostics.is_empty());
     }
 

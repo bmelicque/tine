@@ -1,14 +1,11 @@
 [package]
 name = "tine_core"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 build = "build.rs"
 
 [dependencies]
+enum_from_derive = { path = "../enum_from_derive" }
 anyhow = "1.0.100"
+logos = "0.16.1"
 ordered-float = "5.0.0"
-pest = "2.7"
-pest_derive = "2.7"
-
-[build-dependencies]
-pest_generator = "2.7"

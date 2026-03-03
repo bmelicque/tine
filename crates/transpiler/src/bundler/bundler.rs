@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 
 use swc_bundler::{Config, Hook, ModuleType};
 use swc_common::{sync::Lrc, FileName, Globals, Mark, SourceMap, GLOBALS};
@@ -6,15 +6,18 @@ use swc_ecma_codegen::Node;
 use swc_ecma_minifier::{optimize, option::MinifyOptions};
 use swc_ecma_transforms::resolver;
 use swc_ecma_visit::VisitMutWith;
+use tine_core::ModulePath;
 
 use crate::bundler::{SwcLoader, SwcResolver};
 
 pub fn bundle_entry(
-    filename: PathBuf,
-    out: &str,
+    filename: &ModulePath,
     loader: SwcLoader,
     swc_resolver: SwcResolver,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<String> {
+    let ModulePath::Real(filename) = filename else {
+        panic!()
+    };
     let globals = Globals::default();
 
     GLOBALS.set(&globals, || {
@@ -34,12 +37,13 @@ pub fn bundle_entry(
         );
 
         let mut entries = HashMap::new();
-        entries.insert(String::from("main"), FileName::Real(filename));
+        entries.insert(String::from("main"), FileName::Real(filename.clone()));
 
         let bundles = bundler.bundle(entries)?;
         let top_level_mark = Mark::fresh(Mark::root());
         let unresolved_mark = top_level_mark;
 
+        let mut output = String::new();
         for bundle in bundles {
             let top_level_mark = Mark::fresh(Mark::root());
 
@@ -78,10 +82,10 @@ pub fn bundle_entry(
                 wr: swc_ecma_codegen::text_writer::JsWriter::new(cm.clone(), "\n", &mut buf, None),
             };
             minified.emit_with(&mut emitter).unwrap();
-            std::fs::write(out, buf)?;
+            output.push_str(&String::from_utf8(buf)?);
         }
 
-        Ok(())
+        Ok(output)
     })
 }
 

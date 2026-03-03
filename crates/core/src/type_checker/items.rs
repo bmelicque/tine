@@ -79,6 +79,7 @@ impl TypeChecker<'_> {
         match self.session.find_export(module, name) {
             Some(symbol) => {
                 let ty = symbol.borrow().get_type();
+                symbol.borrow().access.read(path_element.loc());
                 self.ctx.import(symbol);
                 self.ctx.save_expression_type(path_element.loc(), ty);
             }

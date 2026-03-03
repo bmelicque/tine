@@ -82,7 +82,7 @@ impl ModuleGraph {
                     .iter()
                     .find(|e| e.dependency == removed.dependent)
                     .is_none();
-                if dependent_met_prerequisites {
+                if dependent_met_prerequisites && !queue.contains(&removed.dependent) {
                     queue.push_back(removed.dependent);
                 }
             }

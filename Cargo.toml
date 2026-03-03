@@ -1,3 +1,3 @@
 [workspace]
-members = ["crates/core", "crates/server", "crates/transpiler"]
+members = ["crates/core", "crates/server", "crates/transpiler", "crates/enum_from_derive", "crates/cli"]
 resolver = "2"

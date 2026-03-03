@@ -8,7 +8,7 @@ use tine_core::ast;
 
 impl CodeGenerator<'_> {
     pub fn if_to_swc_expr(&mut self, node: &ast::IfExpression) -> swc::Expr {
-        if node.consequent.statements.len() == 0 && node.alternate.is_none() {
+        if node.consequent.as_ref().unwrap().statements.len() == 0 && node.alternate.is_none() {
             undefined()
         } else if can_ifexpr_be_inlined(node) {
             self.if_to_swc_inlined(node).into()
@@ -29,15 +29,20 @@ impl CodeGenerator<'_> {
             let alt = Box::new(alt);
             swc::Expr::Cond(swc::CondExpr {
                 span: DUMMY_SP,
-                test: Box::new(self.expr_to_swc(&node.condition)),
-                cons: Box::new(self.block_to_swc_inlined(&node.consequent).into()),
+                test: Box::new(self.expr_to_swc(node.condition.as_ref().unwrap())),
+                cons: Box::new(
+                    self.block_to_swc_inlined(node.consequent.as_ref().unwrap())
+                        .into(),
+                ),
                 alt,
             })
         } else {
-            let cons = self.block_to_swc_inlined(&node.consequent).into();
+            let cons = self
+                .block_to_swc_inlined(node.consequent.as_ref().unwrap())
+                .into();
             swc::Expr::Cond(swc::CondExpr {
                 span: DUMMY_SP,
-                test: Box::new(self.expr_to_swc(&node.condition)),
+                test: Box::new(self.expr_to_swc(node.condition.as_ref().unwrap())),
                 cons: Box::new(self.some(cons).into()),
                 alt: Box::new(self.none().into()),
             })
@@ -77,7 +82,7 @@ impl CodeGenerator<'_> {
 mod tests {
     use super::*;
     use swc_ecma_ast as swc;
-    use tine_core::{ast, Location, Session};
+    use tine_core::{ast, Location, ModuleLoader, Session};
 
     fn mock_expr() -> ast::Expression {
         ast::Expression::IntLiteral(ast::IntLiteral {
@@ -97,8 +102,8 @@ mod tests {
 
     fn mock_if_expr(with_alt: bool) -> ast::IfExpression {
         ast::IfExpression {
-            condition: mock_expr().into(),
-            consequent: Box::new(mock_block()),
+            condition: Some(Box::new(mock_expr())),
+            consequent: Some(mock_block()),
             alternate: if with_alt {
                 Some(Box::new(ast::Alternate::Block(mock_block())))
             } else {
@@ -108,9 +113,16 @@ mod tests {
         }
     }
 
+    struct MockLoader;
+    impl ModuleLoader for MockLoader {
+        fn load(&self, _: &tine_core::ModulePath) -> anyhow::Result<String> {
+            Ok("".to_string())
+        }
+    }
+
     impl CodeGenerator<'_> {
         fn new_for_test() -> Self {
-            let session = Box::leak(Box::new(Session::new()));
+            let session = Box::leak(Box::new(Session::new(Box::new(MockLoader))));
             let mut gen = CodeGenerator::new(session, 0);
             gen.enter_block();
             gen
@@ -121,8 +133,8 @@ mod tests {
     fn returns_undefined_for_empty_if() {
         let mut gen = CodeGenerator::new_for_test();
         let node = ast::IfExpression {
-            condition: mock_expr().into(),
-            consequent: Box::new(ast::BlockExpression {
+            condition: Some(Box::new(mock_expr())),
+            consequent: Some(ast::BlockExpression {
                 statements: vec![],
                 loc: Location::dummy(),
             }),

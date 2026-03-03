@@ -42,7 +42,11 @@ impl TypeChecker<'_> {
             .map(|param| self.visit_type(param))
             .collect();
 
-        let return_type = self.visit_type(&node.returned);
+        let return_type = node
+            .returned
+            .as_ref()
+            .map(|t| self.visit_type(t))
+            .unwrap_or(TypeStore::UNIT);
 
         self.intern(Type::Function(FunctionType {
             params,
@@ -51,7 +55,10 @@ impl TypeChecker<'_> {
     }
 
     fn visit_listener_type(&mut self, node: &ast::ListenerType) -> TypeId {
-        let inner = self.visit_type(&node.inner);
+        let inner = match &node.inner {
+            Some(inner) => self.visit_type(inner),
+            None => TypeStore::UNKNOWN,
+        };
         self.intern(Type::Listener(ListenerType { inner }))
     }
 
@@ -81,7 +88,7 @@ impl TypeChecker<'_> {
             "void" => return TypeStore::UNIT,
             _ => {}
         }
-        let Some(type_ref) = self.ctx.lookup(name) else {
+        let Some(type_ref) = self.lookup(name) else {
             let error = DiagnosticKind::CannotFindName {
                 name: name.to_string(),
             };
@@ -136,7 +143,10 @@ impl TypeChecker<'_> {
     }
 
     pub fn visit_reference_type(&mut self, node: &ast::ReferenceType) -> TypeId {
-        let target = self.visit_type(&node.target);
+        let target = match &node.target {
+            Some(target) => self.visit_type(target),
+            None => return TypeStore::UNKNOWN,
+        };
         self.intern(Type::Reference(ReferenceType { target }))
     }
 
@@ -172,6 +182,8 @@ mod tests {
     use super::*;
     use crate::analyzer::session::Session;
     use crate::ast;
+    use crate::type_checker::analysis_context::symbols::TypeSymbolKind;
+    use crate::type_checker::test_utils::MockLoader;
     use crate::types::StructType;
     use crate::types::Type;
     use crate::Location;
@@ -180,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_visit_array_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let array_type = ast::ArrayType {
             element: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -203,7 +215,7 @@ mod tests {
 
     #[test]
     fn test_visit_function_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let function_type = ast::FunctionType {
             params: vec![
@@ -218,11 +230,11 @@ mod tests {
                     loc: Location::dummy(),
                 }),
             ],
-            returned: Box::new(ast::Type::Named(ast::NamedType {
+            returned: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "bool".to_string(),
                 args: None,
                 loc: Location::dummy(),
-            })),
+            }))),
             loc: Location::dummy(),
         };
 
@@ -239,7 +251,7 @@ mod tests {
 
     #[test]
     fn test_visit_map_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let map_type = ast::MapType {
             key: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -268,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_visit_named_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let def = checker.intern(Type::Struct(StructType {
             id: 7,
@@ -277,7 +289,10 @@ mod tests {
         checker.ctx.register_symbol(SymbolData {
             name: "Box".into(),
             ty: def,
-            kind: SymbolKind::Type { members: vec![] },
+            kind: SymbolKind::Type {
+                kind: TypeSymbolKind::Struct,
+                members: vec![],
+            },
             ..Default::default()
         });
 
@@ -294,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_visit_option_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let option_type = ast::OptionType {
             base: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -317,14 +332,14 @@ mod tests {
 
     #[test]
     fn test_visit_reference_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let reference_type = ast::ReferenceType {
-            target: Box::new(ast::Type::Named(ast::NamedType {
+            target: Some(Box::new(ast::Type::Named(ast::NamedType {
                 name: "str".to_string(),
                 args: None,
                 loc: Location::dummy(),
-            })),
+            }))),
             loc: Location::dummy(),
         };
 
@@ -341,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_visit_result_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let result_type = ast::ResultType {
             ok: Some(Box::new(ast::Type::Named(ast::NamedType {
@@ -370,7 +385,7 @@ mod tests {
 
     #[test]
     fn test_visit_tuple_type() {
-        let session = Session::new();
+        let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
         let tuple_type = ast::TupleType {
             elements: vec![

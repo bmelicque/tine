@@ -1,18 +1,19 @@
+mod builtins;
 mod graph;
+pub mod loader;
 mod modules;
 mod parse;
 pub mod session;
+mod std_modules;
 mod type_check;
 
-use std::path::PathBuf;
-
+pub use self::loader::ModuleLoader;
+pub use crate::analyzer::session::{Session, SessionLoader};
 pub use modules::{Module, ModuleId, ModulePath, Source};
 pub use type_check::ModuleTypeData;
 
-use crate::analyzer::session::Session;
-
-pub fn analyze(entry: PathBuf) -> Session {
-    let mut session = Session::new();
+pub fn analyze<'sess>(entry: ModulePath, loader: Box<SessionLoader>) -> Session {
+    let mut session = Session::new(loader);
     let _ = session.analyze(entry);
     session
 }

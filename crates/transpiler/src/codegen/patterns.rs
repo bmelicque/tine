@@ -12,14 +12,22 @@ impl CodeGenerator<'_> {
     /// Used to build a destructuring expression, like the `{ name }` part of `const { name } = user;`
     pub fn pattern_to_swc(&mut self, node: &ast::Pattern) -> swc::Pat {
         match node {
+            ast::Pattern::Invalid { .. } => panic!(),
             ast::Pattern::Identifier(pattern) => self.identifier_pattern_to_swc(pattern),
             ast::Pattern::Literal(pattern) => {
                 // TODO: this is probably useless (investigate)
                 swc::Pat::Expr(self.literal_pattern_to_swc(pattern).into())
             }
-            ast::Pattern::Struct(pattern) => self.struct_pattern_to_swc(&pattern.fields).into(),
+            ast::Pattern::Constructor(pattern) => match &pattern.body {
+                Some(ast::ConstructorPatternBody::Struct(pattern)) => {
+                    self.struct_pattern_to_swc(&pattern.fields).into()
+                }
+                Some(ast::ConstructorPatternBody::Tuple(pattern)) => {
+                    self.tuple_pattern_to_swc(pattern).into()
+                }
+                None => swc::Pat::Ident(create_ident("__").into()),
+            },
             ast::Pattern::Tuple(pattern) => self.tuple_pattern_to_swc(pattern).into(),
-            ast::Pattern::Variant(pattern) => self.variant_pattern_to_swc(pattern),
         }
     }
 
@@ -77,15 +85,16 @@ impl CodeGenerator<'_> {
         &mut self,
         node: &ast::StructPatternField,
     ) -> swc::ObjectPatProp {
+        let key = create_ident(node.identifier.as_ref().unwrap().as_str());
         match &node.pattern {
             Some(pattern) => swc::KeyValuePatProp {
-                key: create_ident(node.identifier.as_str()).into(),
+                key: key.into(),
                 value: Box::new(self.pattern_to_swc(pattern)),
             }
             .into(),
             None => swc::AssignPatProp {
                 span: DUMMY_SP,
-                key: create_ident(node.identifier.as_str()).into(),
+                key: key.into(),
                 value: None,
             }
             .into(),
@@ -106,22 +115,12 @@ impl CodeGenerator<'_> {
         }
     }
 
-    fn variant_pattern_to_swc(&mut self, node: &ast::VariantPattern) -> swc::Pat {
-        let Some(ref body) = node.body else {
-            return swc::Pat::Ident(create_ident("__").into());
-        };
-        match body {
-            ast::VariantPatternBody::Struct(fields) => self.struct_pattern_to_swc(fields).into(),
-            ast::VariantPatternBody::Tuple(body) => self.tuple_pattern_to_swc(body).into(),
-        }
-    }
-
     /// Create the JS test expression that will validate if the pattern is matched.
     /// Also provide needed JS declarations, resulting from said test.
     ///
-    /// For example: `if (0, value) := tuple { ... }` will:
+    /// For example: `if const (0, value) = tuple { ... }` will:
     /// - check that `tuple[0] === 0`
-    /// - declare `let value = tuple[0]`
+    /// - declare `const value = tuple[0]`
     /// For a result being: `if (tuple[0] === 0) { let value = tuple[0]; ... }`
     pub fn pattern_to_swc_test(
         &mut self,
@@ -129,11 +128,24 @@ impl CodeGenerator<'_> {
         against: &ast::Expression,
     ) -> swc::Expr {
         match pattern {
+            ast::Pattern::Invalid { .. } => panic!(),
             ast::Pattern::Identifier(_) => true_lit(),
             ast::Pattern::Literal(l) => self.literal_pattern_to_swc_test(l, against),
-            ast::Pattern::Struct(s) => self.struct_pattern_to_swc_test(&s.fields, against),
             ast::Pattern::Tuple(t) => self.tuple_pattern_to_swc_test(t, against),
-            ast::Pattern::Variant(v) => self.variant_pattern_to_swc_test(v, against),
+            ast::Pattern::Constructor(c) => match &c.constructor {
+                ast::Constructor::Variant(variant) => {
+                    self.variant_pattern_to_swc_test(c, variant, against)
+                }
+                _ => match &c.body {
+                    Some(ast::ConstructorPatternBody::Struct(s)) => {
+                        self.struct_pattern_to_swc_test(&s.fields, against)
+                    }
+                    Some(ast::ConstructorPatternBody::Tuple(t)) => {
+                        self.tuple_pattern_to_swc_test(t, against)
+                    }
+                    None => true_lit(),
+                },
+            },
         }
     }
 
@@ -161,8 +173,10 @@ impl CodeGenerator<'_> {
             .map(|field| {
                 let against = ast::MemberExpression {
                     loc: against.loc(),
-                    object: Box::new(against.clone()),
-                    prop: Some(ast::MemberProp::FieldName(field.identifier.clone())),
+                    object: Some(Box::new(against.clone())),
+                    prop: Some(ast::MemberProp::FieldName(
+                        field.identifier.as_ref().unwrap().clone(),
+                    )),
                 };
                 self.pattern_to_swc_test(&field.pattern.as_ref().unwrap(), &against.into())
             })
@@ -190,7 +204,7 @@ impl CodeGenerator<'_> {
         self.tuple_to_swc_test_helper(pattern, |i| {
             ast::MemberExpression {
                 loc: against.loc(),
-                object: Box::new(against.clone()),
+                object: Some(Box::new(against.clone())),
                 prop: Some(ast::MemberProp::Index(ast::IntLiteral {
                     loc: against.loc(),
                     value: i as i64,
@@ -202,7 +216,8 @@ impl CodeGenerator<'_> {
 
     fn variant_pattern_to_swc_test(
         &mut self,
-        pattern: &ast::VariantPattern,
+        pattern: &ast::ConstructorPattern,
+        variant: &ast::VariantConstructor,
         against: &ast::Expression,
     ) -> swc::Expr {
         // TODO: new Enum(name, ...) => ty.__ === name
@@ -216,7 +231,7 @@ impl CodeGenerator<'_> {
             })),
             right: Box::new(swc::Expr::Lit(swc::Lit::Str(swc::Str {
                 span: DUMMY_SP,
-                value: pattern.name.clone().into(),
+                value: variant.variant_name.as_ref().unwrap().as_str().into(),
                 raw: None,
             }))),
         });
@@ -226,10 +241,10 @@ impl CodeGenerator<'_> {
         };
 
         let body_test = match body {
-            ast::VariantPatternBody::Struct(ref fields) => {
-                self.struct_pattern_to_swc_test(fields, against)
+            ast::ConstructorPatternBody::Struct(st) => {
+                self.struct_pattern_to_swc_test(&st.fields, against)
             }
-            ast::VariantPatternBody::Tuple(tuple) => {
+            ast::ConstructorPatternBody::Tuple(tuple) => {
                 self.tuple_variant_to_swc_test(&tuple, against)
             }
         };
@@ -253,7 +268,7 @@ impl CodeGenerator<'_> {
             let leaked_id: &'static str = Box::leak(id.into_boxed_str());
             ast::MemberExpression {
                 loc: against.loc(),
-                object: Box::new(against.clone()),
+                object: Some(Box::new(against.clone())),
                 prop: Some(ast::MemberProp::FieldName(ast::Identifier {
                     loc: Location::new(module, Span::new(0, leaked_id.len() as u32)),
                     text: leaked_id.to_string(),

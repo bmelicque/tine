@@ -8,8 +8,13 @@ use crate::{
 
 impl TypeChecker<'_> {
     pub fn visit_if_expression(&mut self, node: &ast::IfExpression) -> TypeId {
-        self.visit_condition(&node.condition);
-        let ty = self.with_scope(|s| s.visit_block_expression(&node.consequent));
+        if let Some(condition) = &node.condition {
+            self.visit_condition(condition);
+        }
+        let ty = match &node.consequent {
+            Some(consequent) => self.with_scope(|s| s.visit_block_expression(consequent)),
+            None => TypeStore::UNKNOWN,
+        };
         let ty = if let Some(ref alternate) = node.alternate {
             self.visit_alternate(alternate, ty);
             ty
@@ -21,7 +26,7 @@ impl TypeChecker<'_> {
 
     pub fn visit_condition(&mut self, node: &ast::Expression) {
         let condition = self.visit_expression(node);
-        if condition != TypeStore::BOOLEAN {
+        if condition != TypeStore::BOOLEAN && condition != TypeStore::UNKNOWN {
             let error = DiagnosticKind::InvalidCondition {
                 type_name: self.session.display_type(condition),
             };
@@ -30,27 +35,37 @@ impl TypeChecker<'_> {
     }
 
     pub fn visit_if_decl_expression(&mut self, node: &ast::IfPatExpression) -> TypeId {
-        if !node.pattern.is_refutable() {
-            self.error(DiagnosticKind::RefutablePatternExpected, node.pattern.loc());
-        };
+        if let Some(pattern) = &node.pattern {
+            if !pattern.is_refutable() {
+                self.error(DiagnosticKind::RefutablePatternExpected, pattern.loc());
+            };
+        }
 
         let ty = self.with_scope(|s| {
-            let (inferred_type, dependencies) =
-                s.with_dependencies(|s| s.visit_expression(&node.scrutinee));
+            let (inferred_type, dependencies) = match &node.scrutinee {
+                Some(e) => s.with_dependencies(|s| s.visit_expression(e)),
+                None => (TypeStore::UNKNOWN, vec![]),
+            };
             let mut variables = TokenList::new();
-            s.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
-            for (name, ty) in variables.0 {
-                s.ctx.register_symbol(SymbolData {
-                    name: name.as_str().into(),
-                    ty,
-                    kind: SymbolKind::constant(),
-                    defined_at: node.pattern.loc(),
-                    dependencies: dependencies.clone(),
-                    ..Default::default()
-                });
-                s.ctx.save_expression_type(name.loc, ty);
+            if let Some(pattern) = &node.pattern {
+                s.match_pattern(pattern, inferred_type.clone(), &mut variables);
             }
-            s.visit_block_expression(&node.consequent)
+            if let Some(consequent) = &node.consequent {
+                for (name, ty) in variables.0 {
+                    s.ctx.register_symbol(SymbolData {
+                        name: name.as_str().into(),
+                        ty,
+                        kind: SymbolKind::constant(),
+                        defined_at: name.loc,
+                        dependencies: dependencies.clone(),
+                        ..Default::default()
+                    });
+                    s.ctx.save_expression_type(name.loc, ty);
+                }
+                s.visit_block_expression(consequent)
+            } else {
+                TypeStore::UNKNOWN
+            }
         });
 
         let ty = if let Some(ref alternate) = node.alternate {
@@ -75,5 +90,118 @@ impl TypeChecker<'_> {
             };
             self.error(error, alternate.loc())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{type_checker::test_utils::MockLoader, Location, Session};
+
+    use super::*;
+
+    fn visit_if_expression(node: ast::IfExpression) -> (TypeId, TypeChecker<'static>) {
+        let session = Session::new(Box::new(MockLoader));
+        let mut checker = TypeChecker::new(Box::leak(Box::new(session)), 0);
+        let ty = checker.visit_if_expression(&node);
+        (ty, checker)
+    }
+
+    fn mock_condition() -> ast::Expression {
+        ast::Expression::BooleanLiteral(ast::BooleanLiteral {
+            loc: Location::dummy(),
+            value: true,
+        })
+    }
+    fn mock_bad_condition() -> ast::Expression {
+        ast::Expression::IntLiteral(ast::IntLiteral {
+            loc: Location::dummy(),
+            value: 0,
+        })
+    }
+
+    fn int_block_expression() -> ast::BlockExpression {
+        ast::BlockExpression {
+            loc: Location::dummy(),
+            statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
+                expression: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+                    loc: Location::dummy(),
+                    value: 1,
+                })),
+            })],
+        }
+    }
+    fn bool_block_expression() -> ast::BlockExpression {
+        ast::BlockExpression {
+            loc: Location::dummy(),
+            statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
+                expression: Box::new(ast::Expression::BooleanLiteral(ast::BooleanLiteral {
+                    loc: Location::dummy(),
+                    value: true,
+                })),
+            })],
+        }
+    }
+
+    #[test]
+    fn test_visit_if_expression() {
+        let node = ast::IfExpression {
+            loc: Location::dummy(),
+            condition: Some(Box::new(mock_condition())),
+            consequent: Some(int_block_expression()),
+            alternate: None,
+        };
+        let (ty, checker) = visit_if_expression(node);
+        assert_eq!(checker.diagnostics.len(), 0);
+        assert_eq!(
+            ty,
+            checker.session.intern(Type::Option(OptionType {
+                some: TypeStore::INTEGER
+            }))
+        );
+    }
+
+    #[test]
+    fn test_visit_if_expression_with_bad_condition() {
+        let node = ast::IfExpression {
+            loc: Location::dummy(),
+            condition: Some(Box::new(mock_bad_condition())),
+            consequent: Some(int_block_expression()),
+            alternate: None,
+        };
+        let (_, checker) = visit_if_expression(node);
+        assert_eq!(checker.diagnostics.len(), 1);
+        assert!(matches!(
+            checker.diagnostics[0].kind,
+            DiagnosticKind::InvalidCondition { .. }
+        ));
+    }
+
+    #[test]
+    fn test_visit_if_expression_with_alternate() {
+        let node = ast::IfExpression {
+            loc: Location::dummy(),
+            condition: Some(Box::new(mock_condition())),
+            consequent: Some(int_block_expression()),
+            alternate: Some(Box::new(int_block_expression().into())),
+        };
+        let (ty, checker) = visit_if_expression(node);
+        assert_eq!(checker.diagnostics.len(), 0);
+        assert_eq!(ty, TypeStore::INTEGER);
+    }
+
+    #[test]
+    fn test_visit_if_expression_with_alternate_mismatch() {
+        let node = ast::IfExpression {
+            loc: Location::dummy(),
+            condition: Some(Box::new(mock_condition())),
+            consequent: Some(int_block_expression()),
+            alternate: Some(Box::new(bool_block_expression().into())),
+        };
+        let (_, checker) = visit_if_expression(node);
+        assert_eq!(checker.diagnostics.len(), 1);
+        assert!(matches!(
+            checker.diagnostics[0].kind,
+            DiagnosticKind::MismatchedBranchTypes { .. }
+        ))
     }
 }

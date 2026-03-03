@@ -1,7 +1,7 @@
 use crate::codegen::{utils::create_ident, CodeGenerator};
-use tine_core::ast;
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
+use tine_core::ast;
 
 impl CodeGenerator<'_> {
     pub fn member_expr_to_swc(&mut self, node: &ast::MemberExpression) -> swc::MemberExpr {
@@ -17,7 +17,7 @@ impl CodeGenerator<'_> {
 
         swc::MemberExpr {
             span: DUMMY_SP,
-            obj: Box::new(self.expr_to_swc(&node.object)),
+            obj: Box::new(self.expr_to_swc(node.object.as_ref().unwrap())),
             prop,
         }
     }

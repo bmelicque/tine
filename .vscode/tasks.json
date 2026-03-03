@@ -1,0 +1,11 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-server",
+            "type": "shell",
+            "command": "node vscode-extension/scripts/build-server.js",
+            "problemMatcher": []
+        }
+    ]
+}

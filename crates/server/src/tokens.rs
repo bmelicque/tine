@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use tine_core::{
-    types::{FunctionType, Type, TypeId},
-    ModuleId, Source, SymbolData, SymbolKind, SymbolRef,
+    types::{FunctionType, GenericType, Type, TypeId},
+    ModuleId, Source, SymbolData, SymbolKind, SymbolRef, TypeSymbolKind,
 };
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
@@ -127,53 +127,76 @@ impl Backend {
 
     pub fn display_signature(&self, symbol: &ServerSymbol) -> String {
         let session = self.session.read().unwrap();
-        // let store = session.types();
         let name = &symbol.0.name;
         let ty = symbol.0.ty;
         match &symbol.0.kind {
             SymbolKind::Function { param_names } => {
+                eprintln!("function symbol");
                 let params = self.display_function_params(ty, param_names);
-                let return_type = match session.types().get(ty) {
-                    Type::Function(FunctionType { return_type, .. }) => *return_type,
+                eprintln!("got params: {}", &params);
+                let ty = session.types().get(ty).to_owned();
+                eprintln!("got type: {:?}", ty);
+                let return_type = match ty {
+                    Type::Function(FunctionType {
+                        ref return_type, ..
+                    }) => *return_type,
+                    Type::Generic(GenericType { ref definition, .. }) => {
+                        let definition = session.types().get(*definition).to_owned();
+                        match definition {
+                            Type::Function(FunctionType {
+                                ref return_type, ..
+                            }) => *return_type,
+                            _ => panic!(),
+                        }
+                    }
                     _ => panic!(),
                 };
-                match session.types().get(return_type) {
-                    Type::Unit => format!("{}({})", name, params),
+                eprintln!("got return type id");
+                let ty = session.types().get(return_type).to_owned();
+                eprintln!("got return type");
+                match ty {
+                    Type::Unit => format!("fn {}({})", name, params),
                     _ => format!(
-                        "{}({}) => {}",
+                        "fn {}({}) {}",
                         name,
                         params,
                         session.types().display_type(return_type)
                     ),
                 }
             }
-            SymbolKind::Type { .. } => {
+            SymbolKind::Type { kind, .. } => {
                 let ty = session.types().display_raw_type(ty);
-                format!("{} :: {}", name, ty)
+                match kind {
+                    TypeSymbolKind::Alias => format!("type {} = {}", name, ty),
+                    TypeSymbolKind::Enum => format!("enum {} {}", name, ty),
+                    TypeSymbolKind::Struct => format!("struct {} {}", name, ty),
+                }
             }
             SymbolKind::Value { mutable } => {
                 let ty = session.types().display_type(ty);
-                let operator = if *mutable { ":=" } else { "::" };
-                format!("{} {} {}(..)", name, operator, ty)
+                let operator = if *mutable { "var" } else { "const" };
+                format!("{} {} {}", operator, name, ty)
             }
             SymbolKind::Member { owner } => {
                 let owner_name = &owner.borrow().name;
                 let member_name = name;
                 let displayed_type = session.types().display_type(ty);
-                format!("{}.{}: {}", owner_name, member_name, displayed_type)
+                format!("{}.{} {}", owner_name, member_name, displayed_type)
             }
             SymbolKind::Method { owner, param_names } => {
                 let owner_name = &owner.borrow().name;
                 let method_name = name;
                 let params = self.display_function_params(ty, param_names);
                 let return_type = match session.types().get(ty) {
-                    Type::Function(FunctionType { return_type, .. }) => *return_type,
+                    Type::Function(FunctionType {
+                        ref return_type, ..
+                    }) => *return_type,
                     _ => panic!(),
                 };
                 match session.types().get(return_type) {
-                    Type::Unit => format!("{}.{}({})", owner_name, method_name, params),
+                    Type::Unit => format!("fn {}.{}({})", owner_name, method_name, params),
                     _ => format!(
-                        "{}.{}({}) => {}",
+                        "fn {}.{}({}) {}",
                         owner_name,
                         method_name,
                         params,
@@ -192,8 +215,13 @@ impl Backend {
     fn display_function_params(&self, ty: TypeId, names: &Vec<String>) -> String {
         let session = self.session.read().unwrap();
         let store = session.types();
-        let Type::Function(f) = store.get(ty) else {
-            panic!()
+        let f = match store.get(ty) {
+            Type::Function(f) => f,
+            Type::Generic(g) => match store.get(g.definition) {
+                Type::Function(f) => f,
+                _ => panic!("expected function type"),
+            },
+            _ => panic!("expected function type"),
         };
         f.params
             .iter()

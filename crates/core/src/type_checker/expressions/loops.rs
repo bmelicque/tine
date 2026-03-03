@@ -20,28 +20,42 @@ impl TypeChecker<'_> {
     }
 
     fn visit_for_expression(&mut self, node: &ast::ForExpression) -> TypeId {
-        self.visit_condition(&node.condition);
-        let ty = self.with_scope(|checker| checker.visit_loop_body(&node.body));
+        if let Some(ref condition) = node.condition {
+            self.visit_condition(condition);
+        }
+        let ty = match &node.body {
+            Some(body) => self.with_scope(|checker| checker.visit_loop_body(body)),
+            None => TypeStore::UNKNOWN,
+        };
 
         self.ctx.save_expression_type(node.loc, ty)
     }
 
     fn visit_for_in_expression(&mut self, node: &ast::ForInExpression) -> TypeId {
-        let (inferred_type, dependencies) = self.visit_for_in_iterable(&node.iterable);
+        let (inferred_type, dependencies) = match &node.iterable {
+            Some(iterable) => self.visit_for_in_iterable(iterable),
+            None => (TypeStore::UNKNOWN, Vec::new()),
+        };
         let ty = self.with_scope(|checker| {
             let mut variables = TokenList::new();
-            checker.match_pattern(&node.pattern, inferred_type.clone(), &mut variables);
-            for (name, ty) in variables.0 {
-                checker.ctx.register_symbol(SymbolData {
-                    name: name.as_str().into(),
-                    ty,
-                    kind: SymbolKind::constant(),
-                    defined_at: node.pattern.loc(),
-                    dependencies: dependencies.clone(),
-                    ..Default::default()
-                });
+            if let Some(ref pattern) = node.pattern {
+                checker.match_pattern(pattern, inferred_type.clone(), &mut variables);
+                for (name, ty) in variables.0 {
+                    checker.ctx.register_symbol(SymbolData {
+                        name: name.as_str().into(),
+                        ty,
+                        kind: SymbolKind::constant(),
+                        defined_at: pattern.loc(),
+                        dependencies: dependencies.clone(),
+                        ..Default::default()
+                    });
+                }
             }
-            checker.visit_loop_body(&node.body)
+
+            match &node.body {
+                Some(body) => checker.visit_loop_body(body),
+                None => TypeStore::UNKNOWN,
+            }
         });
 
         self.ctx.save_expression_type(node.loc, ty)

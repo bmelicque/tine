@@ -1,0 +1,11 @@
+[package]
+name = "tine_cli"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+clap = { version = "4", features = ["derive"] }
+
+tine_core = { path = "../core" }
+tine_transpiler = { path = "../transpiler" }

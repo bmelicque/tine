@@ -13,7 +13,6 @@ impl CodeGenerator<'_> {
         match node {
             ast::Statement::Assignment(node) => vec![self.assignment_to_swc(node).into()],
             ast::Statement::Break(_) => vec![self.break_to_swc_stmt().into()],
-            ast::Statement::Empty => vec![],
             ast::Statement::Enum(node) => vec![self.enum_to_swc(node).into()],
             ast::Statement::Expression(node) => match node.expression.as_ref() {
                 ast::Expression::Block(block) => {
@@ -101,8 +100,8 @@ impl CodeGenerator<'_> {
 
     /// assign_to is Some if the last stmt has to be assigned (used for extracted blocks)
     pub fn if_to_swc_stmt(&mut self, node: &ast::IfExpression, assign_to: AssignTo) -> swc::IfStmt {
-        let block = self.block_to_swc_stmt(&node.consequent, assign_to.clone());
-        let test = Box::new(self.expr_to_swc(&node.condition));
+        let block = self.block_to_swc_stmt(node.consequent.as_ref().unwrap(), assign_to.clone());
+        let test = Box::new(self.expr_to_swc(node.condition.as_ref().unwrap()));
         let cons = Box::new(block.into());
         let alt = node
             .alternate
@@ -123,8 +122,12 @@ impl CodeGenerator<'_> {
         node: &ast::IfPatExpression,
         assign_to: AssignTo,
     ) -> swc::IfStmt {
-        let mut block = self.block_to_swc_stmt(&node.consequent, assign_to.clone());
-        let test = Box::new(self.pattern_to_swc_test(&node.pattern, &node.scrutinee));
+        let mut block =
+            self.block_to_swc_stmt(node.consequent.as_ref().unwrap(), assign_to.clone());
+        let test = Box::new(self.pattern_to_swc_test(
+            node.pattern.as_ref().unwrap(),
+            node.scrutinee.as_ref().unwrap(),
+        ));
         block.stmts.push(
             swc::Decl::Var(Box::new(swc::VarDecl {
                 span: DUMMY_SP,
@@ -133,8 +136,8 @@ impl CodeGenerator<'_> {
                 declare: false,
                 decls: vec![swc::VarDeclarator {
                     span: DUMMY_SP,
-                    name: self.pattern_to_swc(&node.pattern),
-                    init: Some(Box::new(self.expr_to_swc(&node.scrutinee))),
+                    name: self.pattern_to_swc(node.pattern.as_ref().unwrap()),
+                    init: Some(Box::new(self.expr_to_swc(node.scrutinee.as_ref().unwrap()))),
                     definite: false,
                 }],
             }))
@@ -175,9 +178,12 @@ impl CodeGenerator<'_> {
         node: &ast::ForExpression,
         assign_to: AssignTo,
     ) -> swc::WhileStmt {
-        let test = Box::new(self.expr_to_swc(&node.condition));
+        let test = Box::new(self.expr_to_swc(node.condition.as_ref().unwrap()));
         // FIXME: no assign_to! and breaks should be `assignee = value; break;`
-        let body = Box::new(self.block_to_swc_stmt(&node.body, assign_to).into());
+        let body = Box::new(
+            self.block_to_swc_stmt(node.body.as_ref().unwrap(), assign_to)
+                .into(),
+        );
         swc::WhileStmt {
             span: DUMMY_SP,
             test,
@@ -200,12 +206,12 @@ impl CodeGenerator<'_> {
                 declare: false,
                 decls: vec![swc::VarDeclarator {
                     span: DUMMY_SP,
-                    name: self.get_for_in_element_name(node.pattern.as_ref()),
+                    name: self.get_for_in_element_name(node.pattern.as_ref().unwrap()),
                     init: None,
                     definite: false,
                 }],
             })),
-            right: Box::new(self.expr_to_swc(&node.iterable)),
+            right: Box::new(self.expr_to_swc(node.iterable.as_ref().unwrap())),
             body: Box::new(self.get_for_in_body(&node, assign_to).into()),
         }
     }
@@ -225,8 +231,9 @@ impl CodeGenerator<'_> {
         node: &ast::ForInExpression,
         assign_to: AssignTo,
     ) -> swc::BlockStmt {
-        let mut body = self.block_to_swc_stmt(&node.body, assign_to);
-        if matches!(*node.pattern, ast::Pattern::Identifier(_)) {
+        let mut body = self.block_to_swc_stmt(node.body.as_ref().unwrap(), assign_to);
+        let pattern = node.pattern.as_ref().unwrap();
+        if matches!(**pattern, ast::Pattern::Identifier(_)) {
             return body;
         }
         let guard = swc::Stmt::If(swc::IfStmt {
@@ -234,7 +241,10 @@ impl CodeGenerator<'_> {
             test: Box::new(swc::Expr::Unary(swc::UnaryExpr {
                 span: DUMMY_SP,
                 op: swc::UnaryOp::Bang,
-                arg: Box::new(self.pattern_to_swc_test(&node.pattern, &node.iterable)),
+                arg: Box::new(self.pattern_to_swc_test(
+                    node.pattern.as_ref().unwrap(),
+                    node.iterable.as_ref().unwrap(),
+                )),
             })),
             cons: Box::new(swc::Stmt::Continue(swc::ContinueStmt {
                 span: DUMMY_SP,
@@ -249,7 +259,7 @@ impl CodeGenerator<'_> {
             declare: false,
             decls: vec![swc::VarDeclarator {
                 span: DUMMY_SP,
-                name: self.pattern_to_swc(&node.pattern),
+                name: self.pattern_to_swc(node.pattern.as_ref().unwrap()),
                 init: Some(Box::new(create_ident("__").into())),
                 definite: false,
             }],
@@ -267,10 +277,16 @@ impl CodeGenerator<'_> {
     ) -> swc::IfStmt {
         let mut node = node.clone();
         // FIXME: extract scrutinee in case expensive or not idempotent
-        let mut stmt = self.arm_to_swc_if_stmt(&node.arms.pop().unwrap(), &node.scrutinee, None);
+        let arms = node.arms.as_mut().unwrap();
+        let mut stmt =
+            self.arm_to_swc_if_stmt(&arms.pop().unwrap(), node.scrutinee.as_ref().unwrap(), None);
 
-        for arm in node.arms.iter().rev() {
-            stmt = self.arm_to_swc_if_stmt(&arm, &node.scrutinee, Some(Box::new(stmt)));
+        for arm in node.arms.as_ref().unwrap().iter().rev() {
+            stmt = self.arm_to_swc_if_stmt(
+                &arm,
+                node.scrutinee.as_ref().unwrap(),
+                Some(Box::new(stmt)),
+            );
         }
 
         self.if_decl_to_swc_stmt(&stmt, assign_to)
@@ -282,16 +298,16 @@ impl CodeGenerator<'_> {
         scrutinee: &Box<ast::Expression>,
         alternate: Option<Box<ast::IfPatExpression>>,
     ) -> ast::IfPatExpression {
-        let consequent = Box::new(ast::BlockExpression {
-            loc: node.expression.loc(),
+        let consequent = Some(ast::BlockExpression {
+            loc: node.expression.as_ref().unwrap().loc(),
             statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
-                expression: node.expression.clone(),
+                expression: node.expression.as_ref().unwrap().clone(),
             })],
         });
         ast::IfPatExpression {
             loc: node.loc,
-            pattern: node.pattern.clone(),
-            scrutinee: scrutinee.clone(),
+            pattern: node.pattern.as_deref().cloned(),
+            scrutinee: Some(scrutinee.clone()),
             consequent,
             alternate: alternate
                 .map(|alt| ast::Alternate::IfDecl(*alt))

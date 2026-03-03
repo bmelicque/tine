@@ -5,7 +5,7 @@ use crate::analyzer::{ModuleId, ModulePath};
 use crate::diagnostics::{Diagnostic, DiagnosticKind, DiagnosticLevel};
 use crate::type_checker::analysis_context::{LocalContext, SymbolRef};
 use crate::type_checker::SymbolHandle;
-use crate::types::{Type, TypeId};
+use crate::types::{Type, TypeId, TypeParam};
 use crate::Location;
 
 pub struct CheckResult {
@@ -125,7 +125,7 @@ impl TypeChecker<'_> {
     }
 
     pub fn lookup(&self, name: &str) -> Option<SymbolRef> {
-        self.ctx.lookup(name)
+        self.ctx.lookup(name).or(self.session.find_builtin(name))
     }
 
     pub fn lookup_mut(&self, name: &str) -> Option<SymbolHandle> {
@@ -142,6 +142,105 @@ impl TypeChecker<'_> {
             local_symbol
         } else {
             self.session.get_handle(symbol)
+        }
+    }
+
+    pub fn unify(
+        &mut self,
+        expected: TypeId,
+        actual: TypeId,
+        loc: Location,
+        substitutions: &mut HashMap<TypeParam, TypeId>,
+    ) {
+        match (self.resolve(expected), self.resolve(actual)) {
+            (Type::Param(p), a) => {
+                match substitutions.get(&p) {
+                    Some(p) => {
+                        self.check_assigned_type(*p, actual, loc);
+                    }
+                    None => match &a {
+                        Type::Param(_) => {}
+                        _ => {
+                            substitutions.insert(p, actual);
+                        }
+                    },
+                };
+            }
+            (Type::Array(e), Type::Array(a)) => {
+                self.unify(e.element, a.element, loc, substitutions);
+            }
+            (Type::Function(e), Type::Function(a)) => {
+                if e.params.len() != a.params.len() {
+                    let error = DiagnosticKind::MismatchedTypes {
+                        left_name: self.session.display_type(expected),
+                        right_name: self.session.display_type(actual),
+                    };
+                    self.error(error, loc);
+                    return;
+                }
+                for (e, a) in e.params.iter().zip(a.params.iter()) {
+                    self.unify(*e, *a, loc, substitutions);
+                }
+                self.unify(e.return_type, a.return_type, loc, substitutions);
+            }
+            (Type::Generic(e), Type::Generic(a)) => {
+                for (e, a) in e.params.iter().zip(a.params.iter()) {
+                    self.unify(*e, *a, loc, substitutions);
+                }
+            }
+            (Type::Listener(e), Type::Listener(a)) => {
+                self.unify(e.inner, a.inner, loc, substitutions);
+            }
+            (Type::Map(e), Type::Map(a)) => {
+                self.unify(e.key, a.key, loc, substitutions);
+                self.unify(e.value, a.value, loc, substitutions);
+            }
+            (Type::Option(e), Type::Option(a)) => {
+                self.unify(e.some, a.some, loc, substitutions);
+            }
+            (Type::Reference(e), Type::Reference(a)) => {
+                self.unify(e.target, a.target, loc, substitutions);
+            }
+            (Type::Result(e), Type::Result(a)) => {
+                self.unify(e.ok, a.ok, loc, substitutions);
+                match (&e.error, &a.error) {
+                    (Some(e), Some(a)) => {
+                        self.unify(*e, *a, loc, substitutions);
+                    }
+                    (None, None) => {}
+                    _ => {
+                        let error = DiagnosticKind::MismatchedTypes {
+                            left_name: self.session.display_type(expected),
+                            right_name: self.session.display_type(actual),
+                        };
+                        self.error(error, loc);
+                    }
+                }
+            }
+            (Type::Signal(e), Type::Signal(a)) => {
+                self.unify(e.inner, a.inner, loc, substitutions);
+            }
+            (Type::Tuple(e), Type::Tuple(a)) => {
+                if e.elements.len() != a.elements.len() {
+                    let error = DiagnosticKind::MismatchedTypes {
+                        left_name: self.session.display_type(expected),
+                        right_name: self.session.display_type(actual),
+                    };
+                    self.error(error, loc);
+                }
+                for (e, a) in e.elements.iter().zip(a.elements.iter()) {
+                    self.unify(*e, *a, loc, substitutions);
+                }
+            }
+            (e, a) => {
+                if e != a {
+                    let error = DiagnosticKind::MismatchedTypes {
+                        left_name: self.session.display_type(expected),
+                        right_name: self.session.display_type(actual),
+                    };
+                    self.error(error, loc);
+                }
+            }
         }
     }
 }

@@ -37,9 +37,9 @@ impl CodeGenerator<'_> {
     /// }
     /// ```
     pub fn struct_def_to_swc_class(&mut self, node: &ast::StructDefinition) -> swc::ClassDecl {
-        let body = match &node.body {
+        let body = match &node.body.as_ref().unwrap() {
             ast::TypeBody::Struct(body) => {
-                self.register_struct(&node.name, &body.fields);
+                self.register_struct(&node.name.as_ref().unwrap().text, &body.fields);
                 self.struct_body_to_swc_constructor(body)
             }
             ast::TypeBody::Tuple(_) => self.tuple_body_to_swc_constructor(),
@@ -47,7 +47,7 @@ impl CodeGenerator<'_> {
 
         swc::ClassDecl {
             declare: false,
-            ident: create_ident(&node.name),
+            ident: create_ident(&node.name.as_ref().unwrap().text),
             class: Box::new(swc::Class {
                 span: DUMMY_SP,
                 ctxt: SyntaxContext::empty(),
@@ -117,17 +117,17 @@ impl CodeGenerator<'_> {
             let pattern = match field {
                 ast::StructDefinitionField::Mandatory(field) => {
                     swc::Pat::Ident(swc::BindingIdent {
-                        id: create_ident(&field.name),
+                        id: create_ident(field.name.as_ref().unwrap().as_str()),
                         type_ann: None,
                     })
                 }
                 ast::StructDefinitionField::Optional(field) => swc::Pat::Assign(swc::AssignPat {
                     span: DUMMY_SP,
                     left: Box::new(swc::Pat::Ident(swc::BindingIdent {
-                        id: create_ident(&field.name),
+                        id: create_ident(field.name.as_ref().unwrap().as_str()),
                         type_ann: None,
                     })),
-                    right: Box::new(self.expr_to_swc(&field.default)),
+                    right: Box::new(self.expr_to_swc(field.default.as_ref().unwrap())),
                 }),
             };
 
@@ -170,6 +170,6 @@ impl CodeGenerator<'_> {
 fn struct_to_swc_constructor_stmts(fields: &Vec<ast::StructDefinitionField>) -> Vec<swc::Stmt> {
     fields
         .iter()
-        .map(|field| this_assignment(&field.as_name()))
+        .map(|field| this_assignment(field.as_name().as_ref().unwrap().as_str()))
         .collect()
 }

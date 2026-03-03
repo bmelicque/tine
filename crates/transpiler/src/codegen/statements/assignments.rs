@@ -1,11 +1,11 @@
 use crate::codegen::{utils::create_ident, CodeGenerator};
-use tine_core::ast;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
+use tine_core::ast;
 
 impl CodeGenerator<'_> {
     pub fn assignment_to_swc(&mut self, node: &ast::Assignment) -> swc::ExprStmt {
-        if let ast::Assignee::Indirection(_) = node.pattern {
+        if let ast::Assignee::Indirection(_) = node.pattern.as_ref().unwrap() {
             return swc::ExprStmt {
                 span: DUMMY_SP,
                 expr: Box::new(self.indirected_assignment_to_swc(node)),
@@ -17,8 +17,8 @@ impl CodeGenerator<'_> {
             expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
                 span: DUMMY_SP,
                 op: swc::AssignOp::Assign,
-                left: self.assign_target_to_swc(&node.pattern),
-                right: Box::new(self.expr_to_swc(&node.value)),
+                left: self.assign_target_to_swc(node.pattern.as_ref().unwrap()),
+                right: Box::new(self.expr_to_swc(node.value.as_ref().unwrap())),
             })),
         }
     }
@@ -31,26 +31,35 @@ impl CodeGenerator<'_> {
             ast::Assignee::Indirection(_) => unreachable!(),
 
             ast::Assignee::Pattern(pat) => match pat {
+                ast::Pattern::Invalid { .. } => unreachable!(),
                 ast::Pattern::Identifier(id) => {
                     swc::SimpleAssignTarget::Ident(create_ident(id.as_str()).into()).into()
                 }
                 ast::Pattern::Literal(_) => unreachable!(),
-                ast::Pattern::Struct(pat) => {
-                    swc::AssignTargetPat::Object(self.struct_pattern_to_swc(&pat.fields)).into()
-                }
                 ast::Pattern::Tuple(pat) => {
                     swc::AssignTargetPat::Array(self.tuple_pattern_to_swc(pat)).into()
                 }
-                ast::Pattern::Variant(pat) => match pat.body {
-                    Some(ast::VariantPatternBody::Struct(ref fields)) => {
-                        self.struct_pattern_to_swc(fields).into()
-                    }
-                    Some(ast::VariantPatternBody::Tuple(ref body)) => {
-                        self.tuple_pattern_to_swc(body).into()
-                    }
-                    None => swc::SimpleAssignTarget::Ident(create_ident("__").into()).into(),
+                ast::Pattern::Constructor(pat) => match &pat.constructor {
+                    ast::Constructor::Invalid(_) => panic!(),
+                    ast::Constructor::Map(_) => unimplemented!(),
+                    ast::Constructor::Named(_) | ast::Constructor::Variant(_) => match &pat.body {
+                        Some(body) => self.constructor_pattern_body_to_swc(body),
+                        None => swc::SimpleAssignTarget::Ident(create_ident("__").into()).into(),
+                    },
                 },
             },
+        }
+    }
+
+    fn constructor_pattern_body_to_swc(
+        &mut self,
+        body: &ast::ConstructorPatternBody,
+    ) -> swc::AssignTarget {
+        match body {
+            ast::ConstructorPatternBody::Struct(st) => {
+                self.struct_pattern_to_swc(&st.fields).into()
+            }
+            ast::ConstructorPatternBody::Tuple(t) => self.tuple_pattern_to_swc(t).into(),
         }
     }
 
@@ -62,7 +71,7 @@ impl CodeGenerator<'_> {
     ```ref.set(value)```
     */
     fn indirected_assignment_to_swc(&mut self, node: &ast::Assignment) -> swc::Expr {
-        let ast::Assignee::Indirection(assignee) = &node.pattern else {
+        let ast::Assignee::Indirection(assignee) = node.pattern.as_ref().unwrap() else {
             panic!("Expected assignment to indirection")
         };
 
@@ -74,7 +83,7 @@ impl CodeGenerator<'_> {
                 obj: Box::new(self.ident_to_swc(&assignee.identifier)),
                 prop: swc::MemberProp::Ident(create_ident("set").into()),
             }))),
-            args: vec![self.expr_to_swc(&node.value).into()],
+            args: vec![self.expr_to_swc(node.value.as_ref().unwrap()).into()],
             type_args: None,
         })
     }

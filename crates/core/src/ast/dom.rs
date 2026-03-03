@@ -17,12 +17,6 @@ impl ElementExpression {
     }
 }
 
-impl Into<Expression> for ElementExpression {
-    fn into(self) -> Expression {
-        Expression::Element(self)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Element {
     pub loc: Location,
@@ -104,6 +98,14 @@ impl From<Element> for ElementChild {
 impl From<VoidElement> for ElementChild {
     fn from(v: VoidElement) -> Self {
         ElementChild::VoidElement(v)
+    }
+}
+impl From<ElementExpression> for ElementChild {
+    fn from(value: ElementExpression) -> Self {
+        match value {
+            ElementExpression::Element(e) => e.into(),
+            ElementExpression::Void(v) => v.into(),
+        }
     }
 }
 impl From<TextNode> for ElementChild {

@@ -1,23 +1,25 @@
 use std::{
     collections::HashMap,
-    path::PathBuf,
     sync::{Mutex, MutexGuard},
 };
 
 use anyhow::anyhow;
 
 use crate::{
-    analyzer::{graph::ModuleGraph, modules::Module, ModuleId},
+    analyzer::{graph::ModuleGraph, loader::ModuleLoader, modules::Module, ModuleId},
     ast::Program,
     pretty_print_error,
     type_checker::SymbolHandle,
     types::{Type, TypeId},
-    Diagnostic, Location, ModulePath, SymbolRef, TypeStore,
+    Diagnostic, Location, ModulePath, SymbolKind, SymbolRef, TypeStore,
 };
+
+pub type SessionLoader = dyn ModuleLoader + Sync + Send;
 
 pub struct Session {
     /// The entry point of the project. It should be a `ModulePath::Real`.
     pub(super) entry_point: ModulePath,
+    pub(super) loader: Box<SessionLoader>,
     pub(super) module_graph: ModuleGraph,
     /// The parsed AST for each module.
     pub(super) parsed: HashMap<ModuleId, Program>,
@@ -27,6 +29,8 @@ pub struct Session {
     /// An arena for all the symbols (i.e. names) declared and defined accross
     /// the project. See `SymbolHandle` for more details.
     pub(super) symbols: Vec<SymbolHandle>,
+    /// A list of builtin functions and types
+    pub(super) builtins: Vec<SymbolRef>,
     /// All symbols exported by each module.
     pub(super) exports: HashMap<ModuleId, Vec<SymbolRef>>,
     /// The type of each relevant expression, with expressions identified by
@@ -39,25 +43,29 @@ pub struct Session {
 }
 
 impl Session {
-    pub fn new() -> Self {
-        Self {
+    pub fn new(loader: Box<SessionLoader>) -> Self {
+        let mut session = Self {
             entry_point: ModulePath::Virtual("".into()),
+            loader,
             module_graph: ModuleGraph::new(),
             parsed: HashMap::new(),
             types: Mutex::new(TypeStore::new()),
             symbols: Vec::new(),
+            builtins: Vec::new(),
             exports: HashMap::new(),
             expressions: HashMap::new(),
             dependencies: HashMap::new(),
             diagnostics: HashMap::new(),
-        }
+        };
+        session.init_builtins();
+        session
     }
 
     /// Analyze the whole project, starting from the entry_point.
     /// Returns the `ModuleId` of the entry point.
-    pub fn analyze(&mut self, entry_point: PathBuf) -> anyhow::Result<ModuleId> {
-        let filename = ModulePath::Real(entry_point.canonicalize().unwrap());
-        self.entry_point = filename;
+    pub fn analyze(&mut self, entry_point: ModulePath) -> anyhow::Result<ModuleId> {
+        assert!(matches!(entry_point, ModulePath::Real(_)));
+        self.entry_point = entry_point.clone();
         self.parse_project(entry_point)?;
 
         let sort_result = self.module_graph.try_sorted_vec();
@@ -156,6 +164,21 @@ impl Session {
     }
     pub fn display_raw_type(&self, id: TypeId) -> String {
         self.types.lock().unwrap().display_raw_type(id)
+    }
+
+    pub fn find_method(&self, name: &str, ty: TypeId) -> Option<SymbolRef> {
+        self.symbols
+            .iter()
+            .find(|s| {
+                let s = s.borrow();
+                s.name == name
+                    && match s.kind {
+                        SymbolKind::Method { ref owner, .. } => owner.borrow().ty == ty,
+                        _ => false,
+                    }
+            })
+            .cloned()
+            .map(|h| h.readonly())
     }
 
     pub fn diagnostics(&self) -> &HashMap<ModuleId, Vec<Diagnostic>> {

@@ -27,8 +27,10 @@ impl BlockExpression {
 
 impl IfExpression {
     pub fn find_breaks(&self, stmts: &mut Vec<BreakStatement>) {
-        self.consequent.find_breaks(stmts);
-        if let Some(ref alternate) = self.alternate {
+        if let Some(consequent) = &self.consequent {
+            consequent.find_breaks(stmts);
+        }
+        if let Some(alternate) = &self.alternate {
             alternate.find_breaks(stmts);
         }
     }
@@ -36,8 +38,10 @@ impl IfExpression {
 
 impl IfPatExpression {
     pub fn find_breaks(&self, stmts: &mut Vec<BreakStatement>) {
-        self.consequent.find_breaks(stmts);
-        if let Some(ref alternate) = self.alternate {
+        if let Some(consequent) = &self.consequent {
+            consequent.find_breaks(stmts);
+        }
+        if let Some(alternate) = &self.alternate {
             alternate.find_breaks(stmts);
         }
     }
@@ -56,8 +60,14 @@ impl Alternate {
 impl Loop {
     pub fn find_breaks(&self, stmts: &mut Vec<BreakStatement>) {
         match self {
-            Loop::For(expr) => expr.body.find_breaks(stmts),
-            Loop::ForIn(expr) => expr.body.find_breaks(stmts),
+            Loop::For(expr) => match &expr.body {
+                Some(body) => body.find_breaks(stmts),
+                None => {}
+            },
+            Loop::ForIn(expr) => match &expr.body {
+                Some(body) => body.find_breaks(stmts),
+                None => {}
+            },
         }
     }
 }
@@ -86,8 +96,10 @@ impl BlockExpression {
 
 impl IfExpression {
     pub fn find_returns(&self, stmts: &mut Vec<ReturnStatement>) {
-        self.consequent.find_returns(stmts);
-        if let Some(ref alternate) = self.alternate {
+        if let Some(consequent) = &self.consequent {
+            consequent.find_returns(stmts);
+        }
+        if let Some(alternate) = &self.alternate {
             alternate.find_returns(stmts);
         }
     }
@@ -95,8 +107,10 @@ impl IfExpression {
 
 impl IfPatExpression {
     pub fn find_returns(&self, stmts: &mut Vec<ReturnStatement>) {
-        self.consequent.find_returns(stmts);
-        if let Some(ref alternate) = self.alternate {
+        if let Some(consequent) = &self.consequent {
+            consequent.find_returns(stmts);
+        }
+        if let Some(alternate) = &self.alternate {
             alternate.find_returns(stmts);
         }
     }
@@ -115,8 +129,14 @@ impl Alternate {
 impl Loop {
     pub fn find_returns(&self, stmts: &mut Vec<ReturnStatement>) {
         match self {
-            Loop::For(expr) => expr.body.find_returns(stmts),
-            Loop::ForIn(expr) => expr.body.find_returns(stmts),
+            Loop::For(expr) => match &expr.body {
+                Some(body) => body.find_returns(stmts),
+                None => {}
+            },
+            Loop::ForIn(expr) => match &expr.body {
+                Some(body) => body.find_returns(stmts),
+                None => {}
+            },
         }
     }
 }
@@ -133,7 +153,7 @@ pub fn root_identifier(expr: &Expression) -> Option<Identifier> {
         _ => return None,
     };
     match root {
-        Expression::Identifier(expr) => Some(expr.clone()),
+        Some(Expression::Identifier(expr)) => Some(expr.clone()),
         _ => None,
     }
 }

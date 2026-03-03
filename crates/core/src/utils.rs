@@ -16,7 +16,7 @@ pub fn pretty_print_error(src: &Source, diag: &Diagnostic) {
         "\nerror: {}\n --> line {}, column {}\n",
         diag.kind, start_line, start_col
     );
-    println!("{} | {}", start_line, line_text);
+    print!("{} | {}", start_line, line_text);
 
     let gutter = " ".repeat(start_line.to_string().len());
     let underline = if end_col > start_col {
@@ -25,5 +25,5 @@ pub fn pretty_print_error(src: &Source, diag: &Diagnostic) {
         "^".to_string()
     };
 
-    println!("{} | {}{}", gutter, " ".repeat(start_col - 1), underline);
+    println!("{} | {}{}", gutter, " ".repeat(start_col), underline);
 }

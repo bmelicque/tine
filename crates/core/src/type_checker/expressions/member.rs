@@ -8,7 +8,9 @@ use crate::{
 impl TypeChecker<'_> {
     pub fn visit_member_expression(&mut self, expr: &ast::MemberExpression) -> TypeId {
         let Some(ref member) = expr.prop else {
-            self.visit_expression(&expr.object);
+            if let Some(object) = &expr.object {
+                self.visit_expression(object);
+            }
             // missing member already reported during parsing phase
             return TypeStore::UNKNOWN;
         };
@@ -19,40 +21,52 @@ impl TypeChecker<'_> {
     }
 
     fn visit_field_access(&mut self, expr: &ast::MemberExpression) -> TypeId {
-        let root_type = self.visit_expression(&expr.object);
-
+        debug_assert!(matches!(expr.prop, Some(ast::MemberProp::FieldName(_))));
+        let root_type = self.visit_expression_box_option(&expr.object);
         let Some(ast::MemberProp::FieldName(ref field_name)) = expr.prop else {
             unreachable!()
         };
 
-        let prop = field_name.as_str();
-        let Type::Struct(ty) = self.resolve(root_type).clone() else {
-            let error = DiagnosticKind::UnknownMember {
-                member: prop.to_string(),
-            };
-            self.error(error, field_name.loc);
-            return self.save_member_type(expr, TypeStore::UNKNOWN);
+        let ty: Option<TypeId> = match self.resolve(root_type) {
+            Type::Integer => self
+                .session
+                .find_method(field_name.as_str(), root_type)
+                .map(|s| s.borrow().ty),
+            Type::Float => self
+                .session
+                .find_method(field_name.as_str(), root_type)
+                .map(|s| s.borrow().ty),
+            Type::Struct(ref ty) => {
+                let prop = field_name.as_str();
+                ty.fields.iter().find(|f| f.name == prop).map(|f| f.def)
+            }
+            _ => None,
         };
-        let ty = match ty.fields.iter().find(|field| field.name == prop) {
-            Some(field) => field.def,
+
+        let ty = match ty {
+            Some(ty) => ty,
             None => {
                 let error = DiagnosticKind::UnknownMember {
-                    member: prop.to_string(),
+                    member: field_name.as_str().to_string(),
                 };
-                self.error(error, expr.loc);
+                self.error(error, expr.prop.as_ref().unwrap().loc());
                 TypeStore::UNKNOWN
             }
         };
+
         self.save_member_type(expr, ty)
     }
 
     pub fn visit_tuple_indexing(&mut self, expr: &ast::MemberExpression) -> TypeId {
-        let root_type = self.visit_expression(&expr.object);
+        let root_type = self.visit_expression_box_option(&expr.object);
         let Type::Tuple(tuple) = self.resolve(root_type) else {
-            let error = DiagnosticKind::ExpectedTuple {
-                got: self.session.display_type(root_type),
-            };
-            self.error(error, expr.object.loc());
+            if root_type != TypeStore::UNKNOWN {
+                let error = DiagnosticKind::ExpectedTuple {
+                    got: self.session.display_type(root_type),
+                };
+                // unwrap is safe by checking if not `UNKNOWN`
+                self.error(error, expr.object.as_ref().unwrap().loc());
+            }
             return self.save_member_type(expr, TypeStore::UNKNOWN);
         };
 
@@ -88,12 +102,16 @@ impl TypeChecker<'_> {
 mod tests {
     use super::*;
     use crate::{
-        analyzer::session::Session, ast, locations::Span, types::*, Location, SymbolData,
-        SymbolKind,
+        analyzer::session::Session,
+        ast,
+        locations::Span,
+        type_checker::{analysis_context::symbols::TypeSymbolKind, test_utils::MockLoader},
+        types::*,
+        Location, SymbolData, SymbolKind,
     };
 
     fn create_type_checker() -> TypeChecker<'static> {
-        let session = Box::leak(Box::new(Session::new()));
+        let session = Box::leak(Box::new(Session::new(Box::new(MockLoader))));
         TypeChecker::new(session, 0)
     }
 
@@ -130,12 +148,15 @@ mod tests {
         checker.ctx.register_symbol(SymbolData {
             name: "User".into(),
             ty: id,
-            kind: SymbolKind::Type { members: vec![] },
+            kind: SymbolKind::Type {
+                kind: TypeSymbolKind::Struct,
+                members: vec![],
+            },
             ..Default::default()
         });
 
         let field_access_expression = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ident("user"))),
+            object: Some(Box::new(ast::Expression::Identifier(ident("user")))),
             prop: Some(ident("name").into()),
             loc: Location::dummy(),
         };
@@ -172,7 +193,7 @@ mod tests {
         });
 
         let tuple_indexing = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
+            object: Some(Box::new(ast::Expression::Identifier(ident("my_tuple")))),
             prop: Some(ast::MemberProp::Index(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
@@ -197,7 +218,7 @@ mod tests {
         });
 
         let tuple_indexing = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ident("not_a_tuple"))),
+            object: Some(Box::new(ast::Expression::Identifier(ident("not_a_tuple")))),
             prop: Some(ast::MemberProp::Index(ast::IntLiteral {
                 value: 0,
                 loc: Location::dummy(),
@@ -226,7 +247,7 @@ mod tests {
         });
 
         let tuple_indexing = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
+            object: Some(Box::new(ast::Expression::Identifier(ident("my_tuple")))),
             prop: Some(ast::MemberProp::Index(ast::IntLiteral {
                 value: 2,
                 loc: Location::dummy(),
@@ -259,7 +280,7 @@ mod tests {
         });
 
         let tuple_indexing = ast::MemberExpression {
-            object: Box::new(ast::Expression::Identifier(ident("my_tuple"))),
+            object: Some(Box::new(ast::Expression::Identifier(ident("my_tuple")))),
             prop: Some(ast::MemberProp::Index(ast::IntLiteral {
                 value: -1,
                 loc: Location::dummy(),
