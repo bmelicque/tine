@@ -2,7 +2,7 @@
   "name": "vscode-extension",
   "displayName": "Tine",
   "description": "VS Code support for Tine",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "bmelicque",
   "engines": {
     "vscode": "^1.105.0"
