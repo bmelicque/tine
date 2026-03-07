@@ -8,21 +8,59 @@ impl Parser<'_> {
     pub fn parse_function_expression(&mut self) -> ast::FunctionExpression {
         let start_range = self.eat(&[Token::Fn]);
         let start_loc = self.localize(start_range);
+        let function = self.parse_function_expression_without_kw();
+        match function {
+            Some(mut function) => {
+                function.loc = Location::merge(start_loc, function.loc);
+                function
+            }
+            _ => ast::FunctionExpression {
+                loc: start_loc,
+                name: None,
+                type_params: None,
+                params: None,
+                return_type: None,
+                body: None,
+            },
+        }
+    }
+
+    pub fn parse_function_expression_without_kw(&mut self) -> Option<ast::FunctionExpression> {
         let name = self.parse_function_name();
         let type_params = self.parse_function_type_params();
         let params = self.parse_function_params();
         let return_type = self.parse_type();
         let body = self.parse_function_body();
-        let loc = Location::merge(start_loc, body.loc);
+        let start_loc = if let Some(name) = &name {
+            name.loc
+        } else if let Some(params) = &params {
+            params.loc
+        } else if let Some(return_type) = &return_type {
+            return_type.loc()
+        } else if let Some(body) = &body {
+            body.loc
+        } else {
+            return None;
+        };
+        let end_loc = if let Some(body) = &body {
+            body.loc
+        } else if let Some(return_type) = &return_type {
+            return_type.loc()
+        } else if let Some(params) = &params {
+            params.loc
+        } else {
+            name.as_ref().unwrap().loc
+        };
+        let loc = Location::merge(start_loc, end_loc);
 
-        ast::FunctionExpression {
+        Some(ast::FunctionExpression {
             loc,
             name,
             type_params,
             params,
             return_type,
             body,
-        }
+        })
     }
 
     fn parse_function_name(&mut self) -> Option<ast::Identifier> {
@@ -46,47 +84,24 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_function_params(&mut self) -> Vec<ast::FunctionParam> {
-        let result = self.better_expect(
-            |t| match t {
-                Token::LParen => Some(()),
-                _ => None,
-            },
-            &[Token::Newline],
-        );
-        match result {
-            Ok(_) => {}
-            Err(range) => {
-                self.error(DiagnosticKind::MissingName, self.localize(range));
-                let Some((Ok(Token::LParen), _)) = self.tokens.peek() else {
-                    return vec![];
-                };
-                self.tokens.next();
-            }
-        }
+    fn parse_function_params(&mut self) -> Option<ast::FunctionParams> {
+        let Some((Ok(Token::LParen), _)) = self.tokens.peek() else {
+            let loc = self.next_loc();
+            self.error(DiagnosticKind::MissingName, loc);
+            return None;
+        };
+        let start_range = self.eat(&[Token::LParen]);
+        let start_loc = self.localize(start_range);
 
         let params = self.parse_list(|p| p.parse_function_param(), Token::Comma, Token::RParen);
-        let result = self.better_expect(
-            |t| match t {
-                Token::RParen => Some(()),
-                _ => None,
-            },
-            &[],
-        );
-        match result {
-            Ok(_) => {}
-            Err(range) => {
-                let error = DiagnosticKind::ExpectedToken {
-                    expected: vec![Token::RParen.to_string()],
-                };
-                self.error(error, self.localize(range));
-                if let Some((Ok(Token::RParen), _)) = self.tokens.peek() {
-                    self.tokens.next();
-                };
-            }
-        }
+        let end_range = match self.tokens.peek() {
+            Some((Ok(Token::RBrace), r)) => r.clone(),
+            _ => self.recover_at(&[Token::RBrace]),
+        };
+        let end_loc = self.localize(end_range);
+        let loc = Location::merge(start_loc, end_loc);
 
-        params
+        Some(ast::FunctionParams { loc, params })
     }
 
     fn parse_function_param(&mut self) -> Option<ast::FunctionParam> {
@@ -123,24 +138,13 @@ impl Parser<'_> {
         })
     }
 
-    fn parse_function_body(&mut self) -> ast::BlockExpression {
+    fn parse_function_body(&mut self) -> Option<ast::BlockExpression> {
         match self.tokens.peek() {
-            Some((Ok(Token::LBrace), _)) => {}
+            Some((Ok(Token::LBrace), _)) => Some(self.parse_block()),
             _ => {
-                self.recover_before(&[Token::LBrace], &[Token::Newline]);
-            }
-        }
-
-        match self.tokens.peek() {
-            Some((Ok(Token::LBrace), _)) => self.parse_block(),
-            _ => {
-                let range = self.next_range();
-                let loc = self.localize(range);
+                let loc = self.next_loc();
                 self.error(DiagnosticKind::MissingBody, loc);
-                ast::BlockExpression {
-                    loc: loc.decrement(),
-                    statements: vec![],
-                }
+                None
             }
         }
     }
@@ -163,12 +167,15 @@ mod tests {
                 loc: Location::new(0, Span::new(0, 7)),
                 name: None,
                 type_params: None,
-                params: vec![],
+                params: Some(ast::FunctionParams {
+                    loc: Location::new(0, Span::new(2, 4)),
+                    params: vec![],
+                }),
                 return_type: None,
-                body: ast::BlockExpression {
+                body: Some(ast::BlockExpression {
                     loc: Location::new(0, Span::new(5, 7)),
                     statements: vec![],
-                },
+                }),
             }),
             diagnostics: vec![],
         });

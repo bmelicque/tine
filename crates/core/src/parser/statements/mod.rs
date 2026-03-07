@@ -3,6 +3,7 @@ mod assignments;
 mod diverging;
 mod enums;
 mod functions;
+mod implementations;
 mod structs;
 mod utils;
 mod variables;

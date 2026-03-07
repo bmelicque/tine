@@ -2,11 +2,9 @@ mod implementations;
 
 use enum_from_derive::EnumFrom;
 
+pub use crate::ast::statements::implementations::*;
 use crate::{
-    ast::{
-        statements::implementations::{Implementation, MethodDefinition},
-        InvalidExpression, MemberExpression, TupleType,
-    },
+    ast::{InvalidExpression, MemberExpression, TupleType},
     Location,
 };
 

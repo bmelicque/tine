@@ -383,9 +383,28 @@ pub struct FunctionExpression {
     pub loc: Location,
     pub name: Option<Identifier>,
     pub type_params: Option<Vec<Identifier>>,
-    pub params: Vec<FunctionParam>,
+    pub params: Option<FunctionParams>,
     pub return_type: Option<Type>,
-    pub body: BlockExpression,
+    pub body: Option<BlockExpression>,
+}
+
+impl Default for FunctionExpression {
+    fn default() -> Self {
+        Self {
+            loc: Location::dummy(),
+            name: None,
+            type_params: None,
+            params: None,
+            return_type: None,
+            body: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FunctionParams {
+    pub loc: Location,
+    pub params: Vec<FunctionParam>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

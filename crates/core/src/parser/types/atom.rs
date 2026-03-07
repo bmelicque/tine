@@ -13,7 +13,7 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_named_type(&mut self) -> ast::NamedType {
+    pub fn parse_named_type(&mut self) -> ast::NamedType {
         let Some((Ok(Token::Ident(name)), mut range)) = self.tokens.next() else {
             panic!()
         };
