@@ -46,6 +46,7 @@ impl Parser<'_> {
             Some((Ok(Token::Ident(text)), range)) => {
                 let text = text.to_owned();
                 let range = range.clone();
+                self.tokens.next();
                 let loc = self.localize(range);
                 ast::Identifier { loc, text }
             }
@@ -89,13 +90,10 @@ impl Parser<'_> {
         let fields = self.parse_list(
             |p| p.parse_struct_definition_field(),
             Token::Comma,
-            Token::RParen,
+            Token::RBrace,
         );
 
-        let end_range = match self.tokens.peek() {
-            Some((Ok(Token::RBrace), r)) => r.clone(),
-            _ => self.recover_at(&[Token::RBrace]),
-        };
+        let end_range = self.expect(Token::RBrace);
         let loc = self.localize(start_range.start..end_range.end);
         ast::StructBody { loc, fields }
     }
@@ -103,16 +101,7 @@ impl Parser<'_> {
     fn parse_struct_definition_field(&mut self) -> Option<ast::StructDefinitionField> {
         let name = match self.tokens.peek() {
             Some((Ok(Token::Ident(_)), _)) => Some(self.parse_identifier()),
-            Some(_) => {
-                let loc = self.next_loc();
-                self.error(DiagnosticKind::MissingName, loc);
-                None
-            }
-            None => {
-                let loc = self.next_loc();
-                self.error(DiagnosticKind::MissingName, loc);
-                return None;
-            }
+            _ => return None,
         };
 
         match self.tokens.peek() {

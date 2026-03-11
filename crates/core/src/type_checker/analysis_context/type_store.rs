@@ -296,7 +296,7 @@ impl TypeStore {
                     .map(|field| format!("{} {}", field.name, self.display_type(field.def)))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("({})", fields)
+                format!("{{ {} }}", fields)
             }
             Type::Trait(t) => {
                 let methods = t

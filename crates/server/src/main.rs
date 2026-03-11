@@ -1,3 +1,4 @@
+mod display;
 mod loader;
 mod tokens;
 mod utils;

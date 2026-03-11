@@ -95,8 +95,8 @@ impl Parser<'_> {
 
         let params = self.parse_list(|p| p.parse_function_param(), Token::Comma, Token::RParen);
         let end_range = match self.tokens.peek() {
-            Some((Ok(Token::RBrace), r)) => r.clone(),
-            _ => self.recover_at(&[Token::RBrace]),
+            Some((Ok(Token::RParen), _)) => self.eat(&[Token::RParen]),
+            _ => self.recover_at(&[Token::RParen]),
         };
         let end_loc = self.localize(end_range);
         let loc = Location::merge(start_loc, end_loc);

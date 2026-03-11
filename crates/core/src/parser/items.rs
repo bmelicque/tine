@@ -27,16 +27,6 @@ impl Parser<'_> {
             self.error(DiagnosticKind::MissingName, error_loc);
         }
 
-        // match self.tokens.peek() {
-        //     Some((Ok(Token::Newline), _)) => {
-        //         self.tokens.next();
-        //     }
-        //     Some(_) => {
-        //         self.recover_at(&[Token::Newline]);
-        //     }
-        //     None => {}
-        // }
-
         Some(ast::Item::UseDeclaration(ast::UseDeclaration {
             loc: Location::merge(start_loc, self.next_loc()),
             relative_count,
