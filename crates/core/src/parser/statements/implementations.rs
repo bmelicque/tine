@@ -120,3 +120,33 @@ impl Parser<'_> {
         ast::MethodReceiver { loc, pattern }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        parser::test_utils::{test_statement, StatementTest},
+        Span,
+    };
+
+    use super::*;
+
+    #[test]
+    fn parse_empty_impl() {
+        test_statement(StatementTest {
+            input: "impl Type {}",
+            expected: ast::Statement::Implementation(ast::Implementation {
+                loc: Location::new(0, Span::new(0, 12)),
+                implemented_type: Some(ast::NamedType {
+                    loc: Location::new(0, Span::new(5, 9)),
+                    name: "Type".to_string(),
+                    args: None,
+                }),
+                body: Some(ast::ImplementationBody {
+                    loc: Location::new(0, Span::new(10, 12)),
+                    items: vec![],
+                }),
+            }),
+            diagnostics: vec![],
+        });
+    }
+}
