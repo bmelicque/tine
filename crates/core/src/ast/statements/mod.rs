@@ -23,7 +23,6 @@ pub enum Statement {
     Function(FunctionDefinition),
     Implementation(Implementation),
     Invalid(InvalidStatement),
-    MethodDefinition(MethodDefinition),
     Return(ReturnStatement),
     StructDefinition(StructDefinition),
     TypeAlias(TypeAlias),

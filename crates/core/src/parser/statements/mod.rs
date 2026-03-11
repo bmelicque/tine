@@ -27,28 +27,17 @@ impl Parser<'_> {
             // This is unreachable because other cases have been handled just above
             unreachable!()
         };
-        let statement = match token {
+        match token {
             Token::Break => Some(self.parse_break_statement().into()),
             Token::Const | Token::Var => Some(self.parse_variable_declaration(docs).into()),
             Token::Enum => Some(self.parse_enum(docs).into()),
             Token::Fn => Some(self.parse_function_definition(docs).into()),
+            Token::Impl => Some(self.parse_implementations().into()),
             Token::Return => Some(self.parse_return_statement().into()),
             Token::Struct => Some(self.parse_struct_definition(docs).into()),
             Token::Type => Some(self.parse_type_alias(docs).into()),
             _ => self.parse_assignment(),
-        };
-
-        // match self.tokens.peek() {
-        //     Some((Ok(Token::Newline), _)) => {
-        //         self.tokens.next();
-        //     }
-        //     Some(_) => {
-        //         self.recover_at(&[Token::Newline]);
-        //     }
-        //     None => {}
-        // }
-
-        statement
+        }
     }
 
     fn parse_docs(&mut self, start: usize) -> ast::Docs {

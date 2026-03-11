@@ -5,7 +5,7 @@ use crate::{
         ArrayType, DuckType, FunctionType, GenericType, ListenerType, MapType, OptionType,
         ReferenceType, ResultType, SignalType, TupleType, Type, TypeId,
     },
-    DiagnosticKind,
+    DiagnosticKind, Location,
 };
 
 use super::TypeChecker;
@@ -106,26 +106,37 @@ impl TypeChecker<'_> {
     fn visit_generic_instance(&mut self, node: &ast::NamedType, ty: &GenericType) -> TypeId {
         let arity = ty.params.len();
         let args = node.args.clone().unwrap_or(Vec::new());
+        let mut arg_types: Vec<TypeId> = args
+            .iter()
+            .take(arity)
+            .map(|arg| self.visit_type(arg))
+            .collect();
+
+        self.visit_generic_instance_with_args(ty, &mut arg_types, node.loc)
+    }
+
+    pub fn visit_generic_instance_with_args(
+        &mut self,
+        ty: &GenericType,
+        args: &mut Vec<TypeId>,
+        loc: Location,
+    ) -> TypeId {
+        let arity = ty.params.len();
 
         if args.len() > arity {
             let error = DiagnosticKind::ArgumentCountMismatch {
                 expected: arity,
                 got: args.len(),
             };
-            self.error(error, node.loc);
+            self.error(error, loc);
         }
 
-        let mut arg_types: Vec<TypeId> = args
-            .iter()
-            .take(arity)
-            .map(|arg| self.visit_type(arg))
-            .collect();
-        while arg_types.len() < arity {
+        while args.len() < arity {
             let dynamic = self.intern(Type::Dynamic);
-            arg_types.push(dynamic);
+            args.push(dynamic);
         }
 
-        self.session.types().substitute(ty.definition, &arg_types)
+        self.session.types().substitute(ty.definition, &args)
     }
 
     pub fn visit_option_type(&mut self, node: &ast::OptionType) -> TypeId {

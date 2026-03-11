@@ -8,8 +8,8 @@ use crate::{
 impl TypeChecker<'_> {
     pub fn visit_function_expression(&mut self, node: &ast::FunctionExpression) -> TypeId {
         let ((params, return_type), type_params) = self.with_type_params(&node.type_params, |s| {
-            let param_types = s.visit_function_params(&node);
-            let body_type = s.visit_function_body(node);
+            let param_types = s.visit_function_params(&node.params);
+            let body_type = s.visit_function_body(&node.return_type, &node.body);
             (param_types, body_type)
         });
 
@@ -28,14 +28,16 @@ impl TypeChecker<'_> {
         self.ctx.save_expression_type(node.loc, ty)
     }
 
-    fn visit_function_params(&mut self, node: &ast::FunctionExpression) -> Vec<TypeId> {
-        let mut param_types = Vec::with_capacity(node.params.len());
-        for param in node.params.iter() {
+    pub fn visit_function_params(&mut self, node: &Option<ast::FunctionParams>) -> Vec<TypeId> {
+        let Some(ast::FunctionParams { params, .. }) = node else {
+            return vec![];
+        };
+        let mut param_types = Vec::with_capacity(params.len());
+        for param in params {
             let ty = param
                 .type_annotation
                 .as_ref()
-                .map(|t| self.visit_type(t))
-                .unwrap_or(TypeStore::UNKNOWN);
+                .map_or(TypeStore::UNKNOWN, |t| self.visit_type(t));
             self.ctx.register_symbol(SymbolData {
                 name: param.name.as_str().into(),
                 ty,
@@ -48,16 +50,23 @@ impl TypeChecker<'_> {
         param_types
     }
 
-    pub fn visit_function_body(&mut self, node: &ast::FunctionExpression) -> TypeId {
-        let return_type = node
-            .return_type
+    pub fn visit_function_body(
+        &mut self,
+        return_type: &Option<ast::Type>,
+        body: &Option<ast::BlockExpression>,
+    ) -> TypeId {
+        let return_type = return_type
             .as_ref()
             .map(|ty| self.visit_type(ty))
             .unwrap_or(TypeStore::UNIT);
 
-        let body_type = self.visit_block_expression(&node.body);
+        let Some(body) = body else {
+            return return_type;
+        };
+
+        let body_type = self.visit_block_expression(body);
         let mut returns = Vec::<ast::ReturnStatement>::new();
-        node.body.find_returns(&mut returns);
+        body.find_returns(&mut returns);
         for ret in returns {
             let ty = match ret.value {
                 Some(value) => self.get_type_at(value.loc()).unwrap_or(TypeStore::UNKNOWN),
@@ -66,7 +75,7 @@ impl TypeChecker<'_> {
             self.check_assigned_type(return_type, ty, ret.loc);
         }
 
-        if let Some(ast::Statement::Expression(expr)) = node.body.statements.last() {
+        if let Some(ast::Statement::Expression(expr)) = body.statements.last() {
             if return_type != TypeStore::UNIT {
                 self.check_assigned_type(return_type, body_type, expr.expression.loc());
             }
@@ -105,32 +114,35 @@ mod tests {
             loc: Location::dummy(),
             name: None,
             type_params: None,
-            params: vec![
-                ast::FunctionParam {
-                    name: ident("x"),
-                    type_annotation: Some(ast::Type::Named(ast::NamedType {
-                        name: "int".to_string(),
-                        args: None,
+            params: Some(ast::FunctionParams {
+                loc: Location::dummy(),
+                params: vec![
+                    ast::FunctionParam {
+                        name: ident("x"),
+                        type_annotation: Some(ast::Type::Named(ast::NamedType {
+                            name: "int".to_string(),
+                            args: None,
+                            loc: Location::dummy(),
+                        })),
                         loc: Location::dummy(),
-                    })),
-                    loc: Location::dummy(),
-                },
-                ast::FunctionParam {
-                    name: ident("y"),
-                    type_annotation: Some(ast::Type::Named(ast::NamedType {
-                        name: "int".to_string(),
-                        args: None,
+                    },
+                    ast::FunctionParam {
+                        name: ident("y"),
+                        type_annotation: Some(ast::Type::Named(ast::NamedType {
+                            name: "int".to_string(),
+                            args: None,
+                            loc: Location::dummy(),
+                        })),
                         loc: Location::dummy(),
-                    })),
-                    loc: Location::dummy(),
-                },
-            ],
+                    },
+                ],
+            }),
             return_type: Some(ast::Type::Named(ast::NamedType {
                 loc: Location::dummy(),
                 name: "int".into(),
                 args: None,
             })),
-            body: ast::BlockExpression {
+            body: Some(ast::BlockExpression {
                 loc: Location::dummy(),
                 statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
                     expression: Box::new(ast::Expression::Binary(ast::BinaryExpression {
@@ -140,7 +152,7 @@ mod tests {
                         loc: Location::dummy(),
                     })),
                 })],
-            },
+            }),
         };
 
         let result = checker.visit_function_expression(&function_expression);
@@ -165,20 +177,23 @@ mod tests {
                 text: "T".to_string(),
                 loc: Location::dummy(),
             }]),
-            params: vec![ast::FunctionParam {
-                name: ident("x"),
-                type_annotation: Some(ast::Type::Named(ast::NamedType {
-                    name: "T".to_string(),
-                    args: None,
-                    loc: Location::dummy(),
-                })),
+            params: Some(ast::FunctionParams {
                 loc: Location::dummy(),
-            }],
+                params: vec![ast::FunctionParam {
+                    name: ident("x"),
+                    type_annotation: Some(ast::Type::Named(ast::NamedType {
+                        name: "T".to_string(),
+                        args: None,
+                        loc: Location::dummy(),
+                    })),
+                    loc: Location::dummy(),
+                }],
+            }),
             return_type: None,
-            body: ast::BlockExpression {
+            body: Some(ast::BlockExpression {
                 loc: Location::dummy(),
                 statements: vec![],
-            },
+            }),
         };
 
         let result = checker.visit_function_expression(&function_expression);

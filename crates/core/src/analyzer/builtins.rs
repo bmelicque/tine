@@ -29,6 +29,8 @@ impl Session {
             })),
             kind: SymbolKind::Method {
                 owner: int_handle.readonly(),
+                owner_args: vec![],
+                has_receiver: true,
                 param_names: vec![],
             },
             ..Default::default()
@@ -62,6 +64,8 @@ impl Session {
             })),
             kind: SymbolKind::Method {
                 owner: float_handle.readonly(),
+                owner_args: vec![],
+                has_receiver: true,
                 param_names: vec![],
             },
             ..Default::default()

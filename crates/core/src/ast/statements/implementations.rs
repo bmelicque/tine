@@ -33,6 +33,22 @@ pub enum ImplementationItem {
     StaticMethod(FunctionDefinition),
 }
 
+impl ImplementationItem {
+    pub fn docs(&self) -> &Option<Docs> {
+        match self {
+            Self::Method(m) => &m.docs,
+            Self::StaticMethod(m) => &m.docs,
+        }
+    }
+
+    pub fn name(&self) -> &Option<Identifier> {
+        match self {
+            Self::Method(m) => &m.name,
+            Self::StaticMethod(m) => &m.definition.name,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MethodDefinition {
     pub docs: Option<Docs>,

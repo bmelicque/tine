@@ -37,6 +37,13 @@ pub enum SymbolKind {
     Method {
         /// The type definition of the type owning this.
         owner: SymbolRef,
+        /// All the type arguments on the receiver.
+        ///
+        /// eg in `Type<Arg1, Arg2>.staticMethod()`
+        /// (same for instance methods)
+        owner_args: Vec<TypeId>,
+        /// If `has_receiver`, then it's an instance method. Else, it's a static method.
+        has_receiver: bool,
         // This is expected to have the same length as the function type's params.
         param_names: Vec<String>,
     },
