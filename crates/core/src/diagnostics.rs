@@ -58,6 +58,7 @@ pub enum DiagnosticKind {
     ExpectedStruct {
         got: String,
     },
+    ExpectedStructGotEnum,
     ExpectedStructLikeBody,
     ExpectedToken {
         expected: Vec<String>,
@@ -67,6 +68,7 @@ pub enum DiagnosticKind {
     },
     ExpectedTupleLikeBody,
     ExpectedTuplePattern,
+    ExpectedTypeGotValue,
     ExpectedVariantStruct,
     ExpectedVariantTuple,
     ExpectedVariantUnit,
@@ -202,6 +204,7 @@ impl Display for DiagnosticKind {
             Self::ExpectedMapKey => write!(f, "expected map key but got an identifier"),
             Self::ExpectedNumber { got } => write!(f, "expected number but got `{}`", got),
             Self::ExpectedStruct { got } => write!(f, "expected struct but got type `{}`", got),
+            Self::ExpectedStructGotEnum => write!(f, "expected a struct but found an enum"),
             Self::ExpectedStructLikeBody => {
                 write!(f, "expected struct-like body, got tuple-like body")
             }
@@ -215,6 +218,7 @@ impl Display for DiagnosticKind {
                 write!(f, "expected tuple-like body but got a struct-like body")
             }
             Self::ExpectedTuplePattern => write!(f, "expected tuple pattern"),
+            Self::ExpectedTypeGotValue => write!(f, "expected a type but got a value"),
             Self::ExpectedVariantStruct => write!(f, "expected struct variant"),
             Self::ExpectedVariantTuple => write!(f, "expected tuple variant"),
             Self::ExpectedVariantUnit => write!(f, "expected unit variant"),

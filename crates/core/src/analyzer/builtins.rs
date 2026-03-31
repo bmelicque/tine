@@ -1,5 +1,5 @@
 use crate::{
-    type_checker::{SymbolHandle, TypeSymbolKind},
+    type_checker::SymbolHandle,
     types::{FunctionType, Type},
     Session, SymbolData, SymbolKind, SymbolRef, TypeStore,
 };
@@ -14,10 +14,7 @@ impl Session {
         let int_handle = self.add_builtin(SymbolData {
             name: "int".into(),
             ty: TypeStore::INTEGER,
-            kind: SymbolKind::Type {
-                kind: TypeSymbolKind::Alias,
-                members: vec![],
-            },
+            kind: SymbolKind::TypeAlias,
             // TODO: add docs
             ..Default::default()
         });
@@ -36,10 +33,8 @@ impl Session {
             ..Default::default()
         });
         match int_handle.borrow().kind {
-            SymbolKind::Type {
-                ref mut members, ..
-            } => {
-                members.push(int_to_string_handle.readonly());
+            SymbolKind::PrimitiveType { ref mut methods } => {
+                methods.push(int_to_string_handle.readonly());
             }
             _ => unreachable!(),
         };
@@ -49,10 +44,7 @@ impl Session {
         let float_handle = self.add_builtin(SymbolData {
             name: "float".into(),
             ty: TypeStore::FLOAT,
-            kind: SymbolKind::Type {
-                kind: TypeSymbolKind::Alias,
-                members: vec![],
-            },
+            kind: SymbolKind::TypeAlias,
             // TODO: add docs
             ..Default::default()
         });
@@ -71,10 +63,8 @@ impl Session {
             ..Default::default()
         });
         match float_handle.borrow().kind {
-            SymbolKind::Type {
-                ref mut members, ..
-            } => {
-                members.push(string_handle.readonly());
+            SymbolKind::PrimitiveType { ref mut methods } => {
+                methods.push(string_handle.readonly());
             }
             _ => unreachable!(),
         };

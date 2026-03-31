@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use tine_core::{
-    types::{FunctionType, GenericType, Type, TypeId},
-    ModuleId, Source, SymbolData, SymbolKind, SymbolRef, TypeSymbolKind,
+    types::{Type, TypeId},
+    ModuleId, Source, SymbolData, SymbolKind, SymbolRef,
 };
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
@@ -72,7 +72,10 @@ impl Backend {
             };
 
             let type_name = match symbol.0.kind {
-                SymbolKind::Type { .. } => SemanticTokenType::TYPE,
+                SymbolKind::Enum { .. }
+                | SymbolKind::PrimitiveType { .. }
+                | SymbolKind::TypeAlias
+                | SymbolKind::Struct { .. } => SemanticTokenType::TYPE,
                 SymbolKind::Value { .. } => {
                     if let Type::Function(_) = self.get_type(symbol.0.ty) {
                         SemanticTokenType::FUNCTION

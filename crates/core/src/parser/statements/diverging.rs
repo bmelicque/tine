@@ -26,4 +26,10 @@ impl Parser<'_> {
 
         ast::BreakStatement { loc, value }
     }
+
+    pub fn parse_continue_statement(&mut self) -> ast::ContinueStatement {
+        let kw_range = self.eat(&[Token::Continue]);
+        let loc = self.localize(kw_range);
+        ast::ContinueStatement { loc }
+    }
 }

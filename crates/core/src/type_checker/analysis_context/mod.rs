@@ -121,11 +121,6 @@ impl LocalContext {
         current_scope.bindings.push(symbol.clone());
     }
 
-    pub fn save_expression_type(&mut self, loc: Location, ty: TypeId) -> TypeId {
-        self.expressions.insert(loc, ty);
-        ty
-    }
-
     pub fn lookup(&self, name: &str) -> Option<SymbolRef> {
         for scope in self.scopes.iter().rev() {
             if let Some(var) = scope.find(name) {

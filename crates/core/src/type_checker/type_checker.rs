@@ -5,7 +5,7 @@ use crate::analyzer::{ModuleId, ModulePath};
 use crate::diagnostics::{Diagnostic, DiagnosticKind, DiagnosticLevel};
 use crate::type_checker::analysis_context::{LocalContext, SymbolRef};
 use crate::type_checker::SymbolHandle;
-use crate::types::{Type, TypeId, TypeParam};
+use crate::types::{self, Type, TypeId, TypeParam};
 use crate::Location;
 
 pub struct CheckResult {
@@ -40,7 +40,7 @@ impl TypeChecker<'_> {
     pub fn check(mut self) -> CheckResult {
         let ast = self.session.get_ast(self.current_module);
         for item in &ast.items {
-            self.visit_item(item);
+            self.visit_item(item.clone());
         }
 
         CheckResult {
@@ -52,8 +52,8 @@ impl TypeChecker<'_> {
         }
     }
 
-    pub fn intern(&self, ty: Type) -> TypeId {
-        self.session.intern(ty)
+    pub fn intern(&self, ty: impl Into<Type>) -> TypeId {
+        self.session.intern(ty.into())
     }
     pub fn intern_unique(&self, ty: Type) -> TypeId {
         self.session.intern_unique(ty)
@@ -61,10 +61,6 @@ impl TypeChecker<'_> {
 
     pub fn resolve(&self, id: TypeId) -> Type {
         self.session.get_type(id)
-    }
-
-    pub fn get_type_at(&mut self, loc: Location) -> Option<TypeId> {
-        self.ctx.expressions.get(&loc).map(|ty| *ty)
     }
 
     pub fn can_be_assigned_to(&self, test_id: TypeId, against: TypeId) -> bool {
@@ -78,9 +74,9 @@ impl TypeChecker<'_> {
         }
     }
 
-    pub fn with_scope<F, T>(&mut self, mut predicate: F) -> T
+    pub fn with_scope<F, T>(&mut self, predicate: F) -> T
     where
-        F: FnMut(&mut Self) -> T,
+        F: FnOnce(&mut Self) -> T,
     {
         self.ctx.enter_scope();
         let res = predicate(self);
@@ -90,9 +86,9 @@ impl TypeChecker<'_> {
     }
 
     /// Execute the given predicate while registering outer dependencies (=enclosed variables)
-    pub fn with_dependencies<F, T>(&mut self, mut predicate: F) -> (T, Vec<SymbolRef>)
+    pub fn with_dependencies<F, T>(&mut self, predicate: F) -> (T, Vec<SymbolRef>)
     where
-        F: FnMut(&mut Self) -> T,
+        F: FnOnce(&mut Self) -> T,
     {
         let memo = self.ctx.current_declaration_dependencies.clone();
         self.ctx.current_declaration_dependencies = Some(vec![]);
@@ -142,6 +138,35 @@ impl TypeChecker<'_> {
             local_symbol
         } else {
             self.session.get_handle(symbol)
+        }
+    }
+
+    pub fn resolve_type_symbol(&self, ty: TypeId) -> Option<SymbolRef> {
+        self.ctx
+            .symbols
+            .iter()
+            .find(|s| self.equals_type(s.borrow().ty, ty) && s.borrow().is_type_symbol())
+            .map(|s| s.readonly())
+            .or_else(|| {
+                self.session
+                    .symbols()
+                    .iter()
+                    .find(|s| self.equals_type(s.borrow().ty, ty) && s.borrow().is_type_symbol())
+                    .cloned()
+            })
+    }
+
+    fn equals_type(&self, tested: TypeId, against: TypeId) -> bool {
+        let tested = self.unwrap_generic(tested);
+        let against = self.unwrap_generic(against);
+        tested == against
+    }
+    /// If the given type id refers to a generic, unwrap the underlying type definition.
+    /// Else, just return the original value.
+    fn unwrap_generic(&self, ty: TypeId) -> TypeId {
+        match self.resolve(ty) {
+            types::Type::Generic(g) => g.definition,
+            _ => ty,
         }
     }
 

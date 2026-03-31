@@ -81,20 +81,18 @@ mod tests {
                 params: None,
                 body: Some(ast::TypeBody::Struct(ast::StructBody {
                     loc: Location::new(0, Span::new(11, 26)),
-                    fields: vec![ast::StructDefinitionField::Mandatory(
-                        ast::StructMandatoryField {
-                            loc: Location::new(0, Span::new(17, 24)),
-                            name: Some(ast::Identifier {
-                                loc: Location::new(0, Span::new(17, 20)),
-                                text: "bar".to_string(),
-                            }),
-                            definition: Some(ast::Type::Named(ast::NamedType {
-                                loc: Location::new(0, Span::new(21, 24)),
-                                name: "int".to_string(),
-                                args: None,
-                            })),
-                        },
-                    )],
+                    fields: vec![ast::StructDefinitionField {
+                        loc: Location::new(0, Span::new(17, 24)),
+                        name: Some(ast::Identifier {
+                            loc: Location::new(0, Span::new(17, 20)),
+                            text: "bar".to_string(),
+                        }),
+                        definition: Some(ast::Type::Named(ast::NamedType {
+                            loc: Location::new(0, Span::new(21, 24)),
+                            name: "int".to_string(),
+                            args: None,
+                        })),
+                    }],
                 })),
             }),
             diagnostics: vec![],

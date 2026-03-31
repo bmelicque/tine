@@ -30,6 +30,7 @@ impl Parser<'_> {
         match token {
             Token::Break => Some(self.parse_break_statement().into()),
             Token::Const | Token::Var => Some(self.parse_variable_declaration(docs).into()),
+            Token::Continue => Some(self.parse_continue_statement().into()),
             Token::Enum => Some(self.parse_enum(docs).into()),
             Token::Fn => Some(self.parse_function_definition(docs).into()),
             Token::Impl => Some(self.parse_implementations().into()),

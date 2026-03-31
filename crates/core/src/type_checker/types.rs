@@ -11,74 +11,62 @@ use crate::{
 use super::TypeChecker;
 
 impl TypeChecker<'_> {
-    pub fn visit_type(&mut self, node: &ast::Type) -> TypeId {
+    pub fn visit_type(&mut self, node: ast::Type) -> TypeId {
         match node {
             ast::Type::Array(array) => self.visit_array_type(array),
             ast::Type::Duck(duck) => self.visit_duck_type(duck),
-            ast::Type::Function(function) => self.visit_function_type(function).into(),
-            ast::Type::Listener(listener) => self.visit_listener_type(listener).into(),
+            ast::Type::Function(function) => self.visit_function_type(function),
+            ast::Type::Listener(listener) => self.visit_listener_type(listener),
             ast::Type::Map(map) => self.visit_map_type(map),
             ast::Type::Named(named) => self.visit_named_type(named),
             ast::Type::Option(option) => self.visit_option_type(option),
-            ast::Type::Reference(reference) => self.visit_reference_type(reference).into(),
+            ast::Type::Reference(reference) => self.visit_reference_type(reference),
             ast::Type::Result(result) => self.visit_result_type(result),
-            ast::Type::Signal(signal) => self.visit_signal_type(signal).into(),
-            ast::Type::Tuple(tuple) => self.visit_tuple_type(tuple).into(),
+            ast::Type::Signal(signal) => self.visit_signal_type(signal),
+            ast::Type::Tuple(tuple) => self.visit_tuple_type(tuple),
         }
     }
 
-    pub fn visit_array_type(&mut self, node: &ast::ArrayType) -> TypeId {
-        let element = match node.element {
-            Some(ref element) => self.visit_type(element),
-            None => TypeStore::DYNAMIC,
-        };
-        self.intern(Type::Array(ArrayType { element }))
+    pub fn visit_array_type(&mut self, node: ast::ArrayType) -> TypeId {
+        let element = node
+            .element
+            .map_or(TypeStore::UNKNOWN, |e| self.visit_type(*e));
+        self.intern(ArrayType { element })
     }
 
-    pub(super) fn visit_function_type(&mut self, node: &ast::FunctionType) -> TypeId {
-        let params: Vec<TypeId> = node
+    pub(super) fn visit_function_type(&mut self, node: ast::FunctionType) -> TypeId {
+        let params = node
             .params
-            .iter()
+            .into_iter()
             .map(|param| self.visit_type(param))
-            .collect();
+            .collect::<Vec<_>>();
 
         let return_type = node
             .returned
-            .as_ref()
-            .map(|t| self.visit_type(t))
-            .unwrap_or(TypeStore::UNIT);
+            .map_or(TypeStore::UNIT, |r| self.visit_type(*r));
 
-        self.intern(Type::Function(FunctionType {
+        self.intern(FunctionType {
             params,
             return_type,
-        }))
+        })
     }
 
-    fn visit_listener_type(&mut self, node: &ast::ListenerType) -> TypeId {
-        let inner = match &node.inner {
-            Some(inner) => self.visit_type(inner),
-            None => TypeStore::UNKNOWN,
-        };
+    fn visit_listener_type(&mut self, node: ast::ListenerType) -> TypeId {
+        let inner = node
+            .inner
+            .map_or(TypeStore::UNKNOWN, |i| self.visit_type(*i));
         self.intern(Type::Listener(ListenerType { inner }))
     }
 
-    pub fn visit_map_type(&mut self, node: &ast::MapType) -> TypeId {
-        let key_type = match node.key {
-            Some(ref key) => self.visit_type(key),
-            None => TypeStore::DYNAMIC,
-        };
-        let value_type = match node.value {
-            Some(ref value) => self.visit_type(value),
-            None => TypeStore::DYNAMIC,
-        };
-
-        self.intern(Type::Map(MapType {
-            key: key_type,
-            value: value_type,
-        }))
+    pub fn visit_map_type(&mut self, node: ast::MapType) -> TypeId {
+        let key = node.key.map_or(TypeStore::DYNAMIC, |k| self.visit_type(*k));
+        let value = node
+            .value
+            .map_or(TypeStore::DYNAMIC, |v| self.visit_type(*v));
+        self.intern(MapType { key, value })
     }
 
-    pub fn visit_named_type(&mut self, node: &ast::NamedType) -> TypeId {
+    pub fn visit_named_type(&mut self, node: ast::NamedType) -> TypeId {
         let name = node.name.as_str();
         match name {
             "bool" => return TypeStore::BOOLEAN,
@@ -103,11 +91,11 @@ impl TypeChecker<'_> {
         }
     }
 
-    fn visit_generic_instance(&mut self, node: &ast::NamedType, ty: &GenericType) -> TypeId {
+    fn visit_generic_instance(&mut self, node: ast::NamedType, ty: &GenericType) -> TypeId {
         let arity = ty.params.len();
         let args = node.args.clone().unwrap_or(Vec::new());
         let mut arg_types: Vec<TypeId> = args
-            .iter()
+            .into_iter()
             .take(arity)
             .map(|arg| self.visit_type(arg))
             .collect();
@@ -139,61 +127,57 @@ impl TypeChecker<'_> {
         self.session.types().substitute(ty.definition, &args)
     }
 
-    pub fn visit_option_type(&mut self, node: &ast::OptionType) -> TypeId {
-        let some = match node.base {
-            Some(ref base) => self.visit_type(base),
-            None => self.intern(Type::Dynamic),
-        };
-
-        self.intern(Type::Option(OptionType { some }))
+    pub fn visit_option_type(&mut self, node: ast::OptionType) -> TypeId {
+        let some = node
+            .base
+            .map_or(TypeStore::DYNAMIC, |t| self.visit_type(*t));
+        self.intern(OptionType { some })
     }
 
-    fn visit_signal_type(&mut self, node: &ast::SignalType) -> TypeId {
-        let inner = self.visit_type(&node.inner);
-        self.intern(Type::Signal(SignalType { inner }))
+    fn visit_signal_type(&mut self, node: ast::SignalType) -> TypeId {
+        let inner = self.visit_type(*node.inner);
+        self.intern(SignalType { inner })
     }
 
-    pub fn visit_reference_type(&mut self, node: &ast::ReferenceType) -> TypeId {
-        let target = match &node.target {
-            Some(target) => self.visit_type(target),
-            None => return TypeStore::UNKNOWN,
-        };
-        self.intern(Type::Reference(ReferenceType { target }))
+    pub fn visit_reference_type(&mut self, node: ast::ReferenceType) -> TypeId {
+        let target = node
+            .target
+            .map_or(TypeStore::UNKNOWN, |t| self.visit_type(*t));
+        self.intern(ReferenceType { target })
     }
 
-    pub fn visit_duck_type(&mut self, node: &ast::DuckType) -> TypeId {
-        let like = self.visit_type(&node.like);
+    pub fn visit_duck_type(&mut self, node: ast::DuckType) -> TypeId {
+        let like = self.visit_type(*node.like);
         self.intern(Type::Duck(DuckType { like }))
     }
 
-    pub fn visit_result_type(&mut self, node: &ast::ResultType) -> TypeId {
-        let ok_type = match node.ok {
-            Some(ref ok) => self.visit_type(ok),
-            None => TypeStore::DYNAMIC,
-        };
-        let err_type = match node.error {
-            Some(ref err) => self.visit_type(err),
-            None => TypeStore::DYNAMIC,
-        };
-
-        self.intern(Type::Result(ResultType {
-            error: Some(err_type),
-            ok: ok_type,
-        }))
+    pub fn visit_result_type(&mut self, node: ast::ResultType) -> TypeId {
+        let ok = node.ok.map_or(TypeStore::DYNAMIC, |o| self.visit_type(*o));
+        let error = node
+            .error
+            .map_or(TypeStore::DYNAMIC, |e| self.visit_type(*e))
+            .into();
+        self.intern(ResultType { ok, error })
     }
 
-    pub fn visit_tuple_type(&mut self, node: &ast::TupleType) -> TypeId {
-        let elements: Vec<TypeId> = node.elements.iter().map(|ty| self.visit_type(ty)).collect();
-        self.intern(Type::Tuple(TupleType { elements }))
+    pub fn visit_tuple_type(&mut self, node: ast::TupleType) -> TypeId {
+        let elements = node
+            .elements
+            .into_iter()
+            .map(|e| self.visit_type(e))
+            .collect();
+        self.intern(TupleType { elements })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::analyzer::session::Session;
     use crate::ast;
-    use crate::type_checker::analysis_context::symbols::TypeSymbolKind;
+    use crate::type_checker::analysis_context::symbols::TypeSymbolBody;
     use crate::type_checker::test_utils::MockLoader;
     use crate::types::StructType;
     use crate::types::Type;
@@ -214,8 +198,8 @@ mod tests {
             loc: Location::dummy(),
         };
 
-        let result = checker.visit_array_type(&array_type);
-        let result = checker.resolve(result).clone();
+        let result = checker.visit_array_type(array_type);
+        let result = checker.resolve(result);
         assert_eq!(
             result,
             Type::Array(ArrayType {
@@ -249,8 +233,8 @@ mod tests {
             loc: Location::dummy(),
         };
 
-        let result = checker.visit_function_type(&function_type);
-        let result = checker.resolve(result).clone();
+        let result = checker.visit_function_type(function_type);
+        let result = checker.resolve(result);
         assert_eq!(
             result,
             Type::Function(FunctionType {
@@ -278,8 +262,8 @@ mod tests {
             loc: Location::dummy(),
         };
 
-        let result = checker.visit_map_type(&map_type);
-        let result = checker.resolve(result).clone();
+        let result = checker.visit_map_type(map_type);
+        let result = checker.resolve(result);
         assert_eq!(
             result,
             Type::Map(MapType {
@@ -300,9 +284,9 @@ mod tests {
         checker.ctx.register_symbol(SymbolData {
             name: "Box".into(),
             ty: def,
-            kind: SymbolKind::Type {
-                kind: TypeSymbolKind::Struct,
-                members: vec![],
+            kind: SymbolKind::Struct {
+                body: TypeSymbolBody::Struct(HashMap::new()),
+                methods: vec![],
             },
             ..Default::default()
         });
@@ -313,7 +297,7 @@ mod tests {
             loc: Location::dummy(),
         };
 
-        let result = checker.visit_named_type(&named_type);
+        let result = checker.visit_named_type(named_type);
         let result = checker.resolve(result).clone();
         assert!(matches!(result, Type::Struct(_)));
     }
@@ -331,8 +315,8 @@ mod tests {
             loc: Location::dummy(),
         };
 
-        let result = checker.visit_option_type(&option_type);
-        let result = checker.resolve(result).clone();
+        let result = checker.visit_option_type(option_type);
+        let result = checker.resolve(result);
         assert_eq!(
             result,
             Type::Option(OptionType {
@@ -354,8 +338,8 @@ mod tests {
             loc: Location::dummy(),
         };
 
-        let result = checker.visit_reference_type(&reference_type);
-        let result = checker.resolve(result).clone();
+        let result = checker.visit_reference_type(reference_type);
+        let result = checker.resolve(result);
         assert_eq!(
             result,
             ReferenceType {
@@ -383,8 +367,8 @@ mod tests {
             loc: Location::dummy(),
         };
 
-        let result = checker.visit_result_type(&result_type);
-        let result = checker.resolve(result).clone();
+        let result = checker.visit_result_type(result_type);
+        let result = checker.resolve(result);
         assert_eq!(
             result,
             Type::Result(ResultType {
@@ -414,8 +398,8 @@ mod tests {
             loc: Location::dummy(),
         };
 
-        let result = checker.visit_tuple_type(&tuple_type);
-        let result = checker.resolve(result).clone();
+        let result = checker.visit_tuple_type(tuple_type);
+        let result = checker.resolve(result);
         assert_eq!(
             result,
             Type::Tuple(TupleType {

@@ -3,35 +3,40 @@ use std::collections::HashMap;
 use crate::{
     ast,
     diagnostics::DiagnosticKind,
+    ir,
     type_checker::TypeChecker,
-    types::{DuckType, ListenerType, Type, TypeId},
+    types::{DuckType, Type, TypeId},
     Location, TypeStore,
 };
 
 impl TypeChecker<'_> {
-    pub fn visit_element_expression(&mut self, node: &ast::ElementExpression) -> TypeId {
-        match node {
-            ast::ElementExpression::Element(e) => self.visit_element_with_children(e),
-            ast::ElementExpression::Void(v) => self.visit_void_element(v),
-        }
+    pub fn visit_element_expression(
+        &mut self,
+        node: ast::ElementExpression,
+    ) -> Option<ir::ElementExpression> {
+        let loc = node.loc();
+        let (tag_name, attributes, children) = match node {
+            ast::ElementExpression::Element(e) => (e.tag_name, e.attributes, e.children),
+            ast::ElementExpression::Void(e) => (e.tag_name, e.attributes, vec![]),
+        };
+        let attributes = self.visit_attributes(attributes);
+        let children = self.visit_children(children);
+        Some(ir::ElementExpression {
+            loc,
+            tag_name,
+            attributes: attributes?,
+            children: children?,
+            ty: self.element_type(),
+        })
     }
 
-    fn visit_element_with_children(&mut self, node: &ast::Element) -> TypeId {
-        self.visit_attributes(&node.attributes);
-        self.visit_children(&node.children);
-        let t = self.element_type();
-        self.ctx.save_expression_type(node.loc, t)
-    }
-
-    fn visit_void_element(&mut self, node: &ast::VoidElement) -> TypeId {
-        self.visit_attributes(&node.attributes);
-        let t = self.element_type();
-        self.ctx.save_expression_type(node.loc, t)
-    }
-
-    fn visit_attributes(&mut self, attributes: &Vec<ast::Attribute>) {
-        self.report_duplicated_attributes(attributes);
-        self.visit_attributes_values(attributes);
+    fn visit_attributes(&mut self, attributes: Vec<ast::Attribute>) -> Option<Vec<ir::Attribute>> {
+        self.report_duplicated_attributes(&attributes);
+        let attributes = attributes
+            .into_iter()
+            .map(|a| self.visit_attribute(a))
+            .collect::<Vec<_>>();
+        attributes.into_iter().collect()
     }
 
     fn report_duplicated_attributes(&mut self, attributes: &Vec<ast::Attribute>) {
@@ -55,40 +60,60 @@ impl TypeChecker<'_> {
         }
     }
 
-    fn visit_attributes_values(&mut self, attributes: &Vec<ast::Attribute>) {
-        for attribute in attributes {
-            if let Some(ast::AttributeValue::Expression(ref expr)) = attribute.value {
-                self.visit_dom_expression(expr);
+    fn visit_attribute(&mut self, attribute: ast::Attribute) -> Option<ir::Attribute> {
+        let value = match attribute.value {
+            Some(v) => match v {
+                ast::AttributeValue::Expression(e) => self.visit_expression(e)?,
+                ast::AttributeValue::String(s) => {
+                    ir::Expression::Stringliteral(ir::StringLiteral {
+                        loc: attribute.loc,
+                        value: s,
+                    })
+                }
+            },
+            None => ir::Expression::BooleanLiteral(ir::BooleanLiteral {
+                loc: attribute.loc,
+                value: true,
+            }),
+        };
+        Some(ir::Attribute {
+            loc: attribute.loc,
+            name: attribute.name,
+            value,
+        })
+    }
+
+    fn visit_children(&mut self, children: Vec<ast::ElementChild>) -> Option<Vec<ir::Expression>> {
+        children
+            .into_iter()
+            .map(|c| self.visit_child(c))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .collect()
+    }
+
+    fn visit_child(&mut self, child: ast::ElementChild) -> Option<ir::Expression> {
+        match child {
+            ast::ElementChild::Expression(e) => self.visit_dom_expression(e),
+            ast::ElementChild::Text(t) => Some(ir::Expression::Stringliteral(ir::StringLiteral {
+                loc: t.loc,
+                value: t.text,
+            })),
+            ast::ElementChild::Element(e) => {
+                self.visit_element_expression(e.into()).map(Into::into)
+            }
+            ast::ElementChild::VoidElement(v) => {
+                self.visit_element_expression(v.into()).map(Into::into)
             }
         }
     }
 
-    fn visit_children(&mut self, children: &Vec<ast::ElementChild>) {
-        for child in children {
-            match child {
-                ast::ElementChild::Expression(e) => {
-                    self.visit_dom_expression(e);
-                }
-                ast::ElementChild::Text(_) => {}
-                ast::ElementChild::Element(e) => {
-                    self.visit_element_with_children(e);
-                }
-                ast::ElementChild::VoidElement(v) => {
-                    self.visit_void_element(v);
-                }
-            };
-        }
-    }
-
-    fn visit_dom_expression(&mut self, expr: &ast::Expression) -> TypeId {
-        let (mut expr_type, deps) = self.with_dependencies(|s| s.visit_expression(expr));
-        let count = self.save_reactive_dependencies(&deps, expr.loc());
-        let is_reactive = self.resolve(expr_type).is_reactive();
-        if count > 0 && !is_reactive {
-            expr_type = self.intern(Type::Listener(ListenerType { inner: expr_type }));
-        }
+    fn visit_dom_expression(&mut self, expr: ast::Expression) -> Option<ir::Expression> {
+        let (expr, deps) = self.with_dependencies(|s| s.visit_expression(expr));
+        let expr = expr?;
+        self.save_reactive_dependencies(&deps, expr.loc());
         self.ctx.add_dependencies(deps);
-        return expr_type;
+        Some(expr)
     }
 
     pub fn element_type(&mut self) -> TypeId {

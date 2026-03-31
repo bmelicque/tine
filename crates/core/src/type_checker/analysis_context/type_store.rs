@@ -178,7 +178,6 @@ impl TypeStore {
                     .map(|field| StructField {
                         name: field.name.clone(),
                         def: self.substitute(field.def, args),
-                        optional: field.optional,
                     })
                     .collect();
                 self.add(Type::Struct(StructType { id: t.id, fields }))
@@ -398,7 +397,6 @@ impl TypeStore {
                     .map(|field| StructField {
                         name: field.name.clone(),
                         def: self.import(from, field.def),
-                        optional: field.optional,
                     })
                     .collect();
                 self.add(Type::Struct(StructType {
@@ -493,7 +491,6 @@ mod tests {
             fields: vec![StructField {
                 name: "name".to_string(),
                 def: TypeStore::STRING,
-                optional: false,
             }],
         });
         let struct_id = store.add(struct_type);
@@ -555,12 +552,10 @@ mod tests {
                 StructField {
                     name: "name".to_string(),
                     def: TypeStore::STRING,
-                    optional: false,
                 },
                 StructField {
                     name: "age".to_string(),
                     def: TypeStore::INTEGER,
-                    optional: false,
                 },
             ],
         });

@@ -1,6 +1,6 @@
 use tine_core::{
     types::{FunctionType, GenericType, Type, TypeId},
-    SymbolKind, TypeStore, TypeSymbolKind,
+    SymbolKind, TypeStore,
 };
 
 use crate::{tokens::ServerSymbol, Backend};
@@ -12,13 +12,15 @@ impl Backend {
         let ty = symbol.0.ty;
         match &symbol.0.kind {
             SymbolKind::Function { .. } => self.display_function_symbol(&symbol),
-            SymbolKind::Type { kind, .. } => {
-                let ty = session.types().display_raw_type(ty);
-                match kind {
-                    TypeSymbolKind::Alias => format!("type {} = {}", name, ty),
-                    TypeSymbolKind::Enum => format!("enum {} {}", name, ty),
-                    TypeSymbolKind::Struct => format!("struct {} {}", name, ty),
-                }
+            SymbolKind::PrimitiveType { .. } => session.types().display_raw_type(ty),
+            SymbolKind::TypeAlias => {
+                format!("type {} = {}", name, session.types().display_raw_type(ty))
+            }
+            SymbolKind::Struct { .. } => {
+                format!("struct {} {}", name, session.types().display_raw_type(ty))
+            }
+            SymbolKind::Enum { .. } => {
+                format!("enum {} {}", name, session.types().display_raw_type(ty))
             }
             SymbolKind::Value { mutable } => {
                 let ty = session.types().display_type(ty);
@@ -32,7 +34,7 @@ impl Backend {
                 format!("{}.{} {}", owner_name, member_name, displayed_type)
             }
             SymbolKind::Method { .. } => self.display_method_symbol(symbol),
-            SymbolKind::Constructor { owner } => {
+            SymbolKind::Constructor { owner, .. } => {
                 let owner_name = &owner.borrow().name;
                 // TODO: FIXME:
                 format!("{}.{}", owner_name, name)

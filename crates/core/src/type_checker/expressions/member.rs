@@ -1,18 +1,22 @@
 use crate::{
-    ast,
-    type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
-    types::{Type, TypeId},
-    DiagnosticKind,
+    ast, ir,
+    type_checker::{
+        analysis_context::{symbols::TypeSymbolBody, type_store::TypeStore},
+        TypeChecker,
+    },
+    types::Type,
+    DiagnosticKind, SymbolKind,
 };
 
 impl TypeChecker<'_> {
-    pub fn visit_member_expression(&mut self, expr: &ast::MemberExpression) -> TypeId {
-        let Some(ref member) = expr.prop else {
-            if let Some(object) = &expr.object {
-                self.visit_expression(object);
-            }
+    pub fn visit_member_expression(
+        &mut self,
+        expr: ast::MemberExpression,
+    ) -> Option<ir::MemberExpression> {
+        let Some(member) = &expr.prop else {
+            expr.object.and_then(|o| self.visit_expression(*o));
             // missing member already reported during parsing phase
-            return TypeStore::UNKNOWN;
+            return None;
         };
         match member {
             ast::MemberProp::FieldName(_) => self.visit_field_access(expr),
@@ -20,92 +24,131 @@ impl TypeChecker<'_> {
         }
     }
 
-    fn visit_field_access(&mut self, expr: &ast::MemberExpression) -> TypeId {
+    fn visit_field_access(&mut self, expr: ast::MemberExpression) -> Option<ir::MemberExpression> {
         debug_assert!(matches!(expr.prop, Some(ast::MemberProp::FieldName(_))));
-        let root_type = self.visit_expression_box_option(&expr.object);
-        let Some(ast::MemberProp::FieldName(ref field_name)) = expr.prop else {
+        let object = expr.object.and_then(|o| self.visit_expression(*o))?;
+        let Some(ast::MemberProp::FieldName(field_name)) = expr.prop else {
             unreachable!()
         };
-
-        let ty: Option<TypeId> = match self.resolve(root_type) {
-            Type::Integer => self
-                .session
-                .find_method(field_name.as_str(), root_type)
-                .map(|s| s.borrow().ty),
-            Type::Float => self
-                .session
-                .find_method(field_name.as_str(), root_type)
-                .map(|s| s.borrow().ty),
-            Type::Struct(ref ty) => {
-                let prop = field_name.as_str();
-                ty.fields.iter().find(|f| f.name == prop).map(|f| f.def)
-            }
-            _ => None,
+        let Some(root_symbol) = self.resolve_type_symbol(object.ty()) else {
+            let error = DiagnosticKind::UnknownMember {
+                member: field_name.as_str().to_string(),
+            };
+            self.error(error, field_name.loc);
+            return None;
         };
 
-        let ty = match ty {
-            Some(ty) => ty,
+        let SymbolKind::Struct {
+            body: TypeSymbolBody::Struct(fields),
+            methods,
+        } = &root_symbol.borrow().kind
+        else {
+            panic!();
+        };
+
+        let member = fields
+            .get(field_name.as_str())
+            .or_else(|| methods.iter().find(|m| m.borrow().name == field_name.text))
+            .cloned();
+        let member = match member {
+            Some(symbol) => ir::Identifier {
+                loc: field_name.loc,
+                symbol,
+            },
             None => {
                 let error = DiagnosticKind::UnknownMember {
                     member: field_name.as_str().to_string(),
                 };
-                self.error(error, expr.prop.as_ref().unwrap().loc());
-                TypeStore::UNKNOWN
+                self.error(error, field_name.loc);
+                return None;
             }
         };
 
-        self.save_member_type(expr, ty)
+        Some(ir::MemberExpression {
+            loc: expr.loc,
+            object: Box::new(object),
+            // FIXME: handle substitutions for generics
+            ty: member.ty(),
+            member,
+        })
     }
 
-    pub fn visit_tuple_indexing(&mut self, expr: &ast::MemberExpression) -> TypeId {
-        let root_type = self.visit_expression_box_option(&expr.object);
-        let Type::Tuple(tuple) = self.resolve(root_type) else {
-            if root_type != TypeStore::UNKNOWN {
-                let error = DiagnosticKind::ExpectedTuple {
-                    got: self.session.display_type(root_type),
-                };
-                // unwrap is safe by checking if not `UNKNOWN`
-                self.error(error, expr.object.as_ref().unwrap().loc());
-            }
-            return self.save_member_type(expr, TypeStore::UNKNOWN);
-        };
-
+    pub fn visit_tuple_indexing(
+        &mut self,
+        expr: ast::MemberExpression,
+    ) -> Option<ir::MemberExpression> {
         let Some(ast::MemberProp::Index(index)) = &expr.prop else {
             panic!();
         };
+
+        // check object
+        let object = expr.object.and_then(|o| self.visit_expression(*o))?;
+        let Some(root_symbol) = self.resolve_type_symbol(object.ty()) else {
+            let error = DiagnosticKind::UnknownMember {
+                member: index.value.to_string(),
+            };
+            self.error(error, index.loc);
+            return None;
+        };
+
+        let Type::Tuple(ty) = self.resolve(object.ty()) else {
+            if object.ty() != TypeStore::UNKNOWN {
+                let error = DiagnosticKind::ExpectedTuple {
+                    got: self.session.display_type(object.ty()),
+                };
+                self.error(error, object.loc());
+            }
+            return None;
+        };
+        let SymbolKind::Struct {
+            body: TypeSymbolBody::Tuple(elements),
+            ..
+        } = &root_symbol.borrow().kind
+        else {
+            panic!();
+        };
+
+        // check index is in range
         let value = index.value;
         if value < 0 {
             self.error(DiagnosticKind::NegativeTupleIndex, index.loc);
-            return self.save_member_type(expr, TypeStore::UNKNOWN);
+            return None;
         }
         let value = value as usize;
-        if value >= tuple.elements.len() {
+        if value >= elements.len() {
             self.error(
                 DiagnosticKind::UnknownMember {
                     member: value.to_string(),
                 },
                 index.loc,
             );
-            return self.save_member_type(expr, TypeStore::UNKNOWN);
-        } else {
-            return self.save_member_type(expr, tuple.elements[value]);
+            return None;
         }
-    }
 
-    fn save_member_type(&mut self, expr: &ast::MemberExpression, ty: TypeId) -> TypeId {
-        self.ctx.save_expression_type(expr.loc, ty);
-        ty
+        let member = ir::Identifier {
+            loc: index.loc,
+            symbol: elements[value].clone(),
+        };
+
+        Some(ir::MemberExpression {
+            loc: expr.loc,
+            object: Box::new(object),
+            ty: ty.elements[value],
+            member,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
     use crate::{
         analyzer::session::Session,
         ast,
         locations::Span,
-        type_checker::{analysis_context::symbols::TypeSymbolKind, test_utils::MockLoader},
+        type_checker::{analysis_context::symbols::TypeSymbolBody, test_utils::MockLoader},
         types::*,
         Location, SymbolData, SymbolKind,
     };
@@ -136,21 +179,19 @@ mod tests {
                 StructField {
                     name: "name".to_string(),
                     def: TypeStore::STRING,
-                    optional: false,
                 },
                 StructField {
                     name: "age".to_string(),
                     def: TypeStore::INTEGER,
-                    optional: false,
                 },
             ],
         }));
         checker.ctx.register_symbol(SymbolData {
             name: "User".into(),
             ty: id,
-            kind: SymbolKind::Type {
-                kind: TypeSymbolKind::Struct,
-                members: vec![],
+            kind: SymbolKind::Struct {
+                body: TypeSymbolBody::Struct(HashMap::new()),
+                methods: vec![],
             },
             ..Default::default()
         });
@@ -167,13 +208,15 @@ mod tests {
             ..Default::default()
         });
 
-        let result = checker.visit_member_expression(&field_access_expression);
+        let result = checker
+            .visit_member_expression(field_access_expression)
+            .unwrap();
         assert!(
             checker.diagnostics.is_empty(),
             "Expected no errors, got {:?}",
             checker.diagnostics
         );
-        assert_eq!(result, TypeStore::STRING);
+        assert_eq!(result.ty, TypeStore::STRING);
     }
 
     #[test]
@@ -201,8 +244,8 @@ mod tests {
             loc: Location::dummy(),
         };
 
-        let result = checker.visit_tuple_indexing(&tuple_indexing);
-        assert_eq!(result, TypeStore::STRING);
+        let result = checker.visit_tuple_indexing(tuple_indexing).unwrap();
+        assert_eq!(result.ty, TypeStore::STRING);
         assert!(checker.diagnostics.is_empty());
     }
 
@@ -226,8 +269,8 @@ mod tests {
             loc: Location::dummy(),
         };
 
-        let result = checker.visit_tuple_indexing(&tuple_indexing);
-        assert_eq!(result, TypeStore::UNKNOWN);
+        let result = checker.visit_tuple_indexing(tuple_indexing).unwrap();
+        assert_eq!(result.ty, TypeStore::UNKNOWN);
         assert_eq!(checker.diagnostics.len(), 1);
     }
 
@@ -255,8 +298,8 @@ mod tests {
             loc: Location::dummy(),
         };
 
-        let result = checker.visit_tuple_indexing(&tuple_indexing);
-        assert_eq!(result, TypeStore::UNKNOWN);
+        let result = checker.visit_tuple_indexing(tuple_indexing).unwrap();
+        assert_eq!(result.ty, TypeStore::UNKNOWN);
         assert_eq!(checker.diagnostics.len(), 1);
         assert!(matches!(
             checker.diagnostics[0].kind,
@@ -288,8 +331,8 @@ mod tests {
             loc: Location::dummy(),
         };
 
-        let result = checker.visit_tuple_indexing(&tuple_indexing);
-        assert_eq!(result, TypeStore::UNKNOWN);
+        let result = checker.visit_tuple_indexing(tuple_indexing).unwrap();
+        assert_eq!(result.ty, TypeStore::UNKNOWN);
         assert_eq!(checker.diagnostics.len(), 1);
     }
 }

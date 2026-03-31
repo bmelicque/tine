@@ -1,12 +1,14 @@
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex, MutexGuard},
+};
 
 use crate::{types::TypeId, Location, TypeStore};
 
 #[derive(Clone, Debug)]
-pub enum TypeSymbolKind {
-    Struct,
-    Enum,
-    Alias,
+pub enum TypeSymbolBody {
+    Struct(HashMap<String, SymbolRef>),
+    Tuple(Vec<SymbolRef>),
 }
 
 #[derive(Clone, Debug)]
@@ -20,15 +22,25 @@ pub enum SymbolKind {
         // This is expected to have the same length as the function type's params.
         param_names: Vec<String>,
     },
-    Type {
-        kind: TypeSymbolKind,
-        /// These could be members or methods
-        members: Vec<SymbolRef>,
+    PrimitiveType {
+        methods: Vec<SymbolRef>,
+    },
+    TypeAlias,
+    Struct {
+        body: TypeSymbolBody,
+        methods: Vec<SymbolRef>,
+    },
+    Enum {
+        /// All the variants of the enum.
+        /// This should only contain `Constructor` symbols
+        variants: Vec<SymbolRef>,
+        methods: Vec<SymbolRef>,
     },
     /// An enum constructor. In this case, the symbol's `def` should refer to either a `StructType`, a `TupleType` or a `TypeTemplate` wrapping either
     Constructor {
-        /// The type definition of the enum owning this.
+        /// The enum symbol owning this.
         owner: SymbolRef,
+        body: Option<TypeSymbolBody>,
     },
     Member {
         /// The type definition of the struct owning this member.
@@ -117,6 +129,13 @@ impl SymbolData {
     pub fn get_type(&self) -> TypeId {
         self.ty
     }
+
+    pub fn is_type_symbol(&self) -> bool {
+        matches!(
+            self.kind,
+            SymbolKind::Struct { .. } | SymbolKind::Enum { .. }
+        )
+    }
 }
 
 impl Default for SymbolData {
@@ -184,6 +203,14 @@ pub struct SymbolRef(Arc<Mutex<SymbolData>>);
 impl SymbolRef {
     pub fn borrow(&self) -> MutexGuard<'_, SymbolData> {
         self.0.lock().unwrap()
+    }
+
+    pub fn as_name(&self) -> String {
+        self.borrow().name.clone()
+    }
+
+    pub fn as_type(&self) -> TypeId {
+        self.borrow().ty
     }
 
     pub fn is(&self, test: &SymbolRef) -> bool {

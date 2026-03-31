@@ -9,7 +9,7 @@ mod types;
 mod utils;
 
 pub use analysis_context::{
-    symbols::TypeSymbolKind, type_store::TypeStore, MemberToken, SymbolData, SymbolHandle,
-    SymbolKind, SymbolRef, SymbolToken, Token,
+    type_store::TypeStore, MemberToken, SymbolData, SymbolHandle, SymbolKind, SymbolRef,
+    SymbolToken, Token,
 };
 pub use type_checker::{CheckResult, TypeChecker};

@@ -56,6 +56,11 @@ pub struct GenericType {
     /// Those will be substituted at some point with the concrete types.
     pub definition: TypeId,
 }
+impl Into<Type> for GenericType {
+    fn into(self) -> Type {
+        Type::Generic(self)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ArrayType {
@@ -214,7 +219,6 @@ impl Into<Type> for StructType {
 pub struct StructField {
     pub name: String,
     pub def: TypeId,
-    pub optional: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
