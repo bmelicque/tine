@@ -69,8 +69,6 @@ pub struct LocalContext {
 
     pub(crate) scopes: Vec<Scope>,
 
-    pub expressions: HashMap<Location, TypeId>,
-
     pub current_declaration_dependencies: Option<Vec<SymbolRef>>,
     pub other_dependencies: HashMap<Location, Vec<SymbolRef>>,
 }
@@ -80,7 +78,6 @@ impl LocalContext {
         Self {
             symbols: Vec::<SymbolHandle>::new(),
             scopes: vec![Scope::new()],
-            expressions: HashMap::new(),
             current_declaration_dependencies: None,
             other_dependencies: HashMap::new(),
         }

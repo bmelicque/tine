@@ -7,3 +7,7 @@ pub use expressions::*;
 pub use patterns::*;
 pub use statements::*;
 pub use utils::*;
+
+pub struct Program {
+    pub statements: Vec<Statement>,
+}

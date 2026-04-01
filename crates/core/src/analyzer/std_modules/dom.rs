@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     type_checker::{CheckResult, TypeChecker},
     types::{DuckType, FunctionType, Type},
@@ -43,9 +41,7 @@ In this example, the `<article>` element is rendered inside the document's body.
         CheckResult {
             symbols: checker.ctx.symbols,
             exports: main_scope.bindings.clone(),
-            expressions: HashMap::new(),
-            dependencies: HashMap::new(),
-            diagnostics: vec![],
+            ..Default::default()
         }
     }
 }

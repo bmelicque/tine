@@ -6,14 +6,23 @@ use crate::diagnostics::{Diagnostic, DiagnosticKind, DiagnosticLevel};
 use crate::type_checker::analysis_context::{LocalContext, SymbolRef};
 use crate::type_checker::SymbolHandle;
 use crate::types::{self, Type, TypeId, TypeParam};
-use crate::Location;
+use crate::{ir, Location};
 
 pub struct CheckResult {
+    pub ir: ir::Program,
     pub symbols: Vec<SymbolHandle>,
     pub exports: Vec<SymbolRef>,
-    pub expressions: HashMap<Location, TypeId>,
-    pub dependencies: HashMap<Location, Vec<SymbolRef>>,
     pub diagnostics: Vec<Diagnostic>,
+}
+impl Default for CheckResult {
+    fn default() -> Self {
+        Self {
+            ir: ir::Program { statements: vec![] },
+            symbols: vec![],
+            exports: vec![],
+            diagnostics: vec![],
+        }
+    }
 }
 
 pub struct TypeChecker<'sess> {
@@ -43,11 +52,18 @@ impl TypeChecker<'_> {
             self.visit_item(item.clone());
         }
 
+        let program = ir::Program {
+            statements: ast
+                .items
+                .iter()
+                .flat_map(|i| self.visit_item(i.clone()))
+                .collect(),
+        };
+
         CheckResult {
+            ir: program,
             symbols: self.ctx.symbols,
             exports: self.ctx.scopes[0].bindings.clone(),
-            expressions: self.ctx.expressions,
-            dependencies: self.ctx.other_dependencies,
             diagnostics: self.diagnostics,
         }
     }
