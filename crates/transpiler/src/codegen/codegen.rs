@@ -1,16 +1,16 @@
-use super::sort::Scope;
 use crate::codegen::utils::create_ident;
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
-use tine_core::{types, Location, ModuleId, ModulePath, Session, SymbolRef};
+use tine_core::{Location, ModuleId, ModulePath, Session, SymbolRef};
 
 pub struct CodeGenerator<'sess> {
-    scope: Scope,
     _source_map: Lrc<SourceMap>,
-    current_block: Vec<Vec<swc::Stmt>>,
 
     session: &'sess Session,
     pub(crate) module: ModuleId,
+    /// Should the `break` statements be converted to `return` statements.
+    /// This is used when generating `for` and `for ... in` expressions, which are translated to IIFEs.
+    breaks_to_returns: bool,
 }
 
 impl CodeGenerator<'_> {
@@ -18,21 +18,18 @@ impl CodeGenerator<'_> {
         CodeGenerator {
             session,
             module,
-            scope: Scope::new(),
             _source_map: Lrc::new(SourceMap::new(Default::default())),
-            current_block: vec![],
+            breaks_to_returns: false,
         }
     }
 
     pub fn program_to_swc_module(&mut self) -> swc::Module {
-        let node = self.session.get_ast(self.module);
-        self.enter_block();
-        let items: Vec<swc::ModuleItem> = self.with_scope(|s| {
-            node.items
-                .iter()
-                .flat_map(|item| s.item_to_swc(item))
-                .collect()
-        });
+        let node = self.session.get_ir(self.module);
+        let items: Vec<swc::ModuleItem> = node
+            .statements
+            .iter()
+            .map(|item| self.item_to_swc(item))
+            .collect();
 
         let internals_import =
             swc::ModuleItem::ModuleDecl(swc::ModuleDecl::Import(swc::ImportDecl {
@@ -69,38 +66,15 @@ impl CodeGenerator<'_> {
         &module.name
     }
 
-    pub fn enter_block(&mut self) {
-        self.push_scope();
-        self.current_block.push(Vec::<swc::Stmt>::new());
-    }
-    pub fn exit_block(&mut self) -> Vec<swc::Stmt> {
-        self.drop_scope();
-        self.current_block.pop().unwrap()
-    }
-    pub fn push_to_block(&mut self, stmt: swc::Stmt) {
-        self.current_block.last_mut().unwrap().push(stmt);
-    }
-
-    pub fn add_to_scope(&mut self, name: String, fields: Vec<String>) {
-        self.scope.register(name, fields);
-    }
-    pub fn push_scope(&mut self) {
-        self.scope.enter();
-    }
-    pub fn drop_scope(&mut self) {
-        self.scope.exit();
-    }
-    pub fn with_scope<F, T>(&mut self, predicate: F) -> T
+    pub(crate) fn with_breaks_to_returns<F, T>(&mut self, callback: F) -> T
     where
         F: FnOnce(&mut Self) -> T,
     {
-        self.scope.enter();
-        let res = predicate(self);
-        self.scope.exit();
-        res
-    }
-    pub fn find(&self, name: &String) -> Option<&Vec<String>> {
-        self.scope.find(name)
+        let old = self.breaks_to_returns;
+        self.breaks_to_returns = true;
+        let ret = callback(self);
+        self.breaks_to_returns = old;
+        ret
     }
 
     pub fn find_symbol(&self, loc: Location) -> Option<SymbolRef> {
@@ -109,19 +83,5 @@ impl CodeGenerator<'_> {
             .iter()
             .find(|s| s.uses().into_iter().find(|&l| l == loc).is_some())
             .cloned()
-    }
-
-    pub fn get_reactive_dependencies(&self, loc: Location) -> Vec<SymbolRef> {
-        let Some(deps) = self.session.get_dependencies(loc) else {
-            return vec![];
-        };
-        deps.iter()
-            .filter(|dep| self.session.get_type(dep.borrow().get_type()).is_reactive())
-            .cloned()
-            .collect()
-    }
-
-    pub fn get_type_at(&self, loc: Location) -> Option<types::Type> {
-        self.session.get_type_at(loc)
     }
 }

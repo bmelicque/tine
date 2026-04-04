@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-use tine_core::ast;
+use tine_core::ir;
 
 use super::CodeGenerator;
 
@@ -109,21 +109,25 @@ pub fn create_block_stmt(stmts: Vec<swc::Stmt>) -> swc::BlockStmt {
     }
 }
 
-pub fn can_be_inlined(node: &ast::Statement) -> bool {
+pub fn can_be_inlined(node: &ir::Statement) -> bool {
     match node {
-        ast::Statement::Expression(e) => match e.expression.as_ref() {
-            ast::Expression::Block(b) => can_block_be_inlined(b),
-            ast::Expression::If(i) => can_ifexpr_be_inlined(i),
-            ast::Expression::IfDecl(_) => false,
-            ast::Expression::Loop(_) => false,
-            ast::Expression::Match(_) => false,
-            _ => true,
-        },
+        ir::Statement::Assignment(a) => can_expression_be_inlined(&a.value),
+        ir::Statement::Expression(e) => can_expression_be_inlined(e),
         _ => false,
     }
 }
 
-pub fn can_block_be_inlined(block: &ast::BlockExpression) -> bool {
+fn can_expression_be_inlined(node: &ir::Expression) -> bool {
+    match node {
+        ir::Expression::Block(b) => can_block_be_inlined(b),
+        ir::Expression::If(i) => can_ifexpr_be_inlined(i),
+        ir::Expression::For(_) => false,
+        ir::Expression::ForIn(_) => false,
+        _ => true,
+    }
+}
+
+pub fn can_block_be_inlined(block: &ir::Block) -> bool {
     block
         .statements
         .iter()
@@ -131,17 +135,13 @@ pub fn can_block_be_inlined(block: &ast::BlockExpression) -> bool {
         .is_none()
 }
 
-pub fn can_ifexpr_be_inlined(expr: &ast::IfExpression) -> bool {
-    if !can_block_be_inlined(expr.consequent.as_ref().unwrap()) {
+pub fn can_ifexpr_be_inlined(expr: &ir::IfExpression) -> bool {
+    if !can_block_be_inlined(&expr.consequent) {
         return false;
     }
-    let Some(ref alt) = expr.alternate else {
-        return true;
-    };
-    match alt.as_ref() {
-        ast::Alternate::Block(b) => can_block_be_inlined(b),
-        ast::Alternate::If(i) => can_ifexpr_be_inlined(i),
-        ast::Alternate::IfDecl(_) => false,
+    match &expr.alternate {
+        Some(alt) => can_block_be_inlined(alt),
+        None => true,
     }
 }
 
@@ -152,13 +152,6 @@ pub fn undefined() -> swc::Expr {
         sym: "undefined".into(),
         optional: false,
     })
-}
-
-pub fn true_lit() -> swc::Expr {
-    swc::Expr::Lit(swc::Lit::Bool(swc::Bool {
-        span: DUMMY_SP,
-        value: true,
-    }))
 }
 
 impl CodeGenerator<'_> {
@@ -196,13 +189,46 @@ impl CodeGenerator<'_> {
             })),
         })
     }
-}
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum AssignTo {
-    None,
-    /// `{ value }` becomes `{ identifier = value }`
-    Last(String),
-    /// `{ break value }` becomes `{ identifier = value; break }`
-    Break(String),
+    pub fn some(&mut self, expr: swc::Expr) -> swc::NewExpr {
+        let exprs = vec![create_str("Some"), expr];
+        let args = exprs
+            .into_iter()
+            .map(|expr| swc::ExprOrSpread {
+                spread: None,
+                expr: Box::new(expr),
+            })
+            .collect();
+
+        swc::NewExpr {
+            span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
+            callee: Box::new(swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(swc::Expr::Ident(create_ident("__"))),
+                prop: swc::MemberProp::Ident(create_ident("Option").into()),
+            })),
+            args: Some(args),
+            type_args: None,
+        }
+    }
+
+    pub fn none(&mut self) -> swc::NewExpr {
+        let args = vec![swc::ExprOrSpread {
+            spread: None,
+            expr: Box::new(create_str("None")),
+        }];
+
+        swc::NewExpr {
+            span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
+            callee: Box::new(swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(swc::Expr::Ident(create_ident("__"))),
+                prop: swc::MemberProp::Ident(create_ident("Option").into()),
+            })),
+            args: Some(args),
+            type_args: None,
+        }
+    }
 }

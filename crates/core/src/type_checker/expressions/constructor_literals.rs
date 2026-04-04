@@ -13,7 +13,8 @@ use crate::{
 use super::super::TypeChecker;
 
 struct ConstructorVisit {
-    pub constructor_symbol: SymbolRef,
+    pub type_symbol: SymbolRef,
+    pub variant_symbol: Option<SymbolRef>,
     pub expected_body: Option<TypeSymbolBody>,
     pub substitutions: HashMap<types::TypeParam, TypeId>,
 }
@@ -35,7 +36,8 @@ impl TypeChecker<'_> {
         }
 
         let Some(ConstructorVisit {
-            constructor_symbol,
+            type_symbol: constructor_symbol,
+            variant_symbol,
             expected_body,
             substitutions,
         }) = self.visit_constructor(node.constructor)
@@ -51,6 +53,7 @@ impl TypeChecker<'_> {
                         s,
                         fields.into_iter().map(|f| f.1).collect(),
                         constructor_symbol.borrow().ty,
+                        variant_symbol,
                         substitutions,
                     )
                     .map(Into::into),
@@ -61,7 +64,13 @@ impl TypeChecker<'_> {
             },
             Some(ast::ConstructorBody::Tuple(t)) => match expected_body {
                 Some(TypeSymbolBody::Tuple(elements)) => self
-                    .visit_tuple_body(t, elements, constructor_symbol.borrow().ty, substitutions)
+                    .visit_struct_tuple_body(
+                        t,
+                        elements,
+                        constructor_symbol.borrow().ty,
+                        variant_symbol,
+                        substitutions,
+                    )
                     .map(Into::into),
                 _ => {
                     self.handle_unexpected_tuple_body(t, true);
@@ -106,7 +115,8 @@ impl TypeChecker<'_> {
                     _ => panic!(),
                 };
                 Some(ConstructorVisit {
-                    constructor_symbol: symbol,
+                    type_symbol: symbol,
+                    variant_symbol: None,
                     expected_body: Some(body),
                     substitutions,
                 })
@@ -145,7 +155,8 @@ impl TypeChecker<'_> {
                     return None;
                 };
                 Some(ConstructorVisit {
-                    constructor_symbol: symbol.clone(),
+                    type_symbol: symbol.clone(),
+                    variant_symbol: Some(constructor.clone()),
                     expected_body: body.clone(),
                     substitutions,
                 })
@@ -195,6 +206,7 @@ impl TypeChecker<'_> {
         body: ast::StructLiteralBody,
         members: Vec<SymbolRef>,
         constructor_type: TypeId,
+        variant_symbol: Option<SymbolRef>,
         mut substitutions: HashMap<types::TypeParam, TypeId>,
     ) -> Option<ir::StructLiteral> {
         let mut encountered = HashSet::new();
@@ -210,6 +222,7 @@ impl TypeChecker<'_> {
         let ty = self.resolve_constructor_type(constructor_type, body.loc, &substitutions);
         Some(ir::StructLiteral {
             loc: body.loc,
+            constructor: variant_symbol,
             fields,
             ty,
         })
@@ -262,28 +275,50 @@ impl TypeChecker<'_> {
         })
     }
 
-    fn visit_tuple_body(
+    /// Visit the body of tuple-like structs, like `Struct(a, b)`.
+    ///
+    /// These get lowered to regular structs `{ _0: a, _1: b }`.
+    fn visit_struct_tuple_body(
         &mut self,
         body: ast::TupleExpression,
         members: Vec<SymbolRef>,
         constructor_type: TypeId,
+        variant_symbol: Option<SymbolRef>,
         mut substitutions: HashMap<types::TypeParam, TypeId>,
-    ) -> Option<ir::TupleExpression> {
-        let elements = body
+    ) -> Option<ir::StructLiteral> {
+        let fields = body
             .elements
             .into_iter()
             .zip(members.into_iter())
             .map(|(got, expected)| {
-                self.check_expression_against(got, expected.borrow().ty, &mut substitutions)
+                self.visit_struct_tuple_element(got, expected, &mut substitutions)
             })
             .collect::<Vec<Option<_>>>()
             .into_iter()
             .collect::<Option<Vec<_>>>()?;
         let ty = self.resolve_constructor_type(constructor_type, body.loc, &substitutions);
-        Some(ir::TupleExpression {
+        Some(ir::StructLiteral {
             loc: body.loc,
-            elements,
+            constructor: variant_symbol,
+            fields,
             ty,
+        })
+    }
+
+    fn visit_struct_tuple_element(
+        &mut self,
+        got: ast::Expression,
+        expected: SymbolRef,
+        mut substitutions: &mut HashMap<types::TypeParam, TypeId>,
+    ) -> Option<ir::StructLiteralField> {
+        let expr = self.check_expression_against(got, expected.borrow().ty, &mut substitutions)?;
+        Some(ir::StructLiteralField {
+            loc: expr.loc(),
+            name: ir::Identifier {
+                loc: expr.loc(),
+                symbol: expected.clone(),
+            },
+            value: expr,
         })
     }
 
@@ -347,7 +382,17 @@ impl TypeChecker<'_> {
             }
         };
 
-        let ty = self.validate_map_type(ty, &entries);
+        let (key, value) = self.validate_map_type(ty, &entries);
+        match key {
+            TypeStore::DYNAMIC => self.error(DiagnosticKind::CannotInferType, node.loc),
+            TypeStore::UNKNOWN
+            | TypeStore::BOOLEAN
+            | TypeStore::FLOAT
+            | TypeStore::INTEGER
+            | TypeStore::STRING => {}
+            _ => self.error(DiagnosticKind::NotImplementedMapType, node.loc),
+        }
+        let ty = self.intern(types::MapType { key, value });
         Some(ir::MapLiteral {
             loc: node.loc,
             entries,
@@ -372,7 +417,11 @@ impl TypeChecker<'_> {
         })
     }
 
-    fn validate_map_type(&mut self, expected: TypeId, entries: &[ir::MapEntry]) -> TypeId {
+    fn validate_map_type(
+        &mut self,
+        expected: TypeId,
+        entries: &[ir::MapEntry],
+    ) -> (TypeId, TypeId) {
         let types::Type::Map(map_type) = self.resolve(expected) else {
             panic!()
         };
@@ -387,10 +436,8 @@ impl TypeChecker<'_> {
                 entry.value.loc(),
             );
         }
-        self.intern(types::MapType {
-            key: expected_key_type,
-            value: expected_value_type,
-        })
+
+        (expected_key_type, expected_value_type)
     }
 
     // Return new expected type

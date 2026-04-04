@@ -65,7 +65,7 @@ impl TypeChecker<'_> {
             Some(v) => match v {
                 ast::AttributeValue::Expression(e) => self.visit_expression(e)?,
                 ast::AttributeValue::String(s) => {
-                    ir::Expression::Stringliteral(ir::StringLiteral {
+                    ir::Expression::StringLiteral(ir::StringLiteral {
                         loc: attribute.loc,
                         value: s,
                     })
@@ -95,7 +95,7 @@ impl TypeChecker<'_> {
     fn visit_child(&mut self, child: ast::ElementChild) -> Option<ir::Expression> {
         match child {
             ast::ElementChild::Expression(e) => self.visit_dom_expression(e),
-            ast::ElementChild::Text(t) => Some(ir::Expression::Stringliteral(ir::StringLiteral {
+            ast::ElementChild::Text(t) => Some(ir::Expression::StringLiteral(ir::StringLiteral {
                 loc: t.loc,
                 value: t.text,
             })),

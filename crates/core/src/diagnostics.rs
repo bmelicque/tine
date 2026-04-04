@@ -129,6 +129,7 @@ pub enum DiagnosticKind {
     NotDereferenceable {
         type_name: String,
     },
+    NotImplementedMapType,
     NotIterable {
         type_name: String,
     },
@@ -320,6 +321,10 @@ impl Display for DiagnosticKind {
             Self::NotDereferenceable { type_name } => {
                 write!(f, "type `{}` cannot be dereferenced", type_name)
             }
+            Self::NotImplementedMapType => write!(
+                f,
+                "map key type not implemented yet; expecting a primitive type"
+            ),
             Self::NotIterable { type_name } => {
                 write!(f, "type `{}` cannot be iterated over", type_name)
             }

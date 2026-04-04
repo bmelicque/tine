@@ -157,6 +157,15 @@ impl TypeChecker<'_> {
         }
     }
 
+    pub fn get_handle(&self, symbol: SymbolRef) -> Option<SymbolHandle> {
+        self.ctx
+            .symbols
+            .iter()
+            .find(|s| s.has_ref(&symbol))
+            .cloned()
+            .or_else(|| self.session.get_handle(symbol))
+    }
+
     pub fn resolve_type_symbol(&self, ty: TypeId) -> Option<SymbolRef> {
         self.ctx
             .symbols

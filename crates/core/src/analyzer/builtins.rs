@@ -14,7 +14,7 @@ impl Session {
         let int_handle = self.add_builtin(SymbolData {
             name: "int".into(),
             ty: TypeStore::INTEGER,
-            kind: SymbolKind::TypeAlias,
+            kind: SymbolKind::PrimitiveType { methods: vec![] },
             // TODO: add docs
             ..Default::default()
         });
@@ -36,7 +36,7 @@ impl Session {
             SymbolKind::PrimitiveType { ref mut methods } => {
                 methods.push(int_to_string_handle.readonly());
             }
-            _ => unreachable!(),
+            ref kind => unreachable!("expected primitive, got {:?}", kind),
         };
     }
 
@@ -44,7 +44,7 @@ impl Session {
         let float_handle = self.add_builtin(SymbolData {
             name: "float".into(),
             ty: TypeStore::FLOAT,
-            kind: SymbolKind::TypeAlias,
+            kind: SymbolKind::PrimitiveType { methods: vec![] },
             // TODO: add docs
             ..Default::default()
         });

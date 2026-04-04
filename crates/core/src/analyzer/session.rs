@@ -95,6 +95,9 @@ impl Session {
     pub fn get_ast(&self, id: ModuleId) -> &ast::Program {
         &self.parsed.get(&id).unwrap()
     }
+    pub fn get_ir(&self, id: ModuleId) -> &ir::Program {
+        &self.ir.get(&id).unwrap()
+    }
 
     pub fn find_export(&self, module: ModuleId, name: &str) -> Option<SymbolRef> {
         self.exports

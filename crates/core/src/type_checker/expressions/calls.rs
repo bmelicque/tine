@@ -335,6 +335,24 @@ impl TypeChecker<'_> {
             inner: arg.ty(),
         }));
 
+        let arg = ir::FunctionExpression {
+            ty: self.intern(types::FunctionType {
+                params: vec![],
+                return_type: arg.ty(),
+            }),
+            loc: arg.loc(),
+            name: None,
+            params: vec![],
+            body: ir::Block {
+                ty: arg.ty(),
+                loc: arg.loc(),
+                statements: vec![ir::Statement::Return(ir::ReturnStatement {
+                    loc: arg.loc(),
+                    expression: Some(Box::new(arg)),
+                })],
+            },
+        };
+
         Some(ir::CallExpression {
             loc: node.loc,
             callee: Box::new(callee),

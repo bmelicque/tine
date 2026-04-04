@@ -108,7 +108,7 @@ impl TypeChecker<'_> {
         return_type: Option<ast::Type>,
         body: Option<ast::BlockExpression>,
     ) -> Option<(TypeId, ir::Block)> {
-        let return_type = return_type.map_or(TypeStore::UNKNOWN, |ty| self.visit_type(ty));
+        let return_type = return_type.map_or(TypeStore::UNIT, |ty| self.visit_type(ty));
 
         let body = body.map(|b| self.visit_block_expression(b))?;
 

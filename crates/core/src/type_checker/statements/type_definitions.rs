@@ -213,7 +213,7 @@ impl TypeChecker<'_> {
                 let loc = ty.loc();
                 let ty = self.visit_type(ty);
                 self.ctx.register_symbol(SymbolData {
-                    name: i.to_string(),
+                    name: format!("_{}", i),
                     ty,
                     kind: SymbolKind::Member {
                         owner: owner.clone(),

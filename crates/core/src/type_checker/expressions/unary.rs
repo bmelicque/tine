@@ -38,6 +38,7 @@ impl TypeChecker<'_> {
         };
         Some(ir::UnaryExpression {
             loc: node.loc,
+            operator: node.operator,
             operand: Box::new(operand),
             ty,
         })
@@ -71,6 +72,7 @@ impl TypeChecker<'_> {
         });
         Some(ir::UnaryExpression {
             loc: node.loc,
+            operator: node.operator,
             operand: Box::new(operand),
             ty,
         })
@@ -87,6 +89,7 @@ impl TypeChecker<'_> {
         match operand_type {
             TypeStore::INTEGER | TypeStore::FLOAT => Some(ir::UnaryExpression {
                 loc: node.loc,
+                operator: node.operator,
                 operand: Box::new(operand),
                 ty: operand_type,
             }),
@@ -118,6 +121,7 @@ impl TypeChecker<'_> {
         }
         Some(ir::UnaryExpression {
             loc: node.loc,
+            operator: node.operator,
             operand: Box::new(operand),
             ty: TypeStore::BOOLEAN,
         })

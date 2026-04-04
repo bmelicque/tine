@@ -3,7 +3,7 @@ use enum_from_derive::EnumFrom;
 use crate::{
     ir::{Block, Expression, Identifier},
     types::TypeId,
-    Location, ModuleId, SymbolRef,
+    Location, ModuleId, ModulePath, SymbolRef,
 };
 
 #[derive(Debug, Clone, EnumFrom)]
@@ -43,6 +43,10 @@ impl Statement {
 pub struct Assignment {
     pub loc: Location,
     pub pattern: Expression,
+    /// Should be either:
+    /// - an identifier
+    /// - a member expression
+    /// - a indirection (`*` + identifier)
     pub value: Expression,
 }
 
@@ -76,6 +80,7 @@ pub struct ReturnStatement {
 pub struct UseDeclaration {
     pub loc: Location,
     pub module: ModuleId,
+    pub path: ModulePath,
     pub symbols: Vec<SymbolRef>,
 }
 

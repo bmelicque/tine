@@ -1,94 +1,48 @@
 mod assignments;
-mod declarations;
-mod type_definitions;
 
 use super::{utils::create_ident, CodeGenerator};
-use crate::codegen::utils::{create_block_stmt, AssignTo};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
-use tine_core::ast;
+use tine_core::ir;
 
 impl CodeGenerator<'_> {
-    pub fn stmt_to_swc(&mut self, node: &ast::Statement) -> Vec<swc::Stmt> {
+    pub fn stmt_to_swc(&mut self, node: &ir::Statement) -> swc::Stmt {
         match node {
-            ast::Statement::Assignment(node) => vec![self.assignment_to_swc(node).into()],
-            ast::Statement::Break(_) => vec![self.break_to_swc_stmt().into()],
-            ast::Statement::Enum(node) => vec![self.enum_to_swc(node).into()],
-            ast::Statement::Expression(node) => match node.expression.as_ref() {
-                ast::Expression::Block(block) => {
-                    vec![self.block_to_swc_stmt(block, AssignTo::None).into()]
-                }
-                ast::Expression::If(expr) => vec![self.if_to_swc_stmt(expr, AssignTo::None).into()],
-                ast::Expression::IfDecl(expr) => {
-                    vec![self.if_decl_to_swc_stmt(expr, AssignTo::None).into()]
-                }
-                ast::Expression::Loop(expr) => vec![self.loop_to_swc_stmt(expr, AssignTo::None)],
-                ast::Expression::Match(expr) => {
-                    vec![self.match_to_swc_stmt(expr, AssignTo::None).into()]
-                }
-                expr => vec![swc::ExprStmt {
+            ir::Statement::Assignment(a) => self.assignment_to_swc(a).into(),
+            ir::Statement::Break(_) => self.break_to_swc_stmt().into(),
+            ir::Statement::Continue(_) => swc::Stmt::Continue(swc::ContinueStmt {
+                span: DUMMY_SP,
+                label: None,
+            }),
+            ir::Statement::Expression(e) => match e {
+                ir::Expression::Block(block) => self.block_to_swc_stmt(block).into(),
+                ir::Expression::If(expr) => self.if_to_swc_stmt(expr).into(),
+                ir::Expression::For(f) => self.for_to_swc_stmt(f).into(),
+                ir::Expression::ForIn(f) => self.for_in_to_swc_stmt(f).into(),
+                expr => swc::Stmt::Expr(swc::ExprStmt {
                     span: DUMMY_SP,
                     expr: Box::new(self.expr_to_swc(expr)),
-                }
-                .into()],
+                }),
             },
-            ast::Statement::Function(node) => vec![swc::Stmt::Decl(swc::Decl::Fn(swc::FnDecl {
-                ident: create_ident(node.definition.name.as_ref().unwrap().as_str()),
-                declare: false,
-                function: Box::new(self.function_to_swc_function(&node.definition)),
-            }))],
-            ast::Statement::Invalid(_) => {
-                unreachable!("Invalid input should've been detected during analysis phase")
+            ir::Statement::Function(f) => {
+                swc::Stmt::Decl(swc::Decl::Fn(self.function_to_swc_definition(f)))
             }
-            ast::Statement::MethodDefinition(node) => vec![swc::ExprStmt {
-                span: DUMMY_SP,
-                expr: Box::new(self.method_definition_to_swc(node).into()),
-            }
-            .into()],
-            ast::Statement::Return(node) => vec![self.return_to_swc(node).into()],
-            ast::Statement::StructDefinition(node) => {
-                vec![self.struct_def_to_swc_class(node).into()]
-            }
-            ast::Statement::TypeAlias(_) => vec![],
-            ast::Statement::VariableDeclaration(node) => self.declaration_to_swc(node),
+            ir::Statement::Return(node) => self.return_to_swc(node).into(),
+            ir::Statement::Use(_) => unreachable!(),
+            ir::Statement::Variable(node) => self.declaration_to_swc(node).into(),
         }
     }
 
-    pub fn block_to_swc_stmt(
-        &mut self,
-        node: &ast::BlockExpression,
-        assign_to: AssignTo,
-    ) -> swc::BlockStmt {
-        self.push_scope();
-        let mut stmts = Vec::<swc::Stmt>::new();
-        for statement in node.statements.iter() {
-            match statement {
-                ast::Statement::Break(stmt) => {
-                    if let (AssignTo::Break(assignee), Some(expr)) =
-                        (assign_to.clone(), stmt.value.clone())
-                    {
-                        let assigned = self.expr_to_swc(&expr);
-                        stmts.push(self.assignment_expression(&assignee, assigned).into());
-                    }
-                    stmts.push(swc::Stmt::Break(swc::BreakStmt {
-                        span: DUMMY_SP,
-                        label: None,
-                    }));
-                }
-                stmt => {
-                    stmts.extend(self.stmt_to_swc(stmt));
-                }
-            }
+    pub fn block_to_swc_stmt(&mut self, node: &ir::Block) -> swc::BlockStmt {
+        swc::BlockStmt {
+            span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
+            stmts: node
+                .statements
+                .iter()
+                .map(|stmt| self.stmt_to_swc(stmt))
+                .collect(),
         }
-
-        self.drop_scope();
-        if let AssignTo::Last(ref target) = assign_to {
-            if let Some(swc::Stmt::Expr(last)) = stmts.last_mut() {
-                *last = self.assignment_expression(target, *last.expr.clone())
-            }
-        }
-
-        create_block_stmt(stmts)
     }
 
     fn break_to_swc_stmt(&mut self) -> swc::BreakStmt {
@@ -98,15 +52,14 @@ impl CodeGenerator<'_> {
         }
     }
 
-    /// assign_to is Some if the last stmt has to be assigned (used for extracted blocks)
-    pub fn if_to_swc_stmt(&mut self, node: &ast::IfExpression, assign_to: AssignTo) -> swc::IfStmt {
-        let block = self.block_to_swc_stmt(node.consequent.as_ref().unwrap(), assign_to.clone());
-        let test = Box::new(self.expr_to_swc(node.condition.as_ref().unwrap()));
+    pub fn if_to_swc_stmt(&mut self, node: &ir::IfExpression) -> swc::IfStmt {
+        let block = self.block_to_swc_stmt(&node.consequent);
+        let test = Box::new(self.expr_to_swc(&node.condition));
         let cons = Box::new(block.into());
         let alt = node
             .alternate
             .as_ref()
-            .map(|alt| self.alt_to_swc_stmt(alt.as_ref(), assign_to))
+            .map(|alt| self.block_to_swc_stmt(alt).into())
             .map(Box::new);
         swc::IfStmt {
             span: DUMMY_SP,
@@ -116,86 +69,23 @@ impl CodeGenerator<'_> {
         }
     }
 
-    /// assign_to is Some if the last stmt has to be assigned (used for extracted blocks)
-    pub fn if_decl_to_swc_stmt(
-        &mut self,
-        node: &ast::IfPatExpression,
-        assign_to: AssignTo,
-    ) -> swc::IfStmt {
-        let mut block =
-            self.block_to_swc_stmt(node.consequent.as_ref().unwrap(), assign_to.clone());
-        let test = Box::new(self.pattern_to_swc_test(
-            node.pattern.as_ref().unwrap(),
-            node.scrutinee.as_ref().unwrap(),
-        ));
-        block.stmts.push(
-            swc::Decl::Var(Box::new(swc::VarDecl {
+    pub fn for_to_swc_stmt(&mut self, node: &ir::ForExpression) -> swc::WhileStmt {
+        let test = match node.condition.as_ref() {
+            Some(condition) => self.expr_to_swc(condition),
+            None => swc::Expr::Lit(swc::Lit::Bool(swc::Bool {
                 span: DUMMY_SP,
-                ctxt: SyntaxContext::empty(),
-                kind: swc::VarDeclKind::Const,
-                declare: false,
-                decls: vec![swc::VarDeclarator {
-                    span: DUMMY_SP,
-                    name: self.pattern_to_swc(node.pattern.as_ref().unwrap()),
-                    init: Some(Box::new(self.expr_to_swc(node.scrutinee.as_ref().unwrap()))),
-                    definite: false,
-                }],
-            }))
-            .into(),
-        );
-        block.stmts.rotate_right(1);
-        let cons = Box::new(block.into());
-        let alt = node
-            .alternate
-            .as_ref()
-            .map(|alt| self.alt_to_swc_stmt(alt.as_ref(), assign_to))
-            .map(Box::new);
-        swc::IfStmt {
-            span: DUMMY_SP,
-            test,
-            cons,
-            alt,
-        }
-    }
-
-    fn alt_to_swc_stmt(&mut self, node: &ast::Alternate, params: AssignTo) -> swc::Stmt {
-        match node {
-            ast::Alternate::Block(n) => self.block_to_swc_stmt(n, params).into(),
-            ast::Alternate::If(n) => self.if_to_swc_stmt(n, params).into(),
-            ast::Alternate::IfDecl(n) => self.if_decl_to_swc_stmt(n, params).into(),
-        }
-    }
-
-    pub fn loop_to_swc_stmt(&mut self, node: &ast::Loop, assign_to: AssignTo) -> swc::Stmt {
-        match node {
-            ast::Loop::For(node) => self.for_to_swc_stmt(node, assign_to).into(),
-            ast::Loop::ForIn(node) => self.for_in_to_swc_stmt(node, assign_to).into(),
-        }
-    }
-
-    fn for_to_swc_stmt(
-        &mut self,
-        node: &ast::ForExpression,
-        assign_to: AssignTo,
-    ) -> swc::WhileStmt {
-        let test = Box::new(self.expr_to_swc(node.condition.as_ref().unwrap()));
-        // FIXME: no assign_to! and breaks should be `assignee = value; break;`
-        let body = Box::new(
-            self.block_to_swc_stmt(node.body.as_ref().unwrap(), assign_to)
-                .into(),
-        );
+                value: true,
+            })),
+        };
+        let body = Box::new(self.block_to_swc_stmt(&node.body).into());
         swc::WhileStmt {
             span: DUMMY_SP,
-            test,
+            test: Box::new(test),
             body,
         }
     }
 
-    fn for_in_to_swc_stmt(
-        &mut self,
-        node: &ast::ForInExpression,
-        assign_to: AssignTo,
-    ) -> swc::ForOfStmt {
+    pub fn for_in_to_swc_stmt(&mut self, node: &ir::ForInExpression) -> swc::ForOfStmt {
         swc::ForOfStmt {
             span: DUMMY_SP,
             is_await: false,
@@ -206,170 +96,71 @@ impl CodeGenerator<'_> {
                 declare: false,
                 decls: vec![swc::VarDeclarator {
                     span: DUMMY_SP,
-                    name: self.get_for_in_element_name(node.pattern.as_ref().unwrap()),
+                    name: create_ident(&node.element.as_name()).into(),
                     init: None,
                     definite: false,
                 }],
             })),
-            right: Box::new(self.expr_to_swc(node.iterable.as_ref().unwrap())),
-            body: Box::new(self.get_for_in_body(&node, assign_to).into()),
+            right: Box::new(self.expr_to_swc(&node.iterable)),
+            body: Box::new(self.block_to_swc_stmt(&node.body).into()),
         }
     }
 
-    fn get_for_in_element_name(&mut self, pattern: &ast::Pattern) -> swc::Pat {
-        match pattern {
-            ast::Pattern::Identifier(id) => self.identifier_pattern_to_swc(&id),
-            _ => swc::Pat::Ident(swc::BindingIdent {
-                id: create_ident("__"),
-                type_ann: None,
+    fn function_to_swc_definition(&mut self, node: &ir::FunctionDefinition) -> swc::FnDecl {
+        swc::FnDecl {
+            ident: create_ident(&node.name.as_name()),
+            declare: false,
+            function: Box::new(swc::Function {
+                params: node
+                    .params
+                    .iter()
+                    .map(|p| swc::Param {
+                        span: DUMMY_SP,
+                        decorators: vec![],
+                        pat: swc::Pat::Ident(create_ident(&p.as_name()).into()),
+                    })
+                    .collect(),
+                decorators: vec![],
+                span: DUMMY_SP,
+                ctxt: SyntaxContext::empty(),
+                body: Some(self.block_to_swc_stmt(&node.body)),
+                is_generator: false,
+                is_async: false,
+                type_params: None,
+                return_type: None,
             }),
         }
     }
 
-    fn get_for_in_body(
-        &mut self,
-        node: &ast::ForInExpression,
-        assign_to: AssignTo,
-    ) -> swc::BlockStmt {
-        let mut body = self.block_to_swc_stmt(node.body.as_ref().unwrap(), assign_to);
-        let pattern = node.pattern.as_ref().unwrap();
-        if matches!(**pattern, ast::Pattern::Identifier(_)) {
-            return body;
-        }
-        let guard = swc::Stmt::If(swc::IfStmt {
-            span: DUMMY_SP,
-            test: Box::new(swc::Expr::Unary(swc::UnaryExpr {
-                span: DUMMY_SP,
-                op: swc::UnaryOp::Bang,
-                arg: Box::new(self.pattern_to_swc_test(
-                    node.pattern.as_ref().unwrap(),
-                    node.iterable.as_ref().unwrap(),
-                )),
-            })),
-            cons: Box::new(swc::Stmt::Continue(swc::ContinueStmt {
-                span: DUMMY_SP,
-                label: None,
-            })),
-            alt: None,
-        });
-        let decl = swc::Stmt::Decl(swc::Decl::Var(Box::new(swc::VarDecl {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
-            kind: swc::VarDeclKind::Const,
-            declare: false,
-            decls: vec![swc::VarDeclarator {
-                span: DUMMY_SP,
-                name: self.pattern_to_swc(node.pattern.as_ref().unwrap()),
-                init: Some(Box::new(create_ident("__").into())),
-                definite: false,
-            }],
-        })));
-        body.stmts.push(guard);
-        body.stmts.push(decl);
-        body.stmts.rotate_right(2);
-        body
-    }
-
-    pub fn match_to_swc_stmt(
-        &mut self,
-        node: &ast::MatchExpression,
-        assign_to: AssignTo,
-    ) -> swc::IfStmt {
-        let mut node = node.clone();
-        // FIXME: extract scrutinee in case expensive or not idempotent
-        let arms = node.arms.as_mut().unwrap();
-        let mut stmt =
-            self.arm_to_swc_if_stmt(&arms.pop().unwrap(), node.scrutinee.as_ref().unwrap(), None);
-
-        for arm in node.arms.as_ref().unwrap().iter().rev() {
-            stmt = self.arm_to_swc_if_stmt(
-                &arm,
-                node.scrutinee.as_ref().unwrap(),
-                Some(Box::new(stmt)),
-            );
-        }
-
-        self.if_decl_to_swc_stmt(&stmt, assign_to)
-    }
-
-    fn arm_to_swc_if_stmt(
-        &mut self,
-        node: &ast::MatchArm,
-        scrutinee: &Box<ast::Expression>,
-        alternate: Option<Box<ast::IfPatExpression>>,
-    ) -> ast::IfPatExpression {
-        let consequent = Some(ast::BlockExpression {
-            loc: node.expression.as_ref().unwrap().loc(),
-            statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
-                expression: node.expression.as_ref().unwrap().clone(),
-            })],
-        });
-        ast::IfPatExpression {
-            loc: node.loc,
-            pattern: node.pattern.as_deref().cloned(),
-            scrutinee: Some(scrutinee.clone()),
-            consequent,
-            alternate: alternate
-                .map(|alt| ast::Alternate::IfDecl(*alt))
-                .map(Box::new),
-        }
-    }
-
-    fn function_to_swc_function(&mut self, node: &ast::FunctionExpression) -> swc::Function {
-        let params = node
-            .params
-            .iter()
-            .map(|param| swc::Param {
-                span: DUMMY_SP,
-                decorators: vec![],
-                pat: swc::Pat::Ident(create_ident(param.name.as_str()).into()),
-            })
-            .collect();
-
-        let body = match self.function_body_to_swc(&node.body) {
-            swc::BlockStmtOrExpr::BlockStmt(block) => block,
-            swc::BlockStmtOrExpr::Expr(expr) => {
-                create_block_stmt(vec![swc::Stmt::Return(swc::ReturnStmt {
-                    span: DUMMY_SP,
-                    arg: Some(expr),
-                })])
-            }
-        };
-
-        swc::Function {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
-            params,
-            decorators: vec![],
-            body: Some(body),
-            is_generator: false,
-            is_async: false,
-            type_params: None,
-            return_type: None,
-        }
-    }
-
-    fn method_definition_to_swc(&mut self, node: &ast::MethodDefinition) -> swc::AssignExpr {
-        swc::AssignExpr {
-            span: DUMMY_SP,
-            op: swc::AssignOp::Assign,
-            left: swc::AssignTarget::Simple(swc::SimpleAssignTarget::Member(swc::MemberExpr {
-                span: DUMMY_SP,
-                obj: Box::new(create_ident(&node.receiver.ty.name).into()),
-                prop: swc::MemberProp::Ident(create_ident(node.name.as_str()).into()),
-            })),
-            right: Box::new(self.function_to_swc_function(&node.definition).into()),
-        }
-    }
-
-    fn return_to_swc(&mut self, node: &ast::ReturnStatement) -> swc::ReturnStmt {
+    fn return_to_swc(&mut self, node: &ir::ReturnStatement) -> swc::ReturnStmt {
         swc::ReturnStmt {
             span: DUMMY_SP,
             arg: node
-                .value
+                .expression
                 .as_ref()
                 .map(|value| self.expr_to_swc(&value))
                 .map(Box::new),
+        }
+    }
+
+    fn declaration_to_swc(&mut self, node: &ir::VariableDeclaration) -> swc::VarDecl {
+        let kind = if node.mutable {
+            swc::VarDeclKind::Let
+        } else {
+            swc::VarDeclKind::Const
+        };
+
+        swc::VarDecl {
+            span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
+            kind,
+            declare: false,
+            decls: vec![swc::VarDeclarator {
+                span: DUMMY_SP,
+                name: swc::Pat::Ident(create_ident(&node.symbol.as_name()).into()),
+                init: Some(Box::new(self.expr_to_swc(&node.value))),
+                definite: false,
+            }],
         }
     }
 }

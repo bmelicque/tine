@@ -97,7 +97,7 @@ impl TypeChecker<'_> {
             panic!("this should only be called with identifiers")
         };
         let identifier = self.visit_identifier(identifier)?;
-        let handle = self.session.get_handle(identifier.symbol.clone())?;
+        let handle = self.get_handle(identifier.symbol.clone())?;
         if !handle.borrow().is_mutable() {
             let error = DiagnosticKind::AssignmentToConstant {
                 name: identifier.as_name(),
@@ -165,6 +165,7 @@ impl TypeChecker<'_> {
 
         Some(ir::Expression::Unary(ir::UnaryExpression {
             loc: node.loc,
+            operator: ir::UnaryOperator::Star,
             operand: Box::new(ir::Expression::Identifier(ir::Identifier {
                 loc: node.loc,
                 symbol: info.readonly(),

@@ -47,7 +47,7 @@ impl TypeChecker<'_> {
             ast::Expression::Loop(node) => self.visit_loop(node),
             ast::Expression::Match(node) => self.visit_match_expression(node).map(Into::into),
             ast::Expression::StringLiteral(node) => {
-                Some(ir::Expression::Stringliteral(ir::StringLiteral {
+                Some(ir::Expression::StringLiteral(ir::StringLiteral {
                     loc: node.loc,
                     value: node.text,
                 }))
@@ -220,7 +220,12 @@ mod tests {
         };
 
         let result = checker.visit_array_expression(array_expression);
-        assert_eq!(result.ty, TypeStore::DYNAMIC);
+        assert_eq!(
+            checker.resolve(result.ty),
+            types::Type::Array(types::ArrayType {
+                element: TypeStore::DYNAMIC
+            })
+        );
         assert!(checker.diagnostics.is_empty());
     }
 

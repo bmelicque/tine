@@ -61,9 +61,11 @@ impl TypeChecker<'_> {
                 .collect()
         };
 
+        let path = self.session.read_module(module_id).name.clone();
         Some(ir::UseDeclaration {
             loc: node.loc,
             module: module_id,
+            path,
             symbols,
         })
     }
@@ -101,6 +103,7 @@ impl TypeChecker<'_> {
 
         Some(ir::UseDeclaration {
             module: module_id,
+            path: module_name,
             loc,
             symbols,
         })

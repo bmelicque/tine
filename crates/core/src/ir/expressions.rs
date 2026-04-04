@@ -25,7 +25,7 @@ pub enum Expression {
     IntLiteral(IntLiteral),
     Map(MapLiteral),
     Member(MemberExpression),
-    Stringliteral(StringLiteral),
+    StringLiteral(StringLiteral),
     Struct(StructLiteral),
     Tuple(TupleExpression),
     TypeMatch(TypeMatch),
@@ -50,7 +50,7 @@ impl Expression {
             Expression::IntLiteral(i) => i.loc,
             Expression::Map(m) => m.loc,
             Expression::Member(m) => m.loc,
-            Expression::Stringliteral(s) => s.loc,
+            Expression::StringLiteral(s) => s.loc,
             Expression::Struct(s) => s.loc,
             Expression::Tuple(tuple) => tuple.loc,
             Expression::TypeMatch(t) => t.loc,
@@ -75,7 +75,7 @@ impl Expression {
             Expression::IntLiteral(_) => TypeStore::INTEGER,
             Expression::Map(m) => m.ty,
             Expression::Member(m) => m.ty,
-            Expression::Stringliteral(_) => TypeStore::STRING,
+            Expression::StringLiteral(_) => TypeStore::STRING,
             Expression::Struct(s) => s.ty,
             Expression::Tuple(tuple) => tuple.ty,
             Expression::TypeMatch(_) => TypeStore::BOOLEAN,
@@ -95,7 +95,7 @@ impl Expression {
             Self::BooleanLiteral(_)
             | Self::FloatLiteral(_)
             | Self::IntLiteral(_)
-            | Self::Stringliteral(_) => Box::new(std::iter::empty()),
+            | Self::StringLiteral(_) => Box::new(std::iter::empty()),
 
             Self::Array(a) => iterate(&a.elements),
             Self::Binary(b) => Box::new(b.left.walk().chain(b.right.walk())),
@@ -155,8 +155,13 @@ impl Expression {
         }
     }
 
+    /// Iterates through all the symbols captured by this expression
     pub fn dependencies<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Identifier> + 'a> {
-        Box::new(self.walk().filter_map(|child| child.as_identifier()))
+        Box::new(
+            self.walk()
+                .filter_map(|child| child.as_identifier())
+                .filter(|i| !i.loc.is_within(self.loc())),
+        )
     }
 }
 
@@ -347,6 +352,8 @@ pub struct StringLiteral {
 #[derive(Debug, Clone)]
 pub struct StructLiteral {
     pub loc: Location,
+    /// If this has been constructed from an enum variant, contains a ref to the given variant.
+    pub constructor: Option<SymbolRef>,
     pub fields: Vec<StructLiteralField>,
     pub ty: TypeId,
 }
@@ -377,6 +384,7 @@ pub type UnaryOperator = ast::UnaryOperator;
 #[derive(Debug, Clone)]
 pub struct UnaryExpression {
     pub loc: Location,
+    pub operator: UnaryOperator,
     pub operand: Box<Expression>,
     pub ty: TypeId,
 }
