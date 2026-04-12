@@ -9,10 +9,10 @@ use swc_common::{FileName, DUMMY_SP};
 use swc_ecma_ast as swc;
 
 impl CodeGenerator<'_> {
-    pub fn item_to_swc(&mut self, node: &ir::Statement) -> swc::ModuleItem {
+    pub fn item_to_swc(&mut self, node: &ir::Statement) -> Vec<swc::ModuleItem> {
         match node {
-            ir::Statement::Use(u) => self.use_decl_to_swc(u).into(),
-            stmt => self.stmt_to_swc(stmt).into(),
+            ir::Statement::Use(u) => vec![self.use_decl_to_swc(u).into()],
+            stmt => self.stmt_to_swc(stmt).into_iter().map(Into::into).collect(),
         }
     }
 

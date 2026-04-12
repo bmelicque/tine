@@ -1,5 +1,6 @@
 use crate::codegen::{
-    utils::{create_ident, create_number, create_str, undefined},
+    expressions::ExpressionResult,
+    utils::{create_ident, create_str, is_primitive, make_cell},
     CodeGenerator,
 };
 use swc_common::{SyntaxContext, DUMMY_SP};
@@ -7,68 +8,107 @@ use swc_ecma_ast as swc;
 use tine_core::ir;
 
 impl CodeGenerator<'_> {
-    pub fn unary_expression_to_swc_expr(&mut self, node: &ir::UnaryExpression) -> swc::Expr {
+    pub fn handle_unary_expression(&mut self, node: &ir::UnaryExpression) -> ExpressionResult {
         match node.operator {
-            ir::UnaryOperator::Ampersand => self.ref_to_swc_expr(node),
-            ir::UnaryOperator::Bang => self.logical_not_to_swc_expr(node),
-            ir::UnaryOperator::Minus => self.negation_to_swc_expr(node),
-            ir::UnaryOperator::Star => self.indirection_to_swc_expr(node),
+            ir::UnaryOperator::Ampersand => self.handle_ref(node),
+            ir::UnaryOperator::Bang => self.handle_logical_not(node),
+            ir::UnaryOperator::Minus => self.handle_negation(node),
+            ir::UnaryOperator::Star => self.handle_deref(node),
         }
     }
 
     /**
-     * `*expr` => `expr.get()`
+     * `*expr` => `expr.$get()`
      */
-    fn indirection_to_swc_expr(&mut self, node: &ir::UnaryExpression) -> swc::Expr {
-        swc::Expr::Call(swc::CallExpr {
+    fn handle_deref(&mut self, node: &ir::UnaryExpression) -> ExpressionResult {
+        let obj_result = self.handle_expression(&node.operand);
+
+        let expr = swc::Expr::Call(swc::CallExpr {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
             callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
-                obj: Box::new(self.expr_to_swc(&node.operand)),
-                prop: swc::MemberProp::Ident(create_ident("get").into()),
+                obj: Box::new(obj_result.expr),
+                prop: swc::MemberProp::Ident(create_ident("$get").into()),
             }))),
             args: vec![],
             type_args: None,
-        })
+        });
+
+        ExpressionResult {
+            prelim_stmts: obj_result.prelim_stmts,
+            expr,
+        }
     }
 
-    fn ref_to_swc_expr(&mut self, node: &ir::UnaryExpression) -> swc::Expr {
-        let (ctx, value) = match &*node.operand {
-            ir::Expression::Identifier(expr) => {
-                (self.ident_to_swc(expr).into(), create_number(0.0))
+    fn handle_ref(&mut self, node: &ir::UnaryExpression) -> ExpressionResult {
+        if !is_primitive(node.operand.ty()) {
+            return self.handle_expression(&node.operand);
+        }
+
+        match &*node.operand {
+            ir::Expression::Identifier(i) => self.ident_to_swc(i).into(),
+            ir::Expression::Member(m) => self.handle_primitive_member_ref(m),
+            _ => {
+                let operand = self.handle_expression(&node.operand);
+                ExpressionResult {
+                    prelim_stmts: operand.prelim_stmts,
+                    expr: make_cell(operand.expr),
+                }
             }
-            ir::Expression::Member(expr) => (
-                self.expr_to_swc(&expr.object),
-                match expr.member.as_name().parse::<usize>() {
-                    Ok(int) => create_number(int as f64),
-                    Err(_) => create_str(&expr.member.as_name()),
-                },
-            ),
-            expr => (undefined(), self.expr_to_swc(expr)),
-        };
-        swc::Expr::New(swc::NewExpr {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
-            callee: Box::new(swc::Expr::Ident(create_ident("__Reference"))),
-            args: Some(vec![ctx.into(), value.into()]),
-            type_args: None,
-        })
+        }
     }
 
-    fn negation_to_swc_expr(&mut self, node: &ir::UnaryExpression) -> swc::Expr {
-        swc::Expr::Unary(swc::UnaryExpr {
+    /// Handle expressions like `&object.value` that evaluate to a primitive
+    fn handle_primitive_member_ref(&mut self, node: &ir::MemberExpression) -> ExpressionResult {
+        // `$.MemberRef`
+        let callee = swc::Expr::Member(swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(create_ident("$").into()),
+            prop: swc::MemberProp::Ident(create_ident("MemberRef").into()),
+        });
+        let obj = self.handle_expression(&node.object);
+        let prop = create_str(&node.member.as_name());
+
+        let expr = swc::Expr::New(swc::NewExpr {
+            callee: Box::new(callee),
+            args: Some(vec![obj.expr.into(), prop.into()]),
+            ..Default::default()
+        });
+
+        ExpressionResult {
+            prelim_stmts: obj.prelim_stmts,
+            expr,
+        }
+    }
+
+    fn handle_negation(&mut self, node: &ir::UnaryExpression) -> ExpressionResult {
+        let arg_result = self.handle_expression(&node.operand);
+
+        let expr = swc::Expr::Unary(swc::UnaryExpr {
             span: DUMMY_SP,
             op: swc::UnaryOp::Minus,
-            arg: Box::new(self.expr_to_swc(&node.operand)),
-        })
+            arg: Box::new(arg_result.expr),
+        });
+
+        ExpressionResult {
+            prelim_stmts: arg_result.prelim_stmts,
+            expr,
+        }
     }
 
-    fn logical_not_to_swc_expr(&mut self, node: &ir::UnaryExpression) -> swc::Expr {
-        swc::Expr::Unary(swc::UnaryExpr {
+    fn handle_logical_not(&mut self, node: &ir::UnaryExpression) -> ExpressionResult {
+        let arg_result = self.handle_expression(&node.operand);
+
+        let expr = swc::Expr::Unary(swc::UnaryExpr {
             span: DUMMY_SP,
             op: swc::UnaryOp::Bang,
-            arg: Box::new(self.expr_to_swc(&node.operand)),
-        })
+            arg: Box::new(arg_result.expr),
+        });
+
+        ExpressionResult {
+            prelim_stmts: arg_result.prelim_stmts,
+            expr,
+        }
     }
 }

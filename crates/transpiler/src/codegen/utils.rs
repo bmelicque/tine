@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-use tine_core::ir;
+use tine_core::{ir, types::TypeId, TypeStore};
 
 use super::CodeGenerator;
 
@@ -93,14 +93,6 @@ pub fn create_str(text: &str) -> swc::Expr {
     }))
 }
 
-pub fn create_number(value: f64) -> swc::Expr {
-    swc::Expr::Lit(swc::Lit::Num(swc::Number {
-        span: DUMMY_SP,
-        value: value,
-        raw: None,
-    }))
-}
-
 pub fn create_block_stmt(stmts: Vec<swc::Stmt>) -> swc::BlockStmt {
     swc::BlockStmt {
         span: DUMMY_SP,
@@ -117,7 +109,7 @@ pub fn can_be_inlined(node: &ir::Statement) -> bool {
     }
 }
 
-fn can_expression_be_inlined(node: &ir::Expression) -> bool {
+pub fn can_expression_be_inlined(node: &ir::Expression) -> bool {
     match node {
         ir::Expression::Block(b) => can_block_be_inlined(b),
         ir::Expression::If(i) => can_ifexpr_be_inlined(i),
@@ -145,6 +137,28 @@ pub fn can_ifexpr_be_inlined(expr: &ir::IfExpression) -> bool {
     }
 }
 
+pub fn is_primitive(ty: TypeId) -> bool {
+    match ty {
+        TypeStore::BOOLEAN
+        | TypeStore::FLOAT
+        | TypeStore::INTEGER
+        | TypeStore::STRING
+        | TypeStore::UNIT => true,
+        _ => false,
+    }
+}
+
+pub fn is_handled_by_ref(node: &ir::Expression) -> bool {
+    if !is_primitive(node.ty()) {
+        return true;
+    }
+
+    match node {
+        ir::Expression::Identifier(i) => i.symbol.is_referenced(),
+        _ => false,
+    }
+}
+
 pub fn undefined() -> swc::Expr {
     swc::Expr::Ident(swc::Ident {
         span: DUMMY_SP,
@@ -154,65 +168,21 @@ pub fn undefined() -> swc::Expr {
     })
 }
 
+pub fn make_cell(value: swc::Expr) -> swc::Expr {
+    let callee = swc::Expr::Member(swc::MemberExpr {
+        span: DUMMY_SP,
+        obj: Box::new(create_ident("$").into()),
+        prop: swc::MemberProp::Ident(create_ident("Cell").into()),
+    });
+
+    swc::Expr::New(swc::NewExpr {
+        callee: Box::new(callee),
+        args: Some(vec![value.into()]),
+        ..Default::default()
+    })
+}
+
 impl CodeGenerator<'_> {
-    pub fn into_option(&mut self, identifier: &String) -> swc::Stmt {
-        // identifier !== undefined ? new __Option("Some", identifier) : new __Option("None")
-
-        let test = Box::new(swc::Expr::Bin(swc::BinExpr {
-            span: DUMMY_SP,
-            op: swc::BinaryOp::NotEqEq,
-            left: Box::new(create_ident(&identifier).into()),
-            right: Box::new(undefined()),
-        }));
-
-        let cons = Box::new(self.some(create_ident(&identifier).into()).into());
-        let alt = Box::new(self.none().into());
-        let expr = Box::new(swc::Expr::Cond(swc::CondExpr {
-            span: DUMMY_SP,
-            test,
-            cons,
-            alt,
-        }));
-
-        swc::Stmt::Expr(swc::ExprStmt {
-            span: DUMMY_SP,
-            expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
-                span: DUMMY_SP,
-                op: swc::AssignOp::Assign,
-                left: swc::AssignTarget::Simple(swc::SimpleAssignTarget::Ident(
-                    swc::BindingIdent {
-                        id: create_ident(&identifier),
-                        type_ann: None,
-                    },
-                )),
-                right: expr,
-            })),
-        })
-    }
-
-    pub fn some(&mut self, expr: swc::Expr) -> swc::NewExpr {
-        let exprs = vec![create_str("Some"), expr];
-        let args = exprs
-            .into_iter()
-            .map(|expr| swc::ExprOrSpread {
-                spread: None,
-                expr: Box::new(expr),
-            })
-            .collect();
-
-        swc::NewExpr {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
-            callee: Box::new(swc::Expr::Member(swc::MemberExpr {
-                span: DUMMY_SP,
-                obj: Box::new(swc::Expr::Ident(create_ident("__"))),
-                prop: swc::MemberProp::Ident(create_ident("Option").into()),
-            })),
-            args: Some(args),
-            type_args: None,
-        }
-    }
-
     pub fn none(&mut self) -> swc::NewExpr {
         let args = vec![swc::ExprOrSpread {
             spread: None,

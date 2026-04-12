@@ -163,6 +163,10 @@ impl Expression {
                 .filter(|i| !i.loc.is_within(self.loc())),
         )
     }
+
+    pub fn is_pure(&self) -> bool {
+        self.dependencies().next().is_none()
+    }
 }
 
 fn iterate<'a>(expressions: &'a [Expression]) -> Box<dyn Iterator<Item = &'a Expression> + 'a> {
@@ -352,8 +356,10 @@ pub struct StringLiteral {
 #[derive(Debug, Clone)]
 pub struct StructLiteral {
     pub loc: Location,
+    /// A ref to the struct/enum constructor
+    pub constructor: SymbolRef,
     /// If this has been constructed from an enum variant, contains a ref to the given variant.
-    pub constructor: Option<SymbolRef>,
+    pub variant: Option<SymbolRef>,
     pub fields: Vec<StructLiteralField>,
     pub ty: TypeId,
 }

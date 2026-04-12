@@ -1,13 +1,10 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex, MutexGuard},
-};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use crate::{types::TypeId, Location, TypeStore};
 
 #[derive(Clone, Debug)]
 pub enum TypeSymbolBody {
-    Struct(HashMap<String, SymbolRef>),
+    Struct(Vec<(String, SymbolRef)>),
     Tuple(Vec<SymbolRef>),
 }
 
@@ -213,6 +210,21 @@ impl SymbolRef {
         self.borrow().ty
     }
 
+    pub fn as_type_body(&self) -> Option<TypeSymbolBody> {
+        match &self.borrow().kind {
+            SymbolKind::Struct { body, .. } => Some(body.clone()),
+            SymbolKind::Constructor { body, .. } => body.clone(),
+            _ => None,
+        }
+    }
+
+    pub fn as_variants(&self) -> Option<Vec<SymbolRef>> {
+        match &self.borrow().kind {
+            SymbolKind::Enum { variants, .. } => Some(variants.clone()),
+            _ => None,
+        }
+    }
+
     pub fn is(&self, test: &SymbolRef) -> bool {
         Arc::ptr_eq(&self.0, &test.0)
     }
@@ -223,5 +235,21 @@ impl SymbolRef {
             .into_iter()
             .chain(symbol.access.uses())
             .collect::<Vec<_>>()
+    }
+
+    pub fn is_referenced(&self) -> bool {
+        self.borrow().access.references.len() > 0
+    }
+
+    pub fn is_scalar(&self) -> bool {
+        match self.as_type() {
+            TypeStore::BOOLEAN | TypeStore::FLOAT | TypeStore::INTEGER | TypeStore::STRING => true,
+            _ => false,
+        }
+    }
+}
+impl PartialEq for SymbolRef {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
     }
 }

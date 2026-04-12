@@ -1,7 +1,7 @@
 use crate::codegen::utils::create_ident;
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
-use tine_core::{Location, ModuleId, ModulePath, Session, SymbolRef};
+use tine_core::{ModuleId, ModulePath, Session};
 
 pub struct CodeGenerator<'sess> {
     _source_map: Lrc<SourceMap>,
@@ -10,7 +10,10 @@ pub struct CodeGenerator<'sess> {
     pub(crate) module: ModuleId,
     /// Should the `break` statements be converted to `return` statements.
     /// This is used when generating `for` and `for ... in` expressions, which are translated to IIFEs.
-    breaks_to_returns: bool,
+    next_temp_id: usize,
+
+    // Used when replacing `break X` by `TARGET = X; break`
+    pub(crate) break_target: Option<swc::Ident>,
 }
 
 impl CodeGenerator<'_> {
@@ -19,7 +22,8 @@ impl CodeGenerator<'_> {
             session,
             module,
             _source_map: Lrc::new(SourceMap::new(Default::default())),
-            breaks_to_returns: false,
+            next_temp_id: 0,
+            break_target: None,
         }
     }
 
@@ -28,7 +32,7 @@ impl CodeGenerator<'_> {
         let items: Vec<swc::ModuleItem> = node
             .statements
             .iter()
-            .map(|item| self.item_to_swc(item))
+            .flat_map(|item| self.item_to_swc(item))
             .collect();
 
         let internals_import =
@@ -66,22 +70,20 @@ impl CodeGenerator<'_> {
         &module.name
     }
 
-    pub(crate) fn with_breaks_to_returns<F, T>(&mut self, callback: F) -> T
+    pub(crate) fn with_break_target<F, T>(&mut self, target: swc::Ident, callback: F) -> T
     where
         F: FnOnce(&mut Self) -> T,
     {
-        let old = self.breaks_to_returns;
-        self.breaks_to_returns = true;
+        let mem = self.break_target.clone();
+        self.break_target = Some(target);
         let ret = callback(self);
-        self.breaks_to_returns = old;
+        self.break_target = mem;
         ret
     }
 
-    pub fn find_symbol(&self, loc: Location) -> Option<SymbolRef> {
-        self.session
-            .symbols()
-            .iter()
-            .find(|s| s.uses().into_iter().find(|&l| l == loc).is_some())
-            .cloned()
+    pub(crate) fn get_temp_id(&mut self) -> swc::Ident {
+        let ident = create_ident(&format!("$_{}", self.next_temp_id));
+        self.next_temp_id += 1;
+        ident
     }
 }

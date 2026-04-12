@@ -172,8 +172,6 @@ impl TypeChecker<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::*;
     use crate::analyzer::session::Session;
     use crate::ast;
@@ -285,7 +283,7 @@ mod tests {
             name: "Box".into(),
             ty: def,
             kind: SymbolKind::Struct {
-                body: TypeSymbolBody::Struct(HashMap::new()),
+                body: TypeSymbolBody::Struct(vec![]),
                 methods: vec![],
             },
             ..Default::default()

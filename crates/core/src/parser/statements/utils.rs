@@ -11,17 +11,14 @@ pub(super) struct TypeName {
 }
 
 impl Parser<'_> {
-    pub(super) fn try_parse_type_name(&mut self) -> Option<(String, Option<Vec<ast::Identifier>>)> {
+    pub(super) fn try_parse_type_name(
+        &mut self,
+    ) -> (Option<ast::Identifier>, Option<Vec<ast::Identifier>>) {
         let name = match self.tokens.peek() {
-            Some((Ok(Token::Ident(_)), _)) => {
-                let Some((Ok(Token::Ident(name)), _)) = self.tokens.next() else {
-                    unreachable!()
-                };
-                name
-            }
+            Some((Ok(Token::Ident(_)), _)) => self.parse_identifier(),
             _ => {
                 self.report_missing(DiagnosticKind::MissingName);
-                return None;
+                return (None, None);
             }
         };
 
@@ -31,7 +28,7 @@ impl Parser<'_> {
             None
         };
 
-        Some((name, params))
+        (Some(name), params)
     }
 
     /// Tries to parse a type name with its params.

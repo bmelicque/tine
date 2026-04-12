@@ -2,6 +2,7 @@ use enum_from_derive::EnumFrom;
 
 use crate::{
     ir::{Block, Expression, Identifier},
+    type_checker::TypeSymbolBody,
     types::TypeId,
     Location, ModuleId, ModulePath, SymbolRef,
 };
@@ -11,9 +12,11 @@ pub enum Statement {
     Assignment(Assignment),
     Break(BreakStatement),
     Continue(ContinueStatement),
+    Enum(EnumDefinition),
     Expression(Expression),
     Function(FunctionDefinition),
     Return(ReturnStatement),
+    Struct(StructDefinition),
     Use(UseDeclaration),
     Variable(VariableDeclaration),
 }
@@ -27,12 +30,14 @@ impl Statement {
                 None => Box::new(std::iter::empty()),
             },
             Self::Continue(_) => Box::new(std::iter::empty()),
+            Self::Enum(_) => Box::new(std::iter::empty()),
             Self::Expression(e) => e.walk(),
             Self::Function(f) => f.body.walk(),
             Self::Return(r) => match &r.expression {
                 Some(e) => e.walk(),
                 None => Box::new(std::iter::empty()),
             },
+            Self::Struct(_) => Box::new(std::iter::empty()),
             Self::Use(_) => Box::new(std::iter::empty()),
             Self::Variable(v) => v.value.walk(),
         }
@@ -62,6 +67,21 @@ pub struct ContinueStatement {
 }
 
 #[derive(Debug, Clone)]
+pub struct EnumDefinition {
+    pub loc: Location,
+    pub name: Identifier,
+}
+impl EnumDefinition {
+    pub fn ty(&self) -> TypeId {
+        self.name.symbol.as_type()
+    }
+
+    pub fn variants(&self) -> Vec<SymbolRef> {
+        self.name.symbol.as_variants().unwrap()
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct FunctionDefinition {
     pub loc: Location,
     pub name: Identifier,
@@ -74,6 +94,21 @@ pub struct FunctionDefinition {
 pub struct ReturnStatement {
     pub loc: Location,
     pub expression: Option<Box<Expression>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StructDefinition {
+    pub loc: Location,
+    pub name: Identifier,
+}
+impl StructDefinition {
+    pub fn ty(&self) -> TypeId {
+        self.name.symbol.as_type()
+    }
+
+    pub fn body(&self) -> TypeSymbolBody {
+        self.name.symbol.as_type_body().unwrap()
+    }
 }
 
 #[derive(Debug, Clone)]

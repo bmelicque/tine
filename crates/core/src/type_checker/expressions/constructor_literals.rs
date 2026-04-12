@@ -52,7 +52,7 @@ impl TypeChecker<'_> {
                     .visit_struct_literal_body(
                         s,
                         fields.into_iter().map(|f| f.1).collect(),
-                        constructor_symbol.borrow().ty,
+                        constructor_symbol,
                         variant_symbol,
                         substitutions,
                     )
@@ -67,7 +67,7 @@ impl TypeChecker<'_> {
                     .visit_struct_tuple_body(
                         t,
                         elements,
-                        constructor_symbol.borrow().ty,
+                        constructor_symbol,
                         variant_symbol,
                         substitutions,
                     )
@@ -205,8 +205,8 @@ impl TypeChecker<'_> {
         &mut self,
         body: ast::StructLiteralBody,
         members: Vec<SymbolRef>,
-        constructor_type: TypeId,
-        variant_symbol: Option<SymbolRef>,
+        constructor: SymbolRef,
+        variant: Option<SymbolRef>,
         mut substitutions: HashMap<types::TypeParam, TypeId>,
     ) -> Option<ir::StructLiteral> {
         let mut encountered = HashSet::new();
@@ -219,10 +219,12 @@ impl TypeChecker<'_> {
             .collect::<Vec<Option<_>>>()
             .into_iter()
             .collect::<Option<Vec<_>>>()?;
-        let ty = self.resolve_constructor_type(constructor_type, body.loc, &substitutions);
+        let ty = self.resolve_constructor_type(constructor.as_type(), body.loc, &substitutions);
+
         Some(ir::StructLiteral {
             loc: body.loc,
-            constructor: variant_symbol,
+            constructor,
+            variant,
             fields,
             ty,
         })
@@ -282,7 +284,7 @@ impl TypeChecker<'_> {
         &mut self,
         body: ast::TupleExpression,
         members: Vec<SymbolRef>,
-        constructor_type: TypeId,
+        constructor_symbol: SymbolRef,
         variant_symbol: Option<SymbolRef>,
         mut substitutions: HashMap<types::TypeParam, TypeId>,
     ) -> Option<ir::StructLiteral> {
@@ -296,10 +298,12 @@ impl TypeChecker<'_> {
             .collect::<Vec<Option<_>>>()
             .into_iter()
             .collect::<Option<Vec<_>>>()?;
-        let ty = self.resolve_constructor_type(constructor_type, body.loc, &substitutions);
+        let ty =
+            self.resolve_constructor_type(constructor_symbol.as_type(), body.loc, &substitutions);
         Some(ir::StructLiteral {
             loc: body.loc,
-            constructor: variant_symbol,
+            constructor: constructor_symbol,
+            variant: variant_symbol,
             fields,
             ty,
         })

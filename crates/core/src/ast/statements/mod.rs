@@ -112,7 +112,7 @@ pub struct StructDefinitionField {
 pub struct EnumDefinition {
     pub docs: Option<Docs>,
     pub loc: Location,
-    pub name: String,
+    pub name: Option<Identifier>,
     pub params: Option<Vec<Identifier>>,
     pub variants: Vec<VariantDefinition>,
 }

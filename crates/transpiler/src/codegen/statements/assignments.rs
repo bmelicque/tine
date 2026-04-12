@@ -1,69 +1,114 @@
-use crate::codegen::{utils::create_ident, CodeGenerator};
-use swc_common::{SyntaxContext, DUMMY_SP};
+use crate::codegen::{
+    expressions::ExpressionResult,
+    utils::{create_ident, is_handled_by_ref},
+    CodeGenerator,
+};
+use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 use tine_core::ir;
 
 impl CodeGenerator<'_> {
-    pub fn assignment_to_swc(&mut self, node: &ir::Assignment) -> swc::ExprStmt {
+    pub fn handle_assignment(&mut self, node: &ir::Assignment) -> Vec<swc::Stmt> {
+        let result = self.handle_assignment_as_expr(node);
+        let mut stmts = result.prelim_stmts;
+        stmts.push(swc::Stmt::Expr(swc::ExprStmt {
+            span: DUMMY_SP,
+            expr: Box::new(result.expr),
+        }));
+        stmts
+    }
+
+    pub fn handle_assignment_as_expr(&mut self, node: &ir::Assignment) -> ExpressionResult {
         match &node.pattern {
+            ir::Expression::Identifier(_) if is_handled_by_ref(&node.pattern) => {
+                self.handle_method_assign(&node.pattern, &node.value)
+            }
+            ir::Expression::Identifier(_) => self.handle_raw_assign(&node.pattern, &node.value),
+            ir::Expression::Member(_) => self.handle_raw_assign(&node.pattern, &node.value),
             ir::Expression::Unary(u) if u.operator == ir::UnaryOperator::Star => {
-                return swc::ExprStmt {
-                    span: DUMMY_SP,
-                    expr: Box::new(self.indirected_assignment_to_swc(node)),
-                };
+                self.handle_method_assign(&u.operand, &node.value)
             }
-            _ => {}
-        };
-
-        swc::ExprStmt {
-            span: DUMMY_SP,
-            expr: Box::new(self.assignment_to_swc_expr(node).into()),
+            _ => unimplemented!(),
         }
     }
 
-    pub fn assignment_to_swc_expr(&mut self, node: &ir::Assignment) -> swc::AssignExpr {
-        swc::AssignExpr {
-            span: DUMMY_SP,
-            op: swc::AssignOp::Assign,
-            left: self.assign_target_to_swc(&node.pattern),
-            right: Box::new(self.expr_to_swc(&node.value)),
-        }
-    }
+    fn handle_raw_assign(
+        &mut self,
+        assign_target: &ir::Expression,
+        value: &ir::Expression,
+    ) -> ExpressionResult {
+        let value_result = self.handle_assigned_value(value);
 
-    pub fn assign_target_to_swc(&mut self, node: &ir::Expression) -> swc::AssignTarget {
-        return match node {
-            ir::Expression::Identifier(i) => {
-                swc::SimpleAssignTarget::Ident(create_ident(&i.as_name()).into()).into()
-            }
-            ir::Expression::Member(expr) => {
-                swc::SimpleAssignTarget::Member(self.member_expr_to_swc(expr)).into()
-            }
-            _ => panic!(),
-        };
-    }
-
-    /**
-    Setting a value through a reference, like:
-    `*ref = value`
-
-    This is transpiled as:
-    ```ref.set(value)```
-    */
-    fn indirected_assignment_to_swc(&mut self, node: &ir::Assignment) -> swc::Expr {
-        let ir::Expression::Unary(assignee) = &node.pattern else {
-            panic!("Expected assignment to indirection")
+        let assign_target = if value_result.prelim_stmts.len() > 0 {
+            let result = self.handle_expression(assign_target);
+            self.to_extracted(result)
+        } else {
+            self.handle_expression(assign_target)
         };
 
-        swc::Expr::Call(swc::CallExpr {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
+        let prelim_stmts = vec![assign_target.prelim_stmts, value_result.prelim_stmts].concat();
+        let assign_target = match assign_target.expr {
+            swc::Expr::Ident(i) => swc::SimpleAssignTarget::Ident(i.into()),
+            swc::Expr::Member(m) => swc::SimpleAssignTarget::Member(m),
+            _ => unreachable!(),
+        };
+
+        let expr = swc::Expr::Assign(swc::AssignExpr {
+            left: assign_target.into(),
+            right: Box::new(value_result.expr),
+            ..Default::default()
+        });
+
+        ExpressionResult { prelim_stmts, expr }
+    }
+
+    fn handle_method_assign(
+        &mut self,
+        assign_target: &ir::Expression,
+        value: &ir::Expression,
+    ) -> ExpressionResult {
+        let method_name = if is_handled_by_ref(value) {
+            create_ident("$assign")
+        } else {
+            create_ident("$set")
+        };
+        let value_result = self.handle_expression(value);
+
+        let assign_target = if value_result.prelim_stmts.len() > 0 {
+            let result = self.handle_expression(assign_target);
+            self.to_extracted(result)
+        } else {
+            self.handle_expression(assign_target)
+        };
+
+        let prelim_stmts = vec![assign_target.prelim_stmts, value_result.prelim_stmts].concat();
+
+        let expr = swc::Expr::Call(swc::CallExpr {
             callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
-                obj: Box::new(self.expr_to_swc(&*assignee.operand)),
-                prop: swc::MemberProp::Ident(create_ident("set").into()),
+                obj: Box::new(assign_target.expr),
+                prop: swc::MemberProp::Ident(method_name.into()),
             }))),
-            args: vec![self.expr_to_swc(&node.value).into()],
-            type_args: None,
-        })
+            args: vec![value_result.expr.into()],
+            ..Default::default()
+        });
+
+        ExpressionResult { prelim_stmts, expr }
+    }
+
+    pub(crate) fn handle_assigned_value(&mut self, value: &ir::Expression) -> ExpressionResult {
+        let mut result = self.handle_expression(value);
+
+        if is_handled_by_ref(value) {
+            result.expr = swc::Expr::Call(swc::CallExpr {
+                callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+                    span: DUMMY_SP,
+                    obj: Box::new(result.expr),
+                    prop: swc::MemberProp::Ident(create_ident("$get").into()),
+                }))),
+                ..Default::default()
+            })
+        }
+        result
     }
 }

@@ -1,15 +1,41 @@
-use swc_common::{SyntaxContext, DUMMY_SP};
+use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
-use crate::codegen::{utils::create_ident, CodeGenerator};
+use crate::codegen::{expressions::ExpressionResult, utils::create_ident, CodeGenerator};
 
 use tine_core::ir;
 
 impl CodeGenerator<'_> {
-    pub fn element_expression_to_swc(&mut self, node: &ir::ElementExpression) -> swc::Expr {
-        swc::Expr::Call(swc::CallExpr {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
+    pub fn handle_element_expression(&mut self, node: &ir::ElementExpression) -> ExpressionResult {
+        let children_results = node
+            .children
+            .iter()
+            .map(|c| self.handle_expression(c))
+            .collect::<Vec<_>>();
+        let (children_prelim, children) = self.extract_necessary(children_results);
+
+        let attributes_results = node
+            .attributes
+            .iter()
+            .map(|a| self.handle_expression(&a.value))
+            .collect::<Vec<_>>();
+        let (attributes_prelim, attribute_values) = if children_prelim.is_empty() {
+            self.extract_necessary(attributes_results)
+        } else {
+            self.extract_all(attributes_results)
+        };
+        let attributes = attribute_values
+            .into_iter()
+            .zip(node.attributes.iter())
+            .map(|(value, ir)| {
+                swc::PropOrSpread::Prop(Box::new(swc::Prop::KeyValue(swc::KeyValueProp {
+                    key: swc::PropName::Ident(create_ident(&ir.name).into()),
+                    value: Box::new(value),
+                })))
+            })
+            .collect();
+
+        let expr = swc::CallExpr {
             callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(swc::Expr::Ident(create_ident("__"))),
@@ -22,41 +48,23 @@ impl CodeGenerator<'_> {
                     raw: None,
                 })))
                 .into(),
-                Box::new(self.attributes_to_swc_object(&node.attributes)).into(),
-                Box::new(self.children_to_swc_array(&node.children)).into(),
+                Box::new(swc::Expr::Object(swc::ObjectLit {
+                    span: DUMMY_SP,
+                    props: attributes,
+                }))
+                .into(),
+                Box::new(swc::Expr::Array(swc::ArrayLit {
+                    span: DUMMY_SP,
+                    elems: children.into_iter().map(|c| Some(c.into())).collect(),
+                }))
+                .into(),
             ],
-            type_args: None,
-        })
-    }
+            ..Default::default()
+        };
 
-    fn attributes_to_swc_object(&mut self, attributes: &Vec<ir::Attribute>) -> swc::Expr {
-        let props = attributes
-            .into_iter()
-            .map(|attr| {
-                swc::PropOrSpread::Prop(Box::new(swc::Prop::KeyValue(swc::KeyValueProp {
-                    key: swc::PropName::Str(swc::Str {
-                        span: DUMMY_SP,
-                        value: attr.name.clone().into(),
-                        raw: None,
-                    }),
-                    value: Box::new(self.expr_to_swc(&attr.value)),
-                })))
-            })
-            .collect();
-        swc::Expr::Object(swc::ObjectLit {
-            span: DUMMY_SP,
-            props,
-        })
-    }
-
-    fn children_to_swc_array(&mut self, children: &Vec<ir::Expression>) -> swc::Expr {
-        let elems = children
-            .into_iter()
-            .map(|child| Some(self.expr_to_swc(child).into()))
-            .collect();
-        swc::Expr::Array(swc::ArrayLit {
-            span: DUMMY_SP,
-            elems,
-        })
+        ExpressionResult {
+            prelim_stmts: vec![attributes_prelim, children_prelim].concat(),
+            expr: expr.into(),
+        }
     }
 }

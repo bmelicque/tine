@@ -47,7 +47,9 @@ impl TypeChecker<'_> {
         };
 
         let member = fields
-            .get(field_name.as_str())
+            .iter()
+            .find(|(name, _)| *name == field_name.text)
+            .map(|(_, symbol)| symbol)
             .or_else(|| methods.iter().find(|m| m.borrow().name == field_name.text))
             .cloned();
         let member = match member {

@@ -1,7 +1,5 @@
-use std::collections::HashMap;
-
 use crate::{
-    ast,
+    ast, ir,
     type_checker::{
         analysis_context::{symbols::TypeSymbolBody, type_store::TypeStore},
         SymbolHandle,
@@ -33,24 +31,27 @@ impl TypeChecker<'_> {
         }
     }
 
-    pub fn visit_struct_definition(&mut self, node: ast::StructDefinition) {
-        let Some(body) = node.body else { return };
+    pub fn visit_struct_definition(
+        &mut self,
+        node: ast::StructDefinition,
+    ) -> Option<ir::StructDefinition> {
+        let Some(body) = node.body else { return None };
         let Some(name) = node.name else {
             self.fallback_check_body(body);
-            return;
+            return None;
         };
         let owner = self.add_type_to_scope(
             name.text.clone(),
             node.loc,
             TypeStore::UNKNOWN,
             SymbolKind::Struct {
-                body: TypeSymbolBody::Struct(HashMap::new()),
+                body: TypeSymbolBody::Struct(vec![]),
                 methods: vec![],
             },
         );
         let Some(owner) = owner else {
             self.fallback_check_body(body);
-            return;
+            return None;
         };
 
         let ((ty, body), params) = self.with_type_params(&node.params, |checker| {
@@ -70,11 +71,23 @@ impl TypeChecker<'_> {
             body,
             methods: vec![],
         };
+
+        Some(ir::StructDefinition {
+            loc: node.loc,
+            name: ir::Identifier {
+                loc: name.loc,
+                symbol: owner.readonly(),
+            },
+        })
     }
 
-    pub fn visit_enum_definition(&mut self, node: ast::EnumDefinition) {
+    pub fn visit_enum_definition(
+        &mut self,
+        node: ast::EnumDefinition,
+    ) -> Option<ir::EnumDefinition> {
+        let name = node.name?;
         let owner = self.add_type_to_scope(
-            node.name,
+            name.as_str().to_string(),
             node.loc,
             TypeStore::UNKNOWN,
             SymbolKind::Enum {
@@ -84,7 +97,7 @@ impl TypeChecker<'_> {
         );
         let Some(owner) = owner else {
             self.fallback_check_variants(node.variants);
-            return;
+            return None;
         };
 
         let (variants, params) = self.with_type_params(&node.params, |self_| {
@@ -118,6 +131,14 @@ impl TypeChecker<'_> {
             variants,
             methods: vec![],
         };
+
+        Some(ir::EnumDefinition {
+            loc: node.loc,
+            name: ir::Identifier {
+                loc: name.loc,
+                symbol: owner.readonly(),
+            },
+        })
     }
 
     fn visit_enum_variant(

@@ -48,10 +48,6 @@ impl TypeChecker<'_> {
 
     pub fn check(mut self) -> CheckResult {
         let ast = self.session.get_ast(self.current_module);
-        for item in &ast.items {
-            self.visit_item(item.clone());
-        }
-
         let program = ir::Program {
             statements: ast
                 .items
