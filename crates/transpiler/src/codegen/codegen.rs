@@ -41,12 +41,12 @@ impl CodeGenerator<'_> {
                 specifiers: vec![swc::ImportSpecifier::Namespace(
                     swc_ecma_ast::ImportStarAsSpecifier {
                         span: DUMMY_SP,
-                        local: create_ident("__"),
+                        local: create_ident("$"),
                     },
                 )],
                 src: Box::new(swc::Str {
                     span: DUMMY_SP,
-                    value: "internals".into(),
+                    value: "$internals".into(),
                     raw: None,
                 }),
                 type_only: false,

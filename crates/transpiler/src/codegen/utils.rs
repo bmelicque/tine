@@ -194,7 +194,7 @@ impl CodeGenerator<'_> {
             ctxt: SyntaxContext::empty(),
             callee: Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
-                obj: Box::new(swc::Expr::Ident(create_ident("__"))),
+                obj: Box::new(swc::Expr::Ident(create_ident("$"))),
                 prop: swc::MemberProp::Ident(create_ident("Option").into()),
             })),
             args: Some(args),

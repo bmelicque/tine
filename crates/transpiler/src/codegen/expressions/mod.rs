@@ -49,14 +49,14 @@ impl CodeGenerator<'_> {
             ir::Expression::For(f) => self.handle_for_expression(f),
             ir::Expression::ForIn(f) => self.handle_for_in_expression(f),
             ir::Expression::Function(f) => self.handle_function_expression(f).into(),
-            ir::Expression::Identifier(i) => self.ident_to_swc(i).into(),
+            ir::Expression::Identifier(i) => self.handle_identifier(i).into(),
             ir::Expression::If(i) => self.handle_if_expression(i),
             ir::Expression::IntLiteral(i) => ExpressionResult::from(swc::Number {
                 span: DUMMY_SP,
                 value: i.value as f64,
                 raw: None,
             }),
-            ir::Expression::Map(m) => self.map_to_swc(m),
+            ir::Expression::Map(m) => self.handle_map_expression(m),
             ir::Expression::Member(m) => self.member_expr_to_swc(m),
             ir::Expression::StringLiteral(s) => self.string_literal_to_swc(s).into(),
             ir::Expression::Struct(s) => self.struct_to_swc(s),
@@ -151,11 +151,11 @@ impl CodeGenerator<'_> {
         swc::BlockStmtOrExpr::BlockStmt(create_block_stmt(stmts))
     }
 
-    pub fn ident_to_swc(&mut self, node: &ir::Identifier) -> swc::Expr {
+    pub fn handle_identifier(&mut self, node: &ir::Identifier) -> swc::Expr {
         swc::Expr::Ident(create_ident(&node.as_name()))
     }
 
-    fn map_to_swc(&mut self, node: &ir::MapLiteral) -> ExpressionResult {
+    fn handle_map_expression(&mut self, node: &ir::MapLiteral) -> ExpressionResult {
         let mut results = Vec::with_capacity(node.entries.len() * 2);
         for entry in &node.entries {
             results.push(self.handle_expression(&entry.key));

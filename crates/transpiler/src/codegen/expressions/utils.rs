@@ -23,7 +23,7 @@ impl CodeGenerator<'_> {
     }
 
     pub fn to_extracted(&mut self, result: ExpressionResult) -> ExpressionResult {
-        if result.prelim_stmts.is_empty() {
+        if result.prelim_stmts.is_empty() && !matches!(result.expr, swc::Expr::Lit(_)) {
             self.extract_expression(result.expr)
         } else {
             result
@@ -63,7 +63,11 @@ impl CodeGenerator<'_> {
             .enumerate()
             .rev()
             .find(|(_, r)| !r.prelim_stmts.is_empty())
-            .map_or(results.len() - 1, |(i, _)| i);
+            .map(|(i, _)| i);
+        let Some(last) = last else {
+            let exprs = results.into_iter().map(|r| r.expr).collect();
+            return (vec![], exprs);
+        };
         results
             .into_iter()
             .enumerate()

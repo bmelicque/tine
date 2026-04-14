@@ -109,9 +109,9 @@ export class Reactive {
 		}
 	}
 
-    toDOMNode() {
-        return this instanceof ReactiveNode ? this : new ReactiveNode([this], () => this.get());
-    }
+	toDOMNode() {
+		return this instanceof ReactiveNode ? this : new ReactiveNode([this], () => this.$get());
+	}
 }
 
 /**
@@ -125,11 +125,11 @@ export class Signal extends Reactive {
 		this.value = value;
 	}
 
-	get() {
+	$get() {
 		return this.value;
 	}
 
-	set(value) {
+	$set(value) {
 		this.value = value;
 		this.setupTreeUpdate();
 	}
@@ -168,7 +168,7 @@ export class Listener extends Reactive {
 		return this.value !== old;
 	}
 
-	get() {
+	$get() {
 		if (dirty.has(this)) this.compute();
 		return this.value;
 	}
@@ -195,7 +195,7 @@ export class WritableComputed extends Listener {
 	/**
 	 * Example setter for `&obj.value`:
 	 * ```
-	 * (newValue) => { obj.get().value = newValue }
+	 * (newValue) => { obj.$get().value = newValue }
 	 * ```
 	 */
 	constructor(deps, getter, setter) {
@@ -203,7 +203,7 @@ export class WritableComputed extends Listener {
 		this.setter = setter;
 	}
 
-	set(value) {
+	$set(value) {
 		this.setter(value);
 		this.value = value;
 		const rootState = this.deps[0];
@@ -240,9 +240,9 @@ export class ReactiveNode extends Listener {
 }
 
 export function state(initialValue) {
-    return new Signal(initialValue);
+	return new Signal(initialValue);
 }
 
 export function derived$(getter, dependencies) {
-    return new Listener(dependencies, getter);
+	return new Listener(dependencies, getter);
 }

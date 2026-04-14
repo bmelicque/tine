@@ -1,9 +1,58 @@
 import { Reactive } from "signals";
 
 export class Option {
-	constructor(__, some) {
-		this.__ = __;
-		if (arguments.length > 1) this.some = some;
+	None() {
+		const $ = new this;
+		$.$tag = 0;
+		return $;
+	}
+
+	Some(_0) {
+		const $ = new this;
+		$.$tag = 1;
+		$._0 = _0;
+		return $;
+	}
+
+	$get() {
+		const $ = new this;
+		$.$tag = this.$tag;
+		if (this.$tag) {
+			$._0 = typeof this._0 === "object" ? this._0.$get() : this._0;
+		}
+		return $;
+	}
+
+	$set(other) {
+		if (this.$tag === 0) {
+			if (other.$tag === 1) {
+				this._0 = other._0;
+			}
+		} else {
+			if (other.$tag === 0) {
+				delete this._0;
+			} else {
+				typeof this._0 === "object" ? this._0.$set(other._0) : this._0 = other._0;
+			}
+		}
+
+		this.$tag = other.$tag;
+	}
+
+	$assign(other) {
+		if (this.$tag === 0) {
+			if (other.$tag === 1) {
+				this._0 = other._0;
+			}
+		} else {
+			if (other.$tag === 0) {
+				delete this._0;
+			} else {
+				this._0.$assign(other._0);
+			}
+		}
+
+		this.$tag = other.$tag;
 	}
 }
 

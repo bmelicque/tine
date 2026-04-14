@@ -47,7 +47,7 @@ impl CodeGenerator<'_> {
         }
 
         match &*node.operand {
-            ir::Expression::Identifier(i) => self.ident_to_swc(i).into(),
+            ir::Expression::Identifier(i) => self.handle_identifier(i).into(),
             ir::Expression::Member(m) => self.handle_primitive_member_ref(m),
             _ => {
                 let operand = self.handle_expression(&node.operand);
