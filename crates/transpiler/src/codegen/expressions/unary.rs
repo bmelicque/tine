@@ -1,6 +1,6 @@
 use crate::codegen::{
     expressions::ExpressionResult,
-    utils::{create_ident, create_str, is_primitive, make_cell},
+    utils::{ident_from_str, create_str, is_primitive, make_cell},
     CodeGenerator,
 };
 use swc_common::{SyntaxContext, DUMMY_SP};
@@ -29,7 +29,7 @@ impl CodeGenerator<'_> {
             callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(obj_result.expr),
-                prop: swc::MemberProp::Ident(create_ident("$get").into()),
+                prop: swc::MemberProp::Ident(ident_from_str("$get").into()),
             }))),
             args: vec![],
             type_args: None,
@@ -64,8 +64,8 @@ impl CodeGenerator<'_> {
         // `$.MemberRef`
         let callee = swc::Expr::Member(swc::MemberExpr {
             span: DUMMY_SP,
-            obj: Box::new(create_ident("$").into()),
-            prop: swc::MemberProp::Ident(create_ident("MemberRef").into()),
+            obj: Box::new(ident_from_str("$").into()),
+            prop: swc::MemberProp::Ident(ident_from_str("MemberRef").into()),
         });
         let obj = self.handle_expression(&node.object);
         let prop = create_str(&node.member.as_name());

@@ -76,7 +76,7 @@ fn safe_identifier(name: &str) -> String {
     }
 }
 
-pub fn create_ident(name: &str) -> swc::Ident {
+pub fn ident_from_str(name: &str) -> swc::Ident {
     swc::Ident {
         sym: safe_identifier(name).into(),
         span: DUMMY_SP,
@@ -171,8 +171,8 @@ pub fn undefined() -> swc::Expr {
 pub fn make_cell(value: swc::Expr) -> swc::Expr {
     let callee = swc::Expr::Member(swc::MemberExpr {
         span: DUMMY_SP,
-        obj: Box::new(create_ident("$").into()),
-        prop: swc::MemberProp::Ident(create_ident("Cell").into()),
+        obj: Box::new(ident_from_str("$").into()),
+        prop: swc::MemberProp::Ident(ident_from_str("Cell").into()),
     });
 
     swc::Expr::New(swc::NewExpr {
@@ -180,6 +180,18 @@ pub fn make_cell(value: swc::Expr) -> swc::Expr {
         args: Some(vec![value.into()]),
         ..Default::default()
     })
+}
+
+pub fn std_method_call(name: &str, args: Vec<swc::ExprOrSpread>) -> swc::CallExpr {
+    swc::CallExpr {
+        callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(swc::Expr::Ident(ident_from_str("$"))),
+            prop: swc::MemberProp::Ident(ident_from_str(name).into()),
+        }))),
+        args,
+        ..Default::default()
+    }
 }
 
 impl CodeGenerator<'_> {
@@ -194,8 +206,8 @@ impl CodeGenerator<'_> {
             ctxt: SyntaxContext::empty(),
             callee: Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
-                obj: Box::new(swc::Expr::Ident(create_ident("$"))),
-                prop: swc::MemberProp::Ident(create_ident("Option").into()),
+                obj: Box::new(swc::Expr::Ident(ident_from_str("$"))),
+                prop: swc::MemberProp::Ident(ident_from_str("Option").into()),
             })),
             args: Some(args),
             type_args: None,

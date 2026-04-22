@@ -1,7 +1,7 @@
-use crate::codegen::utils::create_ident;
+use crate::codegen::utils::ident_from_str;
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
-use tine_core::{ModuleId, ModulePath, Session};
+use tine_core::{types, ModuleId, ModulePath, Session};
 
 pub struct CodeGenerator<'sess> {
     _source_map: Lrc<SourceMap>,
@@ -41,7 +41,7 @@ impl CodeGenerator<'_> {
                 specifiers: vec![swc::ImportSpecifier::Namespace(
                     swc_ecma_ast::ImportStarAsSpecifier {
                         span: DUMMY_SP,
-                        local: create_ident("$"),
+                        local: ident_from_str("$"),
                     },
                 )],
                 src: Box::new(swc::Str {
@@ -82,8 +82,12 @@ impl CodeGenerator<'_> {
     }
 
     pub(crate) fn get_temp_id(&mut self) -> swc::Ident {
-        let ident = create_ident(&format!("$_{}", self.next_temp_id));
+        let ident = ident_from_str(&format!("$_{}", self.next_temp_id));
         self.next_temp_id += 1;
         ident
+    }
+
+    pub(crate) fn resolve(&self, ty: types::TypeId) -> types::Type {
+        self.session.get_type(ty)
     }
 }

@@ -5,7 +5,7 @@ mod ifs;
 mod unary;
 mod utils;
 
-use super::{utils::create_ident, CodeGenerator};
+use super::{utils::ident_from_str, CodeGenerator};
 use crate::codegen::utils::{create_block_stmt, create_str};
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
@@ -134,7 +134,7 @@ impl CodeGenerator<'_> {
             .into_iter()
             .map(|param| {
                 swc::Pat::Ident(swc::BindingIdent {
-                    id: create_ident(&param.as_name()),
+                    id: ident_from_str(&param.as_name()),
                     type_ann: None,
                 })
             })
@@ -152,7 +152,7 @@ impl CodeGenerator<'_> {
     }
 
     pub fn handle_identifier(&mut self, node: &ir::Identifier) -> swc::Expr {
-        swc::Expr::Ident(create_ident(&node.as_name()))
+        swc::Expr::Ident(ident_from_str(&node.as_name()))
     }
 
     fn handle_map_expression(&mut self, node: &ir::MapLiteral) -> ExpressionResult {
@@ -199,7 +199,7 @@ impl CodeGenerator<'_> {
                     raw: None,
                 }))),
             }),
-            Err(_) => swc::MemberProp::Ident(create_ident(&prop_name).into()),
+            Err(_) => swc::MemberProp::Ident(ident_from_str(&prop_name).into()),
         };
 
         let expr = swc::MemberExpr {
@@ -241,8 +241,10 @@ impl CodeGenerator<'_> {
         };
         let callee = swc::Expr::Member(swc::MemberExpr {
             span: DUMMY_SP,
-            obj: Box::new(swc::Expr::Ident(create_ident(&node.constructor.as_name()))),
-            prop: swc::MemberProp::Ident(create_ident(&variant.as_name()).into()),
+            obj: Box::new(swc::Expr::Ident(ident_from_str(
+                &node.constructor.as_name(),
+            ))),
+            prop: swc::MemberProp::Ident(ident_from_str(&variant.as_name()).into()),
         });
         let expr = swc::Expr::Call(swc::CallExpr {
             callee: swc::Callee::Expr(Box::new(callee)),
@@ -259,7 +261,7 @@ impl CodeGenerator<'_> {
             TypeSymbolBody::Tuple(_) => self.handle_tuple_like_body(node),
         };
         let expr = swc::Expr::New(swc::NewExpr {
-            callee: Box::new(create_ident(&node.constructor.as_name()).into()),
+            callee: Box::new(ident_from_str(&node.constructor.as_name()).into()),
             args: Some(args.into_iter().map(Into::into).collect()),
             ..Default::default()
         });
@@ -320,7 +322,7 @@ impl CodeGenerator<'_> {
             left: Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(obj_result.expr),
-                prop: swc::MemberProp::Ident(create_ident("$tag").into()),
+                prop: swc::MemberProp::Ident(ident_from_str("$tag").into()),
             })),
             right: Box::new(create_str(&node.constructor.as_name())),
         };

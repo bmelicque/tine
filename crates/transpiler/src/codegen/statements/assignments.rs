@@ -1,6 +1,6 @@
 use crate::codegen::{
     expressions::ExpressionResult,
-    utils::{create_ident, is_handled_by_ref},
+    utils::{ident_from_str, is_handled_by_ref},
     CodeGenerator,
 };
 use swc_common::DUMMY_SP;
@@ -68,9 +68,9 @@ impl CodeGenerator<'_> {
         value: &ir::Expression,
     ) -> ExpressionResult {
         let method_name = if is_handled_by_ref(value) {
-            create_ident("$assign")
+            ident_from_str("$assign")
         } else {
-            create_ident("$set")
+            ident_from_str("$set")
         };
         let value_result = self.handle_expression(value);
 
@@ -104,7 +104,7 @@ impl CodeGenerator<'_> {
                 callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
                     span: DUMMY_SP,
                     obj: Box::new(result.expr),
-                    prop: swc::MemberProp::Ident(create_ident("$get").into()),
+                    prop: swc::MemberProp::Ident(ident_from_str("$get").into()),
                 }))),
                 ..Default::default()
             })

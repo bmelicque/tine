@@ -1,12 +1,13 @@
 mod assignments;
 mod types;
+mod utils;
 
 use crate::codegen::{
     expressions::ExpressionResult,
     utils::{is_primitive, make_cell},
 };
 
-use super::{utils::create_ident, CodeGenerator};
+use super::{utils::ident_from_str, CodeGenerator};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 use tine_core::ir;
@@ -150,7 +151,7 @@ impl CodeGenerator<'_> {
             left: swc::ForHead::VarDecl(Box::new(swc::VarDecl {
                 decls: vec![swc::VarDeclarator {
                     span: DUMMY_SP,
-                    name: create_ident(&node.element.as_name()).into(),
+                    name: ident_from_str(&node.element.as_name()).into(),
                     init: None,
                     definite: false,
                 }],
@@ -166,7 +167,7 @@ impl CodeGenerator<'_> {
 
     fn function_to_swc_definition(&mut self, node: &ir::FunctionDefinition) -> swc::FnDecl {
         swc::FnDecl {
-            ident: create_ident(&node.name.as_name()),
+            ident: ident_from_str(&node.name.as_name()),
             declare: false,
             function: Box::new(swc::Function {
                 params: node
@@ -175,7 +176,7 @@ impl CodeGenerator<'_> {
                     .map(|p| swc::Param {
                         span: DUMMY_SP,
                         decorators: vec![],
-                        pat: swc::Pat::Ident(create_ident(&p.as_name()).into()),
+                        pat: swc::Pat::Ident(ident_from_str(&p.as_name()).into()),
                     })
                     .collect(),
                 decorators: vec![],
@@ -230,7 +231,7 @@ impl CodeGenerator<'_> {
             declare: false,
             decls: vec![swc::VarDeclarator {
                 span: DUMMY_SP,
-                name: swc::Pat::Ident(create_ident(&node.symbol.as_name()).into()),
+                name: swc::Pat::Ident(ident_from_str(&node.symbol.as_name()).into()),
                 init: Some(Box::new(expr)),
                 definite: false,
             }],

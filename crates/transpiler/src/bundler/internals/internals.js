@@ -64,6 +64,79 @@ export class Result {
 }
 
 /**
+ * Get the cloned value of given item.
+ * @template T
+ * @param {T} x 
+ * @returns {T}
+ */
+export function get(x) {
+	if (typeof x !== "object" || !x) return x;
+
+	if (Array.isArray(x)) return getArray(x);
+
+	if (x.$get) return x.$get();
+
+	return x;
+}
+
+/**
+ * Clone the given array.
+ * @template T
+ * @param {T[]} a
+ * @returns {T[]}
+ */
+export function getArray(a) {
+	const len = a.length;
+	const out = new Array(len);
+	for (let i = 0; i < len; i++) {
+		const v = a[i];
+		out[i] = typeof v === "object" && v ? get(v) : v;
+	}
+	return out;
+}
+
+/**
+ * Set the given target and return its new value
+ * @template T
+ * @param {T} target
+ * @param {T} source
+ * @returns {T}
+ */
+export function set(target, source) {
+	if (typeof target !== "object" || !target) return source;
+
+	if (target.$set !== undefined) {
+		target.$set(source);
+		return target;
+	}
+
+	if (Array.isArray(target) && Array.isArray(source)) {
+		return setArray(target, source);
+	}
+
+	return target;
+}
+
+/**
+ * Set the given array and return its new value
+ * @template T
+ * @param {T[]} target
+ * @param {T[]} source
+ * @returns {T[]}
+ */
+export function setArray(target, source) {
+	const len = source.length;
+	target.length = len;
+
+	for (let i = 0; i < len; i++) {
+		const v = source[i];
+		target[i] = v !== null && typeof v === "object" ? get(v) : v;
+	}
+
+	return target;
+}
+
+/**
  * Create a DOM Element, possibly reactive depending on the params used at creation.
  *
  * Children (inner nodes) can be created from:

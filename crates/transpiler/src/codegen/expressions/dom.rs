@@ -1,7 +1,11 @@
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 
-use crate::codegen::{expressions::ExpressionResult, utils::create_ident, CodeGenerator};
+use crate::codegen::{
+    expressions::ExpressionResult,
+    utils::{ident_from_str, create_str, std_method_call},
+    CodeGenerator,
+};
 
 use tine_core::ir;
 
@@ -29,38 +33,26 @@ impl CodeGenerator<'_> {
             .zip(node.attributes.iter())
             .map(|(value, ir)| {
                 swc::PropOrSpread::Prop(Box::new(swc::Prop::KeyValue(swc::KeyValueProp {
-                    key: swc::PropName::Ident(create_ident(&ir.name).into()),
+                    key: swc::PropName::Ident(ident_from_str(&ir.name).into()),
                     value: Box::new(value),
                 })))
             })
             .collect();
 
-        let expr = swc::CallExpr {
-            callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+        let args = vec![
+            create_str(&node.tag_name.clone()).into(),
+            swc::Expr::Object(swc::ObjectLit {
                 span: DUMMY_SP,
-                obj: Box::new(swc::Expr::Ident(create_ident("$"))),
-                prop: swc::MemberProp::Ident(create_ident("createElement").into()),
-            }))),
-            args: vec![
-                Box::new(swc::Expr::Lit(swc::Lit::Str(swc::Str {
-                    span: DUMMY_SP,
-                    value: node.tag_name.clone().into(),
-                    raw: None,
-                })))
-                .into(),
-                Box::new(swc::Expr::Object(swc::ObjectLit {
-                    span: DUMMY_SP,
-                    props: attributes,
-                }))
-                .into(),
-                Box::new(swc::Expr::Array(swc::ArrayLit {
-                    span: DUMMY_SP,
-                    elems: children.into_iter().map(|c| Some(c.into())).collect(),
-                }))
-                .into(),
-            ],
-            ..Default::default()
-        };
+                props: attributes,
+            })
+            .into(),
+            swc::Expr::Array(swc::ArrayLit {
+                span: DUMMY_SP,
+                elems: children.into_iter().map(|c| Some(c.into())).collect(),
+            })
+            .into(),
+        ];
+        let expr = std_method_call("createElement", args);
 
         ExpressionResult {
             prelim_stmts: vec![attributes_prelim, children_prelim].concat(),

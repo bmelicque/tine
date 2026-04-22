@@ -1,5 +1,5 @@
 use crate::{
-    codegen::{utils::create_ident, CodeGenerator},
+    codegen::{utils::ident_from_str, CodeGenerator},
     utils::{make_relative, modulepath_to_filename},
 };
 
@@ -50,7 +50,7 @@ impl CodeGenerator<'_> {
     }
 
     fn specifier_to_swc(&self, name: &str) -> swc::ImportSpecifier {
-        let id = create_ident(name);
+        let id = ident_from_str(name);
         swc::ImportSpecifier::Named(swc::ImportNamedSpecifier {
             span: DUMMY_SP,
             local: id.clone(),
