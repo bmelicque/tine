@@ -1,22 +1,22 @@
 use crate::{
-    ast,
+    ast, ir,
     type_checker::TypeChecker,
     types::{self, FunctionType, GenericType, Type, TypeId},
     DiagnosticKind, SymbolData, SymbolKind, SymbolRef, TypeStore,
 };
 
 impl TypeChecker<'_> {
-    pub(super) fn visit_implementation(&mut self, node: &ast::Implementation) -> TypeId {
+    pub(super) fn visit_implementation(&mut self, node: ast::Implementation) -> Vec<ir::Statement> {
         let implemented_type = node.implemented_type.as_ref();
         let owner = implemented_type.and_then(|t| self.lookup(&t.name));
         let mut owner_args = implemented_type
             .and_then(|t| t.args.clone())
             .unwrap_or(vec![])
-            .iter()
+            .into_iter()
             .map(|arg| self.visit_type(arg))
             .collect();
-        if owner.is_none() && node.implemented_type.is_some() {
-            let ast::NamedType { name, loc, .. } = node.implemented_type.as_ref().unwrap();
+        if owner.is_none() && implemented_type.is_some() {
+            let ast::NamedType { name, loc, .. } = implemented_type.unwrap();
             self.error(
                 DiagnosticKind::CannotFindName { name: name.clone() },
                 loc.clone(),
@@ -32,79 +32,56 @@ impl TypeChecker<'_> {
             )
         }
 
-        let Some(body) = &node.body else {
-            return TypeStore::UNIT;
+        let Some(body) = node.body else {
+            return vec![];
         };
-        for item in &body.items {
-            self.visit_impl_item(&owner, receiver_type, &owner_args, item);
-        }
-        TypeStore::UNIT
+        body.items
+            .into_iter()
+            .filter_map(|item| {
+                self.visit_impl_item(owner.clone(), receiver_type, &owner_args, item)
+            })
+            .collect()
     }
 
     fn visit_impl_item(
         &mut self,
-        owner: &Option<SymbolRef>,
+        owner: Option<SymbolRef>,
         receiver_type: TypeId,
         owner_args: &Vec<TypeId>,
-        item: &ast::ImplementationItem,
-    ) {
-        let docs = item.docs().as_ref().map(|d| d.text.clone());
-        let (ty, dependencies) =
-            match item {
-                ast::ImplementationItem::Method(m) => self
-                    .with_dependencies(|checker| checker.visit_method_definition(m, receiver_type)),
-                ast::ImplementationItem::StaticMethod(m) => self
-                    .with_dependencies(|checker| checker.visit_function_expression(&m.definition)),
-            };
-
-        let Some(owner) = owner else { return };
-        let owner = owner.clone();
-        let Some(name) = item.name() else { return };
-        let name = name.clone();
-        let has_receiver = matches!(item, ast::ImplementationItem::Method(_));
-
-        let params = match item {
-            ast::ImplementationItem::Method(m) => &m.params,
-            ast::ImplementationItem::StaticMethod(m) => &m.definition.params,
-        };
-
-        self.ctx.register_symbol(SymbolData {
-            docs,
-            name: name.as_str().to_string(),
-            ty,
-            kind: SymbolKind::Method {
-                owner: owner.clone(),
-                owner_args: owner_args.clone(),
-                has_receiver,
-                param_names: params
-                    .as_ref()
-                    .map(|p| &p.params)
-                    .unwrap_or(&vec![])
-                    .iter()
-                    .map(|param| param.name.text.clone())
-                    .collect(),
-            },
-            defined_at: name.loc,
-            dependencies: dependencies.clone(),
-            ..Default::default()
-        });
+        item: ast::ImplementationItem,
+    ) -> Option<ir::Statement> {
+        match item {
+            ast::ImplementationItem::Method(m) => self
+                .visit_method_definition(m, owner, receiver_type, owner_args)
+                .map(Into::into),
+            ast::ImplementationItem::StaticMethod(m) => self
+                .visit_static_definition(m, owner, owner_args)
+                .map(Into::into),
+        }
     }
 
     pub fn visit_method_definition(
         &mut self,
-        node: &ast::MethodDefinition,
-        receiver: TypeId,
-    ) -> TypeId {
-        let ((params, return_type), type_params) = self.with_type_params(&node.type_params, |s| {
-            let param_types = vec![vec![receiver], s.visit_function_params(&node.params)].concat();
-            let body_type = s.visit_function_body(&node.return_type, &node.body);
-            (param_types, body_type)
+        node: ast::MethodDefinition,
+        receiver: Option<SymbolRef>,
+        receiver_type: TypeId,
+        owner_args: &Vec<TypeId>,
+    ) -> Option<ir::FunctionDefinition> {
+        let ((params, visited_body), type_params) = self.with_type_params(&node.type_params, |s| {
+            let params = s.visit_function_params(node.params);
+            let visited_body = s.visit_function_body(node.return_type, node.body);
+            (params, visited_body)
         });
+        let receiver = receiver?;
 
-        let ty = self.intern(Type::Function(FunctionType {
-            params,
+        let (params, (return_type, body)) = (params?, visited_body?);
+        let mut param_types = params.iter().map(|p| p.ty()).collect::<Vec<_>>();
+        param_types.insert(0, receiver_type);
+
+        let ty = self.intern(FunctionType {
+            params: param_types,
             return_type,
-        }));
+        });
         let ty = match type_params.len() {
             0 => ty,
             _ => self.intern(Type::Generic(GenericType {
@@ -113,6 +90,88 @@ impl TypeChecker<'_> {
             })),
         };
 
-        self.ctx.save_expression_type(node.loc, ty)
+        let name = node.name?;
+        let symbol = self.ctx.register_symbol(SymbolData {
+            name: name.text,
+            ty,
+            kind: SymbolKind::Method {
+                owner: receiver,
+                owner_args: owner_args.clone(),
+                has_receiver: true,
+                param_names: params.iter().map(|p| p.as_name()).collect(),
+            },
+            defined_at: name.loc,
+            docs: node.docs.map(|d| d.text),
+            ..Default::default()
+        });
+        let name = ir::Identifier {
+            loc: name.loc,
+            symbol,
+        };
+
+        Some(ir::FunctionDefinition {
+            loc: node.loc,
+            name,
+            params,
+            body,
+            ty,
+        })
+    }
+
+    fn visit_static_definition(
+        &mut self,
+        node: ast::FunctionDefinition,
+        owner: Option<SymbolRef>,
+        owner_args: &Vec<TypeId>,
+    ) -> Option<ir::FunctionDefinition> {
+        let ((params, visited_body), type_params) =
+            self.with_type_params(&node.definition.type_params, |s| {
+                let params = s.visit_function_params(node.definition.params);
+                let visited_body =
+                    s.visit_function_body(node.definition.return_type, node.definition.body);
+                (params, visited_body)
+            });
+
+        let owner = owner?;
+        let (params, (return_type, body)) = (params?, visited_body?);
+
+        let ty = self.intern(FunctionType {
+            params: params.iter().map(|p| p.ty()).collect::<Vec<_>>(),
+            return_type,
+        });
+        let ty = match type_params.len() {
+            0 => ty,
+            _ => self.intern(Type::Generic(GenericType {
+                params: type_params,
+                definition: ty,
+            })),
+        };
+
+        let name = node.definition.name?;
+        let symbol = self.ctx.register_symbol(SymbolData {
+            name: name.text,
+            ty,
+            kind: SymbolKind::Method {
+                owner,
+                owner_args: owner_args.clone(),
+                has_receiver: false,
+                param_names: params.iter().map(|p| p.as_name()).collect(),
+            },
+            defined_at: name.loc,
+            docs: node.docs.map(|d| d.text),
+            ..Default::default()
+        });
+        let name = ir::Identifier {
+            loc: name.loc,
+            symbol,
+        };
+
+        Some(ir::FunctionDefinition {
+            loc: node.definition.loc,
+            name,
+            params,
+            body,
+            ty,
+        })
     }
 }

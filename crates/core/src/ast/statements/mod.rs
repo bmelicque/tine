@@ -18,6 +18,7 @@ use super::{
 pub enum Statement {
     Assignment(Assignment),
     Break(BreakStatement),
+    Continue(ContinueStatement),
     Enum(EnumDefinition),
     Expression(ExpressionStatement),
     Function(FunctionDefinition),
@@ -45,7 +46,7 @@ pub struct VariableDeclaration {
     pub value: Option<Expression>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DeclarationKeyword {
     Const,
     Var,
@@ -100,52 +101,18 @@ pub struct StructBody {
     pub fields: Vec<StructDefinitionField>,
 }
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum StructDefinitionField {
-    Optional(StructOptionalField),
-    Mandatory(StructMandatoryField),
-}
-
-impl StructDefinitionField {
-    pub fn as_name(&self) -> Option<Identifier> {
-        let name = match self {
-            Self::Mandatory(m) => &m.name,
-            Self::Optional(o) => &o.name,
-        };
-        name.as_ref().map(|i| i.clone())
-    }
-
-    pub fn loc(&self) -> Location {
-        match self {
-            Self::Mandatory(m) => m.loc,
-            Self::Optional(o) => o.loc,
-        }
-    }
-
-    pub fn is_optional(&self) -> bool {
-        matches!(self, Self::Optional(_))
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StructMandatoryField {
+pub struct StructDefinitionField {
     pub loc: Location,
     pub name: Option<Identifier>,
     pub definition: Option<Type>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StructOptionalField {
-    pub loc: Location,
-    pub name: Option<Identifier>,
-    pub default: Option<Expression>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
     pub docs: Option<Docs>,
     pub loc: Location,
-    pub name: String,
+    pub name: Option<Identifier>,
     pub params: Option<Vec<Identifier>>,
     pub variants: Vec<VariantDefinition>,
 }
@@ -188,6 +155,11 @@ pub struct IndirectionAssignee {
 pub struct BreakStatement {
     pub loc: Location,
     pub value: Option<Box<Expression>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ContinueStatement {
+    pub loc: Location,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

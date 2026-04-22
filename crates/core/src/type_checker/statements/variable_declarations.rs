@@ -1,49 +1,88 @@
 use crate::{
-    ast,
-    type_checker::{patterns::TokenList, TypeChecker},
-    types::TypeId,
-    DiagnosticKind, SymbolData, SymbolKind, TypeStore,
+    ast, ir,
+    type_checker::{patterns::DesugaredPattern, TypeChecker},
+    DiagnosticKind, Location, SymbolData, SymbolKind, TypeStore,
 };
 
 impl TypeChecker<'_> {
-    pub fn visit_variable_declaration(&mut self, node: &ast::VariableDeclaration) -> TypeId {
-        let (inferred_type, dependencies) = match &node.value {
-            Some(value) => self.with_dependencies(|s| s.visit_expression(value)),
-            None => (TypeStore::UNKNOWN, vec![]),
-        };
-        let Some(pattern) = &node.pattern else {
-            return TypeStore::UNIT;
-        };
-
+    pub fn visit_variable_declaration(
+        &mut self,
+        node: ast::VariableDeclaration,
+    ) -> Vec<ir::VariableDeclaration> {
         let mutable = node.keyword == ast::DeclarationKeyword::Var;
-        if pattern.is_refutable() {
-            self.error(DiagnosticKind::IrrefutablePatternExpected, pattern.loc());
+        let Some(pattern) = node.pattern else {
+            return vec![];
+        };
+        let Some(value) = node.value else {
+            return vec![];
+        };
+        let pattern_loc = pattern.loc();
+        let DesugaredPattern { test, bindings } = self.desugar_pattern(pattern, value, mutable);
+
+        if test.is_some() {
+            self.error(DiagnosticKind::IrrefutablePatternExpected, pattern_loc);
+            return vec![];
         }
-        let mut variables = TokenList::new();
-        let docs = node.docs.clone().map(|d| d.text);
-        self.match_pattern(pattern, inferred_type, &mut variables);
-        for (id, ty) in variables.0 {
-            self.check_identifier_sanity(&id);
-            match self.ctx.find_in_current_scope(id.as_str()) {
-                Some(symbol) => {
-                    let error = DiagnosticKind::DuplicateIdentifier {
-                        name: id.as_str().to_string(),
-                    };
-                    self.error(error, id.loc);
-                    symbol
-                }
-                None => self.ctx.register_symbol(SymbolData {
-                    name: id.as_str().to_string(),
-                    ty,
+
+        // TODO create tmp assignment to avoid cloning potentially heavy/not idempotent expression.
+        bindings
+            .into_iter()
+            .filter_map(|(identifier, value)| {
+                self.visit_simple_declaration(
+                    node.docs.clone(),
+                    node.loc,
+                    mutable,
+                    identifier,
+                    value,
+                )
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub fn visit_simple_declaration(
+        &mut self,
+        docs: Option<ast::Docs>,
+        loc: Location,
+        mutable: bool,
+        identifier: ast::Identifier,
+        value: ast::Expression,
+    ) -> Option<ir::VariableDeclaration> {
+        self.check_identifier_sanity(&identifier);
+        match self.ctx.find_in_current_scope(identifier.as_str()) {
+            Some(symbol) => {
+                let error = DiagnosticKind::DuplicateIdentifier {
+                    name: identifier.as_str().to_string(),
+                };
+                self.error(error, identifier.loc);
+                symbol.borrow().access.read(identifier.loc);
+                None
+            }
+            None => {
+                let value = self.visit_expression(value);
+                let dependencies = value.as_ref().map_or(vec![], |value| {
+                    value
+                        .walk()
+                        .filter_map(|e| e.as_identifier())
+                        .map(|identifier| identifier.symbol.clone())
+                        .collect::<Vec<_>>()
+                });
+                let symbol = self.ctx.register_symbol(SymbolData {
+                    name: identifier.as_str().to_string(),
+                    ty: value.as_ref().map_or(TypeStore::UNKNOWN, |v| v.ty()),
                     kind: SymbolKind::Value { mutable },
-                    docs: docs.clone(),
-                    defined_at: pattern.loc(),
-                    dependencies: dependencies.clone(),
+                    docs: docs.map(|d| d.text),
+                    defined_at: identifier.loc,
+                    dependencies: dependencies,
                     ..Default::default()
-                }),
-            };
+                });
+                Some(ir::VariableDeclaration {
+                    loc,
+                    mutable,
+                    symbol,
+                    value: value?,
+                })
+            }
         }
-        TypeStore::UNIT
     }
 
     fn check_identifier_sanity(&mut self, identifier: &ast::Identifier) {
@@ -64,7 +103,7 @@ mod tests {
     fn visit_variable_declaration(node: &ast::VariableDeclaration) -> TypeChecker<'_> {
         let session = Session::new(Box::new(MockLoader));
         let mut tc = TypeChecker::new(Box::leak(Box::new(session)), 0);
-        tc.visit_variable_declaration(node);
+        tc.visit_variable_declaration(node.clone());
         tc
     }
 
@@ -151,7 +190,7 @@ mod tests {
                 loc: Location::dummy(),
             })),
         };
-        tc.visit_variable_declaration(&node);
+        tc.visit_variable_declaration(node);
         assert_eq!(tc.diagnostics.len(), 1);
         assert!(matches!(
             tc.diagnostics[0].kind,

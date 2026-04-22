@@ -1,47 +1,36 @@
 use crate::{
     ast,
     diagnostics::DiagnosticKind,
+    ir,
     type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
     types::TypeId,
     Location,
 };
 
+const VALID_ADD_TYPES: [TypeId; 3] = [TypeStore::INTEGER, TypeStore::FLOAT, TypeStore::STRING];
+
 impl TypeChecker<'_> {
-    pub fn visit_binary_expression(&mut self, node: &ast::BinaryExpression) -> TypeId {
-        let left_type = node
-            .left
-            .as_ref()
-            .map(|e| self.visit_expression(&e))
-            .unwrap_or(TypeStore::UNKNOWN);
-        let right_type = node
-            .right
-            .as_ref()
-            .map(|e| self.visit_expression(&e))
-            .unwrap_or(TypeStore::UNKNOWN);
+    pub fn visit_binary_expression(
+        &mut self,
+        node: ast::BinaryExpression,
+    ) -> Option<ir::BinaryExpression> {
+        let left = node.left.and_then(|e| self.visit_expression(*e));
+        let right = node.right.and_then(|e| self.visit_expression(*e));
+        let (Some(left), Some(right)) = (left, right) else {
+            return None;
+        };
+        let left_type = left.ty();
+        let right_type = right.ty();
 
         match node.operator {
             ast::BinaryOperator::Add => {
-                let left_is_ok = left_type == TypeStore::INTEGER
-                    || left_type == TypeStore::FLOAT
-                    || left_type == TypeStore::STRING;
-                let right_is_ok = right_type == TypeStore::INTEGER
-                    || right_type == TypeStore::FLOAT
-                    || right_type == TypeStore::STRING;
+                let left_is_ok = VALID_ADD_TYPES.contains(&left_type);
+                let right_is_ok = VALID_ADD_TYPES.contains(&right_type);
                 if !left_is_ok && left_type != TypeStore::UNKNOWN {
-                    // Can unwrap safely because `None` results in `UNKNOWN`
-                    self.push_binary_error(
-                        node.operator,
-                        left_type,
-                        node.left.as_ref().unwrap().loc(),
-                    );
+                    self.push_binary_error(node.operator, left_type, left.loc());
                 };
                 if !right_is_ok && right_type != TypeStore::UNKNOWN {
-                    // Can unwrap safely because `None` results in `UNKNOWN`
-                    self.push_binary_error(
-                        node.operator,
-                        right_type,
-                        node.right.as_ref().unwrap().loc(),
-                    );
+                    self.push_binary_error(node.operator, right_type, right.loc());
                 };
                 if left_is_ok && right_is_ok && left_type != right_type {
                     let error = DiagnosticKind::MismatchedTypes {
@@ -64,20 +53,10 @@ impl TypeChecker<'_> {
                 let right_is_num =
                     right_type == TypeStore::INTEGER || right_type == TypeStore::FLOAT;
                 if left_type != TypeStore::UNKNOWN && !left_is_num {
-                    // Can unwrap safely because `None` results in `UNKNOWN`
-                    self.push_binary_error(
-                        node.operator,
-                        left_type,
-                        node.left.as_ref().unwrap().loc(),
-                    );
+                    self.push_binary_error(node.operator, left_type, left.loc());
                 };
                 if right_type != TypeStore::UNKNOWN && !right_is_num {
-                    // Can unwrap safely because `None` results in `UNKNOWN`
-                    self.push_binary_error(
-                        node.operator,
-                        right_type,
-                        node.right.as_ref().unwrap().loc(),
-                    );
+                    self.push_binary_error(node.operator, right_type, right.loc());
                 };
                 if left_is_num && right_is_num && left_type != right_type {
                     let error = DiagnosticKind::MismatchedTypes {
@@ -101,28 +80,23 @@ impl TypeChecker<'_> {
             }
             ast::BinaryOperator::LAnd | ast::BinaryOperator::LOr => {
                 if left_type != TypeStore::UNKNOWN && left_type != TypeStore::BOOLEAN {
-                    // Can unwrap safely because `None` results in `UNKNOWN`
-                    self.push_binary_error(
-                        node.operator,
-                        left_type,
-                        node.left.as_ref().unwrap().loc(),
-                    );
+                    self.push_binary_error(node.operator, left_type, left.loc());
                 };
                 if right_type != TypeStore::UNKNOWN && right_type != TypeStore::BOOLEAN {
-                    // Can unwrap safely because `None` results in `UNKNOWN`
-                    self.push_binary_error(
-                        node.operator,
-                        right_type,
-                        node.right.as_ref().unwrap().loc(),
-                    );
+                    self.push_binary_error(node.operator, right_type, right.loc());
                 };
             }
         };
 
-        self.ctx.save_expression_type(
-            node.loc,
-            get_binary_expression_type(node.operator, left_type, right_type),
-        )
+        let ty = get_binary_expression_type(node.operator, left_type, right_type);
+
+        Some(ir::BinaryExpression {
+            loc: node.loc,
+            left: Box::new(left),
+            right: Box::new(right),
+            op: node.operator,
+            ty,
+        })
     }
 
     fn push_binary_error(&mut self, op: ast::BinaryOperator, ty: TypeId, loc: Location) {
@@ -171,7 +145,9 @@ mod tests {
     fn visit_binary_expression(node: ast::BinaryExpression) -> (TypeId, Vec<Diagnostic>) {
         let session = Session::new(Box::new(MockLoader));
         let mut checker = TypeChecker::new(&session, 0);
-        let ty = checker.visit_binary_expression(&node);
+        let ty = checker
+            .visit_binary_expression(node)
+            .map_or(TypeStore::UNKNOWN, |n| n.ty);
         (ty, checker.diagnostics)
     }
 

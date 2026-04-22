@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     type_checker::{CheckResult, TypeChecker},
     types::{FunctionType, GenericType, SignalType, Type, TypeParam},
@@ -18,9 +16,7 @@ impl Session {
         CheckResult {
             symbols: checker.ctx.symbols,
             exports: main_scope.bindings.clone(),
-            expressions: HashMap::new(),
-            dependencies: HashMap::new(),
-            diagnostics: vec![],
+            ..Default::default()
         }
     }
 }

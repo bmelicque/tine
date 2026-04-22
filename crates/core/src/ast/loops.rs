@@ -29,7 +29,7 @@ pub struct ForExpression {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ForInExpression {
     pub loc: Location,
-    pub pattern: Option<Box<Pattern>>,
+    pub pattern: Option<Pattern>,
     pub iterable: Option<Box<Expression>>,
     pub body: Option<BlockExpression>,
 }

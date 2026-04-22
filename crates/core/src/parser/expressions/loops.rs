@@ -30,7 +30,7 @@ impl Parser<'_> {
                 };
                 ast::Loop::ForIn(ast::ForInExpression {
                     loc,
-                    pattern: pattern.map(|p| Box::new(p)),
+                    pattern,
                     iterable: iterable.map(|i| Box::new(i)),
                     body,
                 })

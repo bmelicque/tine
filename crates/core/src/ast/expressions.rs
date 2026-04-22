@@ -3,7 +3,10 @@ use std::fmt;
 use enum_from_derive::EnumFrom;
 use ordered_float::OrderedFloat;
 
-use crate::{ast::ElementExpression, Location};
+use crate::{
+    ast::{ElementExpression, VariantConstructor},
+    Location,
+};
 
 use super::{constructor_literals::ConstructorLiteral, types::Type, Loop, Pattern, Statement};
 
@@ -28,6 +31,7 @@ pub enum Expression {
     FloatLiteral(FloatLiteral),
     StringLiteral(StringLiteral),
     Tuple(TupleExpression),
+    TypeMatch(TypeMatch),
     Unary(UnaryExpression),
 }
 
@@ -53,6 +57,7 @@ impl Expression {
             Self::Match(e) => e.loc,
             Self::StringLiteral(e) => e.loc,
             Self::Tuple(e) => e.loc,
+            Self::TypeMatch(e) => e.loc,
             Self::Unary(e) => e.loc,
         }
     }
@@ -121,6 +126,15 @@ impl From<IfExpression> for Alternate {
 impl From<IfPatExpression> for Alternate {
     fn from(value: IfPatExpression) -> Self {
         Self::IfDecl(value)
+    }
+}
+impl Into<Expression> for Alternate {
+    fn into(self) -> Expression {
+        match self {
+            Alternate::Block(b) => Expression::Block(b),
+            Alternate::If(i) => Expression::If(i),
+            Alternate::IfDecl(i) => Expression::IfDecl(i),
+        }
     }
 }
 
@@ -347,6 +361,15 @@ pub struct TupleExpression {
     pub elements: Vec<Expression>,
 }
 
+/// Internals use only.
+/// Match a value against an enum variant.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TypeMatch {
+    pub loc: Location,
+    pub expression: Option<Box<Expression>>,
+    pub constructor: VariantConstructor,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnaryExpression {
     pub loc: Location,
@@ -358,8 +381,6 @@ pub struct UnaryExpression {
 pub enum UnaryOperator {
     Star,      // *
     Ampersand, // &
-    Dollar,    // $
-    At,        // @
     Minus,     // -
     Bang,      // !
 }
@@ -369,8 +390,6 @@ impl From<String> for UnaryOperator {
         match value.as_str() {
             "*" => Self::Star,
             "&" => Self::Ampersand,
-            "$" => Self::Dollar,
-            "@" => Self::At,
             "-" => Self::Minus,
             "!" => Self::Bang,
             _ => panic!("Unknown unary operator: {}", value),

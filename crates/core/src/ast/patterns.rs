@@ -80,6 +80,12 @@ impl Pattern {
     }
 }
 
+impl From<Identifier> for Pattern {
+    fn from(value: Identifier) -> Self {
+        Self::Identifier(IdentifierPattern(value))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InvalidPattern {
     pub loc: Location,
@@ -101,6 +107,11 @@ impl IdentifierPattern {
 impl Into<Identifier> for IdentifierPattern {
     fn into(self) -> Identifier {
         self.0
+    }
+}
+impl From<Identifier> for IdentifierPattern {
+    fn from(value: Identifier) -> Self {
+        Self(value)
     }
 }
 

@@ -1,115 +1,67 @@
-use std::collections::HashSet;
-
 use crate::{
-    ast,
-    diagnostics::DiagnosticKind,
-    type_checker::{
-        analysis_context::{type_store::TypeStore, SymbolData, SymbolRef},
-        patterns::TokenList,
-        TypeChecker,
-    },
-    types::{Type, TypeId, Variant},
-    SymbolKind,
+    ast, ir,
+    type_checker::{utils::make_simple_declaration, TypeChecker},
 };
 
 impl TypeChecker<'_> {
-    pub fn visit_match_expression(&mut self, node: &ast::MatchExpression) -> TypeId {
-        let ty = match &node.scrutinee {
-            Some(scrutinee) => self.visit_expression(scrutinee),
-            None => TypeStore::UNKNOWN,
-        };
-        let mut expected = TypeStore::DYNAMIC;
-        if let Some(arms) = &node.arms {
-            for arm in arms {
-                let arm_ty = self.visit_match_arm(arm, ty, vec![]);
-                if expected == TypeStore::DYNAMIC {
-                    expected = arm_ty;
-                } else {
-                    self.check_assigned_type(expected, arm_ty, node.loc);
-                }
-            }
-        }
-        self.check_exhaustiveness(node, ty);
-        self.ctx.save_expression_type(node.loc, expected)
-    }
-
-    fn visit_match_arm(
+    pub fn visit_match_expression(
         &mut self,
-        arm: &ast::MatchArm,
-        against: TypeId,
-        deps: Vec<SymbolRef>,
-    ) -> TypeId {
-        let arm_ty = self.with_scope(|s| {
-            let mut variables = TokenList::new();
-            if let Some(pattern) = &arm.pattern {
-                s.match_pattern(pattern, against, &mut variables);
-                for (name, ty) in variables.0 {
-                    s.ctx.register_symbol(SymbolData {
-                        name: name.as_str().into(),
-                        ty,
-                        kind: SymbolKind::constant(),
-                        defined_at: pattern.loc(),
-                        dependencies: deps.clone(),
-                        ..Default::default()
-                    });
-                }
-            }
-            match &arm.expression {
-                Some(e) => s.visit_expression(e),
-                None => TypeStore::UNKNOWN,
-            }
-        });
-        arm_ty
-    }
+        node: ast::MatchExpression,
+    ) -> Option<ir::IfExpression> {
+        // TODO check exhaustiveness
 
-    fn check_exhaustiveness(&mut self, node: &ast::MatchExpression, against_id: TypeId) {
-        let Some(arms) = &node.arms else {
-            return;
-        };
-        let has_irrefutable = arms
-            .iter()
-            .find(|arm| {
-                arm.pattern
-                    .as_ref()
-                    .map(|p| p.is_identifier())
-                    .unwrap_or(false)
-            })
-            .is_some();
-        if has_irrefutable {
-            return;
-        }
-        let against = self.resolve(against_id);
-        match &against {
-            Type::Enum(ty) => self.check_variants_exhaustiveness(node, &ty.variants),
-            _ => self.error(
-                DiagnosticKind::ExpectedEnum {
-                    got: self.session.display_type(against_id),
-                },
-                node.loc,
-            ),
-        }
-    }
-
-    fn check_variants_exhaustiveness(
-        &mut self,
-        node: &ast::MatchExpression,
-        variants: &Vec<Variant>,
-    ) {
-        let Some(arms) = &node.arms else {
-            return;
-        };
-        let mut names = HashSet::new();
-        for variant in variants {
-            names.insert(variant.name.clone());
-        }
+        let scrutinee = node.scrutinee.as_deref().cloned();
+        let mut arms = node.arms?.into_iter().rev();
+        let mut expr = self.desugar_match_arm(arms.next()?, &scrutinee);
         for arm in arms {
-            // TODO
+            let mut arm = self.desugar_match_arm(arm, &scrutinee);
+            arm.alternate = Some(Box::new(ast::Alternate::If(expr)));
+            expr = arm;
         }
-        if names.len() > 0 {
-            let error = DiagnosticKind::NonExhaustiveMatch {
-                missing: names.into_iter().collect::<Vec<_>>(),
+
+        self.visit_if_expression(expr)
+    }
+
+    fn desugar_match_arm(
+        &mut self,
+        arm: ast::MatchArm,
+        scrutinee: &Option<ast::Expression>,
+    ) -> ast::IfExpression {
+        let consequent = arm.expression.map(|e| match *e {
+            ast::Expression::Block(b) => b,
+            e => ast::BlockExpression {
+                loc: e.loc(),
+                statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
+                    expression: Box::new(e),
+                })],
+            },
+        });
+
+        let (Some(pattern), Some(scrutinee)) = (arm.pattern, scrutinee) else {
+            return ast::IfExpression {
+                loc: arm.loc,
+                condition: None,
+                consequent,
+                alternate: None,
             };
-            self.error(error, node.loc)
+        };
+
+        let desugared = self.desugar_pattern(*pattern, scrutinee.clone(), false);
+        let bindings = desugared
+            .bindings
+            .into_iter()
+            .map(|(identifier, value)| make_simple_declaration(identifier, value).into())
+            .collect();
+        let body = consequent.map(|mut body| {
+            body.statements = vec![bindings, body.statements].concat();
+            body
+        });
+
+        ast::IfExpression {
+            loc: arm.loc,
+            condition: desugared.test.map(Box::new),
+            consequent: body,
+            alternate: None,
         }
     }
 }
