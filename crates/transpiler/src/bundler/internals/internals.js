@@ -38,22 +38,6 @@ export class Option {
 
 		this.$tag = other.$tag;
 	}
-
-	$assign(other) {
-		if (this.$tag === 0) {
-			if (other.$tag === 1) {
-				this._0 = other._0;
-			}
-		} else {
-			if (other.$tag === 0) {
-				delete this._0;
-			} else {
-				this._0.$assign(other._0);
-			}
-		}
-
-		this.$tag = other.$tag;
-	}
 }
 
 export class Result {

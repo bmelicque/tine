@@ -67,11 +67,6 @@ impl CodeGenerator<'_> {
         assign_target: &ir::Expression,
         value: &ir::Expression,
     ) -> ExpressionResult {
-        let method_name = if is_handled_by_ref(value) {
-            ident_from_str("$assign")
-        } else {
-            ident_from_str("$set")
-        };
         let value_result = self.handle_expression(value);
 
         let assign_target = if value_result.prelim_stmts.len() > 0 {
@@ -87,7 +82,7 @@ impl CodeGenerator<'_> {
             callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(assign_target.expr),
-                prop: swc::MemberProp::Ident(method_name.into()),
+                prop: swc::MemberProp::Ident(ident_from_str("$set").into()),
             }))),
             args: vec![value_result.expr.into()],
             ..Default::default()
