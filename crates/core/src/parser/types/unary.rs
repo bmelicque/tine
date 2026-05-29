@@ -5,13 +5,7 @@ use crate::{
 };
 
 impl Parser<'_> {
-    const UNARY_TYPE_OPERATORS: [Token; 5] = [
-        Token::And,
-        Token::At,
-        Token::Bang,
-        Token::LBracket,
-        Token::QMark,
-    ];
+    const UNARY_TYPE_OPERATORS: [Token; 3] = [Token::Bang, Token::LBracket, Token::QMark];
 
     pub fn parse_unary_type(&mut self) -> Option<ast::Type> {
         match self.tokens.peek() {
@@ -35,14 +29,6 @@ impl Parser<'_> {
             None => op_loc,
         };
         let ty = match token {
-            Token::And => ast::Type::Reference(ast::ReferenceType {
-                loc,
-                target: inner.map(|t| Box::new(t)),
-            }),
-            Token::At => ast::Type::Listener(ast::ListenerType {
-                loc,
-                inner: inner.map(|t| Box::new(t)),
-            }),
             Token::Bang => ast::Type::Result(ast::ResultType {
                 loc,
                 error: None,

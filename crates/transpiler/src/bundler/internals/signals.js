@@ -96,6 +96,10 @@ export class Reactive {
 	children = new Set();
 	registry = new FinalizationRegistry((ref) => this.children.delete(ref));
 
+	$clone() {
+		return this;
+	}
+
 	addChild(computed) {
 		const ref = new WeakRef(computed);
 		this.children.add(ref);

@@ -3,10 +3,7 @@ mod functions;
 mod types;
 mod utils;
 
-use crate::codegen::{
-    expressions::ExpressionResult,
-    utils::{is_primitive, make_cell},
-};
+use crate::codegen::expressions::ExpressionResult;
 
 use super::{utils::ident_from_str, CodeGenerator};
 use swc_common::{SyntaxContext, DUMMY_SP};
@@ -191,11 +188,7 @@ impl CodeGenerator<'_> {
         let expr_result = self.handle_expression(&node.value);
         let mut stmts = expr_result.prelim_stmts;
 
-        let expr = if node.symbol.is_referenced() && is_primitive(node.symbol.as_type()) {
-            make_cell(expr_result.expr)
-        } else {
-            expr_result.expr
-        };
+        let expr = expr_result.expr;
 
         stmts.push(swc::Stmt::Decl(swc::Decl::Var(Box::new(swc::VarDecl {
             span: DUMMY_SP,

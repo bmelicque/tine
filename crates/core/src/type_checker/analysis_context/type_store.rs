@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use crate::types::{
-    ArrayType, DuckType, EnumType, FunctionType, ListenerType, MapType, OptionType, ReferenceType,
-    ResultType, SignalType, StructField, StructType, TraitMethod, TraitType, TupleType, Type,
-    TypeId, Variant,
+    ArrayType, DuckType, EnumType, FunctionType, ListenerType, MapType, OptionType, ResultType,
+    SignalType, StructField, StructType, TraitMethod, TraitType, TupleType, Type, TypeId, Variant,
 };
 
 #[derive(Debug, Clone)]
@@ -156,10 +155,6 @@ impl TypeStore {
                 self.add(Type::Option(OptionType { some }))
             }
             Type::Param(t) => args[t.idx],
-            Type::Reference(t) => {
-                let target = self.substitute(t.target, args);
-                self.add(Type::Reference(ReferenceType { target }))
-            }
             Type::Result(t) => {
                 let ok = self.substitute(t.ok, args);
                 let error = t.error.map(|err| self.substitute(err, args));
@@ -273,9 +268,6 @@ impl TypeStore {
                 format!("?{}", self.display_type(t.some))
             }
             Type::Param(t) => t.name.clone(),
-            Type::Reference(t) => {
-                format!("&{}", self.display_type(t.target))
-            }
             Type::Result(t) => {
                 if let Some(error) = &t.error {
                     format!("{}!{}", self.display_type(*error), self.display_type(t.ok))
@@ -375,10 +367,6 @@ impl TypeStore {
                 self.add(Type::Option(OptionType { some }))
             }
             Type::Param(t) => self.add(Type::Param(t.clone())),
-            Type::Reference(t) => {
-                let target = self.import(from, t.target);
-                self.add(Type::Reference(ReferenceType { target }))
-            }
             Type::Result(t) => {
                 let ok = self.import(from, t.ok);
                 let error = t.error.map(|err| self.import(from, err));

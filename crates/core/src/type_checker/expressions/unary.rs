@@ -1,8 +1,7 @@
 use crate::{
-    ast,
-    ir::{self, root_identifier},
+    ast, ir,
     type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
-    types::{self, Type},
+    types::Type,
     DiagnosticKind,
 };
 
@@ -12,7 +11,6 @@ impl TypeChecker<'_> {
         node: ast::UnaryExpression,
     ) -> Option<ir::UnaryExpression> {
         match node.operator {
-            ast::UnaryOperator::Ampersand => self.visit_reference(node),
             ast::UnaryOperator::Bang => self.visit_logical_not_expresion(node),
             ast::UnaryOperator::Minus => self.visit_negate_expresion(node),
             ast::UnaryOperator::Star => self.visit_indirection(node),
@@ -25,7 +23,6 @@ impl TypeChecker<'_> {
         };
         let ty = match self.resolve(operand.ty()) {
             Type::Listener(l) => l.inner,
-            Type::Reference(r) => r.target,
             Type::Signal(s) => s.inner,
             Type::Unknown => return None,
             _ => {
@@ -36,40 +33,6 @@ impl TypeChecker<'_> {
                 return None;
             }
         };
-        Some(ir::UnaryExpression {
-            loc: node.loc,
-            operator: node.operator,
-            operand: Box::new(operand),
-            ty,
-        })
-    }
-
-    fn visit_reference(&mut self, node: ast::UnaryExpression) -> Option<ir::UnaryExpression> {
-        let Some(operand) = node.operand.and_then(|o| self.visit_expression(*o)) else {
-            return None;
-        };
-        if let ir::Expression::Identifier(id) = &operand {
-            if let Some(handle) = self.session.get_handle(id.symbol.clone()) {
-                handle.read_to_mutable_ref(id.loc);
-            }
-            if !id.symbol.borrow().is_mutable() {
-                let error = DiagnosticKind::RefToConstant { name: id.as_name() };
-                self.error(error, node.loc);
-            }
-        } else if let Some(id) = root_identifier(&operand) {
-            if let Some(info) = self.lookup_mut(&id.as_name()) {
-                if !info.is_mutable() {
-                    let error = DiagnosticKind::AssignmentToConstant { name: id.as_name() };
-                    self.error(error, node.loc);
-                } else {
-                    info.read_to_write(id.loc);
-                }
-            };
-        };
-
-        let ty = self.intern(types::ReferenceType {
-            target: operand.ty(),
-        });
         Some(ir::UnaryExpression {
             loc: node.loc,
             operator: node.operator,

@@ -17,7 +17,6 @@ pub enum Type {
     Listener(ListenerType),
     Map(MapType),
     Option(OptionType),
-    Reference(ReferenceType),
     Result(ResultType),
     SelfType, // Represents the current type in a method context
     Signal(SignalType),
@@ -177,17 +176,6 @@ impl Into<Type> for ListenerType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ReferenceType {
-    pub target: TypeId,
-}
-
-impl Into<Type> for ReferenceType {
-    fn into(self) -> Type {
-        Type::Reference(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ResultType {
     pub ok: TypeId,
     pub error: Option<TypeId>,
@@ -281,7 +269,6 @@ impl fmt::Display for Type {
             Type::Listener(ty) => write!(f, "@{}", ty.inner),
             Type::Map(ty) => write!(f, "{}#{}", ty.key, ty.value),
             Type::Option(ty) => write!(f, "?{}", ty.some),
-            Type::Reference(ty) => write!(f, "&{}", ty.target),
             Type::Result(ty) => {
                 if let Some(error) = &ty.error {
                     write!(f, "{}!{}", error, ty.ok)
