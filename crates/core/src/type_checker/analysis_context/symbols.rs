@@ -225,6 +225,14 @@ impl SymbolRef {
         }
     }
 
+    pub fn as_methods(&self) -> Option<Vec<SymbolRef>> {
+        match &self.borrow().kind {
+            SymbolKind::Enum { methods, .. } => Some(methods.clone()),
+            SymbolKind::Struct { methods, .. } => Some(methods.clone()),
+            _ => None,
+        }
+    }
+
     pub fn is(&self, test: &SymbolRef) -> bool {
         Arc::ptr_eq(&self.0, &test.0)
     }

@@ -79,6 +79,10 @@ impl EnumDefinition {
     pub fn variants(&self) -> Vec<SymbolRef> {
         self.name.symbol.as_variants().unwrap()
     }
+
+    pub fn methods(&self) -> Vec<SymbolRef> {
+        self.name.symbol.as_methods().unwrap()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -108,6 +112,10 @@ impl StructDefinition {
 
     pub fn body(&self) -> TypeSymbolBody {
         self.name.symbol.as_type_body().unwrap()
+    }
+
+    pub fn methods(&self) -> Vec<SymbolRef> {
+        self.name.symbol.as_methods().unwrap()
     }
 }
 

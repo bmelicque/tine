@@ -18,10 +18,14 @@ impl CodeGenerator<'_> {
         let get = self.make_struct_getter(&body_symbols);
         let set = self.make_setter(&body_symbols);
         let constructor = self.struct_fields_to_swc_constructor(body_symbols);
+        let mut body = vec![constructor.into(), get.into(), set.into()];
+
+        let child_classes = self.generate_concrete_classes(&node.methods());
+        body.extend(child_classes);
 
         let class = swc::Class {
             span: DUMMY_SP,
-            body: vec![constructor.into(), get.into(), set.into()],
+            body,
             ..Default::default()
         };
 

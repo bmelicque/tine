@@ -107,3 +107,20 @@ impl CodeGenerator<'_> {
         result
     }
 }
+
+pub(crate) fn assignment(lhs: swc::Expr, rhs: swc::Expr) -> swc::Stmt {
+    let lhs = match lhs {
+        swc::Expr::Ident(i) => i.into(),
+        swc::Expr::Member(m) => m.into(),
+        _ => panic!(),
+    };
+
+    swc::Stmt::Expr(swc::ExprStmt {
+        span: DUMMY_SP,
+        expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
+            left: swc::AssignTarget::Simple(lhs),
+            right: Box::new(rhs),
+            ..Default::default()
+        })),
+    })
+}

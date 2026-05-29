@@ -1,4 +1,5 @@
 mod assignments;
+mod functions;
 mod types;
 mod utils;
 
@@ -27,9 +28,7 @@ impl CodeGenerator<'_> {
                 expr => self.handle_expression_statement(expr),
             },
             ir::Statement::Function(f) => {
-                vec![swc::Stmt::Decl(swc::Decl::Fn(
-                    self.function_to_swc_definition(f),
-                ))]
+                vec![self.handle_function_definition(f)]
             }
             ir::Statement::Return(node) => self.return_to_swc(node),
             ir::Statement::Struct(s) => vec![self.struct_def_to_swc(s).into()],
@@ -163,32 +162,6 @@ impl CodeGenerator<'_> {
         }));
 
         stmts
-    }
-
-    fn function_to_swc_definition(&mut self, node: &ir::FunctionDefinition) -> swc::FnDecl {
-        swc::FnDecl {
-            ident: ident_from_str(&node.name.as_name()),
-            declare: false,
-            function: Box::new(swc::Function {
-                params: node
-                    .params
-                    .iter()
-                    .map(|p| swc::Param {
-                        span: DUMMY_SP,
-                        decorators: vec![],
-                        pat: swc::Pat::Ident(ident_from_str(&p.as_name()).into()),
-                    })
-                    .collect(),
-                decorators: vec![],
-                span: DUMMY_SP,
-                ctxt: SyntaxContext::empty(),
-                body: Some(self.block_to_swc_stmt(&node.body)),
-                is_generator: false,
-                is_async: false,
-                type_params: None,
-                return_type: None,
-            }),
-        }
     }
 
     fn return_to_swc(&mut self, node: &ir::ReturnStatement) -> Vec<swc::Stmt> {

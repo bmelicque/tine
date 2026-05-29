@@ -3,7 +3,10 @@ use swc_ecma_ast as swc;
 use tine_core::{ir, SymbolKind, SymbolRef, TypeSymbolBody};
 
 use crate::codegen::{
-    statements::types::utils::{member, member_assignment, this_field},
+    statements::{
+        types::utils::{member_assignment, this_field},
+        utils::member,
+    },
     utils::ident_from_str,
     CodeGenerator,
 };
@@ -56,6 +59,9 @@ impl CodeGenerator<'_> {
 
         body.push(self.make_enum_getter(&node.variants()).into());
         body.push(self.make_enum_setter(&node.variants()).into());
+
+        let child_classes = self.generate_concrete_classes(&node.methods());
+        body.extend(child_classes);
 
         let class = swc::Class {
             span: DUMMY_SP,

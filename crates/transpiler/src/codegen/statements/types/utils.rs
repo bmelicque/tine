@@ -6,7 +6,10 @@ use tine_core::{
 };
 
 use crate::codegen::{
-    statements::utils::declare_const,
+    statements::{
+        assignments::assignment,
+        utils::{declare_const, member},
+    },
     utils::{ident_from_str, std_method_call},
     CodeGenerator,
 };
@@ -180,14 +183,6 @@ fn length_of(expr: swc::Expr) -> swc::MemberExpr {
     }
 }
 
-pub(super) fn member(object: swc::Expr, prop: &str) -> swc::MemberExpr {
-    swc::MemberExpr {
-        span: DUMMY_SP,
-        obj: Box::new(object),
-        prop: swc::MemberProp::Ident(ident_from_str(prop).into()),
-    }
-}
-
 fn computed(object: swc::Expr, prop: swc::Expr) -> swc::MemberExpr {
     swc::MemberExpr {
         span: DUMMY_SP,
@@ -241,21 +236,4 @@ pub fn this_assignment(this_prop: swc::Ident, value: swc::Expr) -> swc::Stmt {
         this_prop,
         value,
     )
-}
-
-fn assignment(lhs: swc::Expr, rhs: swc::Expr) -> swc::Stmt {
-    let lhs = match lhs {
-        swc::Expr::Ident(i) => i.into(),
-        swc::Expr::Member(m) => m.into(),
-        _ => panic!(),
-    };
-
-    swc::Stmt::Expr(swc::ExprStmt {
-        span: DUMMY_SP,
-        expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
-            left: swc::AssignTarget::Simple(lhs),
-            right: Box::new(rhs),
-            ..Default::default()
-        })),
-    })
 }
