@@ -1,80 +1,56 @@
 use crate::codegen::{
-    utils::{can_ifexpr_be_inlined, create_ident, undefined, AssignTo},
+    expressions::{
+        utils::{assign_if_last_expressions, ident_to_declaration},
+        ExpressionResult,
+    },
+    utils::{can_ifexpr_be_inlined, undefined},
     CodeGenerator,
 };
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
-use tine_core::ast;
+use tine_core::ir;
 
 impl CodeGenerator<'_> {
-    pub fn if_to_swc_expr(&mut self, node: &ast::IfExpression) -> swc::Expr {
-        if node.consequent.as_ref().unwrap().statements.len() == 0 && node.alternate.is_none() {
-            undefined()
+    pub fn handle_if_expression(&mut self, node: &ir::IfExpression) -> ExpressionResult {
+        if node.consequent.statements.len() == 0 && node.alternate.is_none() {
+            undefined().into()
         } else if can_ifexpr_be_inlined(node) {
-            self.if_to_swc_inlined(node).into()
+            self.inlined_if(node).into()
         } else {
-            self.if_to_swc_extracted(node).into()
+            self.extracted_if(node)
         }
     }
 
-    fn if_to_swc_inlined(&mut self, node: &ast::IfExpression) -> swc::Expr {
-        if let Some(alternate) = &node.alternate {
-            let alt = match alternate.as_ref() {
-                ast::Alternate::Block(b) => self.block_to_swc_inlined(b).into(),
-                ast::Alternate::If(i) => self.if_to_swc_inlined(i).into(),
-                ast::Alternate::IfDecl(_) => {
-                    panic!("Shouldn't try to inline IfDeclExpression!")
-                }
-            };
-            let alt = Box::new(alt);
-            swc::Expr::Cond(swc::CondExpr {
-                span: DUMMY_SP,
-                test: Box::new(self.expr_to_swc(node.condition.as_ref().unwrap())),
-                cons: Box::new(
-                    self.block_to_swc_inlined(node.consequent.as_ref().unwrap())
-                        .into(),
-                ),
-                alt,
-            })
-        } else {
-            let cons = self
-                .block_to_swc_inlined(node.consequent.as_ref().unwrap())
-                .into();
-            swc::Expr::Cond(swc::CondExpr {
-                span: DUMMY_SP,
-                test: Box::new(self.expr_to_swc(node.condition.as_ref().unwrap())),
-                cons: Box::new(self.some(cons).into()),
-                alt: Box::new(self.none().into()),
-            })
+    fn inlined_if(&mut self, node: &ir::IfExpression) -> swc::CondExpr {
+        let test = Box::new(self.handle_expression(&node.condition).expr);
+        let cons = Box::new(self.inlined_block(&node.consequent));
+        let alt = Box::new(
+            node.alternate
+                .as_ref()
+                .map_or(self.none().into(), |alt| self.inlined_block(alt)),
+        );
+
+        swc::CondExpr {
+            span: DUMMY_SP,
+            test,
+            cons,
+            alt,
         }
     }
 
-    fn if_to_swc_extracted(&mut self, node: &ast::IfExpression) -> swc::Expr {
-        let is_option = node.alternate.is_none();
-        let id = self.add_temp_var_to_current_block();
-        self.enter_block();
-        let if_stmt = self.if_to_swc_stmt(node, AssignTo::Last(id.clone()));
-        self.exit_block();
-        self.push_to_block(if_stmt.into());
-        if is_option {
-            let stmt = self.into_option(&id);
-            self.push_to_block(stmt);
+    fn extracted_if(&mut self, node: &ir::IfExpression) -> ExpressionResult {
+        let temp = self.get_temp_id();
+        let decl = ident_to_declaration(temp.clone());
+        let mut stmts = self.if_to_swc_stmt(node);
+        match stmts.last_mut() {
+            Some(swc::Stmt::If(i)) => assign_if_last_expressions(i, temp.clone()),
+            _ => panic!(),
         }
-        create_ident(&id).into()
-    }
-
-    pub fn if_decl_to_swc_expr(&mut self, node: &ast::IfPatExpression) -> swc::Expr {
-        let is_option = node.alternate.is_none();
-        let id = self.add_temp_var_to_current_block();
-        self.enter_block();
-        let if_stmt = self.if_decl_to_swc_stmt(node, AssignTo::Last(id.clone()));
-        self.exit_block();
-        self.push_to_block(if_stmt.into());
-        if is_option {
-            let stmt = self.into_option(&id);
-            self.push_to_block(stmt);
+        stmts.insert(0, decl);
+        ExpressionResult {
+            prelim_stmts: stmts,
+            expr: temp.into(),
         }
-        create_ident(&id).into()
     }
 }
 
@@ -82,34 +58,30 @@ impl CodeGenerator<'_> {
 mod tests {
     use super::*;
     use swc_ecma_ast as swc;
-    use tine_core::{ast, Location, ModuleLoader, Session};
+    use tine_core::{Location, ModuleLoader, Session, TypeStore};
 
-    fn mock_expr() -> ast::Expression {
-        ast::Expression::IntLiteral(ast::IntLiteral {
+    fn mock_expr() -> ir::Expression {
+        ir::Expression::IntLiteral(ir::IntLiteral {
             value: 1,
             loc: Location::dummy(),
         })
     }
 
-    fn mock_block() -> ast::BlockExpression {
-        ast::BlockExpression {
-            statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
-                expression: mock_expr().into(),
-            })],
+    fn mock_block() -> ir::Block {
+        ir::Block {
+            statements: vec![ir::Statement::Expression(mock_expr())],
             loc: Location::dummy(),
+            ty: TypeStore::INTEGER,
         }
     }
 
-    fn mock_if_expr(with_alt: bool) -> ast::IfExpression {
-        ast::IfExpression {
-            condition: Some(Box::new(mock_expr())),
-            consequent: Some(mock_block()),
-            alternate: if with_alt {
-                Some(Box::new(ast::Alternate::Block(mock_block())))
-            } else {
-                None
-            },
+    fn mock_if_expr(with_alt: bool) -> ir::IfExpression {
+        ir::IfExpression {
             loc: Location::dummy(),
+            condition: Box::new(mock_expr()),
+            consequent: mock_block(),
+            alternate: if with_alt { Some(mock_block()) } else { None },
+            ty: TypeStore::UNKNOWN,
         }
     }
 
@@ -123,26 +95,26 @@ mod tests {
     impl CodeGenerator<'_> {
         fn new_for_test() -> Self {
             let session = Box::leak(Box::new(Session::new(Box::new(MockLoader))));
-            let mut gen = CodeGenerator::new(session, 0);
-            gen.enter_block();
-            gen
+            CodeGenerator::new(session, 0)
         }
     }
 
     #[test]
     fn returns_undefined_for_empty_if() {
         let mut gen = CodeGenerator::new_for_test();
-        let node = ast::IfExpression {
-            condition: Some(Box::new(mock_expr())),
-            consequent: Some(ast::BlockExpression {
-                statements: vec![],
-                loc: Location::dummy(),
-            }),
-            alternate: None,
+        let node = ir::IfExpression {
             loc: Location::dummy(),
+            condition: Box::new(mock_expr()),
+            consequent: ir::Block {
+                loc: Location::dummy(),
+                statements: vec![],
+                ty: TypeStore::UNIT,
+            },
+            alternate: None,
+            ty: TypeStore::UNKNOWN,
         };
 
-        let result = gen.if_to_swc_expr(&node);
+        let result = gen.handle_if_expression(&node).expr;
         match result {
             swc::Expr::Ident(ident) => {
                 assert_eq!(ident.sym.to_string(), "undefined");
@@ -158,7 +130,7 @@ mod tests {
 
         assert!(crate::codegen::utils::can_ifexpr_be_inlined(&node));
 
-        let result = gen.if_to_swc_expr(&node);
+        let result = gen.handle_if_expression(&node).expr;
         match result {
             swc::Expr::Cond(cond) => {
                 assert!(matches!(*cond.test, swc::Expr::Lit(_)));
@@ -174,26 +146,11 @@ mod tests {
         let mut gen = CodeGenerator::new_for_test();
         let node = mock_if_expr(true);
 
-        let result = gen.if_to_swc_inlined(&node);
-        match result {
-            swc::Expr::Cond(cond) => {
-                assert!(matches!(*cond.alt, swc::Expr::Lit(_)), "got {:?}", cond.alt);
-            }
-            _ => panic!("Expected CondExpr, got {:?}", result),
-        }
-    }
-
-    #[test]
-    fn generates_temp_var_for_extracted_if() {
-        let mut gen = CodeGenerator::new_for_test();
-        let node = mock_if_expr(false);
-
-        let result = gen.if_to_swc_extracted(&node);
-        match result {
-            swc::Expr::Ident(ident) => {
-                assert!(ident.sym.to_string().starts_with("__"));
-            }
-            _ => panic!("Expected identifier for temp var, got {:?}", result),
-        }
+        let result = gen.inlined_if(&node);
+        assert!(
+            matches!(*result.alt, swc::Expr::Lit(_)),
+            "got {:?}",
+            result.alt
+        );
     }
 }

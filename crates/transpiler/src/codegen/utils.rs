@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-use tine_core::ast;
+use tine_core::{ir, types::TypeId, TypeStore};
 
 use super::CodeGenerator;
 
@@ -76,7 +76,7 @@ fn safe_identifier(name: &str) -> String {
     }
 }
 
-pub fn create_ident(name: &str) -> swc::Ident {
+pub fn ident_from_str(name: &str) -> swc::Ident {
     swc::Ident {
         sym: safe_identifier(name).into(),
         span: DUMMY_SP,
@@ -93,14 +93,6 @@ pub fn create_str(text: &str) -> swc::Expr {
     }))
 }
 
-pub fn create_number(value: f64) -> swc::Expr {
-    swc::Expr::Lit(swc::Lit::Num(swc::Number {
-        span: DUMMY_SP,
-        value: value,
-        raw: None,
-    }))
-}
-
 pub fn create_block_stmt(stmts: Vec<swc::Stmt>) -> swc::BlockStmt {
     swc::BlockStmt {
         span: DUMMY_SP,
@@ -109,21 +101,25 @@ pub fn create_block_stmt(stmts: Vec<swc::Stmt>) -> swc::BlockStmt {
     }
 }
 
-pub fn can_be_inlined(node: &ast::Statement) -> bool {
+pub fn can_be_inlined(node: &ir::Statement) -> bool {
     match node {
-        ast::Statement::Expression(e) => match e.expression.as_ref() {
-            ast::Expression::Block(b) => can_block_be_inlined(b),
-            ast::Expression::If(i) => can_ifexpr_be_inlined(i),
-            ast::Expression::IfDecl(_) => false,
-            ast::Expression::Loop(_) => false,
-            ast::Expression::Match(_) => false,
-            _ => true,
-        },
+        ir::Statement::Assignment(a) => can_expression_be_inlined(&a.value),
+        ir::Statement::Expression(e) => can_expression_be_inlined(e),
         _ => false,
     }
 }
 
-pub fn can_block_be_inlined(block: &ast::BlockExpression) -> bool {
+pub fn can_expression_be_inlined(node: &ir::Expression) -> bool {
+    match node {
+        ir::Expression::Block(b) => can_block_be_inlined(b),
+        ir::Expression::If(i) => can_ifexpr_be_inlined(i),
+        ir::Expression::For(_) => false,
+        ir::Expression::ForIn(_) => false,
+        _ => true,
+    }
+}
+
+pub fn can_block_be_inlined(block: &ir::Block) -> bool {
     block
         .statements
         .iter()
@@ -131,17 +127,35 @@ pub fn can_block_be_inlined(block: &ast::BlockExpression) -> bool {
         .is_none()
 }
 
-pub fn can_ifexpr_be_inlined(expr: &ast::IfExpression) -> bool {
-    if !can_block_be_inlined(expr.consequent.as_ref().unwrap()) {
+pub fn can_ifexpr_be_inlined(expr: &ir::IfExpression) -> bool {
+    if !can_block_be_inlined(&expr.consequent) {
         return false;
     }
-    let Some(ref alt) = expr.alternate else {
+    match &expr.alternate {
+        Some(alt) => can_block_be_inlined(alt),
+        None => true,
+    }
+}
+
+pub fn is_primitive(ty: TypeId) -> bool {
+    match ty {
+        TypeStore::BOOLEAN
+        | TypeStore::FLOAT
+        | TypeStore::INTEGER
+        | TypeStore::STRING
+        | TypeStore::UNIT => true,
+        _ => false,
+    }
+}
+
+pub fn is_handled_by_ref(node: &ir::Expression) -> bool {
+    if !is_primitive(node.ty()) {
         return true;
-    };
-    match alt.as_ref() {
-        ast::Alternate::Block(b) => can_block_be_inlined(b),
-        ast::Alternate::If(i) => can_ifexpr_be_inlined(i),
-        ast::Alternate::IfDecl(_) => false,
+    }
+
+    match node {
+        ir::Expression::Identifier(i) => i.symbol.is_referenced(),
+        _ => false,
     }
 }
 
@@ -154,55 +168,49 @@ pub fn undefined() -> swc::Expr {
     })
 }
 
-pub fn true_lit() -> swc::Expr {
-    swc::Expr::Lit(swc::Lit::Bool(swc::Bool {
+pub fn make_cell(value: swc::Expr) -> swc::Expr {
+    let callee = swc::Expr::Member(swc::MemberExpr {
         span: DUMMY_SP,
-        value: true,
-    }))
+        obj: Box::new(ident_from_str("$").into()),
+        prop: swc::MemberProp::Ident(ident_from_str("Cell").into()),
+    });
+
+    swc::Expr::New(swc::NewExpr {
+        callee: Box::new(callee),
+        args: Some(vec![value.into()]),
+        ..Default::default()
+    })
 }
 
-impl CodeGenerator<'_> {
-    pub fn into_option(&mut self, identifier: &String) -> swc::Stmt {
-        // identifier !== undefined ? new __Option("Some", identifier) : new __Option("None")
-
-        let test = Box::new(swc::Expr::Bin(swc::BinExpr {
+pub fn std_method_call(name: &str, args: Vec<swc::ExprOrSpread>) -> swc::CallExpr {
+    swc::CallExpr {
+        callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
             span: DUMMY_SP,
-            op: swc::BinaryOp::NotEqEq,
-            left: Box::new(create_ident(&identifier).into()),
-            right: Box::new(undefined()),
-        }));
-
-        let cons = Box::new(self.some(create_ident(&identifier).into()).into());
-        let alt = Box::new(self.none().into());
-        let expr = Box::new(swc::Expr::Cond(swc::CondExpr {
-            span: DUMMY_SP,
-            test,
-            cons,
-            alt,
-        }));
-
-        swc::Stmt::Expr(swc::ExprStmt {
-            span: DUMMY_SP,
-            expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
-                span: DUMMY_SP,
-                op: swc::AssignOp::Assign,
-                left: swc::AssignTarget::Simple(swc::SimpleAssignTarget::Ident(
-                    swc::BindingIdent {
-                        id: create_ident(&identifier),
-                        type_ann: None,
-                    },
-                )),
-                right: expr,
-            })),
-        })
+            obj: Box::new(swc::Expr::Ident(ident_from_str("$"))),
+            prop: swc::MemberProp::Ident(ident_from_str(name).into()),
+        }))),
+        args,
+        ..Default::default()
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum AssignTo {
-    None,
-    /// `{ value }` becomes `{ identifier = value }`
-    Last(String),
-    /// `{ break value }` becomes `{ identifier = value; break }`
-    Break(String),
+impl CodeGenerator<'_> {
+    pub fn none(&mut self) -> swc::NewExpr {
+        let args = vec![swc::ExprOrSpread {
+            spread: None,
+            expr: Box::new(create_str("None")),
+        }];
+
+        swc::NewExpr {
+            span: DUMMY_SP,
+            ctxt: SyntaxContext::empty(),
+            callee: Box::new(swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(swc::Expr::Ident(ident_from_str("$"))),
+                prop: swc::MemberProp::Ident(ident_from_str("Option").into()),
+            })),
+            args: Some(args),
+            type_args: None,
+        }
+    }
 }

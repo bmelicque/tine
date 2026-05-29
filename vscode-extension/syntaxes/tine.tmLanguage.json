@@ -105,8 +105,12 @@
                     "match": "\\b(const|var)\\b"
                 },
                 {
+                    "name": "keyword.declaration.type.tine",
+                    "match": "\\b(struct|enum)\\b"
+                },
+                {
                     "name": "keyword.declaration.function.tine",
-                    "match": "\\b(fn)\\b"
+                    "match": "\\b(fn|impl)\\b"
                 }
             ]
         },

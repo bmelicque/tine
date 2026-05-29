@@ -33,8 +33,7 @@ impl Session {
                 .append(&mut result.diagnostics);
             self.symbols.append(&mut result.symbols);
             self.exports.insert(module_id, result.exports);
-            self.add_expressions(result.expressions);
-            self.add_dependencies(result.dependencies);
+            self.ir.insert(module_id, result.ir);
         }
     }
 

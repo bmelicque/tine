@@ -9,7 +9,7 @@ impl Parser<'_> {
         let start_range = self.eat(&[Token::Enum]);
         let start = self.localize(start_range);
 
-        let (name, params) = self.try_parse_type_name().unwrap_or(("".to_string(), None));
+        let (name, params) = self.try_parse_type_name();
         self.expect(Token::LBrace);
         let variants = self.parse_enum_variants();
         let end_range = self.expect(Token::RBrace);

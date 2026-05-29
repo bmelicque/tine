@@ -1,7 +1,7 @@
 pub mod symbols;
 pub mod type_store;
 
-pub use symbols::{SymbolData, SymbolHandle, SymbolKind, SymbolRef};
+pub use symbols::{SymbolData, SymbolHandle, SymbolKind, SymbolRef, TypeSymbolBody};
 
 use std::collections::HashMap;
 
@@ -69,8 +69,6 @@ pub struct LocalContext {
 
     pub(crate) scopes: Vec<Scope>,
 
-    pub expressions: HashMap<Location, TypeId>,
-
     pub current_declaration_dependencies: Option<Vec<SymbolRef>>,
     pub other_dependencies: HashMap<Location, Vec<SymbolRef>>,
 }
@@ -80,7 +78,6 @@ impl LocalContext {
         Self {
             symbols: Vec::<SymbolHandle>::new(),
             scopes: vec![Scope::new()],
-            expressions: HashMap::new(),
             current_declaration_dependencies: None,
             other_dependencies: HashMap::new(),
         }
@@ -119,11 +116,6 @@ impl LocalContext {
     pub fn import(&mut self, symbol: SymbolRef) {
         let current_scope = self.current_scope_mut();
         current_scope.bindings.push(symbol.clone());
-    }
-
-    pub fn save_expression_type(&mut self, loc: Location, ty: TypeId) -> TypeId {
-        self.expressions.insert(loc, ty);
-        ty
     }
 
     pub fn lookup(&self, name: &str) -> Option<SymbolRef> {

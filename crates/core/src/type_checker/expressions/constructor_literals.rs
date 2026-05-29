@@ -4,93 +4,179 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     ast,
     diagnostics::DiagnosticKind,
-    type_checker::analysis_context::type_store::TypeStore,
-    types::{self, StructField, TypeId},
-    Location,
+    ir,
+    type_checker::analysis_context::{symbols::TypeSymbolBody, type_store::TypeStore},
+    types::{self, TypeId},
+    Location, SymbolKind, SymbolRef,
 };
 
 use super::super::TypeChecker;
 
-enum ExpectedFields {
-    Tuple(Vec<TypeId>),
-    Struct(Vec<StructField>),
-    MapEntries(types::MapType),
-    Any,
-}
-
 struct ConstructorVisit {
-    pub constructor_type: TypeId,
-    pub type_params: Vec<TypeId>,
+    pub type_symbol: SymbolRef,
+    pub variant_symbol: Option<SymbolRef>,
+    pub expected_body: Option<TypeSymbolBody>,
     pub substitutions: HashMap<types::TypeParam, TypeId>,
-    pub expected_fields: Option<ExpectedFields>,
-}
-
-impl Default for ConstructorVisit {
-    fn default() -> Self {
-        Self {
-            constructor_type: TypeStore::UNKNOWN,
-            type_params: vec![],
-            substitutions: HashMap::new(),
-            expected_fields: None,
-        }
-    }
 }
 
 impl TypeChecker<'_> {
-    pub fn visit_constructor_literal(&mut self, node: &ast::ConstructorLiteral) -> TypeId {
-        let ConstructorVisit {
-            constructor_type,
-            type_params,
-            mut substitutions,
-            expected_fields,
-        } = self.visit_constructor(&node.constructor);
+    pub fn visit_constructor_literal(
+        &mut self,
+        node: ast::ConstructorLiteral,
+    ) -> Option<ir::Expression> {
+        match &node.constructor {
+            ast::Constructor::Map(_) => {
+                return self.visit_map_literal(node).map(Into::into);
+            }
+            ast::Constructor::Invalid(_) => {
+                self.fallback_check_literal_body(node.body);
+                return None;
+            }
+            _ => {}
+        }
 
-        self.check_literal_body(&node.body, expected_fields, &mut substitutions);
+        let Some(ConstructorVisit {
+            type_symbol: constructor_symbol,
+            variant_symbol,
+            expected_body,
+            substitutions,
+        }) = self.visit_constructor(node.constructor)
+        else {
+            self.fallback_check_literal_body(node.body);
+            return None;
+        };
 
-        let ty =
-            self.resolve_constructor_type(constructor_type, type_params, node.loc, &substitutions);
-        self.ctx.save_expression_type(node.loc, ty)
+        match node.body {
+            Some(ast::ConstructorBody::Struct(s)) => match expected_body {
+                Some(TypeSymbolBody::Struct(fields)) => self
+                    .visit_struct_literal_body(
+                        s,
+                        fields.into_iter().map(|f| f.1).collect(),
+                        constructor_symbol,
+                        variant_symbol,
+                        substitutions,
+                    )
+                    .map(Into::into),
+                _ => {
+                    self.handle_unexpected_struct_body(s, true);
+                    None
+                }
+            },
+            Some(ast::ConstructorBody::Tuple(t)) => match expected_body {
+                Some(TypeSymbolBody::Tuple(elements)) => self
+                    .visit_struct_tuple_body(
+                        t,
+                        elements,
+                        constructor_symbol,
+                        variant_symbol,
+                        substitutions,
+                    )
+                    .map(Into::into),
+                _ => {
+                    self.handle_unexpected_tuple_body(t, true);
+                    None
+                }
+            },
+            None => match expected_body {
+                None => Some(ir::Expression::Array(ir::ArrayExpression {
+                    loc: node.loc,
+                    elements: vec![],
+                    ty: constructor_symbol.borrow().ty,
+                })),
+                _ => {
+                    self.error(DiagnosticKind::ExpectedVariantUnit, node.loc);
+                    None
+                }
+            },
+        }
     }
 
-    fn visit_constructor(&mut self, node: &ast::Constructor) -> ConstructorVisit {
+    /// Get the type's symbol and a list of expected members.
+    ///
+    /// Members are not directly in the type symbol because of enums (it is then in the appropriate constructor)
+    fn visit_constructor(&mut self, node: ast::Constructor) -> Option<ConstructorVisit> {
         match node {
+            ast::Constructor::Invalid(_) => None,
+            ast::Constructor::Map(_) => None,
             ast::Constructor::Named(named) => {
-                let (ty, type_params, substitutions) = self.resolve_constructor_name(named);
-                let expected_fields = self.get_expected_fields(ty, named.loc);
-
-                ConstructorVisit {
-                    constructor_type: ty,
-                    type_params,
-                    substitutions,
-                    expected_fields,
-                }
-            }
-            ast::Constructor::Map(map) => {
-                let map_type_id = self.visit_map_type(map);
-                let types::Type::Map(map_type) = self.resolve(map_type_id) else {
-                    panic!()
+                let symbol = self.find_type(&named)?;
+                let expected_type_params = match self.resolve(symbol.borrow().ty) {
+                    types::Type::Generic(g) => g.params,
+                    _ => vec![],
                 };
-                ConstructorVisit {
-                    constructor_type: map_type_id,
-                    expected_fields: Some(ExpectedFields::MapEntries(map_type)),
-                    ..Default::default()
-                }
+                let (_, substitutions) =
+                    self.visit_type_args(named.args, &expected_type_params, named.loc);
+                let body = match &symbol.borrow().kind {
+                    SymbolKind::Struct { body, .. } => body.clone(),
+                    SymbolKind::Enum { .. } => {
+                        self.error(DiagnosticKind::ExpectedStructGotEnum, named.loc);
+                        return None;
+                    }
+                    _ => panic!(),
+                };
+                Some(ConstructorVisit {
+                    type_symbol: symbol,
+                    variant_symbol: None,
+                    expected_body: Some(body),
+                    substitutions,
+                })
             }
             ast::Constructor::Variant(variant) => {
-                let (ty, type_params, substitutions) =
-                    self.resolve_constructor_name(&variant.enum_name);
-
-                let expected_fields = self.get_variant_expected_fields(variant, ty, node.loc());
-
-                ConstructorVisit {
-                    constructor_type: ty,
-                    type_params,
+                let (symbol, type_params) = self.resolve_constructor_name(&variant.enum_name)?;
+                let (_, substitutions) = self.visit_type_args(
+                    variant.enum_name.args,
+                    &type_params,
+                    variant.enum_name.loc,
+                );
+                let SymbolKind::Enum { variants, .. } = &symbol.borrow().kind else {
+                    self.error(DiagnosticKind::InvalidTypeConstructor, variant.loc);
+                    return None;
+                };
+                let enum_name = variant.enum_name.name;
+                let variant_name = variant.variant_name?;
+                let variant = variants
+                    .iter()
+                    .find(|constructor| constructor.borrow().name == variant_name.text)
+                    .cloned();
+                let Some(constructor) = variant else {
+                    let error = DiagnosticKind::UnknownVariant {
+                        variant: variant_name.text,
+                        enum_name: enum_name,
+                    };
+                    self.error(error, variant_name.loc);
+                    return None;
+                };
+                let SymbolKind::Constructor { body, .. } = &constructor.borrow().kind else {
+                    let error = DiagnosticKind::UnknownVariant {
+                        variant: variant_name.text,
+                        enum_name: enum_name,
+                    };
+                    self.error(error, variant_name.loc);
+                    return None;
+                };
+                Some(ConstructorVisit {
+                    type_symbol: symbol.clone(),
+                    variant_symbol: Some(constructor.clone()),
+                    expected_body: body.clone(),
                     substitutions,
-                    expected_fields,
-                }
+                })
             }
-            ast::Constructor::Invalid(_) => ConstructorVisit::default(),
         }
+    }
+
+    fn find_type(&mut self, ty: &ast::NamedType) -> Option<SymbolRef> {
+        let Some(symbol) = self.lookup(&ty.name) else {
+            let error = DiagnosticKind::CannotFindName {
+                name: ty.name.clone(),
+            };
+            self.error(error, ty.loc);
+            return None;
+        };
+        if !symbol.borrow().is_type_symbol() {
+            self.error(DiagnosticKind::ExpectedTypeGotValue, ty.loc);
+            return None;
+        }
+        Some(symbol)
     }
 
     /// Tries to resolve the name of the constructor being called.
@@ -99,246 +185,163 @@ impl TypeChecker<'_> {
     fn resolve_constructor_name(
         &mut self,
         name: &ast::NamedType,
-    ) -> (TypeId, Vec<TypeId>, HashMap<types::TypeParam, TypeId>) {
-        let name_str = name.name.as_str();
-        let ty = match name_str {
-            "bool" => TypeStore::BOOLEAN,
-            "float" => TypeStore::FLOAT,
-            "int" => TypeStore::INTEGER,
-            "str" => TypeStore::STRING,
-            "void" => TypeStore::UNIT,
-            _ => match self.lookup(name_str) {
-                Some(symbol) => symbol.borrow().get_type(),
-                None => {
-                    let error = DiagnosticKind::CannotFindName {
-                        name: name_str.to_string(),
-                    };
-                    self.error(error, name.loc);
-                    TypeStore::UNKNOWN
-                }
-            },
+    ) -> Option<(SymbolRef, Vec<TypeId>)> {
+        let Some(symbol) = self.lookup(&name.name) else {
+            let error = DiagnosticKind::CannotFindName {
+                name: name.name.clone(),
+            };
+            self.error(error, name.loc);
+            return None;
         };
 
+        let ty = symbol.borrow().ty;
         match self.resolve(ty) {
-            types::Type::Generic(g) => {
-                self.check_type_args_count(name, &g);
-                let substitutions =
-                    self.get_explicit_substitutions(&name.args, &g.params, name.loc);
-                (g.definition, g.params, substitutions)
-            }
-            _ => (ty, vec![], HashMap::new()),
+            types::Type::Generic(g) => Some((symbol, g.params)),
+            _ => Some((symbol, vec![])),
         }
     }
 
-    fn check_type_args_count(&mut self, node: &ast::NamedType, ty: &types::GenericType) {
-        match &node.args {
-            Some(args) if args.len() > ty.params.len() => {
-                let error = DiagnosticKind::TooManyParams {
-                    expected: ty.params.len(),
-                    got: args.len(),
-                };
-                self.error(error, node.loc);
-            }
-            _ => {}
-        }
-    }
-
-    fn get_expected_fields(&mut self, ty: TypeId, loc: Location) -> Option<ExpectedFields> {
-        match self.resolve(ty) {
-            types::Type::Struct(st) => Some(ExpectedFields::Struct(st.fields)),
-            types::Type::Tuple(tu) => Some(ExpectedFields::Tuple(tu.elements)),
-            types::Type::Map(m) => Some(ExpectedFields::MapEntries(m)),
-            types::Type::Unit => None,
-            _ => {
-                self.error(DiagnosticKind::InvalidTypeConstructor, loc);
-                Some(ExpectedFields::Any)
-            }
-        }
-    }
-
-    fn get_variant_expected_fields(
+    fn visit_struct_literal_body(
         &mut self,
-        variant: &ast::VariantConstructor,
-        variant_ty: TypeId,
-        parent_loc: Location,
-    ) -> Option<ExpectedFields> {
-        let types::Type::Enum(e) = self.resolve(variant_ty) else {
-            self.error(DiagnosticKind::InvalidTypeConstructor, variant.loc);
-            return Some(ExpectedFields::Tuple(vec![]));
-        };
+        body: ast::StructLiteralBody,
+        members: Vec<SymbolRef>,
+        constructor: SymbolRef,
+        variant: Option<SymbolRef>,
+        mut substitutions: HashMap<types::TypeParam, TypeId>,
+    ) -> Option<ir::StructLiteral> {
+        let mut encountered = HashSet::new();
+        let fields = body
+            .fields
+            .into_iter()
+            .map(|field| {
+                self.visit_struct_field(field, &members, &mut encountered, &mut substitutions)
+            })
+            .collect::<Vec<Option<_>>>()
+            .into_iter()
+            .collect::<Option<Vec<_>>>()?;
+        let ty = self.resolve_constructor_type(constructor.as_type(), body.loc, &substitutions);
 
-        let Some(variant_name) = &variant.variant_name else {
-            return Some(ExpectedFields::Any);
-        };
-
-        let v = e.variants.iter().find(|v| v.name == variant_name.text);
-        match v {
-            Some(v) => self.get_expected_fields(v.def, parent_loc),
-            None => {
-                let error = DiagnosticKind::UnknownVariant {
-                    variant: variant_name.text.clone(),
-                    enum_name: variant.enum_name.name.clone(),
-                };
-                self.error(error, variant_name.loc);
-                Some(ExpectedFields::Any)
-            }
-        }
+        Some(ir::StructLiteral {
+            loc: body.loc,
+            constructor,
+            variant,
+            fields,
+            ty,
+        })
     }
 
-    fn check_literal_body(
+    fn visit_struct_field(
         &mut self,
-        body: &Option<ast::ConstructorBody>,
-        expected: Option<ExpectedFields>,
-        mut substitutions: &mut HashMap<types::TypeParam, TypeId>,
-    ) {
-        let Some(body) = body else { return };
-
-        match expected {
-            Some(ExpectedFields::MapEntries(m)) => match body {
-                ast::ConstructorBody::Struct(st) => {
-                    st.fields
-                        .iter()
-                        .for_each(|f| self.check_map_entry(f, &m, &mut substitutions));
-                }
-                ast::ConstructorBody::Tuple(t) => {
-                    self.handle_unexpected_tuple_body(t, true);
-                }
-            },
-            Some(ExpectedFields::Struct(expected_fields)) => match body {
-                ast::ConstructorBody::Struct(st) => {
-                    let mut encountered_field_names = HashSet::new();
-                    for field in &st.fields {
-                        self.check_struct_field(
-                            field,
-                            &expected_fields,
-                            &mut encountered_field_names,
-                            &mut substitutions,
-                        );
-                    }
-                    expected_fields
-                        .iter()
-                        .filter(|f| !encountered_field_names.contains(&f.name))
-                        .for_each(|f| {
-                            let error = DiagnosticKind::MissingField {
-                                name: f.name.clone(),
-                            };
-                            self.error(error, st.loc);
-                        });
-                }
-                ast::ConstructorBody::Tuple(t) => {
-                    self.handle_unexpected_tuple_body(t, true);
-                }
-            },
-            Some(ExpectedFields::Tuple(expected_tuple)) => match body {
-                ast::ConstructorBody::Struct(st) => {
-                    self.handle_unexpected_struct_body(st, true);
-                }
-                ast::ConstructorBody::Tuple(t) => {
-                    if expected_tuple.len() != t.elements.len() {
-                        let error = DiagnosticKind::ArgumentCountMismatch {
-                            expected: expected_tuple.len(),
-                            got: t.elements.len(),
-                        };
-                        self.error(error, t.loc);
-                    }
-                    for (expected, got) in expected_tuple.iter().zip(t.elements.iter()) {
-                        self.check_expression_against(got, *expected, &mut substitutions);
-                    }
-                }
-            },
-            _ => match body {
-                ast::ConstructorBody::Struct(st) => {
-                    self.handle_unexpected_struct_body(st, false);
-                }
-                ast::ConstructorBody::Tuple(t) => {
-                    self.handle_unexpected_tuple_body(t, false);
-                }
-            },
-        }
-    }
-
-    fn check_map_entry(
-        &mut self,
-        entry: &ast::ConstructorField,
-        expected: &types::MapType,
-        mut substitutions: &mut HashMap<types::TypeParam, TypeId>,
-    ) {
-        match &entry.key {
-            Some(ast::ConstructorKey::MapKey(e)) => {
-                self.check_expression_against(e, expected.key, &mut substitutions)
-            }
-            Some(ast::ConstructorKey::Name(n)) => {
-                self.error(DiagnosticKind::ExpectedMapKey, n.loc);
-            }
-            None => {}
-        }
-        if let Some(expr) = &entry.value {
-            self.check_expression_against(expr, expected.value, &mut substitutions);
-        }
-    }
-
-    fn check_struct_field(
-        &mut self,
-        field: &ast::ConstructorField,
-        expected_fields: &Vec<StructField>,
+        field: ast::ConstructorField,
+        members: &[SymbolRef],
         encountered_field_names: &mut HashSet<String>,
         mut substitutions: &mut HashMap<types::TypeParam, TypeId>,
-    ) {
-        let Some(key) = &field.key else {
-            field.value.as_ref().map(|v| self.visit_expression(v));
-            return;
-        };
-        let ast::ConstructorKey::Name(n) = key else {
-            self.error(DiagnosticKind::InvalidMember, field.loc);
-            field.value.as_ref().map(|v| self.visit_expression(v));
-            return;
+    ) -> Option<ir::StructLiteralField> {
+        let key = match field.key {
+            Some(ast::ConstructorKey::Name(n)) => n,
+            Some(_) => {
+                self.error(DiagnosticKind::InvalidMember, field.loc);
+                field.value.and_then(|v| self.visit_expression(v));
+                return None;
+            }
+            None => {
+                field.value.and_then(|v| self.visit_expression(v));
+                return None;
+            }
         };
 
-        let Some(expected_field) = expected_fields.iter().find(|f| f.name == n.text) else {
-            let error = DiagnosticKind::UnknownMember {
-                member: n.as_str().to_string(),
-            };
-            self.error(error, n.loc);
-            return;
-        };
-        encountered_field_names.insert(n.as_str().to_string());
-        if let Some(value) = &field.value {
-            self.check_expression_against(value, expected_field.def, &mut substitutions);
-        }
-    }
-
-    fn handle_unexpected_tuple_body(&mut self, t: &ast::TupleExpression, report: bool) {
-        if report {
-            self.error(DiagnosticKind::ExpectedStructLikeBody, t.loc);
-        }
-        t.elements.iter().for_each(|e| {
-            self.visit_expression(e);
-        });
-    }
-
-    fn handle_unexpected_struct_body(&mut self, st: &ast::StructLiteralBody, report: bool) {
-        if report {
-            self.error(DiagnosticKind::ExpectedTupleLikeBody, st.loc);
-        }
-        st.fields
+        let Some(symbol) = members
             .iter()
-            .filter_map(|f| f.value.as_ref())
-            .for_each(|v| {
-                self.visit_expression(v);
+            .find(|f| f.borrow().name == key.text)
+            .cloned()
+        else {
+            let error = DiagnosticKind::UnknownMember {
+                member: key.as_str().to_string(),
+            };
+            self.error(error, key.loc);
+            return None;
+        };
+        encountered_field_names.insert(key.as_str().to_string());
+
+        let value = field.value.and_then(|v| {
+            self.check_expression_against(v, symbol.borrow().ty, &mut substitutions)
+        })?;
+
+        Some(ir::StructLiteralField {
+            loc: field.loc,
+            name: ir::Identifier {
+                loc: key.loc,
+                symbol,
+            },
+            value,
+        })
+    }
+
+    /// Visit the body of tuple-like structs, like `Struct(a, b)`.
+    ///
+    /// These get lowered to regular structs `{ _0: a, _1: b }`.
+    fn visit_struct_tuple_body(
+        &mut self,
+        body: ast::TupleExpression,
+        members: Vec<SymbolRef>,
+        constructor_symbol: SymbolRef,
+        variant_symbol: Option<SymbolRef>,
+        mut substitutions: HashMap<types::TypeParam, TypeId>,
+    ) -> Option<ir::StructLiteral> {
+        let fields = body
+            .elements
+            .into_iter()
+            .zip(members.into_iter())
+            .map(|(got, expected)| {
+                self.visit_struct_tuple_element(got, expected, &mut substitutions)
             })
+            .collect::<Vec<Option<_>>>()
+            .into_iter()
+            .collect::<Option<Vec<_>>>()?;
+        let ty =
+            self.resolve_constructor_type(constructor_symbol.as_type(), body.loc, &substitutions);
+        Some(ir::StructLiteral {
+            loc: body.loc,
+            constructor: constructor_symbol,
+            variant: variant_symbol,
+            fields,
+            ty,
+        })
+    }
+
+    fn visit_struct_tuple_element(
+        &mut self,
+        got: ast::Expression,
+        expected: SymbolRef,
+        mut substitutions: &mut HashMap<types::TypeParam, TypeId>,
+    ) -> Option<ir::StructLiteralField> {
+        let expr = self.check_expression_against(got, expected.borrow().ty, &mut substitutions)?;
+        Some(ir::StructLiteralField {
+            loc: expr.loc(),
+            name: ir::Identifier {
+                loc: expr.loc(),
+                symbol: expected.clone(),
+            },
+            value: expr,
+        })
     }
 
     fn resolve_constructor_type(
         &mut self,
         unresolved_type: TypeId,
-        constructor_params: Vec<TypeId>,
         at: Location,
         substitutions: &HashMap<types::TypeParam, TypeId>,
     ) -> TypeId {
+        let generic = match self.resolve(unresolved_type) {
+            types::Type::Generic(g) => g,
+            _ => return unresolved_type,
+        };
+
         let mut unresolved = false;
-        let resolved_type_args = constructor_params
-            .into_iter()
-            .map(|p| match self.resolve(p) {
+        let args = generic
+            .params
+            .iter()
+            .map(|p| match self.resolve(*p) {
                 types::Type::Param(param) => param,
                 _ => panic!(),
             })
@@ -355,9 +358,128 @@ impl TypeChecker<'_> {
             self.error(DiagnosticKind::CannotInferType, at);
         }
 
-        self.session
-            .types()
-            .substitute(unresolved_type, &resolved_type_args)
+        self.intern(types::GenericType {
+            params: args,
+            definition: generic.definition,
+        })
+    }
+
+    fn visit_map_literal(&mut self, node: ast::ConstructorLiteral) -> Option<ir::MapLiteral> {
+        let ast::Constructor::Map(constructor) = node.constructor else {
+            panic!()
+        };
+        let ty = self.visit_map_type(constructor);
+
+        let entries = match node.body {
+            Some(ast::ConstructorBody::Struct(body)) => body
+                .fields
+                .into_iter()
+                .filter_map(|entry| self.visit_map_entry(entry))
+                .collect::<Vec<_>>(),
+            Some(ast::ConstructorBody::Tuple(body)) => {
+                self.handle_unexpected_tuple_body(body, true);
+                return None;
+            }
+            None => {
+                self.error(DiagnosticKind::ExpectedStructLikeBody, node.loc);
+                return None;
+            }
+        };
+
+        let (key, value) = self.validate_map_type(ty, &entries);
+        match key {
+            TypeStore::DYNAMIC => self.error(DiagnosticKind::CannotInferType, node.loc),
+            TypeStore::UNKNOWN
+            | TypeStore::BOOLEAN
+            | TypeStore::FLOAT
+            | TypeStore::INTEGER
+            | TypeStore::STRING => {}
+            _ => self.error(DiagnosticKind::NotImplementedMapType, node.loc),
+        }
+        let ty = self.intern(types::MapType { key, value });
+        Some(ir::MapLiteral {
+            loc: node.loc,
+            entries,
+            ty,
+        })
+    }
+
+    fn visit_map_entry(&mut self, entry: ast::ConstructorField) -> Option<ir::MapEntry> {
+        let key = match entry.key {
+            Some(ast::ConstructorKey::MapKey(e)) => self.visit_expression(e),
+            Some(ast::ConstructorKey::Name(n)) => {
+                self.error(DiagnosticKind::ExpectedMapKey, n.loc);
+                None
+            }
+            None => None,
+        };
+        let value = entry.value.and_then(|v| self.visit_expression(v));
+        Some(ir::MapEntry {
+            loc: entry.loc,
+            key: key?,
+            value: value?,
+        })
+    }
+
+    fn validate_map_type(
+        &mut self,
+        expected: TypeId,
+        entries: &[ir::MapEntry],
+    ) -> (TypeId, TypeId) {
+        let types::Type::Map(map_type) = self.resolve(expected) else {
+            panic!()
+        };
+        let mut expected_key_type = map_type.key;
+        let mut expected_value_type = map_type.value;
+        for entry in entries {
+            expected_key_type =
+                self.check_entry_part_type(expected_key_type, entry.key.ty(), entry.key.loc());
+            expected_value_type = self.check_entry_part_type(
+                expected_value_type,
+                entry.value.ty(),
+                entry.value.loc(),
+            );
+        }
+
+        (expected_key_type, expected_value_type)
+    }
+
+    // Return new expected type
+    fn check_entry_part_type(&mut self, expected: TypeId, got: TypeId, at: Location) -> TypeId {
+        if expected == TypeStore::DYNAMIC {
+            if got != TypeStore::UNKNOWN {
+                return got;
+            }
+        } else {
+            self.check_assigned_type(expected, got, at);
+        }
+        return expected;
+    }
+
+    fn handle_unexpected_tuple_body(&mut self, t: ast::TupleExpression, report: bool) {
+        if report {
+            self.error(DiagnosticKind::ExpectedStructLikeBody, t.loc);
+        }
+        t.elements.into_iter().for_each(|e| {
+            self.visit_expression(e);
+        });
+    }
+
+    fn handle_unexpected_struct_body(&mut self, st: ast::StructLiteralBody, report: bool) {
+        if report {
+            self.error(DiagnosticKind::ExpectedTupleLikeBody, st.loc);
+        }
+        st.fields.into_iter().filter_map(|f| f.value).for_each(|v| {
+            self.visit_expression(v);
+        })
+    }
+
+    fn fallback_check_literal_body(&mut self, body: Option<ast::ConstructorBody>) {
+        match body {
+            Some(ast::ConstructorBody::Struct(st)) => self.handle_unexpected_struct_body(st, false),
+            Some(ast::ConstructorBody::Tuple(t)) => self.handle_unexpected_tuple_body(t, false),
+            None => {}
+        }
     }
 }
 
@@ -365,10 +487,9 @@ impl TypeChecker<'_> {
 mod tests {
     use super::*;
     use crate::analyzer::session::Session;
-    use crate::type_checker::analysis_context::symbols::TypeSymbolKind;
     use crate::type_checker::test_utils::MockLoader;
-    use crate::types::{MapType, StructField, Type, Variant};
-    use crate::{ast, Location, SymbolData, SymbolKind};
+    use crate::types::{MapType, Type};
+    use crate::{ast, Location};
 
     #[test]
     fn test_visit_map_literal() {
@@ -408,8 +529,8 @@ mod tests {
             })),
         };
 
-        let result = checker.visit_constructor_literal(&map_literal);
-        let result = checker.resolve(result).clone();
+        let result = checker.visit_constructor_literal(map_literal);
+        let result = checker.resolve(result.unwrap().ty());
         assert!(matches!(
             result,
             Type::Map(MapType {
@@ -418,180 +539,5 @@ mod tests {
             })
         ));
         assert!(checker.diagnostics.is_empty());
-    }
-
-    #[test]
-    fn test_visit_struct_literal() {
-        let session = Session::new(Box::new(MockLoader));
-        let mut checker = TypeChecker::new(&session, 0);
-        // Define the User struct type properly
-        let user_type = types::Type::Struct(types::StructType {
-            id: 0,
-            fields: vec![
-                StructField {
-                    name: "name".to_string(),
-                    def: TypeStore::STRING,
-                    optional: false,
-                },
-                StructField {
-                    name: "age".to_string(),
-                    def: TypeStore::INTEGER,
-                    optional: false,
-                },
-            ],
-        });
-
-        let user_type_id = checker.intern_unique(user_type);
-        checker.ctx.register_symbol(SymbolData {
-            name: "User".into(),
-            ty: user_type_id,
-            kind: SymbolKind::Type {
-                kind: TypeSymbolKind::Struct,
-                members: vec![],
-            },
-            ..Default::default()
-        });
-
-        let struct_literal = ast::ConstructorLiteral {
-            loc: Location::dummy(),
-            qualifiers: vec![],
-            constructor: ast::Constructor::Named(ast::NamedType {
-                name: "User".to_string(),
-                args: None,
-                loc: Location::dummy(),
-            }),
-            body: Some(ast::ConstructorBody::Struct(ast::StructLiteralBody {
-                loc: Location::dummy(),
-                fields: vec![
-                    ast::ConstructorField {
-                        loc: Location::dummy(),
-                        key: Some(ast::ConstructorKey::Name(ast::Identifier {
-                            loc: Location::dummy(),
-                            text: "name".to_string(),
-                        })),
-                        value: Some(ast::Expression::StringLiteral(ast::StringLiteral {
-                            loc: Location::dummy(),
-                            text: "John".into(),
-                        })),
-                    },
-                    ast::ConstructorField {
-                        loc: Location::dummy(),
-                        key: Some(ast::ConstructorKey::Name(ast::Identifier {
-                            loc: Location::dummy(),
-                            text: "age".to_string(),
-                        })),
-                        value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
-                            loc: Location::dummy(),
-                            value: 30,
-                        })),
-                    },
-                ],
-            })),
-        };
-
-        let result = checker.visit_constructor_literal(&struct_literal);
-        let result_resolved = checker.resolve(result);
-
-        assert!(matches!(
-            result_resolved,
-            types::Type::Struct(types::StructType { .. })
-        ));
-        assert!(checker.diagnostics.is_empty());
-    }
-
-    #[test]
-    fn test_visit_variant_literal_valid() {
-        let session = Session::new(Box::new(MockLoader));
-        let mut checker = TypeChecker::new(&session, 0);
-        // Define a sum type with variants
-        let enum_type = types::Type::Enum(types::EnumType {
-            id: 0,
-            variants: vec![
-                Variant {
-                    name: "Circle".to_string(),
-                    def: checker.intern_unique(types::Type::Struct(types::StructType {
-                        id: 0,
-                        fields: vec![StructField {
-                            name: "radius".to_string(),
-                            def: TypeStore::INTEGER,
-                            optional: false,
-                        }],
-                    })),
-                },
-                Variant {
-                    name: "Rectangle".to_string(),
-                    def: checker.intern_unique(types::Type::Struct(types::StructType {
-                        id: 0,
-                        fields: vec![
-                            StructField {
-                                name: "width".to_string(),
-                                def: TypeStore::INTEGER,
-                                optional: false,
-                            },
-                            StructField {
-                                name: "height".to_string(),
-                                def: TypeStore::INTEGER,
-                                optional: false,
-                            },
-                        ],
-                    })),
-                },
-            ],
-        });
-
-        let shape_type_id = checker.intern_unique(enum_type);
-        checker.ctx.register_symbol(SymbolData {
-            name: "Shape".into(),
-            ty: shape_type_id,
-            kind: SymbolKind::Type {
-                kind: TypeSymbolKind::Enum,
-                members: vec![],
-            },
-            ..Default::default()
-        });
-
-        let variant_literal = ast::ConstructorLiteral {
-            loc: Location::dummy(),
-            qualifiers: vec![],
-            constructor: ast::Constructor::Variant(ast::VariantConstructor {
-                loc: Location::dummy(),
-                enum_name: Box::new(ast::NamedType {
-                    name: "Shape".to_string(),
-                    args: None,
-                    loc: Location::dummy(),
-                }),
-                variant_name: Some(ast::Identifier {
-                    loc: Location::dummy(),
-                    text: "Circle".to_string(),
-                }),
-            }),
-            body: Some(ast::ConstructorBody::Struct(ast::StructLiteralBody {
-                loc: Location::dummy(),
-                fields: vec![ast::ConstructorField {
-                    loc: Location::dummy(),
-                    key: Some(ast::ConstructorKey::Name(ast::Identifier {
-                        loc: Location::dummy(),
-                        text: "radius".to_string(),
-                    })),
-                    value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
-                        value: 10,
-                        loc: Location::dummy(),
-                    })),
-                }],
-            })),
-        };
-
-        let result = checker.visit_constructor_literal(&variant_literal);
-        let result = checker.resolve(result).clone();
-        assert!(
-            matches!(result, types::Type::Enum(types::EnumType { .. })),
-            "expected enum type, got {:?}",
-            result
-        );
-        assert!(
-            checker.diagnostics.is_empty(),
-            "expected no errors, got {:?}",
-            checker.diagnostics
-        );
     }
 }

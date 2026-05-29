@@ -3,7 +3,7 @@ use std::ops::Range;
 use crate::{
     ast,
     parser::{tokens::Token, Parser},
-    DiagnosticKind,
+    DiagnosticKind, Location,
 };
 
 impl Parser<'_> {
@@ -59,6 +59,14 @@ impl Parser<'_> {
         }
 
         elements
+    }
+
+    pub(super) fn close(&mut self, with: Token) -> Location {
+        let end_range = match self.tokens.peek() {
+            Some((Ok(t), r)) if *t == with => r.clone(),
+            _ => self.recover_at(&[Token::RBrace]),
+        };
+        self.localize(end_range)
     }
 
     pub(super) fn parse_type_params(&mut self) -> Vec<ast::Identifier> {

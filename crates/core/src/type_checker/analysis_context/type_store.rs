@@ -7,22 +7,9 @@ use crate::types::{
 };
 
 #[derive(Debug, Clone)]
-pub struct TypeMetadata {
-    pub methods: HashMap<String, TypeId>,
-}
-impl TypeMetadata {
-    pub fn new() -> Self {
-        TypeMetadata {
-            methods: HashMap::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct TypeStore {
     arena: Vec<Type>,
     lookup: HashMap<Type, TypeId>,
-    metadata: HashMap<TypeId, TypeMetadata>,
     aliases: Vec<(TypeId, String)>,
 }
 
@@ -40,7 +27,6 @@ impl TypeStore {
         let mut store = Self {
             arena: vec![],
             lookup: HashMap::new(),
-            metadata: HashMap::new(),
             aliases: Vec::new(),
         };
         store.add(Type::Unknown);
@@ -103,26 +89,7 @@ impl TypeStore {
         self.lookup.get(ty).copied()
     }
 
-    pub(crate) fn define_method(&mut self, host: TypeId, method_name: &str, signature: TypeId) {
-        if !self.metadata.contains_key(&host) {
-            self.metadata.insert(host, TypeMetadata::new());
-        }
-        let metadata = self.metadata.get_mut(&host).unwrap();
-        let r = metadata.methods.insert(method_name.to_string(), signature);
-        if r.is_some() {
-            panic!("method already exists, this should've been check before calling this");
-        }
-    }
-    pub fn find_method(&self, host: TypeId, method_name: &str) -> Option<TypeId> {
-        let Some(metadata) = self.metadata.get(&host) else {
-            return None;
-        };
-        metadata.methods.get(method_name).copied()
-    }
     pub fn has_property(&self, host: TypeId, property_name: &str) -> bool {
-        if self.find_method(host, property_name).is_some() {
-            return true;
-        }
         match &self.arena[host as usize] {
             Type::Struct(st) => st
                 .fields
@@ -211,7 +178,6 @@ impl TypeStore {
                     .map(|field| StructField {
                         name: field.name.clone(),
                         def: self.substitute(field.def, args),
-                        optional: field.optional,
                     })
                     .collect();
                 self.add(Type::Struct(StructType { id: t.id, fields }))
@@ -329,7 +295,7 @@ impl TypeStore {
                     .map(|field| format!("{} {}", field.name, self.display_type(field.def)))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("({})", fields)
+                format!("{{ {} }}", fields)
             }
             Type::Trait(t) => {
                 let methods = t
@@ -431,7 +397,6 @@ impl TypeStore {
                     .map(|field| StructField {
                         name: field.name.clone(),
                         def: self.import(from, field.def),
-                        optional: field.optional,
                     })
                     .collect();
                 self.add(Type::Struct(StructType {
@@ -519,46 +484,6 @@ mod tests {
     }
 
     #[test]
-    fn test_define_and_find_method() {
-        let mut store = TypeStore::new();
-        let struct_type = Type::Struct(StructType {
-            id: store.get_next_id(),
-            fields: vec![],
-        });
-        let struct_id = store.add(struct_type);
-
-        let fn_type = Type::Function(FunctionType {
-            params: vec![],
-            return_type: TypeStore::UNIT,
-        });
-        let fn_id = store.add(fn_type);
-
-        store.define_method(struct_id, "toString", fn_id);
-        assert_eq!(store.find_method(struct_id, "toString"), Some(fn_id));
-        assert_eq!(store.find_method(struct_id, "nonexistent"), None);
-    }
-
-    #[test]
-    fn test_has_property_method() {
-        let mut store = TypeStore::new();
-        let struct_type = Type::Struct(StructType {
-            id: store.get_next_id(),
-            fields: vec![],
-        });
-        let struct_id = store.add(struct_type);
-
-        let fn_type = Type::Function(FunctionType {
-            params: vec![],
-            return_type: TypeStore::UNIT,
-        });
-        let fn_id = store.add(fn_type);
-
-        store.define_method(struct_id, "toString", fn_id);
-        assert!(store.has_property(struct_id, "toString"));
-        assert!(!store.has_property(struct_id, "nonexistent"));
-    }
-
-    #[test]
     fn test_has_property_field() {
         let mut store = TypeStore::new();
         let struct_type = Type::Struct(StructType {
@@ -566,7 +491,6 @@ mod tests {
             fields: vec![StructField {
                 name: "name".to_string(),
                 def: TypeStore::STRING,
-                optional: false,
             }],
         });
         let struct_id = store.add(struct_type);
@@ -628,12 +552,10 @@ mod tests {
                 StructField {
                     name: "name".to_string(),
                     def: TypeStore::STRING,
-                    optional: false,
                 },
                 StructField {
                     name: "age".to_string(),
                     def: TypeStore::INTEGER,
-                    optional: false,
                 },
             ],
         });

@@ -54,7 +54,7 @@ impl swc_bundler::Load for SwcLoader<'_> {
             FileName::Real(_) => self.load_real_module(file),
             FileName::Custom(name) => match name.as_str() {
                 "dom" => Ok(parse_dom()),
-                "internals" => Ok(parse_internals()),
+                "$internals" => Ok(parse_internals()),
                 "signals" => Ok(parse_signals()),
                 name => panic!("unexpected name '{}'", name),
             },

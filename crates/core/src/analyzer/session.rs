@@ -7,11 +7,10 @@ use anyhow::anyhow;
 
 use crate::{
     analyzer::{graph::ModuleGraph, loader::ModuleLoader, modules::Module, ModuleId},
-    ast::Program,
-    pretty_print_error,
+    ast, ir, pretty_print_error,
     type_checker::SymbolHandle,
     types::{Type, TypeId},
-    Diagnostic, Location, ModulePath, SymbolKind, SymbolRef, TypeStore,
+    Diagnostic, ModulePath, SymbolKind, SymbolRef, TypeStore,
 };
 
 pub type SessionLoader = dyn ModuleLoader + Sync + Send;
@@ -22,7 +21,8 @@ pub struct Session {
     pub(super) loader: Box<SessionLoader>,
     pub(super) module_graph: ModuleGraph,
     /// The parsed AST for each module.
-    pub(super) parsed: HashMap<ModuleId, Program>,
+    pub(super) parsed: HashMap<ModuleId, ast::Program>,
+    pub(super) ir: HashMap<ModuleId, ir::Program>,
     /// The global type store, that can be read and written through each
     /// module's type checker.
     pub(super) types: Mutex<TypeStore>,
@@ -33,12 +33,6 @@ pub struct Session {
     pub(super) builtins: Vec<SymbolRef>,
     /// All symbols exported by each module.
     pub(super) exports: HashMap<ModuleId, Vec<SymbolRef>>,
-    /// The type of each relevant expression, with expressions identified by
-    /// their `Location`.
-    pub(super) expressions: HashMap<Location, TypeId>,
-    /// Dependencies captured by some expressions (like reactive listeners or
-    /// closures). Said expressions are identified by their location.
-    pub(super) dependencies: HashMap<Location, Vec<SymbolRef>>,
     pub(super) diagnostics: HashMap<ModuleId, Vec<Diagnostic>>,
 }
 
@@ -49,12 +43,11 @@ impl Session {
             loader,
             module_graph: ModuleGraph::new(),
             parsed: HashMap::new(),
+            ir: HashMap::new(),
             types: Mutex::new(TypeStore::new()),
             symbols: Vec::new(),
             builtins: Vec::new(),
             exports: HashMap::new(),
-            expressions: HashMap::new(),
-            dependencies: HashMap::new(),
             diagnostics: HashMap::new(),
         };
         session.init_builtins();
@@ -99,8 +92,11 @@ impl Session {
         &self.module_graph.nodes[id]
     }
 
-    pub fn get_ast(&self, id: ModuleId) -> &Program {
+    pub fn get_ast(&self, id: ModuleId) -> &ast::Program {
         &self.parsed.get(&id).unwrap()
+    }
+    pub fn get_ir(&self, id: ModuleId) -> &ir::Program {
+        &self.ir.get(&id).unwrap()
     }
 
     pub fn find_export(&self, module: ModuleId, name: &str) -> Option<SymbolRef> {
@@ -123,20 +119,6 @@ impl Session {
         self.types.lock().unwrap().get(id).clone()
     }
 
-    pub(super) fn add_expressions(&mut self, exprs: HashMap<Location, TypeId>) {
-        self.expressions.reserve(exprs.len());
-        for (loc, ty) in exprs {
-            self.expressions.insert(loc, ty);
-        }
-    }
-
-    pub(super) fn add_dependencies(&mut self, deps: HashMap<Location, Vec<SymbolRef>>) {
-        self.dependencies.reserve(deps.len());
-        for (loc, deps) in deps {
-            self.dependencies.insert(loc, deps);
-        }
-    }
-
     pub fn modules(&self) -> Vec<&Module> {
         self.module_graph.nodes.iter().collect()
     }
@@ -153,9 +135,6 @@ impl Session {
         self.symbols.iter().find(|s| s.has_ref(&symbol)).cloned()
     }
 
-    pub fn get_type_at(&self, loc: Location) -> Option<Type> {
-        self.expressions.get(&loc).map(|t| self.get_type(*t))
-    }
     pub fn find_type(&self, ty: &Type) -> Option<TypeId> {
         self.types.lock().unwrap().find_id(ty)
     }
@@ -183,9 +162,5 @@ impl Session {
 
     pub fn diagnostics(&self) -> &HashMap<ModuleId, Vec<Diagnostic>> {
         &self.diagnostics
-    }
-
-    pub fn get_dependencies(&self, loc: Location) -> Option<&Vec<SymbolRef>> {
-        self.dependencies.get(&loc)
     }
 }
