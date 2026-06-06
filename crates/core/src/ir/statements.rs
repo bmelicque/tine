@@ -1,7 +1,7 @@
 use enum_from_derive::EnumFrom;
 
 use crate::{
-    ir::{Block, Expression, Identifier},
+    ir::{Block, Expression, FunctionExpression, Identifier},
     type_checker::TypeSymbolBody,
     types::TypeId,
     Location, ModuleId, ModulePath, SymbolRef,
@@ -92,6 +92,18 @@ pub struct FunctionDefinition {
     pub params: Vec<Identifier>,
     pub body: Block,
     pub ty: TypeId,
+}
+
+impl Into<FunctionExpression> for FunctionDefinition {
+    fn into(self) -> FunctionExpression {
+        FunctionExpression {
+            loc: self.loc,
+            name: Some(self.name),
+            params: self.params,
+            body: self.body,
+            ty: self.ty,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

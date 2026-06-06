@@ -6,7 +6,10 @@ mod unary;
 mod utils;
 
 use super::{utils::ident_from_str, CodeGenerator};
-use crate::codegen::utils::{create_block_stmt, create_str};
+use crate::{
+    codegen::utils::{create_block_stmt, create_str},
+    ownership_analyser::OwnershipAction,
+};
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 use tine_core::{ir, SymbolRef, TypeSymbolBody};
@@ -152,7 +155,19 @@ impl CodeGenerator<'_> {
     }
 
     pub fn handle_identifier(&mut self, node: &ir::Identifier) -> swc::Expr {
-        swc::Expr::Ident(ident_from_str(&node.as_name()))
+        match self.ownership_action(node) {
+            OwnershipAction::Borrow | OwnershipAction::Copy | OwnershipAction::Move => {
+                swc::Expr::Ident(ident_from_str(&node.as_name()))
+            }
+            OwnershipAction::Clone => swc::Expr::Call(swc::CallExpr {
+                callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+                    span: DUMMY_SP,
+                    obj: Box::new(ident_from_str(&node.as_name()).into()),
+                    prop: swc::MemberProp::Ident(ident_from_str("$clone").into()),
+                }))),
+                ..Default::default()
+            }),
+        }
     }
 
     fn handle_map_expression(&mut self, node: &ir::MapLiteral) -> ExpressionResult {
