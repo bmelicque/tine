@@ -289,7 +289,7 @@ pub struct FunctionParams {
     pub params: Vec<Identifier>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Identifier {
     pub loc: Location,
     pub symbol: SymbolRef,

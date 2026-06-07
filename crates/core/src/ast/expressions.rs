@@ -379,17 +379,15 @@ pub struct UnaryExpression {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UnaryOperator {
-    Star,      // *
-    Ampersand, // &
-    Minus,     // -
-    Bang,      // !
+    Star,  // *
+    Minus, // -
+    Bang,  // !
 }
 
 impl From<String> for UnaryOperator {
     fn from(value: String) -> Self {
         match value.as_str() {
             "*" => Self::Star,
-            "&" => Self::Ampersand,
             "-" => Self::Minus,
             "!" => Self::Bang,
             _ => panic!("Unknown unary operator: {}", value),

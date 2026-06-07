@@ -244,9 +244,6 @@ impl TypeChecker<'_> {
             (Type::Option(e), Type::Option(a)) => {
                 self.unify(e.some, a.some, loc, substitutions);
             }
-            (Type::Reference(e), Type::Reference(a)) => {
-                self.unify(e.target, a.target, loc, substitutions);
-            }
             (Type::Result(e), Type::Result(a)) => {
                 self.unify(e.ok, a.ok, loc, substitutions);
                 match (&e.error, &a.error) {

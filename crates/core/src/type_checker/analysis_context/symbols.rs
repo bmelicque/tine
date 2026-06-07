@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::{
+    hash::{Hash, Hasher},
+    sync::{Arc, Mutex, MutexGuard},
+};
 
 use crate::{types::TypeId, Location, TypeStore};
 
@@ -198,6 +201,19 @@ impl SymbolHandle {
 pub struct SymbolRef(Arc<Mutex<SymbolData>>);
 
 impl SymbolRef {
+    pub fn dummy(at: Location) -> Self {
+        let symbol = SymbolData {
+            name: String::new(),
+            ty: TypeStore::UNKNOWN,
+            kind: SymbolKind::Value { mutable: false },
+            defined_at: at,
+            docs: None,
+            access: SymbolAccessManager::new(),
+            dependencies: vec![],
+        };
+        Self(Arc::new(Mutex::new(symbol)))
+    }
+
     pub fn borrow(&self) -> MutexGuard<'_, SymbolData> {
         self.0.lock().unwrap()
     }
@@ -259,5 +275,11 @@ impl SymbolRef {
 impl PartialEq for SymbolRef {
     fn eq(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+impl Eq for SymbolRef {}
+impl Hash for SymbolRef {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Arc::as_ptr(&self.0).hash(state);
     }
 }

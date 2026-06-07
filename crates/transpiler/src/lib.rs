@@ -1,5 +1,6 @@
 mod bundler;
 mod codegen;
+mod ownership_analyser;
 mod utils;
 
 use std::path::PathBuf;

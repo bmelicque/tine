@@ -1,11 +1,15 @@
-use crate::codegen::utils::ident_from_str;
+use crate::{
+    codegen::utils::ident_from_str,
+    ownership_analyser::{analyse_program, OwnershipAction, OwnershipMap},
+};
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
-use tine_core::{types, ModuleId, ModulePath, Session};
+use tine_core::{ir, types, ModuleId, ModulePath, Session};
 
 pub struct CodeGenerator<'sess> {
     _source_map: Lrc<SourceMap>,
 
+    ownership: OwnershipMap,
     session: &'sess Session,
     pub(crate) module: ModuleId,
     /// Should the `break` statements be converted to `return` statements.
@@ -19,6 +23,7 @@ pub struct CodeGenerator<'sess> {
 impl CodeGenerator<'_> {
     pub fn new<'sess>(session: &'sess Session, module: ModuleId) -> CodeGenerator<'sess> {
         CodeGenerator {
+            ownership: OwnershipMap::default(),
             session,
             module,
             _source_map: Lrc::new(SourceMap::new(Default::default())),
@@ -29,6 +34,7 @@ impl CodeGenerator<'_> {
 
     pub fn program_to_swc_module(&mut self) -> swc::Module {
         let node = self.session.get_ir(self.module);
+        self.ownership = analyse_program(node, self.session);
         let items: Vec<swc::ModuleItem> = node
             .statements
             .iter()
@@ -89,5 +95,9 @@ impl CodeGenerator<'_> {
 
     pub(crate) fn resolve(&self, ty: types::TypeId) -> types::Type {
         self.session.get_type(ty)
+    }
+
+    pub(crate) fn ownership_action(&self, id: &ir::Identifier) -> OwnershipAction {
+        self.ownership.action_for(id.loc)
     }
 }

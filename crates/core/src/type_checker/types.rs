@@ -2,8 +2,8 @@ use crate::{
     ast,
     type_checker::analysis_context::type_store::TypeStore,
     types::{
-        ArrayType, DuckType, FunctionType, GenericType, ListenerType, MapType, OptionType,
-        ReferenceType, ResultType, SignalType, TupleType, Type, TypeId,
+        ArrayType, DuckType, FunctionType, GenericType, MapType, OptionType, ResultType, TupleType,
+        Type, TypeId,
     },
     DiagnosticKind, Location,
 };
@@ -16,13 +16,10 @@ impl TypeChecker<'_> {
             ast::Type::Array(array) => self.visit_array_type(array),
             ast::Type::Duck(duck) => self.visit_duck_type(duck),
             ast::Type::Function(function) => self.visit_function_type(function),
-            ast::Type::Listener(listener) => self.visit_listener_type(listener),
             ast::Type::Map(map) => self.visit_map_type(map),
             ast::Type::Named(named) => self.visit_named_type(named),
             ast::Type::Option(option) => self.visit_option_type(option),
-            ast::Type::Reference(reference) => self.visit_reference_type(reference),
             ast::Type::Result(result) => self.visit_result_type(result),
-            ast::Type::Signal(signal) => self.visit_signal_type(signal),
             ast::Type::Tuple(tuple) => self.visit_tuple_type(tuple),
         }
     }
@@ -49,13 +46,6 @@ impl TypeChecker<'_> {
             params,
             return_type,
         })
-    }
-
-    fn visit_listener_type(&mut self, node: ast::ListenerType) -> TypeId {
-        let inner = node
-            .inner
-            .map_or(TypeStore::UNKNOWN, |i| self.visit_type(*i));
-        self.intern(Type::Listener(ListenerType { inner }))
     }
 
     pub fn visit_map_type(&mut self, node: ast::MapType) -> TypeId {
@@ -132,18 +122,6 @@ impl TypeChecker<'_> {
             .base
             .map_or(TypeStore::DYNAMIC, |t| self.visit_type(*t));
         self.intern(OptionType { some })
-    }
-
-    fn visit_signal_type(&mut self, node: ast::SignalType) -> TypeId {
-        let inner = self.visit_type(*node.inner);
-        self.intern(SignalType { inner })
-    }
-
-    pub fn visit_reference_type(&mut self, node: ast::ReferenceType) -> TypeId {
-        let target = node
-            .target
-            .map_or(TypeStore::UNKNOWN, |t| self.visit_type(*t));
-        self.intern(ReferenceType { target })
     }
 
     pub fn visit_duck_type(&mut self, node: ast::DuckType) -> TypeId {
@@ -320,30 +298,6 @@ mod tests {
             Type::Option(OptionType {
                 some: TypeStore::INTEGER
             })
-        );
-    }
-
-    #[test]
-    fn test_visit_reference_type() {
-        let session = Session::new(Box::new(MockLoader));
-        let mut checker = TypeChecker::new(&session, 0);
-        let reference_type = ast::ReferenceType {
-            target: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "str".to_string(),
-                args: None,
-                loc: Location::dummy(),
-            }))),
-            loc: Location::dummy(),
-        };
-
-        let result = checker.visit_reference_type(reference_type);
-        let result = checker.resolve(result);
-        assert_eq!(
-            result,
-            ReferenceType {
-                target: TypeStore::STRING,
-            }
-            .into()
         );
     }
 

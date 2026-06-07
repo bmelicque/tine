@@ -168,20 +168,6 @@ pub fn undefined() -> swc::Expr {
     })
 }
 
-pub fn make_cell(value: swc::Expr) -> swc::Expr {
-    let callee = swc::Expr::Member(swc::MemberExpr {
-        span: DUMMY_SP,
-        obj: Box::new(ident_from_str("$").into()),
-        prop: swc::MemberProp::Ident(ident_from_str("Cell").into()),
-    });
-
-    swc::Expr::New(swc::NewExpr {
-        callee: Box::new(callee),
-        args: Some(vec![value.into()]),
-        ..Default::default()
-    })
-}
-
 pub fn std_method_call(name: &str, args: Vec<swc::ExprOrSpread>) -> swc::CallExpr {
     swc::CallExpr {
         callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {

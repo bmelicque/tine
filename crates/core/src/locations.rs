@@ -1,8 +1,8 @@
-use std::cmp::{max, min};
+use std::cmp::{max, min, Ordering};
 
 use crate::analyzer::ModuleId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Span {
     start: u32,
     end: u32,
@@ -60,7 +60,7 @@ impl Span {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Location {
     module: ModuleId,
     span: Span,
@@ -123,5 +123,26 @@ impl Location {
             module: self.module,
             span,
         }
+    }
+}
+
+impl PartialOrd for Location {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self.module != other.module {
+            return None;
+        }
+        if self.span.end < other.span.start {
+            return Some(Ordering::Less);
+        }
+        if self.span.start > other.span.end {
+            return Some(Ordering::Greater);
+        }
+        None
+    }
+}
+
+impl Ord for Location {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
     }
 }

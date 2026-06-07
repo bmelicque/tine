@@ -18,9 +18,11 @@ impl CodeGenerator<'_> {
     pub(crate) fn get_field(&mut self, field: &SymbolRef) -> swc::Expr {
         match self.resolve(field.as_type()) {
             types::Type::Array(_) | types::Type::Tuple(_) => {
-                std_method_call("getArray", vec![this_field(field).into()]).into()
+                std_method_call("cloneArray", vec![this_field(field).into()]).into()
             }
-            types::Type::Param(_) => std_method_call("get", vec![this_field(field).into()]).into(),
+            types::Type::Param(_) => {
+                std_method_call("clone", vec![this_field(field).into()]).into()
+            }
             ty if is_primitive(&ty) => this_field(field),
             _ => get_this_field(field).into(),
         }
