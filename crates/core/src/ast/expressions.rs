@@ -268,7 +268,7 @@ impl From<String> for BinaryOperator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct BlockExpression {
     pub loc: Location,
     pub statements: Vec<Statement>,
@@ -397,7 +397,7 @@ impl From<String> for UnaryOperator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionExpression {
     pub loc: Location,
     pub name: Option<Identifier>,
@@ -405,19 +405,6 @@ pub struct FunctionExpression {
     pub params: Option<FunctionParams>,
     pub return_type: Option<Type>,
     pub body: Option<BlockExpression>,
-}
-
-impl Default for FunctionExpression {
-    fn default() -> Self {
-        Self {
-            loc: Location::dummy(),
-            name: None,
-            type_params: None,
-            params: None,
-            return_type: None,
-            body: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -429,6 +416,6 @@ pub struct FunctionParams {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionParam {
     pub loc: Location,
-    pub name: Identifier,
+    pub name: Option<Identifier>,
     pub type_annotation: Option<Type>,
 }

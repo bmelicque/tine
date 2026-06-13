@@ -217,10 +217,11 @@ impl TypeChecker<'_> {
                 })
             }
             ast::CallbackParam::Param(param) => {
+                let id = param.name?;
                 let type_annotation = self.visit_type(param.type_annotation.unwrap());
-                let name = param.name.as_str().into();
+                let name = id.as_str().into();
                 let kind = SymbolKind::constant();
-                let defined_at = param.name.loc;
+                let defined_at = id.loc;
                 match type_annotation {
                     TypeStore::UNKNOWN => {
                         let ty = expected;
@@ -252,7 +253,7 @@ impl TypeChecker<'_> {
                             self.error(error, defined_at);
                         }
                         Some(ir::Identifier {
-                            loc: param.name.loc,
+                            loc: id.loc,
                             symbol,
                         })
                     }
