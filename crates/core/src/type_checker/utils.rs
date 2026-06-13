@@ -1,6 +1,10 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::{ast, type_checker::TypeChecker, types, Location, SymbolData, SymbolKind};
+use crate::{
+    ast,
+    type_checker::{patterns::Binding, TypeChecker},
+    types, Location, SymbolData, SymbolKind,
+};
 
 impl TypeChecker<'_> {
     pub fn with_type_params<F, R>(
@@ -38,16 +42,13 @@ impl TypeChecker<'_> {
     }
 }
 
-pub fn make_simple_declaration(
-    identifier: ast::Identifier,
-    value: ast::Expression,
-) -> ast::VariableDeclaration {
+pub fn make_simple_declaration(binding: Binding) -> ast::VariableDeclaration {
     ast::VariableDeclaration {
         docs: None,
-        loc: identifier.loc,
-        keyword: ast::DeclarationKeyword::Const,
-        pattern: Some(ast::Pattern::Identifier(identifier.into())),
-        value: Some(value),
+        loc: binding.id.loc,
+        mutable: binding.mutable,
+        pattern: Some(ast::Pattern::Identifier(binding.id.into())),
+        value: Some(binding.value),
     }
 }
 
@@ -68,7 +69,7 @@ pub fn make_tmp_declaration(value: ast::Expression) -> ast::VariableDeclaration 
     ast::VariableDeclaration {
         docs: None,
         loc: value.loc(),
-        keyword: ast::DeclarationKeyword::Const,
+        mutable: false,
         pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
             make_tmp_identifier(value.loc()),
         ))),

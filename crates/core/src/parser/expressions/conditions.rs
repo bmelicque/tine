@@ -9,9 +9,7 @@ impl Parser<'_> {
         let start_range = self.eat(&[Token::If]);
         let start_loc = self.localize(start_range);
         match self.tokens.peek() {
-            Some((Ok(Token::Const | Token::Var), _)) => {
-                self.parse_if_pattern_expression(start_loc).into()
-            }
+            Some((Ok(Token::Let), _)) => self.parse_if_pattern_expression(start_loc).into(),
             _ => self.parse_if_expression(start_loc).into(),
         }
     }

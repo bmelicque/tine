@@ -382,6 +382,7 @@ pub enum UnaryOperator {
     Star,  // *
     Minus, // -
     Bang,  // !
+    Mut,   // mut
 }
 
 impl From<String> for UnaryOperator {
@@ -390,6 +391,7 @@ impl From<String> for UnaryOperator {
             "*" => Self::Star,
             "-" => Self::Minus,
             "!" => Self::Bang,
+            "mut" => Self::Mut,
             _ => panic!("Unknown unary operator: {}", value),
         }
     }

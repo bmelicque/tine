@@ -41,25 +41,9 @@ pub struct VariableDeclaration {
     pub docs: Option<Docs>,
     /// This is the span of the actual declaration, and does not include the `docs` (if any)
     pub loc: Location,
-    pub keyword: DeclarationKeyword,
+    pub mutable: bool,
     pub pattern: Option<Pattern>,
     pub value: Option<Expression>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum DeclarationKeyword {
-    Const,
-    Var,
-}
-
-impl From<&str> for DeclarationKeyword {
-    fn from(value: &str) -> Self {
-        match value {
-            "const" => Self::Const,
-            "var" => Self::Var,
-            _ => panic!(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

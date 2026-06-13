@@ -37,7 +37,7 @@ impl TypeChecker<'_> {
                     panic!()
                 };
                 let loc = pattern.loc();
-                let desugared = self.desugar_pattern(pattern.to_owned(), ident.into(), true);
+                let desugared = self.desugar_pattern(pattern.to_owned(), ident.into());
                 if desugared.test.is_some() {
                     self.error(DiagnosticKind::IrrefutablePatternExpected, loc);
                 }
@@ -49,11 +49,11 @@ impl TypeChecker<'_> {
         let mut statements = desugared
             .bindings
             .into_iter()
-            .map(|(identifier, value)| {
+            .map(|binding| {
                 ast::Statement::Assignment(ast::Assignment {
                     loc: node.loc,
-                    pattern: Some(ast::Assignee::Pattern(identifier.into())),
-                    value: Some(value),
+                    pattern: Some(ast::Assignee::Pattern(binding.id.into())),
+                    value: Some(binding.value),
                 })
             })
             .collect::<Vec<_>>();

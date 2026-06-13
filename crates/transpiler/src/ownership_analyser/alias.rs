@@ -285,6 +285,7 @@ fn visit_expr(
                 visit_expr(&u.operand, checker, map);
                 vec![]
             }
+            ir::UnaryOperator::Mut => unreachable!(),
         },
         ir::Expression::Binary(b) => match b.op {
             // Behavior could change with new operators.

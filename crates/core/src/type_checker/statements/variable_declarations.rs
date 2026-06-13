@@ -1,6 +1,9 @@
 use crate::{
     ast, ir,
-    type_checker::{patterns::DesugaredPattern, TypeChecker},
+    type_checker::{
+        patterns::{Binding, DesugaredPattern},
+        TypeChecker,
+    },
     DiagnosticKind, Location, SymbolData, SymbolKind, TypeStore,
 };
 
@@ -9,7 +12,6 @@ impl TypeChecker<'_> {
         &mut self,
         node: ast::VariableDeclaration,
     ) -> Vec<ir::VariableDeclaration> {
-        let mutable = node.keyword == ast::DeclarationKeyword::Var;
         let Some(pattern) = node.pattern else {
             return vec![];
         };
@@ -17,7 +19,7 @@ impl TypeChecker<'_> {
             return vec![];
         };
         let pattern_loc = pattern.loc();
-        let DesugaredPattern { test, bindings } = self.desugar_pattern(pattern, value, mutable);
+        let DesugaredPattern { test, bindings } = self.desugar_pattern(pattern, value);
 
         if test.is_some() {
             self.error(DiagnosticKind::IrrefutablePatternExpected, pattern_loc);
@@ -27,14 +29,8 @@ impl TypeChecker<'_> {
         // TODO create tmp assignment to avoid cloning potentially heavy/not idempotent expression.
         bindings
             .into_iter()
-            .filter_map(|(identifier, value)| {
-                self.visit_simple_declaration(
-                    node.docs.clone(),
-                    node.loc,
-                    mutable,
-                    identifier,
-                    value,
-                )
+            .filter_map(|binding| {
+                self.visit_simple_declaration(node.docs.clone(), node.loc, binding)
             })
             .collect::<Vec<_>>()
     }
@@ -43,10 +39,13 @@ impl TypeChecker<'_> {
         &mut self,
         docs: Option<ast::Docs>,
         loc: Location,
-        mutable: bool,
-        identifier: ast::Identifier,
-        value: ast::Expression,
+        binding: Binding,
     ) -> Option<ir::VariableDeclaration> {
+        let Binding {
+            mutable,
+            id: identifier,
+            value,
+        } = binding;
         self.check_identifier_sanity(&identifier);
         match self.ctx.find_in_current_scope(identifier.as_str()) {
             Some(symbol) => {
@@ -112,13 +111,14 @@ mod tests {
         let node = ast::VariableDeclaration {
             docs: None,
             loc: Location::dummy(),
-            keyword: ast::DeclarationKeyword::Var,
-            pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
-                ast::Identifier {
+            mutable: true,
+            pattern: Some(ast::Pattern::MutIdentifier(ast::MutIdentifierPattern {
+                loc: Location::dummy(),
+                identifier: ast::IdentifierPattern::from(ast::Identifier {
                     text: "a".to_string(),
                     loc: Location::dummy(),
-                },
-            ))),
+                }),
+            })),
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
@@ -141,7 +141,7 @@ mod tests {
         let node = ast::VariableDeclaration {
             docs: None,
             loc: Location::dummy(),
-            keyword: ast::DeclarationKeyword::Const,
+            mutable: false,
             pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
                 ast::Identifier {
                     loc: Location::dummy(),
@@ -178,7 +178,7 @@ mod tests {
         let node = ast::VariableDeclaration {
             docs: None,
             loc: Location::dummy(),
-            keyword: ast::DeclarationKeyword::Var,
+            mutable: true,
             pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
                 ast::Identifier {
                     loc: Location::dummy(),
@@ -203,7 +203,7 @@ mod tests {
         let node = ast::VariableDeclaration {
             docs: None,
             loc: Location::dummy(),
-            keyword: ast::DeclarationKeyword::Const,
+            mutable: false,
             pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
                 ast::Identifier {
                     loc: Location::dummy(),
