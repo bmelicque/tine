@@ -247,6 +247,6 @@ export function state(initialValue) {
 	return new Signal(initialValue);
 }
 
-export function derived$(getter, dependencies) {
+export function computed$(getter, dependencies) {
 	return new Listener(dependencies, getter);
 }

@@ -207,7 +207,7 @@ mod tests {
             pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
                 ast::Identifier {
                     loc: Location::dummy(),
-                    text: "derived$".to_string(),
+                    text: "computed$".to_string(),
                 },
             ))),
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral {

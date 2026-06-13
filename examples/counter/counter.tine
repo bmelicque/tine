@@ -1,8 +1,8 @@
 use dom.render
-use signals.{state, derived$}
+use signals.{state, computed$}
 
 let counter = state(0)
-let suffix = derived$(if *counter != 1 { "s" } else { "" })
+let suffix = computed$(if *counter != 1 { "s" } else { "" })
 
 fn increment() {
     *counter = *counter + 1

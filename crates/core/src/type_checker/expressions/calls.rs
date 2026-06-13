@@ -22,7 +22,7 @@ impl TypeChecker<'_> {
         if let Some(callee) = &node.callee {
             if let ast::Expression::Identifier(id) = callee.as_ref() {
                 match id.as_str() {
-                    "derived$" => return self.visit_derived_call(node),
+                    "computed$" => return self.visit_derived_call(node),
                     _ => {}
                 }
             }
