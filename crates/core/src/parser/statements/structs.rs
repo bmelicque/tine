@@ -70,30 +70,29 @@ mod tests {
     #[test]
     fn test_parse_struct() {
         test_statement(StatementTest {
-            input: "struct Foo {\n    bar int\n}",
+            input: "struct Foo {\n    bar: int\n}",
             expected: ast::Statement::StructDefinition(ast::StructDefinition {
-                docs: None,
-                loc: Location::new(0, Span::new(0, 26)),
+                loc: Location::new(0, Span::new(0, 27)),
                 name: Some(ast::Identifier {
                     loc: Location::new(0, Span::new(7, 10)),
                     text: "Foo".to_string(),
                 }),
-                params: None,
                 body: Some(ast::TypeBody::Struct(ast::StructBody {
-                    loc: Location::new(0, Span::new(11, 26)),
+                    loc: Location::new(0, Span::new(11, 27)),
                     fields: vec![ast::StructDefinitionField {
-                        loc: Location::new(0, Span::new(17, 24)),
+                        loc: Location::new(0, Span::new(17, 25)),
                         name: Some(ast::Identifier {
                             loc: Location::new(0, Span::new(17, 20)),
                             text: "bar".to_string(),
                         }),
                         definition: Some(ast::Type::Named(ast::NamedType {
-                            loc: Location::new(0, Span::new(21, 24)),
+                            loc: Location::new(0, Span::new(22, 25)),
                             name: "int".to_string(),
                             args: None,
                         })),
                     }],
                 })),
+                ..Default::default()
             }),
             diagnostics: vec![],
         });

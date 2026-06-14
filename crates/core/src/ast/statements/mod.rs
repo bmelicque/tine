@@ -55,7 +55,7 @@ pub struct TypeAlias {
     pub definition: Option<Type>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct StructDefinition {
     pub docs: Option<Docs>,
     pub loc: Location,

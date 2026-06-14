@@ -179,6 +179,13 @@ fn parse_string(lex: &mut logos::Lexer<Token>) -> String {
 }
 
 impl Token {
+    pub fn colon(&self) -> Option<Self> {
+        match self {
+            Token::Colon => Some(self.clone()),
+            _ => None,
+        }
+    }
+
     pub fn to_string(&self) -> String {
         match self {
             Token::LineComment(_) => "comment".to_string(),
