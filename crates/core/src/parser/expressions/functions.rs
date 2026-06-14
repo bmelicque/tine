@@ -29,7 +29,7 @@ impl Parser<'_> {
         let name = self.parse_function_name();
         let type_params = self.parse_function_type_params();
         let params = self.parse_function_params();
-        let return_type = self.parse_type();
+        let return_type = self.parse_function_return_type();
         let body = self.parse_function_body();
         let start_loc = if let Some(name) = &name {
             name.loc
@@ -147,6 +147,16 @@ impl Parser<'_> {
             name: identifier,
             type_annotation,
         })
+    }
+
+    fn parse_function_return_type(&mut self) -> Option<ast::Type> {
+        match self.tokens.peek() {
+            Some((Ok(Token::Colon), _)) => {
+                self.tokens.next();
+                self.parse_type()
+            }
+            _ => None,
+        }
     }
 
     fn parse_function_body(&mut self) -> Option<ast::BlockExpression> {
