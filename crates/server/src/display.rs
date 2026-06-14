@@ -67,7 +67,7 @@ impl Backend {
         let SymbolKind::Method {
             owner,
             owner_args,
-            has_receiver,
+            receiver,
             param_names,
         } = &symbol.0.kind
         else {
@@ -76,7 +76,9 @@ impl Backend {
         let session = self.session.read().unwrap();
         let name = &symbol.0.name;
         let ty = symbol.0.ty;
-        let receiver = if *has_receiver {
+        let receiver = if receiver.is_static() {
+            String::new()
+        } else {
             let owner_name = &owner.borrow().name;
             let args = owner_args
                 .iter()
@@ -87,8 +89,6 @@ impl Backend {
                 0 => format!("({}) ", owner_name),
                 _ => format!("({}<{}>) ", owner_name, args),
             }
-        } else {
-            String::new()
         };
 
         let method_name = name;

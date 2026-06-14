@@ -1,6 +1,6 @@
 use crate::{
     ast, ir,
-    type_checker::TypeChecker,
+    type_checker::{analysis_context::symbols::MethodReceiverKind, TypeChecker},
     types::{self, FunctionType, GenericType, Type, TypeId},
     DiagnosticKind, SymbolData, SymbolKind, SymbolRef, TypeStore,
 };
@@ -97,7 +97,11 @@ impl TypeChecker<'_> {
             kind: SymbolKind::Method {
                 owner: receiver,
                 owner_args: owner_args.clone(),
-                has_receiver: true,
+                receiver: if node.receiver.mutable {
+                    MethodReceiverKind::Mutable
+                } else {
+                    MethodReceiverKind::Immutable
+                },
                 param_names: params.iter().map(|p| p.as_name()).collect(),
             },
             defined_at: name.loc,
@@ -154,7 +158,7 @@ impl TypeChecker<'_> {
             kind: SymbolKind::Method {
                 owner,
                 owner_args: owner_args.clone(),
-                has_receiver: false,
+                receiver: MethodReceiverKind::Static,
                 param_names: params.iter().map(|p| p.as_name()).collect(),
             },
             defined_at: name.loc,

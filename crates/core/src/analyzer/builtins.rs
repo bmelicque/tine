@@ -1,5 +1,5 @@
 use crate::{
-    type_checker::SymbolHandle,
+    type_checker::{MethodReceiverKind, SymbolHandle},
     types::{FunctionType, Type},
     Session, SymbolData, SymbolKind, SymbolRef, TypeStore,
 };
@@ -27,7 +27,7 @@ impl Session {
             kind: SymbolKind::Method {
                 owner: int_handle.readonly(),
                 owner_args: vec![],
-                has_receiver: true,
+                receiver: MethodReceiverKind::Immutable,
                 param_names: vec![],
             },
             ..Default::default()
@@ -57,7 +57,7 @@ impl Session {
             kind: SymbolKind::Method {
                 owner: float_handle.readonly(),
                 owner_args: vec![],
-                has_receiver: true,
+                receiver: MethodReceiverKind::Immutable,
                 param_names: vec![],
             },
             ..Default::default()

@@ -12,6 +12,18 @@ pub enum TypeSymbolBody {
 }
 
 #[derive(Clone, Debug)]
+pub enum MethodReceiverKind {
+    Static,
+    Immutable,
+    Mutable,
+}
+impl MethodReceiverKind {
+    pub fn is_static(&self) -> bool {
+        matches!(self, MethodReceiverKind::Static)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum SymbolKind {
     Value {
         mutable: bool,
@@ -54,8 +66,7 @@ pub enum SymbolKind {
         /// eg in `Type<Arg1, Arg2>.staticMethod()`
         /// (same for instance methods)
         owner_args: Vec<TypeId>,
-        /// If `has_receiver`, then it's an instance method. Else, it's a static method.
-        has_receiver: bool,
+        receiver: MethodReceiverKind,
         // This is expected to have the same length as the function type's params.
         param_names: Vec<String>,
     },

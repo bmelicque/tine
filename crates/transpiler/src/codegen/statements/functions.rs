@@ -15,9 +15,9 @@ impl CodeGenerator<'_> {
             SymbolKind::Method {
                 owner,
                 owner_args,
-                has_receiver,
+                receiver,
                 ..
-            } => self.handle_method_definition(node, &owner, &owner_args, !has_receiver),
+            } => self.handle_method_definition(node, &owner, &owner_args, receiver.is_static()),
             _ => panic!(),
         }
     }
