@@ -44,11 +44,11 @@ impl TypeChecker<'_> {
 
 pub fn make_simple_declaration(binding: Binding) -> ast::VariableDeclaration {
     ast::VariableDeclaration {
-        docs: None,
         loc: binding.id.loc,
         mutable: binding.mutable,
         pattern: Some(ast::Pattern::Identifier(binding.id.into())),
         value: Some(binding.value),
+        ..Default::default()
     }
 }
 
@@ -67,12 +67,11 @@ pub fn make_tmp_identifier(at: Location) -> ast::Identifier {
 
 pub fn make_tmp_declaration(value: ast::Expression) -> ast::VariableDeclaration {
     ast::VariableDeclaration {
-        docs: None,
         loc: value.loc(),
-        mutable: false,
         pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
             make_tmp_identifier(value.loc()),
         ))),
         value: Some(value),
+        ..Default::default()
     }
 }

@@ -36,13 +36,14 @@ pub struct Docs {
     pub text: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct VariableDeclaration {
     pub docs: Option<Docs>,
     /// This is the span of the actual declaration, and does not include the `docs` (if any)
     pub loc: Location,
     pub mutable: bool,
     pub pattern: Option<Pattern>,
+    pub annotation: Option<Type>,
     pub value: Option<Expression>,
 }
 

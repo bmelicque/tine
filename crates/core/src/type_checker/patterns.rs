@@ -9,6 +9,7 @@ pub struct Binding {
     pub value: ast::Expression,
 }
 
+#[derive(Default)]
 pub struct DesugaredPattern {
     pub test: Option<ast::Expression>,
     pub bindings: Vec<Binding>,

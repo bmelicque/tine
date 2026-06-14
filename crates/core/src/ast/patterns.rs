@@ -124,6 +124,11 @@ pub struct MutIdentifierPattern {
     pub loc: Location,
     pub identifier: IdentifierPattern,
 }
+impl Into<Identifier> for MutIdentifierPattern {
+    fn into(self) -> Identifier {
+        self.identifier.0
+    }
+}
 
 #[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
 pub enum LiteralPattern {
