@@ -12,8 +12,6 @@ pub enum Token {
     Break,
     #[token("continue")]
     Continue,
-    #[token("const")]
-    Const,
     #[token("else")]
     Else,
     #[token("enum")]
@@ -28,8 +26,12 @@ pub enum Token {
     Impl,
     #[token("in")]
     In,
+    #[token("let")]
+    Let,
     #[token("match")]
     Match,
+    #[token("mut")]
+    Mut,
     #[token("return")]
     Return,
     #[token("struct")]
@@ -40,8 +42,6 @@ pub enum Token {
     Type,
     #[token("use")]
     Use,
-    #[token("var")]
-    Var,
 
     // --- literals ---
     #[regex(r"\d+(_\d+)*", |lex| lex.slice().replace("_", "").parse::<i64>().unwrap())]
@@ -179,12 +179,18 @@ fn parse_string(lex: &mut logos::Lexer<Token>) -> String {
 }
 
 impl Token {
+    pub fn colon(&self) -> Option<Self> {
+        match self {
+            Token::Colon => Some(self.clone()),
+            _ => None,
+        }
+    }
+
     pub fn to_string(&self) -> String {
         match self {
             Token::LineComment(_) => "comment".to_string(),
 
             Token::Break => "break".to_string(),
-            Token::Const => "const".to_string(),
             Token::Continue => "continue".to_string(),
             Token::Else => "else".to_string(),
             Token::Enum => "enum".to_string(),
@@ -193,13 +199,14 @@ impl Token {
             Token::If => "if".to_string(),
             Token::Impl => "impl".to_string(),
             Token::In => "in".to_string(),
+            Token::Let => "let".to_string(),
             Token::Match => "match".to_string(),
+            Token::Mut => "mut".to_string(),
             Token::Return => "return".to_string(),
             Token::Struct => "struct".to_string(),
             Token::Trait => "trait".to_string(),
             Token::Type => "type".to_string(),
             Token::Use => "use".to_string(),
-            Token::Var => "var".to_string(),
 
             Token::Int(i) => i.to_string(),
             Token::Float(f) => f.src.clone(),

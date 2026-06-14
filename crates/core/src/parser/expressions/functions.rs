@@ -29,7 +29,7 @@ impl Parser<'_> {
         let name = self.parse_function_name();
         let type_params = self.parse_function_type_params();
         let params = self.parse_function_params();
-        let return_type = self.parse_type();
+        let return_type = self.parse_function_return_type();
         let body = self.parse_function_body();
         let start_loc = if let Some(name) = &name {
             name.loc
@@ -105,37 +105,58 @@ impl Parser<'_> {
     }
 
     fn parse_function_param(&mut self) -> Option<ast::FunctionParam> {
-        let result = self.better_expect(
+        let identifier = match self.tokens.peek() {
+            Some((Ok(Token::Ident(ident)), range)) => {
+                let range = range.clone();
+                let text = ident.to_owned();
+                let loc = self.localize(range);
+                Some(ast::Identifier { loc, text })
+            }
+            _ => None,
+        };
+        let colon = self.better_expect(
             |t| match t {
-                Token::Ident(i) => Some(i.to_owned()),
+                Token::Colon => Some(()),
                 _ => None,
             },
             &[Token::Comma, Token::RParen, Token::Newline],
         );
-        let (name_text, name_loc) = match result {
-            Ok(r) => r,
-            Err(range) => {
-                self.error(DiagnosticKind::MissingPattern, self.localize(range));
-                return None;
+        let colon_range = match colon {
+            Ok((_, r)) => r,
+            Err(r) => {
+                self.error(DiagnosticKind::MissingPattern, self.localize(r));
+                return identifier.map(|i| ast::FunctionParam {
+                    loc: i.loc,
+                    name: Some(i),
+                    type_annotation: None,
+                });
             }
-        };
-        let name = ast::Identifier {
-            loc: self.localize(name_loc),
-            text: name_text,
         };
 
         let type_annotation = self.parse_type();
 
-        let loc = match &type_annotation {
-            Some(t) => Location::merge(name.loc, t.loc()),
-            None => name.loc,
+        let loc = match (&identifier, &type_annotation) {
+            (Some(i), Some(t)) => Location::merge(i.loc, t.loc()),
+            (Some(i), None) => Location::merge(i.loc, self.localize(colon_range)),
+            (None, Some(t)) => Location::merge(self.localize(colon_range), t.loc()),
+            (None, None) => self.localize(colon_range),
         };
 
         Some(ast::FunctionParam {
             loc,
-            name,
+            name: identifier,
             type_annotation,
         })
+    }
+
+    fn parse_function_return_type(&mut self) -> Option<ast::Type> {
+        match self.tokens.peek() {
+            Some((Ok(Token::Colon), _)) => {
+                self.tokens.next();
+                self.parse_type()
+            }
+            _ => None,
+        }
     }
 
     fn parse_function_body(&mut self) -> Option<ast::BlockExpression> {

@@ -110,7 +110,7 @@ impl TypeChecker<'_> {
         let pattern = node.pattern.unwrap();
         let element = make_tmp_identifier(pattern.loc());
 
-        let desugared = self.desugar_pattern(pattern, element.clone().into(), false);
+        let desugared = self.desugar_pattern(pattern, element.clone().into());
         let guard = desugared.test.map(|test| {
             let loc = test.loc();
             ast::Statement::Expression(ast::ExpressionStatement {
@@ -132,7 +132,7 @@ impl TypeChecker<'_> {
         let mut statements: Vec<ast::Statement> = desugared
             .bindings
             .into_iter()
-            .map(|(identifier, against)| make_simple_declaration(identifier, against).into())
+            .map(|binding| make_simple_declaration(binding).into())
             .collect();
         if let Some(guard) = guard {
             statements.insert(0, guard);

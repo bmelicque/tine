@@ -14,6 +14,8 @@ impl TypeChecker<'_> {
             ast::UnaryOperator::Bang => self.visit_logical_not_expresion(node),
             ast::UnaryOperator::Minus => self.visit_negate_expresion(node),
             ast::UnaryOperator::Star => self.visit_indirection(node),
+
+            ast::UnaryOperator::Mut => panic!(),
         }
     }
 

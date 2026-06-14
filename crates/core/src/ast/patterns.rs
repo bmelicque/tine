@@ -12,6 +12,7 @@ pub enum Pattern {
     Invalid(InvalidPattern),
 
     Identifier(IdentifierPattern),
+    MutIdentifier(MutIdentifierPattern),
     Constructor(ConstructorPattern),
     Literal(LiteralPattern),
     Tuple(TuplePattern),
@@ -21,7 +22,8 @@ impl Pattern {
     pub fn loc(&self) -> Location {
         match self {
             Pattern::Invalid(p) => p.loc,
-            Pattern::Identifier(p) => p.0.loc,
+            Pattern::Identifier(p) => p.loc(),
+            Pattern::MutIdentifier(p) => p.loc,
             Pattern::Constructor(p) => p.loc,
             Pattern::Literal(l) => l.loc(),
             Pattern::Tuple(p) => p.loc,
@@ -47,6 +49,7 @@ impl Pattern {
             Pattern::Invalid { .. } => false,
             Pattern::Identifier(_) => false,
             Pattern::Literal(_) => true,
+            Pattern::MutIdentifier(_) => false,
             Pattern::Constructor(pattern) => pattern.is_refutable(),
             Pattern::Tuple(p) => p.is_refutable(),
         }
@@ -56,6 +59,7 @@ impl Pattern {
         match self {
             Pattern::Invalid { .. } => vec![],
             Pattern::Identifier(p) => vec![p],
+            Pattern::MutIdentifier(p) => vec![&p.identifier],
             Pattern::Literal(_) => vec![],
             Pattern::Constructor(p) => {
                 let Some(body) = &p.body else { return vec![] };
@@ -112,6 +116,17 @@ impl Into<Identifier> for IdentifierPattern {
 impl From<Identifier> for IdentifierPattern {
     fn from(value: Identifier) -> Self {
         Self(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MutIdentifierPattern {
+    pub loc: Location,
+    pub identifier: IdentifierPattern,
+}
+impl Into<Identifier> for MutIdentifierPattern {
+    fn into(self) -> Identifier {
+        self.identifier.0
     }
 }
 
@@ -183,8 +198,36 @@ pub struct StructPattern {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructPatternField {
     pub loc: Location,
-    pub identifier: Option<Identifier>,
+    pub identifier: Option<FieldPatternIdentifier>,
     pub pattern: Option<Pattern>,
+}
+
+#[derive(Debug, Clone, EnumFrom, PartialEq, Eq, Hash)]
+pub enum FieldPatternIdentifier {
+    Const(IdentifierPattern),
+    Mut(MutIdentifierPattern),
+}
+
+impl FieldPatternIdentifier {
+    pub fn is_mutable(&self) -> bool {
+        match self {
+            FieldPatternIdentifier::Mut(_) => true,
+            _ => false,
+        }
+    }
+}
+impl From<Identifier> for FieldPatternIdentifier {
+    fn from(identifier: Identifier) -> Self {
+        FieldPatternIdentifier::Const(identifier.into())
+    }
+}
+impl Into<Identifier> for FieldPatternIdentifier {
+    fn into(self) -> Identifier {
+        match self {
+            FieldPatternIdentifier::Const(i) => i.0,
+            FieldPatternIdentifier::Mut(i) => i.identifier.0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

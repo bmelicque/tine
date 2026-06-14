@@ -101,6 +101,18 @@ impl Parser<'_> {
             _ => return None,
         };
 
+        let colon = self.better_expect(
+            |t| t.colon(),
+            &[Token::Newline, Token::Comma, Token::RBrace],
+        );
+        if let Err(_) = colon {
+            return Some(ast::StructDefinitionField {
+                loc: name.as_ref().unwrap().loc,
+                name,
+                definition: None,
+            });
+        }
+
         let definition = self.parse_type();
         if definition.is_none() {
             let loc = self.next_loc();

@@ -107,6 +107,7 @@ pub enum DiagnosticKind {
         right_name: String,
     },
     MissingBody,
+    MissingColon,
     MissingConsequent,
     MissingConstructorName,
     MissingExpression,
@@ -287,6 +288,7 @@ impl Display for DiagnosticKind {
                 )
             }
             Self::MissingBody => write!(f, "expected function body"),
+            Self::MissingColon => write!(f, "':' expected"),
             Self::MissingConsequent => write!(f, "expected consequent"),
             Self::MissingConstructorName => write!(f, "expected constructor name"),
             Self::MissingExpression => write!(f, "expected expression"),

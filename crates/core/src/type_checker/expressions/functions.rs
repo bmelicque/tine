@@ -86,18 +86,19 @@ impl TypeChecker<'_> {
     }
 
     fn visit_function_param(&mut self, node: ast::FunctionParam) -> Option<ir::Identifier> {
+        let name = node.name?;
         let ty = node
             .type_annotation
             .map_or(TypeStore::UNKNOWN, |t| self.visit_type(t));
         let symbol = self.ctx.register_symbol(SymbolData {
-            name: node.name.as_str().into(),
+            name: name.as_str().into(),
             ty,
             kind: SymbolKind::constant(),
-            defined_at: node.name.loc,
+            defined_at: name.loc,
             ..Default::default()
         });
         Some(ir::Identifier {
-            loc: node.name.loc,
+            loc: name.loc,
             symbol,
         })
     }
@@ -158,29 +159,26 @@ mod tests {
                 loc: Location::dummy(),
                 params: vec![
                     ast::FunctionParam {
-                        name: ident("x"),
+                        name: Some(ident("x")),
                         type_annotation: Some(ast::Type::Named(ast::NamedType {
                             name: "int".to_string(),
-                            args: None,
-                            loc: Location::dummy(),
+                            ..Default::default()
                         })),
                         loc: Location::dummy(),
                     },
                     ast::FunctionParam {
-                        name: ident("y"),
+                        name: Some(ident("y")),
                         type_annotation: Some(ast::Type::Named(ast::NamedType {
                             name: "int".to_string(),
-                            args: None,
-                            loc: Location::dummy(),
+                            ..Default::default()
                         })),
                         loc: Location::dummy(),
                     },
                 ],
             }),
             return_type: Some(ast::Type::Named(ast::NamedType {
-                loc: Location::dummy(),
                 name: "int".into(),
-                args: None,
+                ..Default::default()
             })),
             body: Some(ast::BlockExpression {
                 loc: Location::dummy(),
@@ -211,8 +209,6 @@ mod tests {
     fn test_visit_generic_function_expression() {
         let mut checker = create_type_checker();
         let function_expression = ast::FunctionExpression {
-            loc: Location::dummy(),
-            name: None,
             type_params: Some(vec![ast::Identifier {
                 text: "T".to_string(),
                 loc: Location::dummy(),
@@ -220,20 +216,16 @@ mod tests {
             params: Some(ast::FunctionParams {
                 loc: Location::dummy(),
                 params: vec![ast::FunctionParam {
-                    name: ident("x"),
+                    name: Some(ident("x")),
                     type_annotation: Some(ast::Type::Named(ast::NamedType {
                         name: "T".to_string(),
-                        args: None,
-                        loc: Location::dummy(),
+                        ..Default::default()
                     })),
                     loc: Location::dummy(),
                 }],
             }),
-            return_type: None,
-            body: Some(ast::BlockExpression {
-                loc: Location::dummy(),
-                statements: vec![],
-            }),
+            body: Some(ast::BlockExpression::default()),
+            ..Default::default()
         };
 
         let result = checker.visit_function_expression(function_expression, None);

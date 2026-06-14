@@ -44,6 +44,21 @@ impl Parser<'_> {
                 })
             }
             ast::Expression::Tuple(tuple) => ast::Pattern::Tuple(self.tuple_to_pattern(tuple)),
+            ast::Expression::Unary(unary)
+                if unary.operator == ast::UnaryOperator::Mut
+                    && matches!(
+                        unary.operand.as_deref(),
+                        Some(ast::Expression::Identifier(_))
+                    ) =>
+            {
+                let Some(ast::Expression::Identifier(identifier)) = unary.operand.as_deref() else {
+                    unreachable!()
+                };
+                ast::Pattern::MutIdentifier(ast::MutIdentifierPattern {
+                    loc: unary.loc,
+                    identifier: identifier.clone().into(),
+                })
+            }
             _ => {
                 self.error(DiagnosticKind::InvalidPattern, expr.loc());
                 ast::Pattern::Invalid(ast::InvalidPattern { loc: expr.loc() })
@@ -64,7 +79,7 @@ impl Parser<'_> {
 
     fn struct_field_to_pattern(&mut self, field: ast::ConstructorField) -> ast::StructPatternField {
         let identifier = match field.key {
-            Some(ast::ConstructorKey::Name(ident)) => Some(ident),
+            Some(ast::ConstructorKey::Name(ident)) => Some(ident.into()),
             Some(ast::ConstructorKey::MapKey(key)) => {
                 self.error(DiagnosticKind::InvalidPattern, key.loc());
                 None

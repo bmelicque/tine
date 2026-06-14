@@ -4,12 +4,18 @@ use crate::{
     DiagnosticKind, Location,
 };
 
-impl Parser<'_> {
-    const UNARY_OPERATORS: [Token; 3] = [Token::Bang, Token::Minus, Token::Star];
+const UNARY_OPERATORS: [Token; 3] = [Token::Bang, Token::Minus, Token::Star];
+const EXTENDED_UNARY_OPERATORS: [Token; 4] = [Token::Bang, Token::Minus, Token::Mut, Token::Star];
 
+impl Parser<'_> {
     pub fn parse_unary_expression(&mut self) -> Option<ast::Expression> {
+        let operators: &[Token] = if self.in_mutable_binding {
+            &EXTENDED_UNARY_OPERATORS
+        } else {
+            &UNARY_OPERATORS
+        };
         match self.tokens.peek().cloned() {
-            Some((Ok(token), op_range)) if Self::UNARY_OPERATORS.contains(&token) => {
+            Some((Ok(token), op_range)) if operators.contains(&token) => {
                 self.tokens.next(); // consume the operator
                 let expr = self.parse_unary_expression();
                 if expr.is_none() {

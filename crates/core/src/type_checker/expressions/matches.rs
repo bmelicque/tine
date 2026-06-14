@@ -46,11 +46,11 @@ impl TypeChecker<'_> {
             };
         };
 
-        let desugared = self.desugar_pattern(*pattern, scrutinee.clone(), false);
+        let desugared = self.desugar_pattern(*pattern, scrutinee.clone());
         let bindings = desugared
             .bindings
             .into_iter()
-            .map(|(identifier, value)| make_simple_declaration(identifier, value).into())
+            .map(|binding| make_simple_declaration(binding).into())
             .collect();
         let body = consequent.map(|mut body| {
             body.statements = vec![bindings, body.statements].concat();

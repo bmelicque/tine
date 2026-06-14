@@ -76,7 +76,7 @@ fn register_derived_symbol(checker: &mut TypeChecker) {
         definition: derived_def_type,
     }));
     checker.ctx.register_symbol(SymbolData {
-        name: "derived$".to_string(),
+        name: "computed$".to_string(),
         ty: derived_type,
         kind: SymbolKind::Function {
             param_names: vec!["expression".to_string()],
@@ -91,9 +91,9 @@ Just like states, the underlying value can be accessed using the dereference ope
 # Example
 ```tine
 // Here `counter` will automatically be tracked as a dependency.
-const derivedCounter = derived$(*counter + 1)
-const derivedValue = *derivedCounter
-*derivedValue = 0 // This is not allowed and will result in a compiler error.
+let nextCounter = computed$(*counter + 1)
+let nextValue = *nextCounter
+*nextValue = 0 // This is not allowed and will result in a compiler error.
 ```
 "#
             .to_string(),

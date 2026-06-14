@@ -9,6 +9,7 @@ impl CodeGenerator<'_> {
             ir::UnaryOperator::Bang => self.handle_logical_not(node),
             ir::UnaryOperator::Minus => self.handle_negation(node),
             ir::UnaryOperator::Star => self.handle_deref(node),
+            ir::UnaryOperator::Mut => unreachable!(),
         }
     }
 

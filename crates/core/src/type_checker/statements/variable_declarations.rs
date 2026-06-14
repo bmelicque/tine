@@ -1,6 +1,10 @@
 use crate::{
     ast, ir,
-    type_checker::{patterns::DesugaredPattern, TypeChecker},
+    type_checker::{
+        patterns::{Binding, DesugaredPattern},
+        utils::make_tmp_identifier,
+        TypeChecker,
+    },
     DiagnosticKind, Location, SymbolData, SymbolKind, TypeStore,
 };
 
@@ -9,44 +13,124 @@ impl TypeChecker<'_> {
         &mut self,
         node: ast::VariableDeclaration,
     ) -> Vec<ir::VariableDeclaration> {
-        let mutable = node.keyword == ast::DeclarationKeyword::Var;
-        let Some(pattern) = node.pattern else {
+        let Some(pattern) = &node.pattern else {
             return vec![];
         };
-        let Some(value) = node.value else {
+        let Some(value) = &node.value else {
             return vec![];
         };
+        let loc = node.loc;
         let pattern_loc = pattern.loc();
-        let DesugaredPattern { test, bindings } = self.desugar_pattern(pattern, value, mutable);
+        let docs = node.docs.clone();
+
+        let (prelim, desugared) = match pattern {
+            ast::Pattern::Identifier(_) | ast::Pattern::MutIdentifier(_) => {
+                (node, DesugaredPattern::default())
+            }
+            _ => {
+                let tmp_id = make_tmp_identifier(value.loc());
+                let prelim = ast::VariableDeclaration {
+                    loc: value.loc(),
+                    pattern: Some(ast::Pattern::Identifier(tmp_id.clone().into())),
+                    annotation: node.annotation.clone(),
+                    value: Some(value.to_owned()),
+                    ..Default::default()
+                };
+                let pattern = node.pattern.unwrap();
+                (prelim, self.desugar_pattern(pattern, tmp_id.into()))
+            }
+        };
+
+        let DesugaredPattern { test, bindings } = desugared;
 
         if test.is_some() {
             self.error(DiagnosticKind::IrrefutablePatternExpected, pattern_loc);
             return vec![];
         }
 
-        // TODO create tmp assignment to avoid cloning potentially heavy/not idempotent expression.
-        bindings
+        let prelim = self.visit_prelim_declaration(prelim);
+
+        let decls = bindings
             .into_iter()
-            .filter_map(|(identifier, value)| {
-                self.visit_simple_declaration(
-                    node.docs.clone(),
-                    node.loc,
-                    mutable,
-                    identifier,
-                    value,
-                )
-            })
-            .collect::<Vec<_>>()
+            .filter_map(|binding| self.visit_binding(docs.clone(), loc, binding));
+
+        prelim.into_iter().chain(decls).collect::<Vec<_>>()
     }
 
-    pub fn visit_simple_declaration(
+    fn visit_prelim_declaration(
+        &mut self,
+        decl: ast::VariableDeclaration,
+    ) -> Option<ir::VariableDeclaration> {
+        let pattern = decl.pattern?;
+        let annotation = decl.annotation.map(|a| self.visit_type(a));
+        let value = decl.value.and_then(|v| self.visit_expression(v))?;
+        if let Some(annotation) = annotation {
+            let ok = self.can_be_assigned_to(annotation, value.ty());
+            if !ok {
+                let left_name = self.session.display_type(annotation);
+                let right_name = self.session.display_type(value.ty());
+                let diag = DiagnosticKind::MismatchedTypes {
+                    left_name,
+                    right_name,
+                };
+                self.error(diag, decl.loc);
+            }
+        };
+        let mutable = match &pattern {
+            ast::Pattern::Identifier(_) => false,
+            ast::Pattern::MutIdentifier(_) => true,
+            _ => panic!(),
+        };
+        let identifier: ast::Identifier = match pattern {
+            ast::Pattern::Identifier(id) => id.into(),
+            ast::Pattern::MutIdentifier(id) => id.into(),
+            _ => panic!(),
+        };
+        self.check_identifier_sanity(&identifier);
+
+        match self.ctx.find_in_current_scope(identifier.as_str()) {
+            Some(symbol) => {
+                let error = DiagnosticKind::DuplicateIdentifier {
+                    name: identifier.as_str().to_string(),
+                };
+                self.error(error, identifier.loc);
+                symbol.borrow().access.read(identifier.loc);
+                return None;
+            }
+            None => {
+                let dependencies = value
+                    .dependencies()
+                    .map(|identifier| identifier.symbol.clone())
+                    .collect::<Vec<_>>();
+                let symbol = self.ctx.register_symbol(SymbolData {
+                    name: identifier.as_str().to_string(),
+                    ty: value.ty(),
+                    kind: SymbolKind::Value { mutable },
+                    defined_at: identifier.loc,
+                    dependencies,
+                    ..Default::default()
+                });
+                Some(ir::VariableDeclaration {
+                    loc: decl.loc,
+                    mutable: false,
+                    symbol,
+                    value,
+                })
+            }
+        }
+    }
+
+    pub fn visit_binding(
         &mut self,
         docs: Option<ast::Docs>,
         loc: Location,
-        mutable: bool,
-        identifier: ast::Identifier,
-        value: ast::Expression,
+        binding: Binding,
     ) -> Option<ir::VariableDeclaration> {
+        let Binding {
+            mutable,
+            id: identifier,
+            value,
+        } = binding;
         self.check_identifier_sanity(&identifier);
         match self.ctx.find_in_current_scope(identifier.as_str()) {
             Some(symbol) => {
@@ -61,8 +145,7 @@ impl TypeChecker<'_> {
                 let value = self.visit_expression(value);
                 let dependencies = value.as_ref().map_or(vec![], |value| {
                     value
-                        .walk()
-                        .filter_map(|e| e.as_identifier())
+                        .dependencies()
                         .map(|identifier| identifier.symbol.clone())
                         .collect::<Vec<_>>()
                 });
@@ -72,7 +155,7 @@ impl TypeChecker<'_> {
                     kind: SymbolKind::Value { mutable },
                     docs: docs.map(|d| d.text),
                     defined_at: identifier.loc,
-                    dependencies: dependencies,
+                    dependencies,
                     ..Default::default()
                 });
                 Some(ir::VariableDeclaration {
@@ -110,19 +193,19 @@ mod tests {
     #[test]
     fn test_variable_declaration() {
         let node = ast::VariableDeclaration {
-            docs: None,
-            loc: Location::dummy(),
-            keyword: ast::DeclarationKeyword::Var,
-            pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
-                ast::Identifier {
+            mutable: true,
+            pattern: Some(ast::Pattern::MutIdentifier(ast::MutIdentifierPattern {
+                loc: Location::dummy(),
+                identifier: ast::IdentifierPattern::from(ast::Identifier {
                     text: "a".to_string(),
                     loc: Location::dummy(),
-                },
-            ))),
+                }),
+            })),
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
             })),
+            ..Default::default()
         };
         let tc = visit_variable_declaration(&node);
         match tc.ctx.find_in_current_scope("a") {
@@ -139,9 +222,6 @@ mod tests {
     #[test]
     fn test_constant_declaration() {
         let node = ast::VariableDeclaration {
-            docs: None,
-            loc: Location::dummy(),
-            keyword: ast::DeclarationKeyword::Const,
             pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
                 ast::Identifier {
                     loc: Location::dummy(),
@@ -152,6 +232,7 @@ mod tests {
                 value: 1,
                 loc: Location::dummy(),
             })),
+            ..Default::default()
         };
         let tc = visit_variable_declaration(&node);
         match tc.ctx.find_in_current_scope("a") {
@@ -172,13 +253,10 @@ mod tests {
         tc.ctx.register_symbol(SymbolData {
             name: "a".to_string(),
             ty: TypeStore::INTEGER,
-            kind: SymbolKind::Value { mutable: true },
+            kind: SymbolKind::constant(),
             ..Default::default()
         });
         let node = ast::VariableDeclaration {
-            docs: None,
-            loc: Location::dummy(),
-            keyword: ast::DeclarationKeyword::Var,
             pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
                 ast::Identifier {
                     loc: Location::dummy(),
@@ -189,6 +267,7 @@ mod tests {
                 value: 1,
                 loc: Location::dummy(),
             })),
+            ..Default::default()
         };
         tc.visit_variable_declaration(node);
         assert_eq!(tc.diagnostics.len(), 1);
@@ -201,19 +280,17 @@ mod tests {
     #[test]
     fn test_dollar_declaration() {
         let node = ast::VariableDeclaration {
-            docs: None,
-            loc: Location::dummy(),
-            keyword: ast::DeclarationKeyword::Const,
             pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
                 ast::Identifier {
                     loc: Location::dummy(),
-                    text: "derived$".to_string(),
+                    text: "computed$".to_string(),
                 },
             ))),
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
             })),
+            ..Default::default()
         };
         let tc = visit_variable_declaration(&node);
         assert_eq!(tc.diagnostics.len(), 1);

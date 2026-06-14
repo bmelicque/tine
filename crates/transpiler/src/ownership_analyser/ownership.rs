@@ -341,6 +341,7 @@ fn visit_expr(
                     out,
                 );
             }
+            ir::UnaryOperator::Mut => unreachable!(),
         },
         ir::Expression::Binary(b) => match b.op {
             // Behavior could change with new operators.

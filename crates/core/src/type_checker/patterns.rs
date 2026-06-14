@@ -2,9 +2,17 @@ use crate::{ast, Location};
 
 use super::TypeChecker;
 
+#[derive(Debug, Clone)]
+pub struct Binding {
+    pub mutable: bool,
+    pub id: ast::Identifier,
+    pub value: ast::Expression,
+}
+
+#[derive(Default)]
 pub struct DesugaredPattern {
     pub test: Option<ast::Expression>,
-    pub bindings: Vec<(ast::Identifier, ast::Expression)>,
+    pub bindings: Vec<Binding>,
 }
 impl DesugaredPattern {
     pub fn new() -> Self {
@@ -37,7 +45,7 @@ impl DesugaredPattern {
 impl TypeChecker<'_> {
     /// Desugar pattern-matching into a test and the corresponding bindings.
     ///
-    /// For example, `if const User{ age, name: "John" } = user { ... }` will be transformed into:
+    /// For example, `if let User{ age, name: "John" } = user { ... }` will be transformed into:
     /// ```tine
     /// if user.name == "John" {
     ///     const age = user.age
@@ -50,19 +58,28 @@ impl TypeChecker<'_> {
         &mut self,
         pattern: ast::Pattern,
         against: ast::Expression,
-        mutable: bool,
     ) -> DesugaredPattern {
         match pattern {
-            ast::Pattern::Constructor(pat) => {
-                self.desugar_constructor_pattern(pat, against, mutable)
-            }
+            ast::Pattern::Constructor(pat) => self.desugar_constructor_pattern(pat, against),
             ast::Pattern::Invalid { .. } => DesugaredPattern::new(),
             ast::Pattern::Identifier(id) => DesugaredPattern {
                 test: None,
-                bindings: vec![(id.0, against)],
+                bindings: vec![Binding {
+                    mutable: false,
+                    id: id.0,
+                    value: against,
+                }],
+            },
+            ast::Pattern::MutIdentifier(id) => DesugaredPattern {
+                test: None,
+                bindings: vec![Binding {
+                    mutable: true,
+                    id: id.identifier.0,
+                    value: against,
+                }],
             },
             ast::Pattern::Literal(pat) => self.desugar_literal_pattern(pat, against),
-            ast::Pattern::Tuple(pat) => self.desugar_tuple_pattern(pat, against, mutable),
+            ast::Pattern::Tuple(pat) => self.desugar_tuple_pattern(pat, against),
         }
     }
 
@@ -95,7 +112,6 @@ impl TypeChecker<'_> {
         &mut self,
         pattern: ast::TuplePattern,
         against: ast::Expression,
-        mutable: bool,
     ) -> DesugaredPattern {
         let mut desugared = DesugaredPattern::new();
         for (i, pattern) in pattern.elements.into_iter().enumerate() {
@@ -107,8 +123,7 @@ impl TypeChecker<'_> {
                     value: i as i64,
                 })),
             });
-            desugared =
-                DesugaredPattern::merge(desugared, self.desugar_pattern(pattern, against, mutable))
+            desugared = DesugaredPattern::merge(desugared, self.desugar_pattern(pattern, against))
         }
         desugared
     }
@@ -117,18 +132,15 @@ impl TypeChecker<'_> {
         &mut self,
         pattern: ast::ConstructorPattern,
         against: ast::Expression,
-        mutable: bool,
     ) -> DesugaredPattern {
         let Some(body) = pattern.body else {
             return DesugaredPattern::new();
         };
         let desugared_body = match body {
             ast::ConstructorPatternBody::Struct(s) => {
-                self.desugar_struct_pattern(s, against.clone(), mutable)
+                self.desugar_struct_pattern(s, against.clone())
             }
-            ast::ConstructorPatternBody::Tuple(t) => {
-                self.desugar_tuple_pattern(t, against.clone(), mutable)
-            }
+            ast::ConstructorPatternBody::Tuple(t) => self.desugar_tuple_pattern(t, against.clone()),
         };
         match pattern.constructor {
             ast::Constructor::Variant(v) => {
@@ -154,7 +166,6 @@ impl TypeChecker<'_> {
         &mut self,
         pattern: ast::StructPatternBody,
         against: ast::Expression,
-        mutable: bool,
     ) -> DesugaredPattern {
         let mut desugared = DesugaredPattern::new();
         for pattern in pattern.fields {
@@ -164,14 +175,21 @@ impl TypeChecker<'_> {
             let against = ast::Expression::Member(ast::MemberExpression {
                 loc: against.loc(),
                 object: Some(Box::new(against.clone())),
-                prop: Some(ast::MemberProp::FieldName(identifier.clone())),
+                prop: Some(ast::MemberProp::FieldName(identifier.clone().into())),
             });
             let current = match pattern.pattern {
-                Some(pattern) => self.desugar_pattern(pattern, against, mutable),
-                None => DesugaredPattern {
-                    test: None,
-                    bindings: vec![(identifier, against)],
-                },
+                Some(pattern) => self.desugar_pattern(pattern, against),
+                None => {
+                    let mutable = identifier.is_mutable();
+                    DesugaredPattern {
+                        test: None,
+                        bindings: vec![Binding {
+                            mutable,
+                            id: identifier.into(),
+                            value: against,
+                        }],
+                    }
+                }
             };
             desugared = DesugaredPattern::merge(desugared, current);
         }

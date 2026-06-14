@@ -9,20 +9,18 @@ impl Parser<'_> {
         &mut self,
         docs: Option<ast::Docs>,
     ) -> ast::VariableDeclaration {
-        let Some((Ok(token), start_range)) = self.tokens.next() else {
-            panic!();
-        };
-        let keyword = match token {
-            Token::Const => ast::DeclarationKeyword::Const,
-            Token::Var => ast::DeclarationKeyword::Var,
-            _ => panic!(),
-        };
+        let start_range = self.eat(&[Token::Let]);
 
-        let pattern = self.parse_pattern();
+        let pattern = self.with_mutable_binding(|self_| self_.parse_pattern());
         if pattern.is_none() {
             let loc = self.localize(start_range.clone()).increment();
             self.error(DiagnosticKind::MissingPattern, loc);
         }
+
+        let type_annotation = match self.tokens.peek() {
+            Some((Ok(Token::Colon), _)) => self.parse_type(),
+            _ => None,
+        };
 
         let op_range = self.expect(Token::Eq);
         let value = self.parse_expression();
@@ -40,8 +38,9 @@ impl Parser<'_> {
         ast::VariableDeclaration {
             docs,
             loc,
-            keyword,
+            mutable: false,
             pattern,
+            annotation: type_annotation,
             value: value.into(),
         }
     }

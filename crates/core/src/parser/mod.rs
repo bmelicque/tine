@@ -22,6 +22,9 @@ pub struct Parser<'src> {
     src: &'src str,
     diagnostics: Vec<Diagnostic>,
     tokens: Peekable<SpannedIter<'src, Token>>,
+    /// `true` if the current context is a binding which could produce mutable
+    /// values.
+    in_mutable_binding: bool,
 }
 
 pub struct ParseResult {
@@ -37,6 +40,7 @@ impl<'src> Parser<'src> {
             src,
             tokens,
             diagnostics: Vec::new(),
+            in_mutable_binding: false,
         }
     }
 
@@ -220,5 +224,16 @@ impl<'src> Parser<'src> {
             loc,
             kind,
         });
+    }
+
+    fn with_mutable_binding<F, T>(&mut self, cb: F) -> T
+    where
+        F: FnOnce(&mut Self) -> T,
+    {
+        let old = self.in_mutable_binding;
+        self.in_mutable_binding = true;
+        let result = cb(self);
+        self.in_mutable_binding = old;
+        result
     }
 }
