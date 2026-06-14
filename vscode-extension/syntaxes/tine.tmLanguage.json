@@ -102,7 +102,7 @@
                 },
                 {
                     "name": "keyword.declaration.variable.tine",
-                    "match": "\\b(const|var)\\b"
+                    "match": "\\b(let|mut)\\b"
                 },
                 {
                     "name": "keyword.declaration.type.tine",
