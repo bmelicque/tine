@@ -2,7 +2,7 @@ use crate::{
     ast, ir,
     type_checker::{analysis_context::symbols::MethodReceiverKind, TypeChecker},
     types::{self, FunctionType, GenericType, Type, TypeId},
-    DiagnosticKind, SymbolData, SymbolKind, SymbolRef, TypeStore,
+    DiagnosticKind, Location, SymbolData, SymbolKind, SymbolRef, TypeStore,
 };
 
 impl TypeChecker<'_> {
@@ -60,7 +60,7 @@ impl TypeChecker<'_> {
         }
     }
 
-    pub fn visit_method_definition(
+    fn visit_method_definition(
         &mut self,
         node: ast::MethodDefinition,
         receiver: Option<SymbolRef>,
@@ -91,23 +91,32 @@ impl TypeChecker<'_> {
         };
 
         let name = node.name?;
-        let symbol = self.ctx.register_symbol(SymbolData {
+        if receiver.has_field(&name.text) {
+            let error = DiagnosticKind::DuplicateFieldName {
+                name: name.text.clone(),
+            };
+            self.error(error, name.loc);
+            return None;
+        }
+        let data_kind = SymbolKind::Method {
+            owner: receiver.clone(),
+            owner_args: owner_args.clone(),
+            receiver: if node.receiver.mutable {
+                MethodReceiverKind::Mutable
+            } else {
+                MethodReceiverKind::Immutable
+            },
+            param_names: params.iter().map(|p| p.as_name()).collect(),
+        };
+        let symbol_data = SymbolData {
             name: name.text,
             ty,
-            kind: SymbolKind::Method {
-                owner: receiver,
-                owner_args: owner_args.clone(),
-                receiver: if node.receiver.mutable {
-                    MethodReceiverKind::Mutable
-                } else {
-                    MethodReceiverKind::Immutable
-                },
-                param_names: params.iter().map(|p| p.as_name()).collect(),
-            },
+            kind: data_kind,
             defined_at: name.loc,
             docs: node.docs.map(|d| d.text),
             ..Default::default()
-        });
+        };
+        let symbol = self.attach_method(symbol_data, receiver, name.loc);
         let name = ir::Identifier {
             loc: name.loc,
             symbol,
@@ -152,19 +161,21 @@ impl TypeChecker<'_> {
         };
 
         let name = node.definition.name?;
-        let symbol = self.ctx.register_symbol(SymbolData {
+        let data_kind = SymbolKind::Method {
+            owner: owner.clone(),
+            owner_args: owner_args.clone(),
+            receiver: MethodReceiverKind::Static,
+            param_names: params.iter().map(|p| p.as_name()).collect(),
+        };
+        let symbol_data = SymbolData {
             name: name.text,
             ty,
-            kind: SymbolKind::Method {
-                owner,
-                owner_args: owner_args.clone(),
-                receiver: MethodReceiverKind::Static,
-                param_names: params.iter().map(|p| p.as_name()).collect(),
-            },
+            kind: data_kind,
             defined_at: name.loc,
             docs: node.docs.map(|d| d.text),
             ..Default::default()
-        });
+        };
+        let symbol = self.attach_method(symbol_data, owner, name.loc);
         let name = ir::Identifier {
             loc: name.loc,
             symbol,
@@ -177,5 +188,17 @@ impl TypeChecker<'_> {
             body,
             ty,
         })
+    }
+
+    fn attach_method(&mut self, data: SymbolData, receiver: SymbolRef, at: Location) -> SymbolRef {
+        let symbol = self.ctx.register_symbol(data);
+        if receiver.has_method(&symbol) {
+            let name = symbol.as_name();
+            self.error(DiagnosticKind::DuplicateMethodName { name }, at);
+        } else {
+            let receiver = self.session.get_handle(symbol.clone()).unwrap();
+            receiver.attach_method(symbol.clone());
+        }
+        symbol
     }
 }

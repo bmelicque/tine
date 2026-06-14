@@ -45,6 +45,9 @@ pub enum DiagnosticKind {
     DuplicateIdentifier {
         name: String,
     },
+    DuplicateMethodName {
+        name: String,
+    },
     ExpectedBool {
         got: String,
     },
@@ -200,6 +203,9 @@ impl Display for DiagnosticKind {
             }
             Self::DuplicateIdentifier { name } => {
                 write!(f, "duplicate identifier: `{}`", name)
+            }
+            Self::DuplicateMethodName { name } => {
+                write!(f, "duplicate method: `{}`", name)
             }
             Self::ExpectedBool { got } => write!(f, "expected bool but got `{}`", got),
             Self::ExpectedEnum { got } => write!(f, "expected enum but got type `{}`", got),
