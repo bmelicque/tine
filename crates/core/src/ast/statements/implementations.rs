@@ -49,7 +49,7 @@ impl ImplementationItem {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct MethodDefinition {
     pub docs: Option<Docs>,
     pub loc: Location,
@@ -71,26 +71,9 @@ impl MethodDefinition {
     }
 }
 
-impl Default for MethodDefinition {
-    fn default() -> Self {
-        Self {
-            docs: None,
-            loc: Location::dummy(),
-            receiver: MethodReceiver {
-                loc: Location::dummy(),
-                pattern: None,
-            },
-            name: None,
-            type_params: None,
-            params: None,
-            return_type: None,
-            body: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct MethodReceiver {
     pub loc: Location,
+    pub mutable: bool,
     pub pattern: Option<Pattern>,
 }

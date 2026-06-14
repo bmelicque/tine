@@ -96,6 +96,13 @@ impl<'src> Parser<'src> {
         }
     }
 
+    pub(super) fn eat_if(&mut self, tokens: &[Token]) -> Option<Range<usize>> {
+        match self.tokens.next() {
+            Some((Ok(tok), range)) if tokens.contains(&tok) => Some(range),
+            _ => None,
+        }
+    }
+
     pub(super) fn expect(&mut self, token: Token) -> Range<usize> {
         match self.tokens.peek() {
             Some((Ok(tok), r)) if tok == &token => self.eat(&[token]),
