@@ -1,11 +1,8 @@
 use crate::{
     ast,
-    type_checker::analysis_context::type_store::TypeStore,
-    types::{
-        ArrayType, DuckType, FunctionType, GenericType, MapType, OptionType, ResultType, TupleType,
-        Type, TypeId,
-    },
-    DiagnosticKind, Location,
+    type_checker::{analysis_context::type_store::TypeStore, substitutions::Substitutions},
+    types::{ArrayType, FunctionType, MapType, OptionType, ResultType, TupleType, TypeId},
+    DiagnosticKind,
 };
 
 use super::TypeChecker;
@@ -14,7 +11,6 @@ impl TypeChecker<'_> {
     pub fn visit_type(&mut self, node: ast::Type) -> TypeId {
         match node {
             ast::Type::Array(array) => self.visit_array_type(array),
-            ast::Type::Duck(duck) => self.visit_duck_type(duck),
             ast::Type::Function(function) => self.visit_function_type(function),
             ast::Type::Map(map) => self.visit_map_type(map),
             ast::Type::Named(named) => self.visit_named_type(named),
@@ -45,6 +41,7 @@ impl TypeChecker<'_> {
         self.intern(FunctionType {
             params,
             return_type,
+            ..Default::default()
         })
     }
 
@@ -66,55 +63,40 @@ impl TypeChecker<'_> {
             "void" => return TypeStore::UNIT,
             _ => {}
         }
-        let Some(type_ref) = self.lookup(name) else {
-            let error = DiagnosticKind::CannotFindName {
-                name: name.to_string(),
-            };
+        let Some(type_symbol) = self.lookup(name) else {
+            let name = name.to_string();
+            let error = DiagnosticKind::CannotFindName { name };
             self.error(error, node.loc);
             return TypeStore::UNKNOWN;
         };
-        let ty = type_ref.borrow().get_type();
-        let def = self.resolve(ty).clone();
-        match def {
-            Type::Generic(t) => self.visit_generic_instance(node, &t),
-            _ => ty,
+        let ty = type_symbol.as_type();
+        if node.args.is_none() {
+            return ty;
         }
+        self.visit_type_ref(node, ty)
     }
 
-    fn visit_generic_instance(&mut self, node: ast::NamedType, ty: &GenericType) -> TypeId {
-        let arity = ty.params.len();
-        let args = node.args.clone().unwrap_or(Vec::new());
-        let mut arg_types: Vec<TypeId> = args
+    fn visit_type_ref(&mut self, node: ast::NamedType, ty: TypeId) -> TypeId {
+        let type_ = self.resolve(ty);
+        let params = type_.as_params().unwrap_or(&[]);
+        let arity = params.len();
+        let arg_count = node.args.as_ref().map_or(0, |a| a.len());
+        if arg_count > arity {
+            let error = DiagnosticKind::ArgumentCountMismatch {
+                expected: arity,
+                got: arg_count,
+            };
+            self.error(error, node.loc);
+        }
+
+        let args = node
+            .args
+            .unwrap_or(vec![])
             .into_iter()
             .take(arity)
             .map(|arg| self.visit_type(arg))
-            .collect();
-
-        self.visit_generic_instance_with_args(ty, &mut arg_types, node.loc)
-    }
-
-    pub fn visit_generic_instance_with_args(
-        &mut self,
-        ty: &GenericType,
-        args: &mut Vec<TypeId>,
-        loc: Location,
-    ) -> TypeId {
-        let arity = ty.params.len();
-
-        if args.len() > arity {
-            let error = DiagnosticKind::ArgumentCountMismatch {
-                expected: arity,
-                got: args.len(),
-            };
-            self.error(error, loc);
-        }
-
-        while args.len() < arity {
-            let dynamic = self.intern(Type::Dynamic);
-            args.push(dynamic);
-        }
-
-        self.session.types().substitute(ty.definition, &args)
+            .collect::<Vec<_>>();
+        Substitutions::with_initial(params, &args).apply(&mut self.session.types(), ty)
     }
 
     pub fn visit_option_type(&mut self, node: ast::OptionType) -> TypeId {
@@ -122,11 +104,6 @@ impl TypeChecker<'_> {
             .base
             .map_or(TypeStore::DYNAMIC, |t| self.visit_type(*t));
         self.intern(OptionType { some })
-    }
-
-    pub fn visit_duck_type(&mut self, node: ast::DuckType) -> TypeId {
-        let like = self.visit_type(*node.like);
-        self.intern(Type::Duck(DuckType { like }))
     }
 
     pub fn visit_result_type(&mut self, node: ast::ResultType) -> TypeId {
@@ -144,7 +121,10 @@ impl TypeChecker<'_> {
             .into_iter()
             .map(|e| self.visit_type(e))
             .collect();
-        self.intern(TupleType { elements })
+        self.intern(TupleType {
+            elements,
+            ..Default::default()
+        })
     }
 }
 
@@ -216,6 +196,7 @@ mod tests {
             Type::Function(FunctionType {
                 params: vec![TypeStore::INTEGER, TypeStore::STRING],
                 return_type: TypeStore::BOOLEAN,
+                ..Default::default()
             })
         );
     }
@@ -255,7 +236,7 @@ mod tests {
         let mut checker = TypeChecker::new(&session, 0);
         let def = checker.intern(Type::Struct(StructType {
             id: 7,
-            fields: vec![],
+            ..Default::default()
         }));
         checker.ctx.register_symbol(SymbolData {
             name: "Box".into(),
@@ -355,7 +336,8 @@ mod tests {
         assert_eq!(
             result,
             Type::Tuple(TupleType {
-                elements: vec![TypeStore::INTEGER, TypeStore::STRING]
+                elements: vec![TypeStore::INTEGER, TypeStore::STRING],
+                ..Default::default()
             })
         );
     }

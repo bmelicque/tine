@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::codegen::{
     statements::utils::{args_to_string, member},
     utils::ident_from_str,
@@ -5,7 +7,7 @@ use crate::codegen::{
 };
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
-use tine_core::{ir, types::TypeId, SymbolKind, SymbolRef};
+use tine_core::{ir, types, SymbolKind, SymbolRef};
 
 impl CodeGenerator<'_> {
     pub fn handle_function_definition(&mut self, node: &ir::FunctionDefinition) -> swc::Stmt {
@@ -34,13 +36,17 @@ impl CodeGenerator<'_> {
         &mut self,
         node: &ir::FunctionDefinition,
         ty: &SymbolRef,
-        ty_args: &[TypeId],
+        ty_args: &HashMap<types::TypeParam, types::TypeId>,
         is_static: bool,
     ) -> swc::Stmt {
         let ty = ident_from_str(&ty.as_name());
         let constructor: swc::Expr = match ty_args.len() {
             0 => ty.into(),
-            _ => member(ty.into(), &args_to_string(ty_args)).into(),
+            _ => member(
+                ty.into(),
+                &args_to_string(&ty_args.iter().map(|(_, ty)| *ty).collect::<Vec<_>>()),
+            )
+            .into(),
         };
 
         let name = &node.name.as_name();

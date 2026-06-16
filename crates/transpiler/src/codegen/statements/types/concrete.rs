@@ -21,7 +21,11 @@ impl CodeGenerator<'_> {
 
 fn get_method_receiver_args(method: &SymbolRef) -> Option<Vec<TypeId>> {
     match &method.borrow().kind {
-        SymbolKind::Method { owner_args, .. } => Some(owner_args.clone()),
+        SymbolKind::Method { owner_args, .. } => {
+            let mut entries = owner_args.iter().collect::<Vec<_>>();
+            entries.sort_by(|a, b| a.0.id.cmp(&b.0.id));
+            Some(entries.into_iter().map(|(_, t)| *t).collect())
+        }
         _ => None,
     }
 }

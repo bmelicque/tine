@@ -1,14 +1,37 @@
+use enum_from_derive::EnumFrom;
+
 use crate::{
     ast, ir,
     type_checker::{
         analysis_context::{symbols::TypeSymbolBody, type_store::TypeStore},
         SymbolHandle,
     },
-    types::{self, EnumType, GenericType, StructType, TupleType, Type, TypeId},
-    DiagnosticKind, Location, SymbolData, SymbolKind, SymbolRef,
+    types, DiagnosticKind, Location, SymbolData, SymbolKind, SymbolRef,
 };
 
 use super::TypeChecker;
+
+#[derive(Debug, EnumFrom)]
+pub enum TypeBody {
+    Struct(types::StructType),
+    Tuple(types::TupleType),
+}
+impl TypeBody {
+    fn set_params(&mut self, type_params: Vec<types::TypeParam>) {
+        match self {
+            Self::Struct(ty) => ty.params = type_params,
+            Self::Tuple(ty) => ty.params = type_params,
+        }
+    }
+}
+impl Into<types::Type> for TypeBody {
+    fn into(self) -> types::Type {
+        match self {
+            Self::Struct(ty) => ty.into(),
+            Self::Tuple(ty) => ty.into(),
+        }
+    }
+}
 
 impl TypeChecker<'_> {
     pub fn visit_type_alias(&mut self, node: ast::TypeAlias) {
@@ -20,10 +43,7 @@ impl TypeChecker<'_> {
 
         let ty = match params.len() {
             0 => ty,
-            _ => self.intern(Type::Generic(GenericType {
-                params,
-                definition: ty,
-            })),
+            _ => self.intern(types::GenericDef { params, def: ty }),
         };
 
         if let Some(ref name) = node.name {
@@ -54,19 +74,12 @@ impl TypeChecker<'_> {
             return None;
         };
 
-        let ((ty, body), params) = self.with_type_params(&node.params, |checker| {
+        let ((mut ty, body), params) = self.with_type_params(&node.params, |checker| {
             checker.visit_type_body(body, owner.readonly())
         });
+        ty.set_params(params);
 
-        let ty = match params.len() {
-            0 => ty,
-            _ => self.intern_unique(Type::Generic(GenericType {
-                params,
-                definition: ty,
-            })),
-        };
-
-        owner.borrow().ty = ty;
+        owner.borrow().ty = self.intern_unique(ty);
         owner.borrow().kind = SymbolKind::Struct {
             body,
             methods: vec![],
@@ -113,18 +126,11 @@ impl TypeChecker<'_> {
                 def: v.as_type(),
             })
             .collect::<Vec<_>>();
-        let ty = self.intern_unique(Type::Enum(EnumType {
+        let ty = self.intern_unique(types::EnumType {
             id: 0,
+            params,
             variants: type_variants,
-        }));
-
-        let ty = match params.len() {
-            0 => ty,
-            _ => self.intern_unique(Type::Generic(GenericType {
-                params,
-                definition: ty,
-            })),
-        };
+        });
 
         owner.borrow().ty = ty;
         owner.borrow().kind = SymbolKind::Enum {
@@ -171,7 +177,7 @@ impl TypeChecker<'_> {
         &mut self,
         body: ast::TypeBody,
         owner: SymbolRef,
-    ) -> (TypeId, TypeSymbolBody) {
+    ) -> (TypeBody, TypeSymbolBody) {
         match body {
             ast::TypeBody::Struct(body) => self.visit_type_struct_body(body, owner),
             ast::TypeBody::Tuple(body) => self.visit_type_tuple_body(body, owner),
@@ -182,7 +188,7 @@ impl TypeChecker<'_> {
         &mut self,
         body: ast::StructBody,
         owner: SymbolRef,
-    ) -> (TypeId, TypeSymbolBody) {
+    ) -> (TypeBody, TypeSymbolBody) {
         let symbols = body
             .fields
             .into_iter()
@@ -190,20 +196,21 @@ impl TypeChecker<'_> {
             .collect::<Vec<_>>();
         let fields = symbols
             .iter()
-            .map(|s| types::StructField {
-                name: s.borrow().name.clone(),
-                def: s.borrow().ty,
-            })
+            .map(|s| types::StructField::from(s))
             .collect();
         let id = 0;
-        let ty = self.intern_unique(Type::Struct(StructType { id, fields }));
+        let ty = types::StructType {
+            id,
+            fields,
+            ..Default::default()
+        };
         let body = TypeSymbolBody::Struct(
             symbols
                 .into_iter()
                 .map(|s| (s.borrow().name.clone(), s.clone()))
                 .collect(),
         );
-        (ty, body)
+        (ty.into(), body)
     }
 
     fn visit_struct_definition_field(
@@ -225,7 +232,7 @@ impl TypeChecker<'_> {
         &mut self,
         body: ast::TupleType,
         owner: SymbolRef,
-    ) -> (TypeId, TypeSymbolBody) {
+    ) -> (TypeBody, TypeSymbolBody) {
         let symbols = body
             .elements
             .into_iter()
@@ -245,9 +252,12 @@ impl TypeChecker<'_> {
             })
             .collect::<Vec<_>>();
         let elements = symbols.iter().map(|s| s.borrow().ty).collect();
-        let ty = self.intern_unique(Type::Tuple(TupleType { elements }));
+        let ty = types::TupleType {
+            elements,
+            ..Default::default()
+        };
         let body = TypeSymbolBody::Tuple(symbols);
-        (ty, body)
+        (ty.into(), body)
     }
 
     fn fallback_check_body(&mut self, body: ast::TypeBody) {
@@ -277,7 +287,7 @@ impl TypeChecker<'_> {
         &mut self,
         name: String,
         loc: Location,
-        ty: TypeId,
+        ty: types::TypeId,
         kind: SymbolKind,
     ) -> Option<SymbolHandle> {
         if self.ctx.find_in_current_scope(&name).is_some() {
