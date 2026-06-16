@@ -1,11 +1,14 @@
 use core::panic;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::{
     ast,
     diagnostics::DiagnosticKind,
     ir,
-    type_checker::analysis_context::{symbols::TypeSymbolBody, type_store::TypeStore},
+    type_checker::{
+        analysis_context::{symbols::TypeSymbolBody, type_store::TypeStore},
+        substitutions::{SubstitutionTable, Substitutions},
+    },
     types::{self, TypeId},
     Location, SymbolKind, SymbolRef,
 };
@@ -16,7 +19,7 @@ struct ConstructorVisit {
     pub type_symbol: SymbolRef,
     pub variant_symbol: Option<SymbolRef>,
     pub expected_body: Option<TypeSymbolBody>,
-    pub substitutions: HashMap<types::TypeParam, TypeId>,
+    pub substitutions: Substitutions,
 }
 
 impl TypeChecker<'_> {
@@ -185,7 +188,7 @@ impl TypeChecker<'_> {
     fn resolve_constructor_name(
         &mut self,
         name: &ast::NamedType,
-    ) -> Option<(SymbolRef, Vec<TypeId>)> {
+    ) -> Option<(SymbolRef, Vec<types::TypeParam>)> {
         let Some(symbol) = self.lookup(&name.name) else {
             let error = DiagnosticKind::CannotFindName {
                 name: name.name.clone(),
@@ -207,7 +210,7 @@ impl TypeChecker<'_> {
         members: Vec<SymbolRef>,
         constructor: SymbolRef,
         variant: Option<SymbolRef>,
-        mut substitutions: HashMap<types::TypeParam, TypeId>,
+        mut substitutions: Substitutions,
     ) -> Option<ir::StructLiteral> {
         let mut encountered = HashSet::new();
         let fields = body
@@ -235,7 +238,7 @@ impl TypeChecker<'_> {
         field: ast::ConstructorField,
         members: &[SymbolRef],
         encountered_field_names: &mut HashSet<String>,
-        mut substitutions: &mut HashMap<types::TypeParam, TypeId>,
+        mut substitutions: &mut Substitutions,
     ) -> Option<ir::StructLiteralField> {
         let key = match field.key {
             Some(ast::ConstructorKey::Name(n)) => n,
@@ -286,7 +289,7 @@ impl TypeChecker<'_> {
         members: Vec<SymbolRef>,
         constructor_symbol: SymbolRef,
         variant_symbol: Option<SymbolRef>,
-        mut substitutions: HashMap<types::TypeParam, TypeId>,
+        mut substitutions: Substitutions,
     ) -> Option<ir::StructLiteral> {
         let fields = body
             .elements
@@ -313,7 +316,7 @@ impl TypeChecker<'_> {
         &mut self,
         got: ast::Expression,
         expected: SymbolRef,
-        mut substitutions: &mut HashMap<types::TypeParam, TypeId>,
+        mut substitutions: &mut Substitutions,
     ) -> Option<ir::StructLiteralField> {
         let expr = self.check_expression_against(got, expected.borrow().ty, &mut substitutions)?;
         Some(ir::StructLiteralField {
@@ -330,22 +333,19 @@ impl TypeChecker<'_> {
         &mut self,
         unresolved_type: TypeId,
         at: Location,
-        substitutions: &HashMap<types::TypeParam, TypeId>,
+        substitutions: &Substitutions,
     ) -> TypeId {
         let generic = match self.resolve(unresolved_type) {
             types::Type::Generic(g) => g,
             _ => return unresolved_type,
         };
 
+        let table: SubstitutionTable = substitutions.into();
         let mut unresolved = false;
         let args = generic
             .params
             .iter()
-            .map(|p| match self.resolve(*p) {
-                types::Type::Param(param) => param,
-                _ => panic!(),
-            })
-            .map(|p| match substitutions.get(&p) {
+            .map(|p| match table.get(p) {
                 Some(id) => *id,
                 None => {
                     unresolved = true;
@@ -358,9 +358,9 @@ impl TypeChecker<'_> {
             self.error(DiagnosticKind::CannotInferType, at);
         }
 
-        self.intern(types::GenericType {
-            params: args,
-            definition: generic.definition,
+        self.intern(types::TypeRef {
+            inner: unresolved_type,
+            args,
         })
     }
 

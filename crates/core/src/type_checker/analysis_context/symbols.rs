@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use crate::{types::TypeId, Location, TypeStore};
+use crate::{type_checker::substitutions::SubstitutionTable, types::TypeId, Location, TypeStore};
 
 #[derive(Clone, Debug)]
 pub enum TypeSymbolBody {
@@ -65,7 +65,7 @@ pub enum SymbolKind {
         ///
         /// eg in `Type<Arg1, Arg2>.staticMethod()`
         /// (same for instance methods)
-        owner_args: Vec<TypeId>,
+        owner_args: SubstitutionTable,
         receiver: MethodReceiverKind,
         // This is expected to have the same length as the function type's params.
         param_names: Vec<String>,

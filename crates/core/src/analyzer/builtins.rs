@@ -1,5 +1,5 @@
 use crate::{
-    type_checker::{MethodReceiverKind, SymbolHandle},
+    type_checker::{substitutions::SubstitutionTable, MethodReceiverKind, SymbolHandle},
     types::{FunctionType, Type},
     Session, SymbolData, SymbolKind, SymbolRef, TypeStore,
 };
@@ -21,12 +21,12 @@ impl Session {
         let int_to_string_handle = self.add_builtin(SymbolData {
             name: "toString".into(),
             ty: self.intern(Type::Function(FunctionType {
-                params: vec![],
                 return_type: TypeStore::STRING,
+                ..Default::default()
             })),
             kind: SymbolKind::Method {
                 owner: int_handle.readonly(),
-                owner_args: vec![],
+                owner_args: SubstitutionTable::new(),
                 receiver: MethodReceiverKind::Immutable,
                 param_names: vec![],
             },
@@ -51,12 +51,12 @@ impl Session {
         let string_handle = self.add_builtin(SymbolData {
             name: "toString".into(),
             ty: self.intern(Type::Function(FunctionType {
-                params: vec![],
                 return_type: TypeStore::STRING,
+                ..Default::default()
             })),
             kind: SymbolKind::Method {
                 owner: float_handle.readonly(),
-                owner_args: vec![],
+                owner_args: SubstitutionTable::new(),
                 receiver: MethodReceiverKind::Immutable,
                 param_names: vec![],
             },

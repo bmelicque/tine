@@ -1,4 +1,5 @@
 pub mod symbols;
+pub mod type_display;
 pub mod type_store;
 
 pub use symbols::{

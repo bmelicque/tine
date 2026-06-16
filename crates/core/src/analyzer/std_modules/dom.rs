@@ -1,17 +1,15 @@
 use crate::{
     type_checker::{CheckResult, TypeChecker},
-    types::{DuckType, FunctionType, Type},
+    types::{FunctionType, Type},
     ModuleId, Session, SymbolData, SymbolKind, TypeStore,
 };
 
 impl Session {
     pub fn check_dom_module(&mut self, id: ModuleId) -> CheckResult {
         let mut checker = TypeChecker::new(&self, id);
-        let element_trait = checker.intern(Type::Duck(DuckType {
-            like: TypeStore::ELEMENT,
-        }));
         let render_type = checker.intern(Type::Function(FunctionType {
-            params: vec![TypeStore::STRING, element_trait],
+            type_params: vec![],
+            params: vec![TypeStore::STRING, TypeStore::ELEMENT],
             return_type: TypeStore::UNIT,
         }));
 

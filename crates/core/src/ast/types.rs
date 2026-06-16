@@ -5,7 +5,6 @@ use crate::Location;
 #[derive(Debug, Clone, EnumFrom, PartialEq, Eq, Hash)]
 pub enum Type {
     Array(ArrayType),
-    Duck(DuckType),
     Function(FunctionType),
     Map(MapType),
     Named(NamedType),
@@ -18,7 +17,6 @@ impl Type {
     pub fn loc(&self) -> Location {
         match self {
             Self::Array(t) => t.loc,
-            Self::Duck(t) => t.loc,
             Self::Function(t) => t.loc,
             Self::Map(t) => t.loc,
             Self::Named(t) => t.loc,
@@ -46,12 +44,6 @@ pub struct OptionType {
 pub struct ArrayType {
     pub loc: Location,
     pub element: Option<Box<Type>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DuckType {
-    pub loc: Location,
-    pub like: Box<Type>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

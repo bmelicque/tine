@@ -1,8 +1,6 @@
-use std::collections::HashMap;
-
 use crate::{
     ast, ir,
-    type_checker::TypeChecker,
+    type_checker::{substitutions::Substitutions, TypeChecker},
     types::{self, TypeId},
     DiagnosticKind, Location,
 };
@@ -21,11 +19,11 @@ impl TypeChecker<'_> {
     pub fn visit_type_args(
         &mut self,
         type_args: Option<Vec<ast::Type>>,
-        expected_type_params: &[TypeId],
+        expected_type_params: &[types::TypeParam],
         loc: Location,
-    ) -> (Option<Vec<TypeId>>, HashMap<types::TypeParam, TypeId>) {
+    ) -> (Option<Vec<TypeId>>, Substitutions) {
         let Some(type_args) = type_args else {
-            return (None, HashMap::new());
+            return (None, Substitutions::new());
         };
 
         if type_args.len() > expected_type_params.len() {
@@ -41,12 +39,7 @@ impl TypeChecker<'_> {
             .map(|t| self.visit_type(t))
             .collect::<Vec<_>>();
 
-        let mut substitutions = HashMap::new();
-        for (param, type_arg) in expected_type_params.iter().zip(&type_args) {
-            if let types::Type::Param(p) = self.resolve(*param) {
-                substitutions.insert(p, *type_arg);
-            }
-        }
+        let substitutions = Substitutions::with_initial(expected_type_params, &type_args);
         (Some(type_args), substitutions)
     }
 
@@ -54,12 +47,12 @@ impl TypeChecker<'_> {
         &mut self,
         node: ast::Expression,
         expected: TypeId,
-        substitutions: &mut HashMap<types::TypeParam, TypeId>,
+        substitutions: &mut Substitutions,
     ) -> Option<ir::Expression> {
         let loc = node.loc();
         let got = self.visit_expression(node);
         if let Some(got) = &got {
-            self.unify(expected, got.ty(), loc, substitutions);
+            substitutions.unify(&mut self.session.types(), expected, got.ty(), loc);
         }
         got
     }

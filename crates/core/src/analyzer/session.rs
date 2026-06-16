@@ -8,7 +8,7 @@ use anyhow::anyhow;
 use crate::{
     analyzer::{graph::ModuleGraph, loader::ModuleLoader, modules::Module, ModuleId},
     ast, ir, pretty_print_error,
-    type_checker::SymbolHandle,
+    type_checker::{display_raw_type, display_type, SymbolHandle},
     types::{Type, TypeId},
     Diagnostic, ModulePath, SymbolKind, SymbolRef, TypeStore,
 };
@@ -139,10 +139,12 @@ impl Session {
         self.types.lock().unwrap().find_id(ty)
     }
     pub fn display_type(&self, id: TypeId) -> String {
-        self.types.lock().unwrap().display_type(id)
+        let types = self.types.lock().unwrap();
+        display_type(&types, id)
     }
     pub fn display_raw_type(&self, id: TypeId) -> String {
-        self.types.lock().unwrap().display_raw_type(id)
+        let types = self.types.lock().unwrap();
+        display_raw_type(&types, id)
     }
 
     pub fn find_method(&self, name: &str, ty: TypeId) -> Option<SymbolRef> {

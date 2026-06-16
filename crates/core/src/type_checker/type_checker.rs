@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-
 use crate::analyzer::session::Session;
 use crate::analyzer::{ModuleId, ModulePath};
 use crate::diagnostics::{Diagnostic, DiagnosticKind, DiagnosticLevel};
 use crate::type_checker::analysis_context::{LocalContext, SymbolRef};
 use crate::type_checker::SymbolHandle;
-use crate::types::{self, Type, TypeId, TypeParam};
+use crate::types::{self, Type, TypeId};
 use crate::{ir, Location};
 
 pub struct CheckResult {
@@ -67,8 +65,16 @@ impl TypeChecker<'_> {
     pub fn intern(&self, ty: impl Into<Type>) -> TypeId {
         self.session.intern(ty.into())
     }
-    pub fn intern_unique(&self, ty: Type) -> TypeId {
-        self.session.intern_unique(ty)
+    pub fn intern_unique(&self, ty: impl Into<Type>) -> TypeId {
+        self.session.intern_unique(ty.into())
+    }
+    pub fn add_type_param(&self, name: String) -> types::TypeParam {
+        let param = types::TypeParam {
+            name: name.clone(),
+            id: 0,
+        };
+        let id = self.intern_unique(param);
+        types::TypeParam { name, id }
     }
 
     pub fn resolve(&self, id: TypeId) -> Type {
@@ -76,14 +82,7 @@ impl TypeChecker<'_> {
     }
 
     pub fn can_be_assigned_to(&self, test_id: TypeId, against: TypeId) -> bool {
-        let test = self.resolve(test_id);
-        let against = self.resolve(against);
-        match (&test, &against) {
-            (Type::Unknown, _) => true,
-            (_, Type::Unknown) => true,
-            (_, Type::Duck(duck)) => self.session.types().implements(test_id, duck),
-            (_, _) => test == against,
-        }
+        self.session.types().can_assign_to(test_id, against)
     }
 
     pub fn with_scope<F, T>(&mut self, predicate: F) -> T
@@ -162,128 +161,29 @@ impl TypeChecker<'_> {
             .or_else(|| self.session.get_handle(symbol))
     }
 
-    pub fn resolve_type_symbol(&self, ty: TypeId) -> Option<SymbolRef> {
-        self.ctx
+    /// Resolve the original symbol behind a type.
+    ///
+    /// If the given type is a type ref with type arguments, the function
+    /// returns the generic definition of the type (ir either a struct, enum or
+    /// generic alias).
+    pub fn resolve_type_symbol(&self, mut ty: TypeId) -> Option<SymbolRef> {
+        while let types::Type::Ref(r) = self.resolve(ty) {
+            ty = r.inner
+        }
+        let r = self
+            .ctx
             .symbols
             .iter()
-            .find(|s| self.equals_type(s.borrow().ty, ty) && s.borrow().is_type_symbol())
-            .map(|s| s.readonly())
-            .or_else(|| {
-                self.session
-                    .symbols()
-                    .iter()
-                    .find(|s| self.equals_type(s.borrow().ty, ty) && s.borrow().is_type_symbol())
-                    .cloned()
-            })
-    }
-
-    fn equals_type(&self, tested: TypeId, against: TypeId) -> bool {
-        let tested = self.unwrap_generic(tested);
-        let against = self.unwrap_generic(against);
-        tested == against
-    }
-    /// If the given type id refers to a generic, unwrap the underlying type definition.
-    /// Else, just return the original value.
-    fn unwrap_generic(&self, ty: TypeId) -> TypeId {
-        match self.resolve(ty) {
-            types::Type::Generic(g) => g.definition,
-            _ => ty,
+            .filter(|s| s.borrow().is_type_symbol())
+            .find(|s| s.borrow().ty == ty);
+        if let Some(r) = r {
+            return Some(r.readonly());
         }
-    }
 
-    pub fn unify(
-        &mut self,
-        expected: TypeId,
-        actual: TypeId,
-        loc: Location,
-        substitutions: &mut HashMap<TypeParam, TypeId>,
-    ) {
-        match (self.resolve(expected), self.resolve(actual)) {
-            (Type::Param(p), a) => {
-                match substitutions.get(&p) {
-                    Some(p) => {
-                        self.check_assigned_type(*p, actual, loc);
-                    }
-                    None => match &a {
-                        Type::Param(_) => {}
-                        _ => {
-                            substitutions.insert(p, actual);
-                        }
-                    },
-                };
-            }
-            (Type::Array(e), Type::Array(a)) => {
-                self.unify(e.element, a.element, loc, substitutions);
-            }
-            (Type::Function(e), Type::Function(a)) => {
-                if e.params.len() != a.params.len() {
-                    let error = DiagnosticKind::MismatchedTypes {
-                        left_name: self.session.display_type(expected),
-                        right_name: self.session.display_type(actual),
-                    };
-                    self.error(error, loc);
-                    return;
-                }
-                for (e, a) in e.params.iter().zip(a.params.iter()) {
-                    self.unify(*e, *a, loc, substitutions);
-                }
-                self.unify(e.return_type, a.return_type, loc, substitutions);
-            }
-            (Type::Generic(e), Type::Generic(a)) => {
-                for (e, a) in e.params.iter().zip(a.params.iter()) {
-                    self.unify(*e, *a, loc, substitutions);
-                }
-            }
-            (Type::Listener(e), Type::Listener(a)) => {
-                self.unify(e.inner, a.inner, loc, substitutions);
-            }
-            (Type::Map(e), Type::Map(a)) => {
-                self.unify(e.key, a.key, loc, substitutions);
-                self.unify(e.value, a.value, loc, substitutions);
-            }
-            (Type::Option(e), Type::Option(a)) => {
-                self.unify(e.some, a.some, loc, substitutions);
-            }
-            (Type::Result(e), Type::Result(a)) => {
-                self.unify(e.ok, a.ok, loc, substitutions);
-                match (&e.error, &a.error) {
-                    (Some(e), Some(a)) => {
-                        self.unify(*e, *a, loc, substitutions);
-                    }
-                    (None, None) => {}
-                    _ => {
-                        let error = DiagnosticKind::MismatchedTypes {
-                            left_name: self.session.display_type(expected),
-                            right_name: self.session.display_type(actual),
-                        };
-                        self.error(error, loc);
-                    }
-                }
-            }
-            (Type::Signal(e), Type::Signal(a)) => {
-                self.unify(e.inner, a.inner, loc, substitutions);
-            }
-            (Type::Tuple(e), Type::Tuple(a)) => {
-                if e.elements.len() != a.elements.len() {
-                    let error = DiagnosticKind::MismatchedTypes {
-                        left_name: self.session.display_type(expected),
-                        right_name: self.session.display_type(actual),
-                    };
-                    self.error(error, loc);
-                }
-                for (e, a) in e.elements.iter().zip(a.elements.iter()) {
-                    self.unify(*e, *a, loc, substitutions);
-                }
-            }
-            (e, a) => {
-                if e != a {
-                    let error = DiagnosticKind::MismatchedTypes {
-                        left_name: self.session.display_type(expected),
-                        right_name: self.session.display_type(actual),
-                    };
-                    self.error(error, loc);
-                }
-            }
-        }
+        self.session
+            .symbols()
+            .into_iter()
+            .filter(|s| s.borrow().is_type_symbol())
+            .find(|s| s.borrow().ty == ty)
     }
 }

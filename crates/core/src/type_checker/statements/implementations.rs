@@ -1,44 +1,51 @@
 use crate::{
-    ast, ir,
-    type_checker::{analysis_context::symbols::MethodReceiverKind, TypeChecker},
-    types::{self, FunctionType, GenericType, Type, TypeId},
+    ast::{self, ImplementationBody},
+    ir,
+    type_checker::{
+        analysis_context::symbols::MethodReceiverKind, substitutions::Substitutions, TypeChecker,
+    },
+    types::{self, TraitMethod},
     DiagnosticKind, Location, SymbolData, SymbolKind, SymbolRef, TypeStore,
 };
 
 impl TypeChecker<'_> {
     pub(super) fn visit_implementation(&mut self, node: ast::Implementation) -> Vec<ir::Statement> {
-        let implemented_type = node.implemented_type.as_ref();
-        let owner = implemented_type.and_then(|t| self.lookup(&t.name));
-        let mut owner_args = implemented_type
-            .and_then(|t| t.args.clone())
-            .unwrap_or(vec![])
-            .into_iter()
-            .map(|arg| self.visit_type(arg))
-            .collect();
-        if owner.is_none() && implemented_type.is_some() {
-            let ast::NamedType { name, loc, .. } = implemented_type.unwrap();
-            self.error(
-                DiagnosticKind::CannotFindName { name: name.clone() },
-                loc.clone(),
-            );
-        }
+        let Some(owner) = node
+            .implemented_type
+            .as_ref()
+            .and_then(|t| self.lookup(&t.name))
+        else {
+            if node.implemented_type.is_some() {
+                let ast::NamedType { name, loc, .. } = node.implemented_type.as_ref().unwrap();
+                let name = name.clone();
+                self.error(DiagnosticKind::CannotFindName { name }, *loc);
+            }
+            self.fallback_check_impl_body(node.body);
+            return vec![];
+        };
 
-        let mut receiver_type = owner.as_ref().map_or(TypeStore::UNKNOWN, |o| o.borrow().ty);
-        if let types::Type::Generic(g) = self.resolve(receiver_type) {
-            receiver_type = self.visit_generic_instance_with_args(
-                &g,
-                &mut owner_args,
-                implemented_type.unwrap().loc,
-            )
-        }
+        let Some(receiver_type) = node.implemented_type.map(|t| self.visit_named_type(t)) else {
+            self.fallback_check_impl_body(node.body);
+            return vec![];
+        };
+
+        let owner_type = self.resolve(owner.as_type());
+        let type_params = owner_type.as_params().unwrap_or(&[]);
+        let type_args = match self.resolve(receiver_type) {
+            types::Type::Ref(r) => r.args,
+            _ => vec![],
+        };
+
+        let substitutions = Substitutions::with_initial(type_params, &type_args);
 
         let Some(body) = node.body else {
             return vec![];
         };
+
         body.items
             .into_iter()
             .filter_map(|item| {
-                self.visit_impl_item(owner.clone(), receiver_type, &owner_args, item)
+                self.visit_impl_item(Some(owner.clone()), receiver_type, &substitutions, item)
             })
             .collect()
     }
@@ -46,8 +53,8 @@ impl TypeChecker<'_> {
     fn visit_impl_item(
         &mut self,
         owner: Option<SymbolRef>,
-        receiver_type: TypeId,
-        owner_args: &Vec<TypeId>,
+        receiver_type: types::TypeId,
+        owner_args: &Substitutions,
         item: ast::ImplementationItem,
     ) -> Option<ir::Statement> {
         match item {
@@ -64,8 +71,8 @@ impl TypeChecker<'_> {
         &mut self,
         node: ast::MethodDefinition,
         receiver: Option<SymbolRef>,
-        receiver_type: TypeId,
-        owner_args: &Vec<TypeId>,
+        receiver_type: types::TypeId,
+        owner_args: &Substitutions,
     ) -> Option<ir::FunctionDefinition> {
         let ((params, visited_body), type_params) = self.with_type_params(&node.type_params, |s| {
             let params = s.visit_function_params(node.params);
@@ -78,17 +85,11 @@ impl TypeChecker<'_> {
         let mut param_types = params.iter().map(|p| p.ty()).collect::<Vec<_>>();
         param_types.insert(0, receiver_type);
 
-        let ty = self.intern(FunctionType {
+        let ty = self.intern(types::FunctionType {
+            type_params,
             params: param_types,
             return_type,
         });
-        let ty = match type_params.len() {
-            0 => ty,
-            _ => self.intern(Type::Generic(GenericType {
-                params: type_params,
-                definition: ty,
-            })),
-        };
 
         let name = node.name?;
         if receiver.has_field(&name.text) {
@@ -100,7 +101,7 @@ impl TypeChecker<'_> {
         }
         let data_kind = SymbolKind::Method {
             owner: receiver.clone(),
-            owner_args: owner_args.clone(),
+            owner_args: owner_args.clone().into(),
             receiver: if node.receiver.mutable {
                 MethodReceiverKind::Mutable
             } else {
@@ -135,7 +136,7 @@ impl TypeChecker<'_> {
         &mut self,
         node: ast::FunctionDefinition,
         owner: Option<SymbolRef>,
-        owner_args: &Vec<TypeId>,
+        owner_args: &Substitutions,
     ) -> Option<ir::FunctionDefinition> {
         let ((params, visited_body), type_params) =
             self.with_type_params(&node.definition.type_params, |s| {
@@ -148,22 +149,16 @@ impl TypeChecker<'_> {
         let owner = owner?;
         let (params, (return_type, body)) = (params?, visited_body?);
 
-        let ty = self.intern(FunctionType {
+        let ty = self.intern(types::FunctionType {
+            type_params,
             params: params.iter().map(|p| p.ty()).collect::<Vec<_>>(),
             return_type,
         });
-        let ty = match type_params.len() {
-            0 => ty,
-            _ => self.intern(Type::Generic(GenericType {
-                params: type_params,
-                definition: ty,
-            })),
-        };
 
         let name = node.definition.name?;
         let data_kind = SymbolKind::Method {
             owner: owner.clone(),
-            owner_args: owner_args.clone(),
+            owner_args: owner_args.clone().into(),
             receiver: MethodReceiverKind::Static,
             param_names: params.iter().map(|p| p.as_name()).collect(),
         };
@@ -198,7 +193,34 @@ impl TypeChecker<'_> {
         } else {
             let receiver = self.session.get_handle(symbol.clone()).unwrap();
             receiver.attach_method(symbol.clone());
+            self.add_method_to_store(&symbol);
         }
         symbol
+    }
+    fn add_method_to_store(&mut self, symbol: &SymbolRef) {
+        let SymbolKind::Method { receiver, .. } = &symbol.borrow().kind else {
+            panic!()
+        };
+        if receiver.is_static() {
+            return;
+        }
+        let types::Type::Function(mut f) = self.resolve(symbol.as_type()) else {
+            panic!()
+        };
+        let name = symbol.as_name();
+        let receiver = f.params[0];
+        f.params = f.params[1..].to_vec();
+        let def = self.intern(f);
+        self.session
+            .types()
+            .add_method(receiver, TraitMethod { name, def });
+    }
+
+    fn fallback_check_impl_body(&mut self, body: Option<ImplementationBody>) {
+        body.map_or(vec![], |body| body.items)
+            .into_iter()
+            .for_each(|item| {
+                self.visit_impl_item(None, TypeStore::UNKNOWN, &Substitutions::new(), item);
+            });
     }
 }

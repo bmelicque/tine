@@ -1,13 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    ast,
-    diagnostics::DiagnosticKind,
-    ir,
-    type_checker::TypeChecker,
-    types::{DuckType, Type, TypeId},
-    Location, TypeStore,
-};
+use crate::{ast, diagnostics::DiagnosticKind, ir, type_checker::TypeChecker, Location, TypeStore};
 
 impl TypeChecker<'_> {
     pub fn visit_element_expression(
@@ -26,7 +19,7 @@ impl TypeChecker<'_> {
             tag_name,
             attributes: attributes?,
             children: children?,
-            ty: self.element_type(),
+            ty: TypeStore::ELEMENT,
         })
     }
 
@@ -114,11 +107,5 @@ impl TypeChecker<'_> {
         self.save_reactive_dependencies(&deps, expr.loc());
         self.ctx.add_dependencies(deps);
         Some(expr)
-    }
-
-    pub fn element_type(&mut self) -> TypeId {
-        self.intern(Type::Duck(DuckType {
-            like: TypeStore::ELEMENT,
-        }))
     }
 }

@@ -145,6 +145,7 @@ impl TypeChecker<'_> {
                 };
                 let ty = self.intern(types::TupleType {
                     elements: elements.iter().map(|e| e.ty()).collect(),
+                    ..Default::default()
                 });
 
                 Some(ir::Expression::Tuple(ir::TupleExpression {
@@ -370,7 +371,8 @@ mod tests {
         assert_eq!(
             result,
             Type::Tuple(TupleType {
-                elements: vec![TypeStore::INTEGER, TypeStore::STRING, TypeStore::BOOLEAN]
+                elements: vec![TypeStore::INTEGER, TypeStore::STRING, TypeStore::BOOLEAN],
+                ..Default::default()
             })
         );
         assert!(checker.diagnostics.is_empty());
