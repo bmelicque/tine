@@ -2,10 +2,10 @@ use crate::{
     ast, ir,
     type_checker::{
         analysis_context::{symbols::TypeSymbolBody, type_store::TypeStore},
+        substitutions::{SubstitutionTable, Substitutions},
         TypeChecker,
     },
-    types::Type,
-    DiagnosticKind, SymbolKind,
+    types, DiagnosticKind, SymbolKind, SymbolRef,
 };
 
 impl TypeChecker<'_> {
@@ -37,6 +37,7 @@ impl TypeChecker<'_> {
             self.error(error, field_name.loc);
             return None;
         };
+        let substitutions = self.infer_type_args(&root_symbol, object.ty());
 
         let SymbolKind::Struct {
             body: TypeSymbolBody::Struct(fields),
@@ -46,32 +47,58 @@ impl TypeChecker<'_> {
             panic!();
         };
 
-        let member = fields
+        let field = fields.iter().find(|(name, _)| *name == field_name.text);
+        if let Some((_, symbol)) = field {
+            let ty = substitutions.apply(&mut self.session.types(), symbol.as_type());
+            return Some(ir::MemberExpression {
+                loc: expr.loc,
+                object: Box::new(object),
+                ty,
+                member: ir::Identifier {
+                    loc: field_name.loc,
+                    symbol: symbol.to_owned(),
+                },
+            });
+        }
+
+        let matching_methods = methods
             .iter()
-            .find(|(name, _)| *name == field_name.text)
-            .map(|(_, symbol)| symbol)
-            .or_else(|| methods.iter().find(|m| m.borrow().name == field_name.text))
-            .cloned();
-        let member = match member {
-            Some(symbol) => ir::Identifier {
-                loc: field_name.loc,
-                symbol,
-            },
-            None => {
-                let error = DiagnosticKind::UnknownMember {
-                    member: field_name.as_str().to_string(),
-                };
-                self.error(error, field_name.loc);
-                return None;
-            }
+            .filter(|m| {
+                self.method_matches(m, field_name.as_str(), object.is_mutable(), &substitutions)
+            })
+            .collect::<Vec<_>>();
+
+        if matching_methods.len() == 0 {
+            let error = DiagnosticKind::UnknownMember {
+                member: field_name.as_str().to_string(),
+            };
+            self.error(error, field_name.loc);
+            return None;
+        }
+
+        let most_concrete = matching_methods
+            .into_iter()
+            .max_by_key(|m| method_concreteness(m))?;
+        let object_mutablity = object.is_mutable();
+        let is_method_mutating = match &most_concrete.borrow().kind {
+            SymbolKind::Method { receiver, .. } => receiver.is_mutable(), // TODO: handle mutability
+            // Other symbol kinds should have been filtered out above
+            _ => unreachable!(),
         };
+        if is_method_mutating && object_mutablity == Some(false) {
+            self.error(DiagnosticKind::MutatingMethodOnImmutable, field_name.loc);
+        }
+
+        let ty = substitutions.apply(&mut self.session.types(), most_concrete.as_type());
 
         Some(ir::MemberExpression {
             loc: expr.loc,
             object: Box::new(object),
-            // FIXME: handle substitutions for generics
-            ty: member.ty(),
-            member,
+            ty,
+            member: ir::Identifier {
+                loc: field_name.loc,
+                symbol: most_concrete.to_owned(),
+            },
         })
     }
 
@@ -93,7 +120,7 @@ impl TypeChecker<'_> {
             return None;
         };
 
-        let Type::Tuple(ty) = self.resolve(object.ty()) else {
+        let types::Type::Tuple(ty) = self.resolve(object.ty()) else {
             if object.ty() != TypeStore::UNKNOWN {
                 let error = DiagnosticKind::ExpectedTuple {
                     got: self.session.display_type(object.ty()),
@@ -139,4 +166,44 @@ impl TypeChecker<'_> {
             member,
         })
     }
+
+    fn method_matches(
+        &self,
+        symbol: &SymbolRef,
+        name: &str,
+        mutable: Option<bool>,
+        type_args: &Substitutions,
+    ) -> bool {
+        // Keeping methods with same name
+        if symbol.borrow().name != name {
+            return false;
+        }
+        let SymbolKind::Method {
+            owner_args,
+            receiver,
+            ..
+        } = &symbol.borrow().kind
+        else {
+            return false;
+        };
+
+        // TODO: remove this
+        if receiver.is_mutable() && mutable == Some(false) {
+            return false;
+        }
+
+        // No type args or generic implementation
+        if owner_args.len() == 0 {
+            return true;
+        }
+
+        return *owner_args == SubstitutionTable::from(type_args);
+    }
+}
+
+fn method_concreteness(method: &SymbolRef) -> usize {
+    let SymbolKind::Method { owner_args, .. } = &method.borrow().kind else {
+        panic!()
+    };
+    owner_args.len()
 }

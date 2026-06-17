@@ -167,6 +167,14 @@ impl Expression {
     pub fn is_pure(&self) -> bool {
         self.dependencies().next().is_none()
     }
+
+    pub fn is_mutable(&self) -> Option<bool> {
+        match self {
+            Expression::Identifier(id) => Some(id.symbol.borrow().is_mutable()),
+            Expression::Member(m) => m.object.is_mutable(),
+            _ => None,
+        }
+    }
 }
 
 fn iterate<'a>(expressions: &'a [Expression]) -> Box<dyn Iterator<Item = &'a Expression> + 'a> {

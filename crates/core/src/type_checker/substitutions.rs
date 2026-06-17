@@ -7,23 +7,22 @@ use crate::{
 };
 
 pub type SubstitutionTable = HashMap<TypeParam, TypeId>;
+impl From<Substitutions> for SubstitutionTable {
+    fn from(value: Substitutions) -> Self {
+        value.table
+    }
+}
+impl From<&Substitutions> for SubstitutionTable {
+    fn from(value: &Substitutions) -> Self {
+        value.table.clone()
+    }
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct Substitutions {
     table: SubstitutionTable,
     mismatched_pairs: Vec<(TypeId, TypeId)>,
     diagnostics: Vec<DiagnosticKind>,
-}
-
-impl Into<SubstitutionTable> for Substitutions {
-    fn into(self) -> SubstitutionTable {
-        self.table
-    }
-}
-impl Into<SubstitutionTable> for &Substitutions {
-    fn into(self) -> SubstitutionTable {
-        self.table.clone()
-    }
 }
 impl From<SubstitutionTable> for Substitutions {
     fn from(table: SubstitutionTable) -> Self {

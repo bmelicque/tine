@@ -21,6 +21,10 @@ impl MethodReceiverKind {
     pub fn is_static(&self) -> bool {
         matches!(self, MethodReceiverKind::Static)
     }
+
+    pub fn is_mutable(&self) -> bool {
+        matches!(self, MethodReceiverKind::Mutable)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -310,6 +314,22 @@ impl SymbolRef {
         match self.as_type() {
             TypeStore::BOOLEAN | TypeStore::FLOAT | TypeStore::INTEGER | TypeStore::STRING => true,
             _ => false,
+        }
+    }
+
+    pub fn is_immutable(&self) -> bool {
+        match &self.borrow().kind {
+            SymbolKind::Value { mutable } => !*mutable,
+
+            SymbolKind::Member { owner } => owner.is_immutable(),
+
+            SymbolKind::Constructor { .. }
+            | SymbolKind::Enum { .. }
+            | SymbolKind::PrimitiveType { .. }
+            | SymbolKind::Struct { .. }
+            | SymbolKind::TypeAlias => true,
+
+            SymbolKind::Function { .. } | SymbolKind::Method { .. } => true,
         }
     }
 }

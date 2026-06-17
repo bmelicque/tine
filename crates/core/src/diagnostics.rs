@@ -122,6 +122,7 @@ pub enum DiagnosticKind {
     MissingParams,
     MissingPattern,
     MissingType,
+    MutatingMethodOnImmutable,
     NegativeTupleIndex,
     NonExhaustiveMatch {
         missing: Vec<String>,
@@ -304,6 +305,7 @@ impl Display for DiagnosticKind {
             Self::MissingParams => write!(f, "expected function parameters"),
             Self::MissingPattern => write!(f, "expected pattern"),
             Self::MissingType => write!(f, "expected type"),
+            Self::MutatingMethodOnImmutable => write!(f, "invalid method call: this method is mutating but the object it was called from is immutable"),
             Self::NegativeTupleIndex => write!(f, "tuple index cannot be negative"),
             Self::NonExhaustiveMatch { missing } => {
                 let missing = if missing.len() > 2 {
