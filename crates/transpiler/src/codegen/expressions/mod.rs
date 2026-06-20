@@ -96,11 +96,18 @@ impl CodeGenerator<'_> {
         let prelim_stmts = vec![callee_result.prelim_stmts, prelim_stmts].concat();
         let callee = callee_result.expr;
 
-        let expr = swc::Expr::Call(swc::CallExpr {
+        let mut expr = swc::Expr::Call(swc::CallExpr {
             callee: swc::Callee::Expr(Box::new(callee)),
             args: args.into_iter().map(Into::into).collect(),
             ..Default::default()
         });
+        if self.call_ownership(node) == OwnershipAction::Clone {
+            expr = swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(expr),
+                prop: swc::MemberProp::Ident(ident_from_str("$clone").into()),
+            });
+        }
 
         ExpressionResult { prelim_stmts, expr }
     }
@@ -155,7 +162,7 @@ impl CodeGenerator<'_> {
     }
 
     pub fn handle_identifier(&mut self, node: &ir::Identifier) -> swc::Expr {
-        match self.ownership_action(node) {
+        match self.identifier_ownership(node) {
             OwnershipAction::Borrow | OwnershipAction::Copy | OwnershipAction::Move => {
                 swc::Expr::Ident(ident_from_str(&node.as_name()))
             }

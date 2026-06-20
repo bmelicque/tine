@@ -97,7 +97,10 @@ impl CodeGenerator<'_> {
         self.session.get_type(ty)
     }
 
-    pub(crate) fn ownership_action(&self, id: &ir::Identifier) -> OwnershipAction {
-        self.ownership.action_for(id.loc)
+    pub(crate) fn identifier_ownership(&self, id: &ir::Identifier) -> OwnershipAction {
+        self.ownership.action_for(id.loc, OwnershipAction::Clone)
+    }
+    pub(crate) fn call_ownership(&self, call: &ir::CallExpression) -> OwnershipAction {
+        self.ownership.action_for(call.loc, OwnershipAction::Move)
     }
 }

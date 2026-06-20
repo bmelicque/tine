@@ -5,7 +5,7 @@ use crate::{
         analysis_context::symbols::MethodReceiverKind, substitutions::Substitutions, TypeChecker,
     },
     types::{self, TraitMethod},
-    DiagnosticKind, Location, SymbolData, SymbolKind, SymbolRef, TypeStore,
+    DiagnosticKind, Location, SymbolData, SymbolKind, SymbolRef,
 };
 
 impl TypeChecker<'_> {
@@ -24,6 +24,7 @@ impl TypeChecker<'_> {
             return vec![];
         };
 
+        let receiver_loc = node.implemented_type.as_ref().unwrap().loc;
         let Some(receiver_type) = node.implemented_type.map(|t| self.visit_named_type(t)) else {
             self.fallback_check_impl_body(node.body);
             return vec![];
@@ -42,27 +43,28 @@ impl TypeChecker<'_> {
             return vec![];
         };
 
+        let owner = ir::Identifier {
+            loc: receiver_loc,
+            symbol: owner,
+        };
         body.items
             .into_iter()
-            .filter_map(|item| {
-                self.visit_impl_item(Some(owner.clone()), receiver_type, &substitutions, item)
-            })
+            .filter_map(|item| self.visit_impl_item(Some(owner.clone()), &substitutions, item))
             .collect()
     }
 
     fn visit_impl_item(
         &mut self,
-        owner: Option<SymbolRef>,
-        receiver_type: types::TypeId,
+        owner: Option<ir::Identifier>,
         owner_args: &Substitutions,
         item: ast::ImplementationItem,
     ) -> Option<ir::Statement> {
         match item {
             ast::ImplementationItem::Method(m) => self
-                .visit_method_definition(m, owner, receiver_type, owner_args)
+                .visit_method_definition(m, owner, owner_args)
                 .map(Into::into),
             ast::ImplementationItem::StaticMethod(m) => self
-                .visit_static_definition(m, owner, owner_args)
+                .visit_static_definition(m, owner.map(|o| o.symbol), owner_args)
                 .map(Into::into),
         }
     }
@@ -70,10 +72,9 @@ impl TypeChecker<'_> {
     fn visit_method_definition(
         &mut self,
         node: ast::MethodDefinition,
-        receiver: Option<SymbolRef>,
-        receiver_type: types::TypeId,
+        receiver: Option<ir::Identifier>,
         owner_args: &Substitutions,
-    ) -> Option<ir::FunctionDefinition> {
+    ) -> Option<ir::MethodDefinition> {
         let ((params, visited_body), type_params) = self.with_type_params(&node.type_params, |s| {
             let params = s.visit_function_params(node.params);
             let visited_body = s.visit_function_body(node.return_type, node.body);
@@ -82,8 +83,7 @@ impl TypeChecker<'_> {
         let receiver = receiver?;
 
         let (params, (return_type, body)) = (params?, visited_body?);
-        let mut param_types = params.iter().map(|p| p.ty()).collect::<Vec<_>>();
-        param_types.insert(0, receiver_type);
+        let param_types = params.iter().map(|p| p.ty()).collect::<Vec<_>>();
 
         let ty = self.intern(types::FunctionType {
             type_params,
@@ -92,7 +92,7 @@ impl TypeChecker<'_> {
         });
 
         let name = node.name?;
-        if receiver.has_field(&name.text) {
+        if receiver.symbol.has_field(&name.text) {
             let error = DiagnosticKind::DuplicateFieldName {
                 name: name.text.clone(),
             };
@@ -100,7 +100,7 @@ impl TypeChecker<'_> {
             return None;
         }
         let data_kind = SymbolKind::Method {
-            owner: receiver.clone(),
+            owner: receiver.symbol.clone(),
             owner_args: owner_args.clone().into(),
             receiver: if node.receiver.mutable {
                 MethodReceiverKind::Mutable
@@ -117,14 +117,16 @@ impl TypeChecker<'_> {
             docs: node.docs.map(|d| d.text),
             ..Default::default()
         };
-        let symbol = self.attach_method(symbol_data, receiver, name.loc);
+        let symbol = self.attach_method(symbol_data, receiver.symbol.clone(), name.loc);
         let name = ir::Identifier {
             loc: name.loc,
             symbol,
         };
 
-        Some(ir::FunctionDefinition {
+        Some(ir::MethodDefinition {
             loc: node.loc,
+            receiver,
+            mutating: node.receiver.mutable,
             name,
             params,
             body,
@@ -220,7 +222,7 @@ impl TypeChecker<'_> {
         body.map_or(vec![], |body| body.items)
             .into_iter()
             .for_each(|item| {
-                self.visit_impl_item(None, TypeStore::UNKNOWN, &Substitutions::new(), item);
+                self.visit_impl_item(None, &Substitutions::new(), item);
             });
     }
 }

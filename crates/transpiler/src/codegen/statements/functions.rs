@@ -15,11 +15,8 @@ impl CodeGenerator<'_> {
         match kind {
             SymbolKind::Function { .. } => self.handle_regular_function(node),
             SymbolKind::Method {
-                owner,
-                owner_args,
-                receiver,
-                ..
-            } => self.handle_method_definition(node, &owner, &owner_args, receiver.is_static()),
+                owner, owner_args, ..
+            } => self.handle_static_method(node, &owner, &owner_args),
             _ => panic!(),
         }
     }
@@ -28,38 +25,26 @@ impl CodeGenerator<'_> {
         swc::Stmt::Decl(swc::Decl::Fn(swc::FnDecl {
             ident: ident_from_str(&node.name.as_name()),
             declare: false,
-            function: Box::new(self.handle_function(node)),
+            function: Box::new(self.handle_function(&node.params, &node.body)),
         }))
     }
 
-    fn handle_method_definition(
+    fn handle_static_method(
         &mut self,
         node: &ir::FunctionDefinition,
         ty: &SymbolRef,
         ty_args: &HashMap<types::TypeParam, types::TypeId>,
-        is_static: bool,
     ) -> swc::Stmt {
-        let ty = ident_from_str(&ty.as_name());
-        let constructor: swc::Expr = match ty_args.len() {
-            0 => ty.into(),
-            _ => member(
-                ty.into(),
-                &args_to_string(&ty_args.iter().map(|(_, ty)| *ty).collect::<Vec<_>>()),
-            )
-            .into(),
-        };
+        let constructor = generate_constructor_name(ty, ty_args);
 
         let name = &node.name.as_name();
 
-        let left = match is_static {
-            true => member(constructor, name),
-            false => member(member(constructor, "prototype").into(), name),
-        };
-        let left = swc::AssignTarget::Simple(swc::SimpleAssignTarget::Member(left));
+        let left =
+            swc::AssignTarget::Simple(swc::SimpleAssignTarget::Member(member(constructor, name)));
 
         let right = Box::new(swc::Expr::Fn(swc::FnExpr {
             ident: None,
-            function: Box::new(self.handle_function(node)),
+            function: Box::new(self.handle_function(&node.params, &node.body)),
         }));
 
         swc::Stmt::Expr(swc::ExprStmt {
@@ -72,9 +57,8 @@ impl CodeGenerator<'_> {
         })
     }
 
-    fn handle_function(&mut self, node: &ir::FunctionDefinition) -> swc::Function {
-        let params = node
-            .params
+    fn handle_function(&mut self, params: &[ir::Identifier], body: &ir::Block) -> swc::Function {
+        let params = params
             .iter()
             .map(|p| swc::Param {
                 span: DUMMY_SP,
@@ -85,8 +69,49 @@ impl CodeGenerator<'_> {
 
         swc::Function {
             params,
-            body: Some(self.block_to_swc_stmt(&node.body)),
+            body: Some(self.block_to_swc_stmt(body)),
             ..Default::default()
         }
+    }
+
+    pub fn handle_method_definition(&mut self, node: &ir::MethodDefinition) -> swc::Stmt {
+        let kind = node.name.symbol.borrow().kind.clone();
+        let SymbolKind::Method {
+            owner, owner_args, ..
+        } = kind
+        else {
+            panic!()
+        };
+        let constructor = generate_constructor_name(&owner, &owner_args);
+        let left = member(
+            member(constructor, "prototype").into(),
+            &node.name.as_name(),
+        )
+        .into();
+        let right = self.handle_function(&node.params, &node.body).into();
+
+        swc::Stmt::Expr(swc::ExprStmt {
+            span: DUMMY_SP,
+            expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
+                left,
+                right,
+                ..Default::default()
+            })),
+        })
+    }
+}
+
+fn generate_constructor_name(
+    ty: &SymbolRef,
+    ty_args: &HashMap<types::TypeParam, types::TypeId>,
+) -> swc::Expr {
+    let ty = ident_from_str(&ty.as_name());
+    match ty_args.len() {
+        0 => ty.into(),
+        _ => member(
+            ty.into(),
+            &args_to_string(&ty_args.iter().map(|(_, ty)| *ty).collect::<Vec<_>>()),
+        )
+        .into(),
     }
 }

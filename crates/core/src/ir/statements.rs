@@ -15,6 +15,7 @@ pub enum Statement {
     Enum(EnumDefinition),
     Expression(Expression),
     Function(FunctionDefinition),
+    Method(MethodDefinition),
     Return(ReturnStatement),
     Struct(StructDefinition),
     Use(UseDeclaration),
@@ -33,6 +34,7 @@ impl Statement {
             Self::Enum(_) => Box::new(std::iter::empty()),
             Self::Expression(e) => e.walk(),
             Self::Function(f) => f.body.walk(),
+            Self::Method(m) => m.body.walk(),
             Self::Return(r) => match &r.expression {
                 Some(e) => e.walk(),
                 None => Box::new(std::iter::empty()),
@@ -104,6 +106,17 @@ impl Into<FunctionExpression> for FunctionDefinition {
             ty: self.ty,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct MethodDefinition {
+    pub loc: Location,
+    pub receiver: Identifier,
+    pub mutating: bool,
+    pub name: Identifier,
+    pub params: Vec<Identifier>,
+    pub body: Block,
+    pub ty: TypeId,
 }
 
 #[derive(Debug, Clone)]

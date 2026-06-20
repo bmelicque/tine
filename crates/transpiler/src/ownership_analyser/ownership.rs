@@ -45,8 +45,8 @@ impl OwnershipMap {
     /// Look up the action for a given identifier use.
     /// Falls back to `Clone` (the safe default) if the location was not
     /// annotated (this should not happen in correct usage).
-    pub fn action_for(&self, loc: Location) -> OwnershipAction {
-        self.0.get(&loc).copied().unwrap_or(OwnershipAction::Clone)
+    pub fn action_for(&self, loc: Location, default: OwnershipAction) -> OwnershipAction {
+        self.0.get(&loc).copied().unwrap_or(default)
     }
 }
 
@@ -184,6 +184,11 @@ fn resolve_mutable(id: &ir::Identifier, ctx: Ctx, sites: &UseSites) -> Ownership
     if matches!(ctx.binding, Binding::None | Binding::Any(_)) {
         return OwnershipAction::Borrow;
     }
+    let site = sites.find(id);
+    if site.is_mutated {
+        // Mutable borrow
+        return OwnershipAction::Borrow;
+    }
 
     if sites.has_escaped(id) {
         return OwnershipAction::Clone;
@@ -191,7 +196,7 @@ fn resolve_mutable(id: &ir::Identifier, ctx: Ctx, sites: &UseSites) -> Ownership
 
     let uses_after = sites.uses_after(id.symbol.clone(), id.loc);
     match uses_after.first() {
-        Some(next) if uses_after.len() == 1 && next.is_assignee => OwnershipAction::Move,
+        Some(next) if uses_after.len() == 1 && next.is_mutated => OwnershipAction::Move,
         Some(_) => OwnershipAction::Clone,
         None => OwnershipAction::Move,
     }
@@ -289,6 +294,7 @@ fn visit_stmt(
             }
         }
         ir::Statement::Function(f) => visit_block(&f.body, ctx, sites, aliases, semantics, out),
+        ir::Statement::Method(m) => visit_block(&m.body, ctx, sites, aliases, semantics, out),
         ir::Statement::Enum(_)
         | ir::Statement::Struct(_)
         | ir::Statement::Use(_)
@@ -439,6 +445,11 @@ fn visit_expr(
                     semantics,
                     out,
                 );
+            }
+
+            let value_aliases_callee = signature.map_or(true, |s| s.is_receiver_aliased());
+            if c.callee.is_mutable() == Some(true) && value_aliases_callee {
+                out.0.insert(c.loc, OwnershipAction::Clone);
             }
         }
 
