@@ -4,7 +4,7 @@ use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 use tine_core::{types::TypeId, SymbolKind, SymbolRef};
 
-use crate::codegen::{statements::utils::args_to_string, CodeGenerator};
+use crate::codegen::{utils::args_to_string, CodeGenerator};
 
 impl CodeGenerator<'_> {
     pub fn generate_concrete_classes(&mut self, methods: &[SymbolRef]) -> Vec<swc::ClassMember> {

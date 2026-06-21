@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use crate::codegen::{
-    statements::utils::{args_to_string, declare_const, member},
-    utils::ident_from_str,
+    statements::utils::declare_const,
+    utils::{generate_constructor_name, ident_from_str, member},
     CodeGenerator,
 };
 use swc_common::DUMMY_SP;
@@ -108,20 +108,5 @@ impl CodeGenerator<'_> {
                 ..Default::default()
             })),
         })
-    }
-}
-
-fn generate_constructor_name(
-    ty: &SymbolRef,
-    ty_args: &HashMap<types::TypeParam, types::TypeId>,
-) -> swc::Expr {
-    let ty = ident_from_str(&ty.as_name());
-    match ty_args.len() {
-        0 => ty.into(),
-        _ => member(
-            ty.into(),
-            &args_to_string(&ty_args.iter().map(|(_, ty)| *ty).collect::<Vec<_>>()),
-        )
-        .into(),
     }
 }

@@ -3,11 +3,8 @@ use swc_ecma_ast as swc;
 use tine_core::{ir, SymbolKind, SymbolRef, TypeSymbolBody};
 
 use crate::codegen::{
-    statements::{
-        types::utils::{member_assignment, this_field},
-        utils::member,
-    },
-    utils::ident_from_str,
+    statements::types::utils::{member_assignment, this_field},
+    utils::{ident_from_str, member},
     CodeGenerator,
 };
 

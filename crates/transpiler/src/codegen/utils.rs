@@ -1,8 +1,12 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-use tine_core::{ir, types::TypeId, TypeStore};
+use tine_core::{
+    ir,
+    types::{self, TypeId},
+    SymbolRef, TypeStore,
+};
 
 use super::CodeGenerator;
 
@@ -198,5 +202,39 @@ impl CodeGenerator<'_> {
             args: Some(args),
             type_args: None,
         }
+    }
+}
+
+/// Convert a `Vec<TypeId>` into a unique `String` that will not collide with
+/// user-defined names
+pub fn args_to_string(args: &[TypeId]) -> String {
+    let str = args
+        .into_iter()
+        .map(|a| a.to_string())
+        .collect::<Vec<_>>()
+        .join("_");
+    format!("${}", str)
+}
+
+pub fn member(object: swc::Expr, prop: &str) -> swc::MemberExpr {
+    swc::MemberExpr {
+        span: DUMMY_SP,
+        obj: Box::new(object),
+        prop: swc::MemberProp::Ident(ident_from_str(prop).into()),
+    }
+}
+
+pub fn generate_constructor_name(
+    ty: &SymbolRef,
+    ty_args: &HashMap<types::TypeParam, types::TypeId>,
+) -> swc::Expr {
+    let ty = ident_from_str(&ty.as_name());
+    match ty_args.len() {
+        0 => ty.into(),
+        _ => member(
+            ty.into(),
+            &args_to_string(&ty_args.iter().map(|(_, ty)| *ty).collect::<Vec<_>>()),
+        )
+        .into(),
     }
 }

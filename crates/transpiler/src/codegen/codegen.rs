@@ -10,7 +10,7 @@ pub struct CodeGenerator<'sess> {
     _source_map: Lrc<SourceMap>,
 
     ownership: OwnershipMap,
-    session: &'sess Session,
+    pub(super) session: &'sess Session,
     pub(crate) module: ModuleId,
     /// Should the `break` statements be converted to `return` statements.
     /// This is used when generating `for` and `for ... in` expressions, which are translated to IIFEs.

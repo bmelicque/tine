@@ -7,12 +7,12 @@ mod utils;
 
 use super::{utils::ident_from_str, CodeGenerator};
 use crate::{
-    codegen::utils::{create_block_stmt, create_str},
+    codegen::utils::{create_block_stmt, create_str, generate_constructor_name},
     ownership_analyser::OwnershipAction,
 };
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
-use tine_core::{ir, SymbolRef, TypeSymbolBody};
+use tine_core::{ir, types, Substitutions, SymbolKind, SymbolRef, TypeStore, TypeSymbolBody};
 
 pub struct ExpressionResult {
     /// All the the statements needed to be ran before actually evaluating the expression
@@ -263,9 +263,11 @@ impl CodeGenerator<'_> {
         };
         let callee = swc::Expr::Member(swc::MemberExpr {
             span: DUMMY_SP,
-            obj: Box::new(swc::Expr::Ident(ident_from_str(
-                &node.constructor.as_name(),
-            ))),
+            obj: Box::new(get_constructor_name(
+                &self.session.types(),
+                node.ty,
+                &node.constructor,
+            )),
             prop: swc::MemberProp::Ident(ident_from_str(&variant.as_name()).into()),
         });
         let expr = swc::Expr::Call(swc::CallExpr {
@@ -283,7 +285,11 @@ impl CodeGenerator<'_> {
             TypeSymbolBody::Tuple(_) => self.handle_tuple_like_body(node),
         };
         let expr = swc::Expr::New(swc::NewExpr {
-            callee: Box::new(ident_from_str(&node.constructor.as_name()).into()),
+            callee: Box::new(get_constructor_name(
+                &self.session.types(),
+                node.ty,
+                &node.constructor,
+            )),
             args: Some(args.into_iter().map(Into::into).collect()),
             ..Default::default()
         });
@@ -353,5 +359,39 @@ impl CodeGenerator<'_> {
             prelim_stmts: obj_result.prelim_stmts,
             expr: expr.into(),
         }
+    }
+}
+
+fn get_constructor_name(
+    store: &TypeStore,
+    expr_ty: types::TypeId,
+    constructor: &SymbolRef,
+) -> swc::Expr {
+    // déterminer les arguments de type de l'appelant
+    let type_args = match store.get(expr_ty) {
+        types::Type::Ref(r) => &r.args,
+        _ => &vec![],
+    };
+
+    let params = match store.get(constructor.as_type()).as_params() {
+        Some(p) => p.to_vec(),
+        None => vec![],
+    };
+    let ty_args = Substitutions::with_initial(&params, type_args).into();
+
+    let concrete_exists =
+        constructor
+            .as_methods()
+            .unwrap_or(vec![])
+            .iter()
+            .any(|m| match &m.borrow().kind {
+                SymbolKind::Method { owner_args, .. } if owner_args == &ty_args => true,
+                _ => false,
+            });
+
+    if concrete_exists {
+        generate_constructor_name(constructor, &ty_args)
+    } else {
+        swc::Expr::Ident(ident_from_str(&constructor.as_name()))
     }
 }
