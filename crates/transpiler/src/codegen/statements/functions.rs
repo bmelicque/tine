@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::codegen::{
-    statements::utils::{args_to_string, member},
+    statements::utils::{args_to_string, declare_const, member},
     utils::ident_from_str,
     CodeGenerator,
 };
@@ -88,13 +88,23 @@ impl CodeGenerator<'_> {
             &node.name.as_name(),
         )
         .into();
-        let right = self.handle_function(&node.params, &node.body).into();
+
+        let mut right = self.with_this(node.receiver.symbol.clone(), |self_| {
+            self_.handle_function(&node.params, &node.body)
+        });
+        right.body.as_mut().unwrap().stmts.insert(
+            0,
+            swc::Stmt::Decl(declare_const(
+                &node.receiver.as_name(),
+                swc::ThisExpr { span: DUMMY_SP }.into(),
+            )),
+        );
 
         swc::Stmt::Expr(swc::ExprStmt {
             span: DUMMY_SP,
             expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
                 left,
-                right,
+                right: right.into(),
                 ..Default::default()
             })),
         })

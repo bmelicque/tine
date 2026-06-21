@@ -4,7 +4,7 @@ use crate::{
 };
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
-use tine_core::{ir, types, ModuleId, ModulePath, Session};
+use tine_core::{ir, types, ModuleId, ModulePath, Session, SymbolRef};
 
 pub struct CodeGenerator<'sess> {
     _source_map: Lrc<SourceMap>,
@@ -18,6 +18,8 @@ pub struct CodeGenerator<'sess> {
 
     // Used when replacing `break X` by `TARGET = X; break`
     pub(crate) break_target: Option<swc::Ident>,
+
+    pub(crate) this_stack: Vec<SymbolRef>,
 }
 
 impl CodeGenerator<'_> {
@@ -29,6 +31,7 @@ impl CodeGenerator<'_> {
             _source_map: Lrc::new(SourceMap::new(Default::default())),
             next_temp_id: 0,
             break_target: None,
+            this_stack: vec![],
         }
     }
 
@@ -95,6 +98,22 @@ impl CodeGenerator<'_> {
 
     pub(crate) fn resolve(&self, ty: types::TypeId) -> types::Type {
         self.session.get_type(ty)
+    }
+
+    pub(crate) fn with_this<F, T>(&mut self, this: SymbolRef, callback: F) -> T
+    where
+        F: FnOnce(&mut Self) -> T,
+    {
+        self.this_stack.push(this);
+        let ret = callback(self);
+        self.this_stack.pop();
+        ret
+    }
+    pub(crate) fn is_current_this(&self, expr: &ir::Expression) -> bool {
+        match expr {
+            ir::Expression::Identifier(id) => Some(&id.symbol) == self.this_stack.last(),
+            _ => false,
+        }
     }
 
     pub(crate) fn identifier_ownership(&self, id: &ir::Identifier) -> OwnershipAction {
