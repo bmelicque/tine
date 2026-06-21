@@ -68,7 +68,12 @@ impl TypeChecker<'_> {
         let element_type = elements.first().map_or(TypeStore::DYNAMIC, |e| e.ty());
 
         for element in &elements {
-            self.check_assigned_type(element_type, element.ty(), node.loc);
+            self.check_assigned_type(
+                element_type,
+                element.ty(),
+                element.is_mutable() == Some(false),
+                node.loc,
+            );
         }
 
         let ty = self.intern(ArrayType {
@@ -145,6 +150,7 @@ impl TypeChecker<'_> {
                 };
                 let ty = self.intern(types::TupleType {
                     elements: elements.iter().map(|e| e.ty()).collect(),
+                    ..Default::default()
                 });
 
                 Some(ir::Expression::Tuple(ir::TupleExpression {
@@ -370,7 +376,8 @@ mod tests {
         assert_eq!(
             result,
             Type::Tuple(TupleType {
-                elements: vec![TypeStore::INTEGER, TypeStore::STRING, TypeStore::BOOLEAN]
+                elements: vec![TypeStore::INTEGER, TypeStore::STRING, TypeStore::BOOLEAN],
+                ..Default::default()
             })
         );
         assert!(checker.diagnostics.is_empty());

@@ -27,6 +27,9 @@ impl CodeGenerator<'_> {
             ir::Statement::Function(f) => {
                 vec![self.handle_function_definition(f)]
             }
+            ir::Statement::Method(m) => {
+                vec![self.handle_method_definition(m)]
+            }
             ir::Statement::Return(node) => self.return_to_swc(node),
             ir::Statement::Struct(s) => vec![self.struct_def_to_swc(s).into()],
             ir::Statement::Use(_) => unreachable!(),

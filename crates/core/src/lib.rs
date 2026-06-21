@@ -17,6 +17,7 @@ pub use common::{use_decl_to_paths, ModuleImports};
 pub use diagnostics::*;
 pub use locations::{Location, Span};
 pub use type_checker::{
-    MemberToken, SymbolData, SymbolKind, SymbolRef, SymbolToken, Token, TypeStore, TypeSymbolBody,
+    display_raw_type, display_type, substitutions::Substitutions, MemberToken, MethodReceiverKind,
+    SymbolData, SymbolKind, SymbolRef, SymbolToken, Token, TypeStore, TypeSymbolBody,
 };
 pub use utils::pretty_print_error;

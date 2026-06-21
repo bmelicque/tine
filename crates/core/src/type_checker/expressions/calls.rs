@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use anyhow::{anyhow, bail, Result};
 
 use crate::{
@@ -8,6 +6,7 @@ use crate::{
     ir,
     type_checker::{
         analysis_context::{type_store::TypeStore, SymbolData},
+        substitutions::Substitutions,
         TypeChecker,
     },
     types::{self, Type, TypeId},
@@ -28,16 +27,17 @@ impl TypeChecker<'_> {
             }
         }
 
-        let Ok((callee, callee_type, type_params)) = self.resolve_callee(node.callee) else {
+        let Ok((callee, callee_type)) = self.resolve_callee(node.callee) else {
             return None;
         };
 
-        let (_, mut substitutions) = self.visit_type_args(node.type_args, &type_params, node.loc);
+        let (_, mut substitutions) =
+            self.visit_type_args(node.type_args, &callee_type.type_params, node.loc);
 
         let args =
             self.check_arguments(node.args, &callee_type.params, &mut substitutions, node.loc);
 
-        let ty = self.resolve_return_type(&type_params, callee_type.return_type, &substitutions);
+        let ty = substitutions.apply(&mut self.session.types(), callee_type.return_type);
 
         Some(ir::CallExpression {
             loc: node.loc,
@@ -50,37 +50,32 @@ impl TypeChecker<'_> {
     /// Tries to resolve the type of the function being called.
     /// If something goes wrong (eg the callee is not a function), returns an error.
     /// Errors are reported here if needed (eg "not callable" if wrong type, nothing if `unknown`, etc.)
-    /// If the callee is a function, returns its type and any expected type params.
     fn resolve_callee(
         &mut self,
         callee: Option<Box<ast::Expression>>,
-    ) -> Result<(ir::Expression, types::FunctionType, Vec<TypeId>)> {
+    ) -> Result<(ir::Expression, types::FunctionType)> {
         let Some(callee) = callee.and_then(|c| self.visit_expression(*c)) else {
             bail!("");
         };
 
         match self.resolve(callee.ty()) {
-            types::Type::Function(t) => return Ok((callee, t.clone(), vec![])),
-            types::Type::Generic(g) => match self.resolve(g.definition) {
-                types::Type::Function(f) => return Ok((callee, f.clone(), g.params)),
-                types::Type::Unknown => return Err(anyhow!("")),
-                _ => {}
-            },
-            types::Type::Unknown => return Err(anyhow!("")),
-            _ => {}
-        };
-        let error = DiagnosticKind::NotCallable {
-            type_name: self.session.display_type(callee.ty()),
-        };
-        self.error(error, callee.loc());
-        Err(anyhow!(""))
+            types::Type::Function(t) => Ok((callee, t)),
+            types::Type::Unknown => Err(anyhow!("")),
+            _ => {
+                let error = DiagnosticKind::NotCallable {
+                    type_name: self.session.display_type(callee.ty()),
+                };
+                self.error(error, callee.loc());
+                Err(anyhow!(""))
+            }
+        }
     }
 
     fn check_arguments(
         &mut self,
         args: Vec<ast::CallArgument>,
         params: &[TypeId],
-        substitutions: &mut HashMap<types::TypeParam, TypeId>,
+        substitutions: &mut Substitutions,
         node_loc: Location,
     ) -> Vec<ir::Expression> {
         if args.len() != params.len() {
@@ -102,7 +97,7 @@ impl TypeChecker<'_> {
         &mut self,
         node: ast::CallArgument,
         expected: TypeId,
-        substitutions: &mut HashMap<types::TypeParam, TypeId>,
+        substitutions: &mut Substitutions,
     ) -> Option<ir::Expression> {
         match node {
             ast::CallArgument::Expression(expr) => self
@@ -118,7 +113,7 @@ impl TypeChecker<'_> {
         &mut self,
         node: ast::Callback,
         expected_id: TypeId,
-        substitutions: &mut HashMap<types::TypeParam, TypeId>,
+        substitutions: &mut Substitutions,
     ) -> Option<ir::FunctionExpression> {
         let expected = self.resolve(expected_id);
         let Type::Function(expected) = expected else {
@@ -148,7 +143,12 @@ impl TypeChecker<'_> {
                 body => {
                     let body = s.visit_expression(body);
                     if let Some(body) = &body {
-                        s.unify(return_type, body.ty(), body.loc(), substitutions);
+                        substitutions.unify(
+                            &mut self.session.types(),
+                            return_type,
+                            body.ty(),
+                            body.loc(),
+                        );
                     }
                     body.map(Into::into)
                 }
@@ -171,17 +171,22 @@ impl TypeChecker<'_> {
         &mut self,
         body: ast::BlockExpression,
         expected_type: TypeId,
-        substitutions: &mut HashMap<types::TypeParam, TypeId>,
+        substitutions: &mut Substitutions,
     ) -> Option<ir::Block> {
         let body_type = self.visit_block_expression(body);
-        self.unify(expected_type, body_type.ty, body_type.loc, substitutions);
+        substitutions.unify(
+            &mut self.session.types(),
+            expected_type,
+            body_type.ty,
+            body_type.loc,
+        );
         let returns = body_type.find_returns();
         for ret in returns {
             let ty = ret.expression.map_or(TypeStore::UNIT, |r| r.ty());
-            self.check_assigned_type(expected_type, ty, ret.loc);
+            self.check_assigned_type(expected_type, ty, true, ret.loc);
         }
 
-        self.check_assigned_type(expected_type, body_type.ty, body_type.loc);
+        self.check_assigned_type(expected_type, body_type.ty, true, body_type.loc);
 
         Some(body_type)
     }
@@ -262,27 +267,6 @@ impl TypeChecker<'_> {
         }
     }
 
-    fn resolve_return_type(
-        &mut self,
-        type_params: &[TypeId],
-        return_type: TypeId,
-        substitutions: &HashMap<types::TypeParam, TypeId>,
-    ) -> TypeId {
-        let resolved_type_args = type_params
-            .iter()
-            .map(|p| match self.resolve(*p) {
-                // TODO: Report error if cannot infer type completely
-                types::Type::Param(p) => substitutions.get(&p).unwrap_or(&TypeStore::UNKNOWN),
-                _ => p,
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-
-        self.session
-            .types()
-            .substitute(return_type, &resolved_type_args)
-    }
-
     fn visit_derived_call(&mut self, node: ast::CallExpression) -> Option<ir::CallExpression> {
         let callee = node.callee.and_then(|e| self.visit_expression(*e))?;
 
@@ -328,6 +312,7 @@ impl TypeChecker<'_> {
             loc: node.loc,
             ty: self.intern(types::TupleType {
                 elements: deps.iter().map(|e| e.ty()).collect(),
+                ..Default::default()
             }),
             elements: deps,
         });
@@ -338,8 +323,8 @@ impl TypeChecker<'_> {
 
         let arg = ir::FunctionExpression {
             ty: self.intern(types::FunctionType {
-                params: vec![],
                 return_type: arg.ty(),
+                ..Default::default()
             }),
             loc: arg.loc(),
             name: None,

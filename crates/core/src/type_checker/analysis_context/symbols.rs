@@ -3,12 +3,28 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use crate::{types::TypeId, Location, TypeStore};
+use crate::{type_checker::substitutions::SubstitutionTable, types::TypeId, Location, TypeStore};
 
 #[derive(Clone, Debug)]
 pub enum TypeSymbolBody {
     Struct(Vec<(String, SymbolRef)>),
     Tuple(Vec<SymbolRef>),
+}
+
+#[derive(Clone, Debug)]
+pub enum MethodReceiverKind {
+    Static,
+    Immutable,
+    Mutable,
+}
+impl MethodReceiverKind {
+    pub fn is_static(&self) -> bool {
+        matches!(self, MethodReceiverKind::Static)
+    }
+
+    pub fn is_mutable(&self) -> bool {
+        matches!(self, MethodReceiverKind::Mutable)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -53,9 +69,8 @@ pub enum SymbolKind {
         ///
         /// eg in `Type<Arg1, Arg2>.staticMethod()`
         /// (same for instance methods)
-        owner_args: Vec<TypeId>,
-        /// If `has_receiver`, then it's an instance method. Else, it's a static method.
-        has_receiver: bool,
+        owner_args: SubstitutionTable,
+        receiver: MethodReceiverKind,
         // This is expected to have the same length as the function type's params.
         param_names: Vec<String>,
     },
@@ -192,6 +207,18 @@ impl SymbolHandle {
         SymbolRef(self.0.clone())
     }
 
+    pub fn attach_method(&self, method: SymbolRef) {
+        match &mut self.borrow().kind {
+            SymbolKind::Enum { methods, .. } => {
+                methods.push(method);
+            }
+            SymbolKind::Struct { methods, .. } => {
+                methods.push(method);
+            }
+            _ => panic!(),
+        }
+    }
+
     pub fn has_ref(&self, variable: &SymbolRef) -> bool {
         Arc::ptr_eq(&self.0, &variable.0)
     }
@@ -248,6 +275,24 @@ impl SymbolRef {
             _ => None,
         }
     }
+    pub fn has_method(&self, method: &SymbolRef) -> bool {
+        let kind = &self.borrow().kind;
+        let methods = match kind {
+            SymbolKind::Enum { methods, .. } => methods,
+            SymbolKind::Struct { methods, .. } => methods,
+            _ => panic!(),
+        };
+        methods.iter().any(|m| methods_overlap(m, method))
+    }
+    pub fn has_field(&self, name: &str) -> bool {
+        match &self.borrow().kind {
+            SymbolKind::Struct {
+                body: TypeSymbolBody::Struct(body),
+                ..
+            } => body.iter().any(|(n, _)| n == name),
+            _ => false,
+        }
+    }
 
     pub fn is(&self, test: &SymbolRef) -> bool {
         Arc::ptr_eq(&self.0, &test.0)
@@ -271,6 +316,22 @@ impl SymbolRef {
             _ => false,
         }
     }
+
+    pub fn is_immutable(&self) -> bool {
+        match &self.borrow().kind {
+            SymbolKind::Value { mutable } => !*mutable,
+
+            SymbolKind::Member { owner } => owner.is_immutable(),
+
+            SymbolKind::Constructor { .. }
+            | SymbolKind::Enum { .. }
+            | SymbolKind::PrimitiveType { .. }
+            | SymbolKind::Struct { .. }
+            | SymbolKind::TypeAlias => true,
+
+            SymbolKind::Function { .. } | SymbolKind::Method { .. } => true,
+        }
+    }
 }
 impl PartialEq for SymbolRef {
     fn eq(&self, other: &Self) -> bool {
@@ -281,5 +342,19 @@ impl Eq for SymbolRef {}
 impl Hash for SymbolRef {
     fn hash<H: Hasher>(&self, state: &mut H) {
         Arc::as_ptr(&self.0).hash(state);
+    }
+}
+
+fn methods_overlap(a: &SymbolRef, b: &SymbolRef) -> bool {
+    if a.as_name() != b.as_name() {
+        return false;
+    }
+    let a = a.borrow().kind.clone();
+    let b = b.borrow().kind.clone();
+    match (&a, &b) {
+        (SymbolKind::Method { owner_args: a, .. }, SymbolKind::Method { owner_args: b, .. }) => {
+            a == b
+        }
+        _ => false,
     }
 }

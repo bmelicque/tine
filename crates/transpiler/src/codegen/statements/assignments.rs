@@ -37,6 +37,8 @@ impl CodeGenerator<'_> {
         assign_target: &ir::Expression,
         value: &ir::Expression,
     ) -> ExpressionResult {
+        let is_current_this = self.is_current_this(assign_target);
+
         let value_result = self.handle_assigned_value(value);
 
         let assign_target = if value_result.prelim_stmts.len() > 0 {
@@ -47,17 +49,30 @@ impl CodeGenerator<'_> {
         };
 
         let prelim_stmts = vec![assign_target.prelim_stmts, value_result.prelim_stmts].concat();
-        let assign_target = match assign_target.expr {
-            swc::Expr::Ident(i) => swc::SimpleAssignTarget::Ident(i.into()),
-            swc::Expr::Member(m) => swc::SimpleAssignTarget::Member(m),
-            _ => unreachable!(),
-        };
 
-        let expr = swc::Expr::Assign(swc::AssignExpr {
-            left: assign_target.into(),
-            right: Box::new(value_result.expr),
-            ..Default::default()
-        });
+        let expr = if is_current_this {
+            // Use `Object.assign(this, ...)` to mutate the receiver on raw `this = ...`
+            swc::Expr::Call(swc::CallExpr {
+                callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+                    obj: Box::new(ident_from_str("Object").into()),
+                    prop: swc::MemberProp::Ident(ident_from_str("assign").into()),
+                    ..Default::default()
+                }))),
+                args: vec![assign_target.expr.into(), value_result.expr.into()],
+                ..Default::default()
+            })
+        } else {
+            let assign_target = match assign_target.expr {
+                swc::Expr::Ident(i) => swc::SimpleAssignTarget::Ident(i.into()),
+                swc::Expr::Member(m) => swc::SimpleAssignTarget::Member(m),
+                _ => unreachable!(),
+            };
+            swc::Expr::Assign(swc::AssignExpr {
+                left: assign_target.into(),
+                right: Box::new(value_result.expr),
+                ..Default::default()
+            })
+        };
 
         ExpressionResult { prelim_stmts, expr }
     }

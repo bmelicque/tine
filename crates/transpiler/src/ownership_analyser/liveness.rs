@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use tine_core::{ir, Location, SymbolRef};
 
 /// A single use of a variable, with relevant context information.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct UseSite {
     pub loc: Location,
     /// `true` when this use-site is a capture inside a loop body (For/ForIn).
@@ -32,7 +32,7 @@ pub struct UseSite {
     pub is_external: bool,
     /// `true` if this is the lhs of an assignment. This is relevant only for
     /// mutable variables.
-    pub is_assignee: bool,
+    pub is_mutated: bool,
 }
 
 impl UseSite {
@@ -40,10 +40,7 @@ impl UseSite {
     fn declaration(loc: Location) -> Self {
         Self {
             loc,
-            in_loop: false,
-            in_closure: false,
-            is_assignee: false,
-            is_external: false,
+            ..Default::default()
         }
     }
 }
@@ -101,6 +98,15 @@ impl UseSites {
             .map(|sites| sites.iter().any(|s| s.in_closure))
             .unwrap_or(false)
     }
+
+    pub fn find(&self, id: &ir::Identifier) -> &UseSite {
+        self.0
+            .get(&id.symbol)
+            .unwrap()
+            .iter()
+            .find(|s| s.loc == id.loc)
+            .unwrap()
+    }
 }
 
 /// The context threaded through the traversal.
@@ -111,6 +117,7 @@ struct Ctx {
     closure_ctx: Option<Location>,
     in_param: bool,
     assignment_lhs: bool,
+    in_callee: bool,
 }
 
 impl Ctx {
@@ -129,6 +136,12 @@ impl Ctx {
     fn enter_assignment_lhs(self) -> Self {
         Self {
             assignment_lhs: true,
+            ..self
+        }
+    }
+    fn enter_callee(self) -> Self {
+        Self {
+            in_callee: true,
             ..self
         }
     }
@@ -183,7 +196,42 @@ fn visit_stmt(stmt: &ir::Statement, ctx: Ctx, out: &mut UseSites) {
                 visit_expr(e, ctx, out);
             }
         }
-        ir::Statement::Function(f) => visit_block(&f.body, ctx, out),
+        ir::Statement::Function(f) => {
+            for param in &f.params {
+                out.0
+                    .entry(param.symbol.clone())
+                    .or_default()
+                    .push(UseSite {
+                        loc: param.loc,
+                        in_loop: false,
+                        in_closure: false,
+                        is_external: true,
+                        is_mutated: false,
+                    })
+            }
+            visit_block(&f.body, ctx.enter_closure(f.body.loc), out);
+        }
+        ir::Statement::Method(m) => {
+            out.0.insert(
+                m.receiver.symbol.clone(),
+                vec![UseSite {
+                    loc: m.receiver.loc,
+                    is_external: true,
+                    ..Default::default()
+                }],
+            );
+            for param in &m.params {
+                out.0.insert(
+                    param.symbol.clone(),
+                    vec![UseSite {
+                        loc: param.loc,
+                        is_external: true,
+                        ..Default::default()
+                    }],
+                );
+            }
+            visit_block(&m.body, ctx.enter_closure(m.body.loc), out);
+        }
 
         // Type-level declarations carry no runtime use-sites.
         ir::Statement::Enum(_)
@@ -204,7 +252,7 @@ fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
                 in_loop,
                 in_closure,
                 is_external: ctx.in_param,
-                is_assignee: ctx.assignment_lhs,
+                is_mutated: ctx.assignment_lhs || ctx.in_callee,
             });
         }
 
@@ -244,7 +292,7 @@ fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
         }
 
         ir::Expression::Call(c) => {
-            visit_expr(&c.callee, ctx, out);
+            visit_expr(&c.callee, ctx.enter_callee(), out);
             for arg in &c.args {
                 visit_expr(arg, ctx, out);
             }
@@ -300,10 +348,8 @@ fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
                     .or_default()
                     .push(UseSite {
                         loc: param.loc,
-                        in_loop: false,
-                        in_closure: false,
                         is_external: true,
-                        is_assignee: false,
+                        ..Default::default()
                     })
             }
             visit_block(body, ctx.enter_closure(*loc), out);

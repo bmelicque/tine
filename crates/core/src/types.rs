@@ -1,22 +1,24 @@
 use std::fmt;
 
+use crate::SymbolRef;
+
 pub type TypeId = u32;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     Array(ArrayType),
     Boolean,
-    Duck(DuckType),
     Dynamic, // Represents a type that will have to be inferred later
     Enum(EnumType),
     Float,
     Function(FunctionType),
-    Generic(GenericType),
+    Generic(GenericDef),
     Integer,
     Param(TypeParam), // Represents a generic type parameter
     Listener(ListenerType),
     Map(MapType),
     Option(OptionType),
+    Ref(TypeRef),
     Result(ResultType),
     SelfType, // Represents the current type in a method context
     Signal(SignalType),
@@ -43,21 +45,27 @@ impl Type {
     pub fn is_unknown(&self) -> bool {
         *self == Type::Unknown
     }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct GenericType {
-    /// When creating the type, should create each of the Type::Param and store the id
-    pub params: Vec<TypeId>,
-    /// The Type definition of this generic type.
-    ///
-    /// It contains the `TypeParam`s that are also referenced in order in the `params` field.
-    /// Those will be substituted at some point with the concrete types.
-    pub definition: TypeId,
-}
-impl Into<Type> for GenericType {
-    fn into(self) -> Type {
-        Type::Generic(self)
+    pub fn is_generic(&self) -> bool {
+        match self {
+            Self::Enum(e) => e.params.len() > 0,
+            Self::Function(f) => f.params.len() > 0,
+            Self::Generic(_) => true,
+            Self::Struct(s) => s.params.len() > 0,
+            Self::Trait(t) => t.params.len() > 0,
+            _ => false,
+        }
+    }
+
+    pub fn as_params(&self) -> Option<&[TypeParam]> {
+        match self {
+            Self::Enum(e) => Some(&e.params),
+            Self::Function(f) => Some(&f.type_params),
+            Self::Generic(g) => Some(&g.params),
+            Self::Struct(s) => Some(&s.params),
+            Self::Trait(t) => Some(&t.params),
+            _ => None,
+        }
     }
 }
 
@@ -73,23 +81,13 @@ impl Into<Type> for ArrayType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DuckType {
-    pub like: TypeId,
-}
-
-impl Into<Type> for DuckType {
-    fn into(self) -> Type {
-        Type::Duck(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumType {
     /// This `id` is used to differentiate between enums with identical definitions,
     /// like `A :: True|False` and `B :: True|False`.
     ///
     /// In case this is a canonicalized generic, this id refers to the generic definition.
     pub id: TypeId,
+    pub params: Vec<TypeParam>,
     pub variants: Vec<Variant>,
 }
 
@@ -105,8 +103,9 @@ pub struct Variant {
     pub def: TypeId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionType {
+    pub type_params: Vec<TypeParam>,
     pub params: Vec<TypeId>,
     pub return_type: TypeId,
 }
@@ -120,13 +119,23 @@ impl Into<Type> for FunctionType {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeParam {
     pub name: String,
-    /// Index of the param in the param list of the associated generic type
-    pub idx: usize,
+    pub id: TypeId,
 }
-
 impl Into<Type> for TypeParam {
     fn into(self) -> Type {
         Type::Param(self)
+    }
+}
+
+/// Used for generic type aliases
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct GenericDef {
+    pub def: TypeId,
+    pub params: Vec<TypeParam>,
+}
+impl Into<Type> for GenericDef {
+    fn into(self) -> Type {
+        Type::Generic(self)
     }
 }
 
@@ -150,6 +159,17 @@ pub struct OptionType {
 impl Into<Type> for OptionType {
     fn into(self) -> Type {
         Type::Option(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TypeRef {
+    pub inner: TypeId,
+    pub args: Vec<TypeId>,
+}
+impl Into<Type> for TypeRef {
+    fn into(self) -> Type {
+        Type::Ref(self)
     }
 }
 
@@ -187,13 +207,14 @@ impl Into<Type> for ResultType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct StructType {
     /// This `id` is used to differentiate between identically structured types,
     /// like `A :: (value number)` and `B :: (value number)`.
     ///
     /// In case this is a canonicalized generic, this id refers to the generic definition.
     pub id: TypeId,
+    pub params: Vec<TypeParam>,
     pub fields: Vec<StructField>,
 }
 
@@ -208,9 +229,18 @@ pub struct StructField {
     pub name: String,
     pub def: TypeId,
 }
+impl From<&SymbolRef> for StructField {
+    fn from(s: &SymbolRef) -> Self {
+        StructField {
+            name: s.as_name(),
+            def: s.as_type(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TraitType {
+    pub params: Vec<TypeParam>,
     pub methods: Vec<TraitMethod>,
 }
 
@@ -226,8 +256,9 @@ pub struct TraitMethod {
     pub def: TypeId,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct TupleType {
+    pub params: Vec<TypeParam>,
     pub elements: Vec<TypeId>,
 }
 
@@ -242,7 +273,6 @@ impl fmt::Display for Type {
         match self {
             Type::Array(ty) => write!(f, "[]{}", ty.element),
             Type::Boolean => write!(f, "bool"),
-            Type::Duck(ty) => write!(f, "~{}", ty.like),
             Type::Dynamic => write!(f, "any"),
             Type::Enum(ty) => {
                 let variants_str = ty
@@ -269,6 +299,7 @@ impl fmt::Display for Type {
             Type::Listener(ty) => write!(f, "@{}", ty.inner),
             Type::Map(ty) => write!(f, "{}#{}", ty.key, ty.value),
             Type::Option(ty) => write!(f, "?{}", ty.some),
+            Type::Ref(_) => todo!(),
             Type::Result(ty) => {
                 if let Some(error) = &ty.error {
                     write!(f, "{}!{}", error, ty.ok)

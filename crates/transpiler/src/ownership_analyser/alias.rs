@@ -67,27 +67,59 @@ pub struct AliasSignature {
     /// All the constants captured by the functions that are intricated with
     /// the function's return value.
     captures: Vec<SymbolRef>,
+    /// `true` if the function is a method and its receiver might aliases the
+    /// return value.
+    is_receiver_aliased: bool,
 }
 
 impl AliasSignature {
-    fn infer_from(def: &ir::FunctionExpression, return_group: Vec<SymbolRef>) -> Self {
+    fn infer_from_function(def: &ir::FunctionExpression, return_group: Vec<SymbolRef>) -> Self {
         let def_loc = def.loc;
-        let params = def
-            .params
-            .iter()
-            .map(|p| return_group.contains(&p.symbol))
-            .collect();
-        let captures = return_group
-            .into_iter()
-            .filter(|s| !s.borrow().defined_at.is_within(def_loc))
-            .collect();
+        let params = get_param_aliases(&def.params, &return_group);
+        let captures = get_captures(return_group, def_loc);
 
-        Self { params, captures }
+        Self {
+            params,
+            captures,
+            is_receiver_aliased: false,
+        }
+    }
+
+    fn infer_from_method(def: &ir::MethodDefinition, return_group: Vec<SymbolRef>) -> Self {
+        let def_loc = def.loc;
+        let is_receiver_aliased = return_group
+            .iter()
+            .find(|id| id.is(&def.receiver.symbol))
+            .is_some();
+        let params = get_param_aliases(&def.params, &return_group);
+        let captures = get_captures(return_group, def_loc);
+
+        Self {
+            params,
+            captures,
+            is_receiver_aliased,
+        }
     }
 
     pub fn is_param_aliased(&self, pos: usize) -> bool {
         self.params[pos]
     }
+
+    pub fn is_receiver_aliased(&self) -> bool {
+        self.is_receiver_aliased
+    }
+}
+fn get_param_aliases(params: &[ir::Identifier], return_group: &[SymbolRef]) -> Vec<bool> {
+    params
+        .iter()
+        .map(|p| return_group.contains(&p.symbol))
+        .collect()
+}
+fn get_captures(return_group: Vec<SymbolRef>, loc: Location) -> Vec<SymbolRef> {
+    return_group
+        .into_iter()
+        .filter(|s| !s.borrow().defined_at.is_within(loc))
+        .collect()
 }
 
 /// The result of alias analysis: a queryable map from symbol to alias group.
@@ -241,6 +273,9 @@ fn visit_stmt(stmt: &ir::Statement, checker: &SemanticsChecker, map: &mut AliasM
         }
         ir::Statement::Function(f) => {
             visit_function_expression(&f.clone().into(), checker, map);
+        }
+        ir::Statement::Method(m) => {
+            visit_method(&m.clone().into(), checker, map);
         }
         ir::Statement::Enum(_)
         | ir::Statement::Struct(_)
@@ -428,7 +463,32 @@ fn visit_function_expression(
     if returns.len() > 0 {
         let loc = f.name.as_ref().map_or(f.loc, |n| n.loc);
         map.signatures
-            .insert(loc, AliasSignature::infer_from(f, returns));
+            .insert(loc, AliasSignature::infer_from_function(f, returns));
+    }
+
+    vec![]
+}
+
+fn visit_method(
+    m: &ir::MethodDefinition,
+    checker: &SemanticsChecker,
+    map: &mut AliasMap,
+) -> Vec<SymbolRef> {
+    for param in &m.params {
+        map.register(param.symbol.clone());
+    }
+    let mut returns = visit_block(&m.body, checker, map);
+    m.body
+        .find_returns()
+        .into_iter()
+        .filter_map(|r| r.expression)
+        .for_each(|expr| returns.extend(visit_expr(&expr, checker, map)));
+    map.union_all(&returns);
+
+    if returns.len() > 0 {
+        let loc = m.name.loc;
+        map.signatures
+            .insert(loc, AliasSignature::infer_from_method(m, returns));
     }
 
     vec![]

@@ -4,7 +4,7 @@ use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 use tine_core::{types::TypeId, SymbolKind, SymbolRef};
 
-use crate::codegen::{statements::utils::args_to_string, CodeGenerator};
+use crate::codegen::{utils::args_to_string, CodeGenerator};
 
 impl CodeGenerator<'_> {
     pub fn generate_concrete_classes(&mut self, methods: &[SymbolRef]) -> Vec<swc::ClassMember> {
@@ -21,7 +21,11 @@ impl CodeGenerator<'_> {
 
 fn get_method_receiver_args(method: &SymbolRef) -> Option<Vec<TypeId>> {
     match &method.borrow().kind {
-        SymbolKind::Method { owner_args, .. } => Some(owner_args.clone()),
+        SymbolKind::Method { owner_args, .. } => {
+            let mut entries = owner_args.iter().collect::<Vec<_>>();
+            entries.sort_by(|a, b| a.0.id.cmp(&b.0.id));
+            Some(entries.into_iter().map(|(_, t)| *t).collect())
+        }
         _ => None,
     }
 }

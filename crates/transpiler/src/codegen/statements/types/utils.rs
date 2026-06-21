@@ -6,11 +6,8 @@ use tine_core::{
 };
 
 use crate::codegen::{
-    statements::{
-        assignments::assignment,
-        utils::{declare_const, member},
-    },
-    utils::{ident_from_str, std_method_call},
+    statements::{assignments::assignment, utils::declare_const},
+    utils::{ident_from_str, member, std_method_call},
     CodeGenerator,
 };
 

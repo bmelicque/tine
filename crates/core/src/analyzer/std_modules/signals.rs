@@ -1,6 +1,6 @@
 use crate::{
     type_checker::{CheckResult, TypeChecker},
-    types::{FunctionType, GenericType, SignalType, Type, TypeParam},
+    types::{FunctionType, SignalType, Type},
     ModuleId, Session, SymbolData, SymbolKind,
 };
 
@@ -22,18 +22,14 @@ impl Session {
 }
 
 fn register_state_symbol(checker: &mut TypeChecker) {
-    let param_type = checker.intern(Type::Param(TypeParam {
-        name: "Type".into(),
-        idx: 0,
+    let param_type = checker.add_type_param("Type".to_string());
+    let return_type = checker.intern(Type::Signal(SignalType {
+        inner: param_type.id,
     }));
-    let return_type = checker.intern(Type::Signal(SignalType { inner: param_type }));
-    let state_def_type = checker.intern_unique(Type::Function(FunctionType {
-        params: vec![param_type],
+    let state_type = checker.intern_unique(Type::Function(FunctionType {
+        params: vec![param_type.id],
+        type_params: vec![param_type],
         return_type,
-    }));
-    let state_type = checker.intern(Type::Generic(GenericType {
-        params: vec![param_type],
-        definition: state_def_type,
     }));
     checker.ctx.register_symbol(SymbolData {
         name: "state".to_string(),
@@ -63,17 +59,11 @@ fn reset() {
 }
 
 fn register_derived_symbol(checker: &mut TypeChecker) {
-    let param_type = checker.intern(Type::Param(TypeParam {
-        name: "Type".into(),
-        idx: 0,
-    }));
-    let derived_def_type = checker.intern_unique(Type::Function(FunctionType {
-        params: vec![param_type],
-        return_type: param_type,
-    }));
-    let derived_type = checker.intern(Type::Generic(GenericType {
-        params: vec![param_type],
-        definition: derived_def_type,
+    let param_type = checker.add_type_param("Type".to_string());
+    let derived_type = checker.intern_unique(Type::Function(FunctionType {
+        params: vec![param_type.id],
+        return_type: param_type.id,
+        type_params: vec![param_type],
     }));
     checker.ctx.register_symbol(SymbolData {
         name: "computed$".to_string(),

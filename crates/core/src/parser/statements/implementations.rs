@@ -111,13 +111,19 @@ impl Parser<'_> {
         let start_range = self.eat(&[Token::LParen]);
         let start_loc = self.localize(start_range);
 
+        let mutable = self.eat_if(&[Token::Mut]).is_some();
+
         let pattern = self.parse_pattern();
         let end_range = match self.tokens.peek() {
             Some((Ok(Token::RParen), r)) => r.clone(),
             _ => self.recover_at(&[Token::RParen]),
         };
         let loc = Location::merge(start_loc, self.localize(end_range));
-        ast::MethodReceiver { loc, pattern }
+        ast::MethodReceiver {
+            loc,
+            mutable,
+            pattern,
+        }
     }
 }
 

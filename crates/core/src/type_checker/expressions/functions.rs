@@ -1,7 +1,7 @@
 use crate::{
     ast, ir,
     type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
-    types::{FunctionType, GenericType, TypeId},
+    types::{FunctionType, TypeId},
     SymbolData, SymbolKind,
 };
 
@@ -34,16 +34,10 @@ impl TypeChecker<'_> {
         } = result?;
 
         let ty = self.intern(FunctionType {
+            type_params,
             params: params.iter().map(|p| p.ty()).collect(),
             return_type,
         });
-        let ty = match type_params.len() {
-            0 => ty,
-            _ => self.intern(GenericType {
-                params: type_params,
-                definition: ty,
-            }),
-        };
 
         let name = match node.name {
             Some(id) => {
@@ -115,11 +109,11 @@ impl TypeChecker<'_> {
 
         for ret in body.find_returns() {
             let ty = ret.expression.as_ref().map_or(TypeStore::UNIT, |e| e.ty());
-            self.check_assigned_type(return_type, ty, ret.loc);
+            self.check_assigned_type(return_type, ty, false, ret.loc);
         }
 
         if return_type != TypeStore::UNIT {
-            self.check_assigned_type(return_type, body.ty, body.loc);
+            self.check_assigned_type(return_type, body.ty, false, body.loc);
         }
 
         Some((return_type, body))
@@ -200,6 +194,7 @@ mod tests {
             Type::Function(FunctionType {
                 params: vec![TypeStore::INTEGER, TypeStore::INTEGER],
                 return_type: TypeStore::INTEGER,
+                ..Default::default()
             })
         );
         assert!(checker.diagnostics.is_empty());
@@ -233,26 +228,11 @@ mod tests {
 
         let result = checker.resolve(result.map_or(TypeStore::UNKNOWN, |r| r.ty));
 
-        let Type::Generic(GenericType { params, definition }) = result else {
-            panic!("Expected generic type");
+        let Type::Function(f) = result else {
+            panic!("function expected")
         };
-
-        assert_eq!(params.len(), 1);
-        let param = checker.resolve(params[0]);
-        assert_eq!(
-            param,
-            Type::Param(TypeParam {
-                name: "T".to_string(),
-                idx: 0
-            })
-        );
-
-        assert_eq!(
-            checker.resolve(definition),
-            Type::Function(FunctionType {
-                params: vec![params[0]],
-                return_type: TypeStore::UNIT,
-            })
-        );
+        assert_eq!(f.type_params[0].name, "T");
+        assert!(matches!(checker.resolve(f.params[0]), Type::Param(_)));
+        assert_eq!(f.return_type, TypeStore::UNIT);
     }
 }

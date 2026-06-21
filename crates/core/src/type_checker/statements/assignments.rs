@@ -104,7 +104,7 @@ impl TypeChecker<'_> {
             };
             self.error(error, identifier.loc);
         }
-        self.check_assigned_type(handle.borrow().get_type(), against, identifier.loc);
+        self.check_assigned_type(handle.borrow().get_type(), against, false, identifier.loc);
         Some(identifier.into())
     }
 
@@ -126,7 +126,7 @@ impl TypeChecker<'_> {
                 self.error(error, expression.loc());
             }
         }
-        self.check_assigned_type(against, expression.ty(), expression.loc());
+        self.check_assigned_type(against, expression.ty(), false, expression.loc());
         Some(expression)
     }
 
@@ -147,11 +147,11 @@ impl TypeChecker<'_> {
         let ty = info.borrow().get_type();
         let ty = match self.resolve(ty).clone() {
             Type::Signal(t) => {
-                self.check_assigned_type(t.inner, against, node.loc);
+                self.check_assigned_type(t.inner, against, false, node.loc);
                 t.inner
             }
             Type::Listener(t) => {
-                self.check_assigned_type(t.inner, against, node.loc);
+                self.check_assigned_type(t.inner, against, false, node.loc);
                 t.inner
             }
             _ => {

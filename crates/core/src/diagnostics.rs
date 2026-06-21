@@ -45,6 +45,9 @@ pub enum DiagnosticKind {
     DuplicateIdentifier {
         name: String,
     },
+    DuplicateMethodName {
+        name: String,
+    },
     ExpectedBool {
         got: String,
     },
@@ -119,6 +122,7 @@ pub enum DiagnosticKind {
     MissingParams,
     MissingPattern,
     MissingType,
+    MutatingMethodOnImmutable,
     NegativeTupleIndex,
     NonExhaustiveMatch {
         missing: Vec<String>,
@@ -200,6 +204,9 @@ impl Display for DiagnosticKind {
             }
             Self::DuplicateIdentifier { name } => {
                 write!(f, "duplicate identifier: `{}`", name)
+            }
+            Self::DuplicateMethodName { name } => {
+                write!(f, "duplicate method: `{}`", name)
             }
             Self::ExpectedBool { got } => write!(f, "expected bool but got `{}`", got),
             Self::ExpectedEnum { got } => write!(f, "expected enum but got type `{}`", got),
@@ -298,6 +305,7 @@ impl Display for DiagnosticKind {
             Self::MissingParams => write!(f, "expected function parameters"),
             Self::MissingPattern => write!(f, "expected pattern"),
             Self::MissingType => write!(f, "expected type"),
+            Self::MutatingMethodOnImmutable => write!(f, "invalid method call: this method is mutating but the object it was called from is immutable"),
             Self::NegativeTupleIndex => write!(f, "tuple index cannot be negative"),
             Self::NonExhaustiveMatch { missing } => {
                 let missing = if missing.len() > 2 {
