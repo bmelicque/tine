@@ -6,8 +6,21 @@ use crate::{
 };
 
 impl TypeChecker<'_> {
-    pub fn check_assigned_type(&mut self, expected: TypeId, got: TypeId, loc: Location) {
-        if !self.can_be_assigned_to(got, expected) {
+    pub fn check_assigned_type(
+        &mut self,
+        expected: TypeId,
+        got: TypeId,
+        got_immutable: bool,
+        loc: Location,
+    ) {
+        let ok = self.can_be_assigned_to(got, expected)
+            && (!got_immutable
+                || match self.resolve(expected) {
+                    types::Type::Trait(t) => self.immutable_implements_trait(got, &t),
+                    _ => true,
+                });
+
+        if !ok {
             let got = self.session.display_type(got);
             let expected = self.session.display_type(expected);
             let error = DiagnosticKind::WrongType { expected, got };

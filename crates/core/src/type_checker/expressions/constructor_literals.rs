@@ -451,7 +451,7 @@ impl TypeChecker<'_> {
                 return got;
             }
         } else {
-            self.check_assigned_type(expected, got, at);
+            self.check_assigned_type(expected, got, true, at);
         }
         return expected;
     }

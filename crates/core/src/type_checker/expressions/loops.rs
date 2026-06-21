@@ -185,7 +185,11 @@ impl TypeChecker<'_> {
 
         for stmt in breaks.iter().skip(1) {
             let curr = self.break_type(stmt);
-            self.check_assigned_type(ty, curr, stmt.loc);
+            let got_immutable = match &stmt.expression {
+                Some(expr) => expr.is_mutable() == Some(false),
+                None => false,
+            };
+            self.check_assigned_type(ty, curr, got_immutable, stmt.loc);
         }
 
         self.intern(OptionType { some: ty })

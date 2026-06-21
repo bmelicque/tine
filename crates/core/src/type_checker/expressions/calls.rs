@@ -183,10 +183,10 @@ impl TypeChecker<'_> {
         let returns = body_type.find_returns();
         for ret in returns {
             let ty = ret.expression.map_or(TypeStore::UNIT, |r| r.ty());
-            self.check_assigned_type(expected_type, ty, ret.loc);
+            self.check_assigned_type(expected_type, ty, true, ret.loc);
         }
 
-        self.check_assigned_type(expected_type, body_type.ty, body_type.loc);
+        self.check_assigned_type(expected_type, body_type.ty, true, body_type.loc);
 
         Some(body_type)
     }

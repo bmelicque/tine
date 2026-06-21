@@ -68,7 +68,12 @@ impl TypeChecker<'_> {
         let element_type = elements.first().map_or(TypeStore::DYNAMIC, |e| e.ty());
 
         for element in &elements {
-            self.check_assigned_type(element_type, element.ty(), node.loc);
+            self.check_assigned_type(
+                element_type,
+                element.ty(),
+                element.is_mutable() == Some(false),
+                node.loc,
+            );
         }
 
         let ty = self.intern(ArrayType {

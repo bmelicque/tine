@@ -109,11 +109,11 @@ impl TypeChecker<'_> {
 
         for ret in body.find_returns() {
             let ty = ret.expression.as_ref().map_or(TypeStore::UNIT, |e| e.ty());
-            self.check_assigned_type(return_type, ty, ret.loc);
+            self.check_assigned_type(return_type, ty, false, ret.loc);
         }
 
         if return_type != TypeStore::UNIT {
-            self.check_assigned_type(return_type, body.ty, body.loc);
+            self.check_assigned_type(return_type, body.ty, false, body.loc);
         }
 
         Some((return_type, body))

@@ -65,16 +65,8 @@ impl TypeChecker<'_> {
         let annotation = decl.annotation.map(|a| self.visit_type(a));
         let value = decl.value.and_then(|v| self.visit_expression(v))?;
         if let Some(annotation) = annotation {
-            let ok = self.can_be_assigned_to(annotation, value.ty());
-            if !ok {
-                let left_name = self.session.display_type(annotation);
-                let right_name = self.session.display_type(value.ty());
-                let diag = DiagnosticKind::MismatchedTypes {
-                    left_name,
-                    right_name,
-                };
-                self.error(diag, decl.loc);
-            }
+            let got_immutable = value.is_mutable() == Some(false);
+            self.check_assigned_type(annotation, value.ty(), got_immutable, decl.loc);
         };
         let mutable = match &pattern {
             ast::Pattern::Identifier(_) => false,

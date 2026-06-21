@@ -4,7 +4,7 @@ use crate::diagnostics::{Diagnostic, DiagnosticKind, DiagnosticLevel};
 use crate::type_checker::analysis_context::{LocalContext, SymbolRef};
 use crate::type_checker::SymbolHandle;
 use crate::types::{self, Type, TypeId};
-use crate::{ir, Location};
+use crate::{ir, Location, SymbolKind};
 
 pub struct CheckResult {
     pub ir: ir::Program,
@@ -81,8 +81,8 @@ impl TypeChecker<'_> {
         self.session.get_type(id)
     }
 
-    pub fn can_be_assigned_to(&self, test_id: TypeId, against: TypeId) -> bool {
-        self.session.types().can_assign_to(test_id, against)
+    pub fn can_be_assigned_to(&self, got: TypeId, expected: TypeId) -> bool {
+        self.session.types().can_assign_to(got, expected)
     }
 
     pub fn with_scope<F, T>(&mut self, predicate: F) -> T
@@ -185,5 +185,53 @@ impl TypeChecker<'_> {
             .into_iter()
             .filter(|s| s.borrow().is_type_symbol())
             .find(|s| s.borrow().ty == ty)
+    }
+
+    /// Given a value whose type implements the given trait, check if an
+    /// immutable version of the type also implements the trait (since some
+    /// methods might be defined with a mutable receiver).
+    pub(super) fn immutable_implements_trait(
+        &self,
+        ty: types::TypeId,
+        trait_: &types::TraitType,
+    ) -> bool {
+        // Node: `value.ty()` should implement `trait_`!
+        if let Type::Trait(test) = &self.resolve(ty) {
+            if *test == *trait_ {
+                return true;
+            }
+        }
+
+        let Some(type_symbol) = self.resolve_type_symbol(ty) else {
+            panic!()
+        };
+
+        let value_methods = type_symbol
+            .as_methods()
+            .unwrap_or(vec![])
+            .into_iter()
+            .map(|m| {
+                (
+                    types::TraitMethod {
+                        name: m.as_name(),
+                        def: m.as_type(),
+                    },
+                    m,
+                )
+            })
+            .collect::<Vec<_>>();
+        for trait_method in &trait_.methods {
+            let Some((_, value_method)) = value_methods.iter().find(|m| m.0 == *trait_method)
+            else {
+                panic!()
+            };
+            let SymbolKind::Method { receiver, .. } = &value_method.borrow().kind else {
+                panic!()
+            };
+            if receiver.is_mutable() {
+                return false;
+            }
+        }
+        true
     }
 }
