@@ -44,6 +44,22 @@ impl Statement {
             Self::Variable(v) => v.value.walk(),
         }
     }
+
+    pub fn loc(&self) -> Location {
+        match self {
+            Self::Assignment(a) => a.loc,
+            Self::Break(b) => b.loc,
+            Self::Continue(c) => c.loc,
+            Self::Enum(e) => e.loc,
+            Self::Expression(e) => e.loc(),
+            Self::Function(f) => f.loc,
+            Self::Method(m) => m.loc,
+            Self::Return(r) => r.loc,
+            Self::Struct(s) => s.loc,
+            Self::Use(u) => u.loc,
+            Self::Variable(v) => v.loc,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

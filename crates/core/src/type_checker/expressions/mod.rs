@@ -3,7 +3,7 @@ mod calls;
 mod conditions;
 mod constructor_literals;
 mod dom;
-mod expressions;
+pub mod expressions;
 mod functions;
 mod loops;
 mod matches;

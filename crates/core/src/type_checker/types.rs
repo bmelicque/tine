@@ -147,9 +147,11 @@ mod tests {
         let mut checker = TypeChecker::new(&session, 0);
         let array_type = ast::ArrayType {
             element: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "int".to_string(),
-                args: None,
-                loc: Location::dummy(),
+                name: ast::Identifier {
+                    text: "int".to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
             }))),
             loc: Location::dummy(),
         };
@@ -171,20 +173,26 @@ mod tests {
         let function_type = ast::FunctionType {
             params: vec![
                 ast::Type::Named(ast::NamedType {
-                    name: "int".to_string(),
-                    args: None,
-                    loc: Location::dummy(),
+                    name: ast::Identifier {
+                        text: "int".to_string(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
                 }),
                 ast::Type::Named(ast::NamedType {
-                    name: "str".to_string(),
-                    args: None,
-                    loc: Location::dummy(),
+                    name: ast::Identifier {
+                        text: "str".to_string(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
                 }),
             ],
             returned: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "bool".to_string(),
-                args: None,
-                loc: Location::dummy(),
+                name: ast::Identifier {
+                    text: "bool".to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
             }))),
             loc: Location::dummy(),
         };
@@ -207,14 +215,18 @@ mod tests {
         let mut checker = TypeChecker::new(&session, 0);
         let map_type = ast::MapType {
             key: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "str".to_string(),
-                args: None,
-                loc: Location::dummy(),
+                name: ast::Identifier {
+                    text: "str".to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
             }))),
             value: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "int".to_string(),
-                args: None,
-                loc: Location::dummy(),
+                name: ast::Identifier {
+                    text: "int".to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
             }))),
             loc: Location::dummy(),
         };
@@ -249,9 +261,11 @@ mod tests {
         });
 
         let named_type = ast::NamedType {
-            name: "Box".to_string(),
-            args: None,
-            loc: Location::dummy(),
+            name: ast::Identifier {
+                text: "Box".to_string(),
+                ..Default::default()
+            },
+            ..Default::default()
         };
 
         let result = checker.visit_named_type(named_type);
@@ -265,9 +279,11 @@ mod tests {
         let mut checker = TypeChecker::new(&session, 0);
         let option_type = ast::OptionType {
             base: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "int".to_string(),
-                args: None,
-                loc: Location::dummy(),
+                name: ast::Identifier {
+                    text: "int".to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
             }))),
             loc: Location::dummy(),
         };
@@ -288,14 +304,18 @@ mod tests {
         let mut checker = TypeChecker::new(&session, 0);
         let result_type = ast::ResultType {
             ok: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "int".to_string(),
-                args: None,
-                loc: Location::dummy(),
+                name: ast::Identifier {
+                    text: "int".to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
             }))),
             error: Some(Box::new(ast::Type::Named(ast::NamedType {
-                name: "str".to_string(),
-                args: None,
-                loc: Location::dummy(),
+                name: ast::Identifier {
+                    text: "str".to_string(),
+                    ..Default::default()
+                },
+                ..Default::default()
             }))),
             loc: Location::dummy(),
         };
@@ -318,14 +338,18 @@ mod tests {
         let tuple_type = ast::TupleType {
             elements: vec![
                 ast::Type::Named(ast::NamedType {
-                    name: "int".to_string(),
-                    args: None,
-                    loc: Location::dummy(),
+                    name: ast::Identifier {
+                        text: "int".to_string(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
                 }),
                 ast::Type::Named(ast::NamedType {
-                    name: "str".to_string(),
-                    args: None,
-                    loc: Location::dummy(),
+                    name: ast::Identifier {
+                        text: "str".to_string(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
                 }),
             ],
             loc: Location::dummy(),

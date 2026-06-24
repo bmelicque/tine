@@ -1,6 +1,6 @@
 use enum_from_derive::EnumFrom;
 
-use crate::Location;
+use crate::{ast, Location};
 
 #[derive(Debug, Clone, EnumFrom, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -30,7 +30,7 @@ impl Type {
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct NamedType {
     pub loc: Location,
-    pub name: String,
+    pub name: ast::Identifier,
     pub args: Option<Vec<Type>>,
 }
 

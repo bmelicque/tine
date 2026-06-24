@@ -155,7 +155,10 @@ mod tests {
                     ast::FunctionParam {
                         name: Some(ident("x")),
                         type_annotation: Some(ast::Type::Named(ast::NamedType {
-                            name: "int".to_string(),
+                            name: ast::Identifier {
+                                text: "int".to_string(),
+                                ..Default::default()
+                            },
                             ..Default::default()
                         })),
                         loc: Location::dummy(),
@@ -163,7 +166,10 @@ mod tests {
                     ast::FunctionParam {
                         name: Some(ident("y")),
                         type_annotation: Some(ast::Type::Named(ast::NamedType {
-                            name: "int".to_string(),
+                            name: ast::Identifier {
+                                text: "int".to_string(),
+                                ..Default::default()
+                            },
                             ..Default::default()
                         })),
                         loc: Location::dummy(),
@@ -171,7 +177,10 @@ mod tests {
                 ],
             }),
             return_type: Some(ast::Type::Named(ast::NamedType {
-                name: "int".into(),
+                name: ast::Identifier {
+                    text: "int".to_string(),
+                    ..Default::default()
+                },
                 ..Default::default()
             })),
             body: Some(ast::BlockExpression {
@@ -213,7 +222,10 @@ mod tests {
                 params: vec![ast::FunctionParam {
                     name: Some(ident("x")),
                     type_annotation: Some(ast::Type::Named(ast::NamedType {
-                        name: "T".to_string(),
+                        name: ast::Identifier {
+                            text: "T".to_string(),
+                            ..Default::default()
+                        },
                         ..Default::default()
                     })),
                     loc: Location::dummy(),

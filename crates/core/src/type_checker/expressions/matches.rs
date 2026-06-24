@@ -1,67 +1,68 @@
 use crate::{
     ast, ir,
-    type_checker::{utils::make_simple_declaration, TypeChecker},
+    type_checker::{
+        patterns::{lower_pattern, Pattern},
+        TypeChecker,
+    },
+    types,
 };
 
 impl TypeChecker<'_> {
-    pub fn visit_match_expression(
-        &mut self,
-        node: ast::MatchExpression,
-    ) -> Option<ir::IfExpression> {
-        // TODO check exhaustiveness
-
-        let scrutinee = node.scrutinee.as_deref().cloned();
-        let mut arms = node.arms?.into_iter().rev();
-        let mut expr = self.desugar_match_arm(arms.next()?, &scrutinee);
-        for arm in arms {
-            let mut arm = self.desugar_match_arm(arm, &scrutinee);
-            arm.alternate = Some(Box::new(ast::Alternate::If(expr)));
-            expr = arm;
-        }
-
-        self.visit_if_expression(expr)
-    }
-
-    fn desugar_match_arm(
-        &mut self,
-        arm: ast::MatchArm,
-        scrutinee: &Option<ast::Expression>,
-    ) -> ast::IfExpression {
-        let consequent = arm.expression.map(|e| match *e {
-            ast::Expression::Block(b) => b,
-            e => ast::BlockExpression {
-                loc: e.loc(),
-                statements: vec![ast::Statement::Expression(ast::ExpressionStatement {
-                    expression: Box::new(e),
-                })],
-            },
-        });
-
-        let (Some(pattern), Some(scrutinee)) = (arm.pattern, scrutinee) else {
-            return ast::IfExpression {
-                loc: arm.loc,
-                condition: None,
-                consequent,
-                alternate: None,
-            };
-        };
-
-        let desugared = self.desugar_pattern(*pattern, scrutinee.clone());
-        let bindings = desugared
-            .bindings
+    pub fn visit_match_expression(&mut self, node: ast::MatchExpression) -> Option<ir::Expression> {
+        let scrutinee = node.scrutinee.and_then(|s| self.visit_expression(*s));
+        let arms = node
+            .arms?
             .into_iter()
-            .map(|binding| make_simple_declaration(binding).into())
-            .collect();
-        let body = consequent.map(|mut body| {
-            body.statements = vec![bindings, body.statements].concat();
-            body
-        });
+            .map(|arm| {
+                let expression = arm.expression.and_then(|e| self.visit_expression(*e))?;
 
-        ast::IfExpression {
-            loc: arm.loc,
-            condition: desugared.test.map(Box::new),
-            consequent: body,
-            alternate: None,
-        }
+                let pattern = scrutinee
+                    .as_ref()
+                    .and_then(|s| self.visit_pattern(*arm.pattern?, s, true));
+
+                Some((pattern?, expression))
+            })
+            .collect::<Option<Vec<_>>>()?;
+        let scrutinee = scrutinee?;
+
+        // TODO: check exhaustiveness. If not exhaustive, return `None`
+        arms.into_iter()
+            .rev()
+            .fold(None, |alternate, (pattern, expr)| {
+                Some(match_arm_to_if_else(
+                    pattern,
+                    expr,
+                    alternate,
+                    scrutinee.ty(),
+                ))
+            })
+    }
+}
+
+fn match_arm_to_if_else(
+    pattern: Pattern,
+    body: ir::Expression,
+    alternate: Option<ir::Expression>,
+    ty: types::TypeId,
+) -> ir::Expression {
+    let lowered = lower_pattern(pattern, body.clone());
+    let decls: Vec<ir::Statement> = lowered.decls.into_iter().map(Into::into).collect();
+    let mut block: ir::Block = body.into();
+    block.statements.splice(0..0, decls);
+
+    match alternate {
+        Some(alternate) => ir::Expression::If(ir::IfExpression {
+            loc: block.loc,
+            condition: Box::new(lowered.test.unwrap_or(ir::Expression::BooleanLiteral(
+                ir::BooleanLiteral {
+                    loc: block.loc,
+                    value: true,
+                },
+            ))),
+            consequent: block,
+            alternate: Some(alternate.into()),
+            ty,
+        }),
+        None => block.into(),
     }
 }

@@ -228,10 +228,22 @@ impl Block {
 
 impl From<Expression> for Block {
     fn from(value: Expression) -> Self {
+        match value {
+            Expression::Block(b) => b,
+            _ => Block {
+                loc: value.loc(),
+                ty: value.ty(),
+                statements: vec![Statement::Expression(value)],
+            },
+        }
+    }
+}
+impl From<Statement> for Block {
+    fn from(value: Statement) -> Self {
         Block {
             loc: value.loc(),
-            ty: value.ty(),
-            statements: vec![Statement::Expression(value)],
+            ty: TypeStore::UNIT,
+            statements: vec![value],
         }
     }
 }
@@ -301,6 +313,17 @@ pub struct FunctionParams {
 pub struct Identifier {
     pub loc: Location,
     pub symbol: SymbolRef,
+}
+
+impl From<Identifier> for SymbolRef {
+    fn from(value: Identifier) -> Self {
+        value.symbol
+    }
+}
+impl From<&Identifier> for SymbolRef {
+    fn from(value: &Identifier) -> Self {
+        value.symbol.clone()
+    }
 }
 
 impl Identifier {

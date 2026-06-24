@@ -13,12 +13,12 @@ impl TypeChecker<'_> {
         let Some(owner) = node
             .implemented_type
             .as_ref()
-            .and_then(|t| self.lookup(&t.name))
+            .and_then(|t| self.lookup(t.name.as_str()))
         else {
             if node.implemented_type.is_some() {
                 let ast::NamedType { name, loc, .. } = node.implemented_type.as_ref().unwrap();
                 let name = name.clone();
-                self.error(DiagnosticKind::CannotFindName { name }, *loc);
+                self.error(DiagnosticKind::CannotFindName { name: name.text }, *loc);
             }
             self.fallback_check_impl_body(node.body);
             return vec![];

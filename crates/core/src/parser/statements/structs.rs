@@ -87,7 +87,10 @@ mod tests {
                         }),
                         definition: Some(ast::Type::Named(ast::NamedType {
                             loc: Location::new(0, Span::new(22, 25)),
-                            name: "int".to_string(),
+                            name: ast::Identifier {
+                                loc: Location::new(0, Span::new(22, 25)),
+                                text: "int".to_string(),
+                            },
                             args: None,
                         })),
                     }],

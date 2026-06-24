@@ -87,9 +87,22 @@ impl SymbolKind {
             _ => false,
         }
     }
+
+    pub fn as_type_symbol_body(&self) -> Option<&TypeSymbolBody> {
+        match self {
+            SymbolKind::Struct { body, .. } => Some(body),
+            SymbolKind::Constructor { body, .. } => body.as_ref(),
+            _ => None,
+        }
+    }
+}
+impl Default for SymbolKind {
+    fn default() -> Self {
+        Self::constant()
+    }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct SymbolAccessManager {
     reads: Vec<Location>,
     writes: Vec<Location>,
@@ -121,7 +134,7 @@ impl SymbolAccessManager {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SymbolData {
     pub name: String,
     pub ty: TypeId,
@@ -150,20 +163,6 @@ impl SymbolData {
             self.kind,
             SymbolKind::Struct { .. } | SymbolKind::Enum { .. }
         )
-    }
-}
-
-impl Default for SymbolData {
-    fn default() -> Self {
-        Self {
-            name: "".into(),
-            ty: TypeStore::UNKNOWN,
-            kind: SymbolKind::constant(),
-            defined_at: Location::dummy(),
-            docs: None,
-            access: SymbolAccessManager::new(),
-            dependencies: vec![],
-        }
     }
 }
 
@@ -228,6 +227,15 @@ impl SymbolHandle {
 pub struct SymbolRef(Arc<Mutex<SymbolData>>);
 
 impl SymbolRef {
+    pub fn new(name: String, at: Location) -> Self {
+        let symbol = SymbolData {
+            name,
+            defined_at: at,
+            ..Default::default()
+        };
+        Self(Arc::new(Mutex::new(symbol)))
+    }
+
     pub fn dummy(at: Location) -> Self {
         let symbol = SymbolData {
             name: String::new(),
