@@ -37,10 +37,11 @@ impl LoweredPattern {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Pattern {
-    Literal(LiteralPattern),
-    Identifier(IdentifierPattern),
     Wildcard,
+    Identifier(IdentifierPattern),
+    Literal(LiteralPattern),
 
     Constructor(ConstructorPattern),
     Struct(StructPattern),
@@ -49,6 +50,59 @@ pub enum Pattern {
 impl From<ir::Identifier> for Pattern {
     fn from(value: ir::Identifier) -> Self {
         Self::Identifier(value.into())
+    }
+}
+impl Pattern {
+    pub fn as_literal(&self) -> Option<&LiteralPattern> {
+        match self {
+            Pattern::Literal(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    pub fn as_constructor(&self) -> Option<&ConstructorPattern> {
+        match self {
+            Pattern::Constructor(c) => Some(c),
+            _ => None,
+        }
+    }
+}
+impl std::fmt::Display for Pattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Pattern::Wildcard => write!(f, "_"),
+            Pattern::Identifier(i) => write!(f, "{}", i.identifier.as_name()),
+            Pattern::Constructor(c) => match &c.arg {
+                Some(arg) => write!(f, "{}({})", c.identifier.as_name(), *arg),
+                None => write!(f, "{}", c.identifier.as_name()),
+            },
+            Pattern::Literal(l) => match l {
+                LiteralPattern::Bool(l) => l.fmt(f),
+                LiteralPattern::Int(l) => l.fmt(f),
+                LiteralPattern::Float(l) => l.fmt(f),
+                LiteralPattern::String(l) => l.fmt(f),
+            },
+            Pattern::Struct(s) => {
+                let fields = s
+                    .fields
+                    .iter()
+                    .map(|f| format!("{}: {}", f.0.as_name(), f.1))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                write!(f, "{{{}}}", fields)
+            }
+            Pattern::Tuple(t) => {
+                let items = t
+                    .items
+                    .iter()
+                    .map(|f| format!("{}", f.1))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                write!(f, "({})", items)
+            }
+        }
     }
 }
 
@@ -132,6 +186,7 @@ fn lower_pattern_field(field: PatternField, value: ir::Expression) -> LoweredPat
     lower_pattern(field.1, value)
 }
 
+#[derive(Debug, Clone)]
 pub struct IdentifierPattern {
     pub mut_kw: bool,
     pub identifier: ir::Identifier,
@@ -150,7 +205,7 @@ impl From<ir::Identifier> for IdentifierPattern {
     }
 }
 
-#[derive(Debug, EnumFrom)]
+#[derive(Debug, EnumFrom, Clone)]
 pub enum LiteralPattern {
     Bool(ir::BooleanLiteral),
     Int(ir::IntLiteral),
@@ -177,14 +232,43 @@ impl From<LiteralPattern> for ir::Expression {
 impl LiteralPattern {
     pub fn loc(&self) -> Location {
         match self {
-            LiteralPattern::Bool(b) => b.loc,
-            LiteralPattern::Int(i) => i.loc,
-            LiteralPattern::Float(f) => f.loc,
-            LiteralPattern::String(s) => s.loc,
+            Self::Bool(b) => b.loc,
+            Self::Int(i) => i.loc,
+            Self::Float(f) => f.loc,
+            Self::String(s) => s.loc,
+        }
+    }
+
+    pub fn as_bool(&self) -> Option<&ir::BooleanLiteral> {
+        match self {
+            Self::Bool(b) => Some(b),
+            _ => None,
+        }
+    }
+
+    pub fn as_float(&self) -> Option<&ir::FloatLiteral> {
+        match self {
+            Self::Float(f) => Some(f),
+            _ => None,
+        }
+    }
+
+    pub fn as_int(&self) -> Option<&ir::IntLiteral> {
+        match self {
+            Self::Int(i) => Some(i),
+            _ => None,
+        }
+    }
+
+    pub fn as_string(&self) -> Option<&ir::StringLiteral> {
+        match self {
+            Self::String(s) => Some(s),
+            _ => None,
         }
     }
 }
 
+#[derive(Debug, Default, Clone)]
 pub struct StructPattern {
     pub fields: Vec<PatternField>,
 }
@@ -194,13 +278,21 @@ impl From<StructPattern> for Pattern {
     }
 }
 
-pub struct PatternField(ir::Identifier, Pattern);
+#[derive(Debug, Clone)]
+pub struct PatternField(pub ir::Identifier, pub Pattern);
 
+#[derive(Debug, Clone)]
 pub struct ConstructorPattern {
     pub identifier: ir::Identifier,
     pub arg: Option<Box<Pattern>>,
 }
+impl From<ConstructorPattern> for Pattern {
+    fn from(value: ConstructorPattern) -> Self {
+        Self::Constructor(value)
+    }
+}
 
+#[derive(Debug, Default, Clone)]
 pub struct TuplePattern {
     pub items: Vec<PatternField>,
 }
@@ -362,10 +454,6 @@ fn visit_identifier_pattern(
     mutable: bool,
 ) -> Option<Pattern> {
     use Pattern::*;
-    if pattern.as_str() == "_" {
-        return Some(Wildcard);
-    }
-
     let identifier: ir::Identifier = if visitor.is_declaration {
         let symbol = declare_variable(visitor, &pattern.0, expected, mutable)?;
         ir::Identifier {
@@ -427,14 +515,11 @@ fn visit_tuple_pattern(
     visitor: &mut PatternVisitor,
     expected: types::TypeId,
 ) -> Option<TuplePattern> {
-    let tuple = match visitor.type_checker.resolve(expected) {
-        types::Type::Tuple(t) => t,
-        _ => {
-            visitor
-                .type_checker
-                .error(DiagnosticKind::InvalidPattern, pattern.loc);
-            return None;
-        }
+    let types::Type::Tuple(tuple) = visitor.type_checker.resolve(expected) else {
+        visitor
+            .type_checker
+            .error(DiagnosticKind::InvalidPattern, pattern.loc);
+        return None;
     };
     if tuple.elements.len() < pattern.elements.len() {
         visitor

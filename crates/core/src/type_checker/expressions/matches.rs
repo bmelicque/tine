@@ -1,10 +1,11 @@
 use crate::{
     ast, ir,
     type_checker::{
+        exhaustiveness::usefulness,
         patterns::{lower_pattern, Pattern},
         TypeChecker,
     },
-    types,
+    types, DiagnosticKind, Location,
 };
 
 impl TypeChecker<'_> {
@@ -23,7 +24,13 @@ impl TypeChecker<'_> {
                 Some((pattern?, expression))
             })
             .collect::<Option<Vec<_>>>()?;
+
         let scrutinee = scrutinee?;
+
+        self.check_match_arms(
+            arms.iter().map(|a| &a.0).collect::<Vec<_>>(),
+            scrutinee.loc(),
+        );
 
         // TODO: check exhaustiveness. If not exhaustive, return `None`
         arms.into_iter()
@@ -36,6 +43,21 @@ impl TypeChecker<'_> {
                     scrutinee.ty(),
                 ))
             })
+    }
+
+    fn check_match_arms(&mut self, patterns: Vec<&Pattern>, scrutinee_loc: Location) -> bool {
+        let matrix = patterns
+            .into_iter()
+            .map(|pat| vec![pat])
+            .collect::<Vec<_>>();
+        let u = usefulness(&matrix, &vec![&Pattern::Wildcard]);
+        if !u.is_empty() {
+            let missing = u.into_iter().map(|r| format!("{}", r[0])).collect();
+            let diag = DiagnosticKind::NonExhaustiveMatch { missing };
+            self.error(diag, scrutinee_loc);
+            return false;
+        }
+        true
     }
 }
 

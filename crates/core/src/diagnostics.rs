@@ -322,7 +322,7 @@ impl Display for DiagnosticKind {
                 } else {
                     unreachable!()
                 };
-                write!(f, "non-exhaustive match: missing variants {}", missing)
+                write!(f, "missing match arms {}", missing)
             }
             Self::NonReactiveExpression => write!(f, "expected a reactive expression"),
             Self::NotCallable { type_name } => {

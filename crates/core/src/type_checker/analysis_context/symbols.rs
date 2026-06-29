@@ -164,6 +164,31 @@ impl SymbolData {
             SymbolKind::Struct { .. } | SymbolKind::Enum { .. }
         )
     }
+
+    pub fn arity(&self) -> usize {
+        use SymbolKind::*;
+        match &self.kind {
+            Function { param_names } => param_names.len(),
+            Struct { .. } => 1,
+            Constructor { body, .. } => {
+                if body.is_some() {
+                    1
+                } else {
+                    0
+                }
+            }
+            _ => 0,
+        }
+    }
+
+    pub fn owner(&self) -> Option<&SymbolRef> {
+        use SymbolKind::*;
+        match &self.kind {
+            Constructor { owner, .. } => Some(owner),
+            Method { owner, .. } => Some(owner),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -339,6 +364,10 @@ impl SymbolRef {
 
             SymbolKind::Function { .. } | SymbolKind::Method { .. } => true,
         }
+    }
+
+    pub fn arity(&self) -> usize {
+        self.borrow().arity()
     }
 }
 impl PartialEq for SymbolRef {
