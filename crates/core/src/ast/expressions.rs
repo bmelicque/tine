@@ -69,7 +69,7 @@ pub struct ArrayExpression {
     pub elements: Vec<Expression>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier {
     pub loc: Location,
     pub text: String,

@@ -2,10 +2,8 @@ use crate::{
     ast,
     diagnostics::DiagnosticKind,
     ir,
-    type_checker::{
-        analysis_context::type_store::TypeStore, utils::make_simple_declaration, TypeChecker,
-    },
-    types::{OptionType, TypeId},
+    type_checker::{analysis_context::type_store::TypeStore, patterns::lower_pattern, TypeChecker},
+    types::{self, OptionType, TypeId},
 };
 
 impl TypeChecker<'_> {
@@ -59,37 +57,50 @@ impl TypeChecker<'_> {
         &mut self,
         node: ast::IfPatExpression,
     ) -> Option<ir::IfExpression> {
-        let lowered = self.lower_if_decl(node);
-        self.visit_if_expression(lowered)
-    }
-
-    fn lower_if_decl(&mut self, node: ast::IfPatExpression) -> ast::IfExpression {
         let (Some(pattern), Some(scrutinee)) = (node.pattern, node.scrutinee) else {
-            return ast::IfExpression {
+            let node = ast::IfExpression {
                 loc: node.loc,
                 condition: None,
                 consequent: node.consequent,
                 alternate: node.alternate,
             };
+            return self.visit_if_expression(node);
+        };
+        let value = self.visit_expression(*scrutinee)?;
+        let pattern_loc = pattern.loc();
+
+        let (test, consequent) = self.with_scope(|self_| {
+            let pattern = self_.visit_pattern(pattern, &value, true)?;
+            let lowered = lower_pattern(pattern, value);
+            let mut consequent = node.consequent.map(|c| self_.visit_block_expression(c));
+            if let Some(ref mut consequent) = consequent {
+                let decls: Vec<ir::Statement> = lowered.decls.into_iter().map(Into::into).collect();
+                consequent.statements.splice(0..0, decls);
+            }
+            Some((lowered.test, consequent))
+        })?;
+
+        let alternate = node
+            .alternate
+            .and_then(|a| self.visit_alternate(*a, consequent.as_ref().map(|b| b.ty)));
+
+        let Some(test) = test else {
+            self.error(DiagnosticKind::RefutablePatternExpected, pattern_loc);
+            return None;
         };
 
-        let desugared = self.desugar_pattern(pattern, *scrutinee);
-        let bindings = desugared
-            .bindings
-            .into_iter()
-            .map(|binding| make_simple_declaration(binding).into())
-            .collect();
-        let body = node.consequent.map(|mut body| {
-            body.statements = vec![bindings, body.statements].concat();
-            body
-        });
+        let ty = self.get_if_type(
+            consequent.as_ref().map_or(TypeStore::UNKNOWN, |c| c.ty),
+            &alternate,
+        );
 
-        ast::IfExpression {
+        Some(ir::IfExpression {
             loc: node.loc,
-            condition: desugared.test.map(Box::new),
-            consequent: body,
-            alternate: node.alternate,
-        }
+            condition: Box::new(test),
+            consequent: consequent?,
+            alternate,
+            ty,
+        })
     }
 
     fn visit_alternate(
@@ -116,6 +127,21 @@ impl TypeChecker<'_> {
             }
         }
         Some(alternate)
+    }
+
+    fn get_if_type(
+        &mut self,
+        consequent: types::TypeId,
+        alternate: &Option<ir::Block>,
+    ) -> types::TypeId {
+        let Some(alternate) = alternate else {
+            return self.intern(types::OptionType { some: consequent });
+        };
+
+        match self.resolve(alternate.ty) {
+            types::Type::Option(_) => self.intern(types::OptionType { some: consequent }),
+            _ => consequent,
+        }
     }
 }
 

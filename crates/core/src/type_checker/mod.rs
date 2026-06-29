@@ -1,4 +1,5 @@
 mod analysis_context;
+mod exhaustiveness;
 mod expressions;
 mod items;
 mod patterns;

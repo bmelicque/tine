@@ -1,101 +1,82 @@
 use crate::{
-    ast,
+    ast::{self, Pattern},
     ir::{self, root_identifier},
-    type_checker::{utils::make_tmp_declaration, TypeChecker},
-    types::{Type, TypeId},
+    type_checker::{patterns::lower_pattern, TypeChecker},
+    types::{self, Type, TypeId},
     DiagnosticKind, TypeStore,
 };
 
 impl TypeChecker<'_> {
     pub fn visit_assignment(&mut self, node: ast::Assignment) -> Vec<ir::Statement> {
-        self.desugar_assignment(node)
-            .into_iter()
-            .flat_map(|a| match a {
-                ast::Statement::Assignment(a) => self
-                    .visit_simple_assignment(a)
-                    .map_or(vec![], |a| vec![a.into()]),
-                _ => self.visit_statement(a),
-            })
-            .collect()
-    }
-
-    /// Lower an assignment that uses pattern matching into several simple assignments.
-    /// Also make sure that pattern is irrefutable.
-    fn desugar_assignment(&mut self, node: ast::Assignment) -> Vec<ast::Statement> {
-        let Some(ast::Assignee::Pattern(pattern)) = &node.pattern else {
-            return vec![node.into()];
+        let value = node.value.and_then(|v| self.visit_expression(v));
+        let Some(pattern) = node.pattern else {
+            return vec![];
         };
-        let (tmp_decl, desugared) = match pattern {
-            ast::Pattern::Constructor(_) | ast::Pattern::Tuple(_) => {
-                let Some(value) = node.value else {
+        let value_type = value.as_ref().map_or(TypeStore::UNKNOWN, |v| v.ty());
+        let assignee = self.visit_assignee(pattern, value_type);
+        let Some(value) = value else { return vec![] };
+        match assignee {
+            Ok(Some(assignee)) => {
+                vec![ir::Statement::Assignment(ir::Assignment {
+                    loc: node.loc,
+                    pattern: assignee,
+                    value,
+                })]
+            }
+            Ok(None) => vec![],
+            Err(pattern) => {
+                let mut stmts = Vec::new();
+                let loc = pattern.loc();
+
+                let id: ir::Expression = self.make_temp_variable(loc, &value).into();
+                stmts.push(ir::Statement::Assignment(ir::Assignment {
+                    loc,
+                    pattern: id.clone(),
+                    value,
+                }));
+
+                let pattern = self.visit_pattern(pattern, &id, false);
+                let Some(pattern) = pattern else {
                     return vec![];
                 };
-                let tmp_decl = make_tmp_declaration(value);
-                let Some(ast::Pattern::Identifier(ast::IdentifierPattern(ident))) =
-                    tmp_decl.pattern.clone()
-                else {
-                    panic!()
-                };
-                let loc = pattern.loc();
-                let desugared = self.desugar_pattern(pattern.to_owned(), ident.into());
-                if desugared.test.is_some() {
+                let lowered = lower_pattern(pattern, id);
+                if lowered.test.is_some() {
                     self.error(DiagnosticKind::IrrefutablePatternExpected, loc);
+                    return vec![];
                 }
-                (tmp_decl, desugared)
+                let decls = lowered
+                    .decls
+                    .into_iter()
+                    .map(Into::into)
+                    .collect::<Vec<_>>();
+                stmts.extend(decls);
+                stmts
             }
-            _ => return vec![node.into()],
-        };
-
-        let mut statements = desugared
-            .bindings
-            .into_iter()
-            .map(|binding| {
-                ast::Statement::Assignment(ast::Assignment {
-                    loc: node.loc,
-                    pattern: Some(ast::Assignee::Pattern(binding.id.into())),
-                    value: Some(binding.value),
-                })
-            })
-            .collect::<Vec<_>>();
-        statements.insert(0, tmp_decl.into());
-        statements
+        }
     }
 
-    fn visit_simple_assignment(&mut self, node: ast::Assignment) -> Option<ir::Assignment> {
-        let value = node.value.and_then(|v| self.visit_expression(v));
-        let value_type = value.as_ref().map_or(TypeStore::UNKNOWN, |v| v.ty());
-        let assignee = node
-            .pattern
-            .and_then(|p| self.visit_assignee(p, value_type));
-        Some(ir::Assignment {
-            loc: node.loc,
-            pattern: assignee?,
-            value: value?,
-        })
-    }
-
-    /// Visit an assignee (i.e. the lhs of an assignment)
     fn visit_assignee(
         &mut self,
         assignee: ast::Assignee,
-        against: TypeId,
-    ) -> Option<ir::Expression> {
+        ty: types::TypeId,
+    ) -> Result<Option<ir::Expression>, Pattern> {
         match assignee {
-            ast::Assignee::Member(expr) => self.visit_expr_assignee(expr, against),
-            ast::Assignee::Indirection(expr) => self.visit_indirect_assignee(expr, against),
-            ast::Assignee::Pattern(pat) => self.visit_pattern_assignee(pat, against),
+            ast::Assignee::Member(m) => Ok(self.visit_expr_assignee(m, ty)),
+            ast::Assignee::Indirection(i) => Ok(self.visit_indirect_assignee(i, ty)),
+            ast::Assignee::Pattern(ast::Pattern::Identifier(i)) => {
+                Ok(self.visit_identifier_assignee(i, ty))
+            }
+            ast::Assignee::Pattern(pattern) => Err(pattern),
         }
     }
 
     /// Visit an assignee which is a pattern
-    fn visit_pattern_assignee(
+    fn visit_identifier_assignee(
         &mut self,
-        pattern: ast::Pattern,
+        pattern: ast::IdentifierPattern,
         against: TypeId,
     ) -> Option<ir::Expression> {
-        let ast::Pattern::Identifier(ast::IdentifierPattern(identifier)) = pattern else {
-            panic!("this should only be called with identifiers")
-        };
+        let ast::IdentifierPattern(identifier) = pattern;
         let identifier = self.visit_identifier(identifier)?;
         let handle = self.get_handle(identifier.symbol.clone())?;
         if !handle.borrow().is_mutable() {

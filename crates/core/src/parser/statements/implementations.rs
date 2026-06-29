@@ -144,7 +144,10 @@ mod tests {
                 loc: Location::new(0, Span::new(0, 12)),
                 implemented_type: Some(ast::NamedType {
                     loc: Location::new(0, Span::new(5, 9)),
-                    name: "Type".to_string(),
+                    name: ast::Identifier {
+                        loc: Location::new(0, Span::new(5, 9)),
+                        text: "Type".to_string(),
+                    },
                     args: None,
                 }),
                 body: Some(ast::ImplementationBody {

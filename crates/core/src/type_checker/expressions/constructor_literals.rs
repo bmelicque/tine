@@ -144,7 +144,7 @@ impl TypeChecker<'_> {
                 let Some(constructor) = variant else {
                     let error = DiagnosticKind::UnknownVariant {
                         variant: variant_name.text,
-                        enum_name: enum_name,
+                        enum_name: enum_name.text,
                     };
                     self.error(error, variant_name.loc);
                     return None;
@@ -152,7 +152,7 @@ impl TypeChecker<'_> {
                 let SymbolKind::Constructor { body, .. } = &constructor.borrow().kind else {
                     let error = DiagnosticKind::UnknownVariant {
                         variant: variant_name.text,
-                        enum_name: enum_name,
+                        enum_name: enum_name.text,
                     };
                     self.error(error, variant_name.loc);
                     return None;
@@ -168,9 +168,9 @@ impl TypeChecker<'_> {
     }
 
     fn find_type(&mut self, ty: &ast::NamedType) -> Option<SymbolRef> {
-        let Some(symbol) = self.lookup(&ty.name) else {
+        let Some(symbol) = self.lookup(ty.name.as_str()) else {
             let error = DiagnosticKind::CannotFindName {
-                name: ty.name.clone(),
+                name: ty.name.as_str().to_string(),
             };
             self.error(error, ty.loc);
             return None;
@@ -189,9 +189,9 @@ impl TypeChecker<'_> {
         &mut self,
         name: &ast::NamedType,
     ) -> Option<(SymbolRef, Vec<types::TypeParam>)> {
-        let Some(symbol) = self.lookup(&name.name) else {
+        let Some(symbol) = self.lookup(name.name.as_str()) else {
             let error = DiagnosticKind::CannotFindName {
-                name: name.name.clone(),
+                name: name.name.as_str().to_string(),
             };
             self.error(error, name.loc);
             return None;
@@ -500,14 +500,18 @@ mod tests {
             qualifiers: vec![],
             constructor: ast::Constructor::Map(ast::MapType {
                 key: Some(Box::new(ast::Type::Named(ast::NamedType {
-                    name: "str".to_string(),
-                    args: None,
-                    loc: Location::dummy(),
+                    name: ast::Identifier {
+                        text: "str".to_string(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
                 }))),
                 value: Some(Box::new(ast::Type::Named(ast::NamedType {
-                    name: "int".to_string(),
-                    args: None,
-                    loc: Location::dummy(),
+                    name: ast::Identifier {
+                        text: "int".to_string(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
                 }))),
                 loc: Location::dummy(),
             }),

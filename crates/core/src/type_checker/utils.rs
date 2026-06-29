@@ -1,10 +1,6 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::{
-    ast,
-    type_checker::{patterns::Binding, TypeChecker},
-    types, Location, SymbolData, SymbolKind,
-};
+use crate::{ast, ir, type_checker::TypeChecker, types, Location, SymbolData, SymbolKind};
 
 impl TypeChecker<'_> {
     /// Create a local scope containing the given type params, then run the
@@ -38,15 +34,27 @@ impl TypeChecker<'_> {
             (visit(checker), param_types)
         })
     }
-}
 
-pub fn make_simple_declaration(binding: Binding) -> ast::VariableDeclaration {
-    ast::VariableDeclaration {
-        loc: binding.id.loc,
-        mutable: binding.mutable,
-        pattern: Some(ast::Pattern::Identifier(binding.id.into())),
-        value: Some(binding.value),
-        ..Default::default()
+    pub fn make_temp_variable(&mut self, at: Location, value: &ir::Expression) -> ir::Identifier {
+        let ty = value.ty();
+        self.make_temp_variable_with_type(at, value, ty)
+    }
+    pub fn make_temp_variable_with_type(
+        &mut self,
+        at: Location,
+        value: &ir::Expression,
+        ty: types::TypeId,
+    ) -> ir::Identifier {
+        let name = format!("${}", generate_id());
+        let symbol = self.ctx.register_symbol(SymbolData {
+            name,
+            ty,
+            kind: SymbolKind::constant(),
+            defined_at: at,
+            dependencies: value.dependencies().map(Into::into).collect::<Vec<_>>(),
+            ..Default::default()
+        });
+        ir::Identifier { loc: at, symbol }
     }
 }
 
@@ -54,22 +62,4 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 fn generate_id() -> usize {
     COUNTER.fetch_add(1, Ordering::Relaxed)
-}
-
-pub fn make_tmp_identifier(at: Location) -> ast::Identifier {
-    ast::Identifier {
-        loc: at,
-        text: format!("${}", generate_id()),
-    }
-}
-
-pub fn make_tmp_declaration(value: ast::Expression) -> ast::VariableDeclaration {
-    ast::VariableDeclaration {
-        loc: value.loc(),
-        pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
-            make_tmp_identifier(value.loc()),
-        ))),
-        value: Some(value),
-        ..Default::default()
-    }
 }

@@ -181,6 +181,14 @@ pub enum ConstructorPatternBody {
     Tuple(TuplePattern),
     Struct(StructPatternBody),
 }
+impl ConstructorPatternBody {
+    pub fn loc(&self) -> Location {
+        match self {
+            Self::Tuple(t) => t.loc,
+            Self::Struct(s) => s.loc,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructPatternBody {

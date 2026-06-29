@@ -1,11 +1,7 @@
 use crate::{
     ast, ir,
-    type_checker::{
-        patterns::{Binding, DesugaredPattern},
-        utils::make_tmp_identifier,
-        TypeChecker,
-    },
-    DiagnosticKind, Location, SymbolData, SymbolKind, TypeStore,
+    type_checker::{patterns::lower_pattern, TypeChecker},
+    DiagnosticKind,
 };
 
 impl TypeChecker<'_> {
@@ -13,154 +9,54 @@ impl TypeChecker<'_> {
         &mut self,
         node: ast::VariableDeclaration,
     ) -> Vec<ir::VariableDeclaration> {
-        let Some(pattern) = &node.pattern else {
-            return vec![];
-        };
-        let Some(value) = &node.value else {
+        let value = node.value.and_then(|v| self.visit_expression(v));
+        let Some(pattern) = node.pattern else {
             return vec![];
         };
         let loc = node.loc;
-        let pattern_loc = pattern.loc();
-        let docs = node.docs.clone();
 
-        let (prelim, desugared) = match pattern {
-            ast::Pattern::Identifier(_) | ast::Pattern::MutIdentifier(_) => {
-                (node, DesugaredPattern::default())
-            }
-            _ => {
-                let tmp_id = make_tmp_identifier(value.loc());
-                let prelim = ast::VariableDeclaration {
-                    loc: value.loc(),
-                    pattern: Some(ast::Pattern::Identifier(tmp_id.clone().into())),
-                    annotation: node.annotation.clone(),
-                    value: Some(value.to_owned()),
-                    ..Default::default()
-                };
-                let pattern = node.pattern.unwrap();
-                (prelim, self.desugar_pattern(pattern, tmp_id.into()))
-            }
+        let (mut stmts, value) = self.handle_prelim_stmt(&pattern, value);
+
+        let pattern = value
+            .as_ref()
+            .and_then(|v| self.visit_pattern(pattern, v, true));
+        let (Some(pattern), Some(value)) = (pattern, value) else {
+            return vec![];
         };
 
-        let DesugaredPattern { test, bindings } = desugared;
-
-        if test.is_some() {
-            self.error(DiagnosticKind::IrrefutablePatternExpected, pattern_loc);
+        let lowered = lower_pattern(pattern, value);
+        if lowered.test.is_some() {
+            self.error(DiagnosticKind::IrrefutablePatternExpected, loc);
             return vec![];
         }
-
-        let prelim = self.visit_prelim_declaration(prelim);
-
-        let decls = bindings
-            .into_iter()
-            .filter_map(|binding| self.visit_binding(docs.clone(), loc, binding));
-
-        prelim.into_iter().chain(decls).collect::<Vec<_>>()
+        stmts.extend(lowered.decls);
+        stmts
     }
 
-    fn visit_prelim_declaration(
+    fn handle_prelim_stmt(
         &mut self,
-        decl: ast::VariableDeclaration,
-    ) -> Option<ir::VariableDeclaration> {
-        let pattern = decl.pattern?;
-        let annotation = decl.annotation.map(|a| self.visit_type(a));
-        let value = decl.value.and_then(|v| self.visit_expression(v))?;
-        if let Some(annotation) = annotation {
-            let got_immutable = value.is_mutable() == Some(false);
-            self.check_assigned_type(annotation, value.ty(), got_immutable, decl.loc);
+        pattern: &ast::Pattern,
+        value: Option<ir::Expression>,
+    ) -> (Vec<ir::VariableDeclaration>, Option<ir::Expression>) {
+        use ast::Pattern::*;
+        let Some(value) = value else {
+            return (vec![], None);
         };
-        let mutable = match &pattern {
-            ast::Pattern::Identifier(_) => false,
-            ast::Pattern::MutIdentifier(_) => true,
-            _ => panic!(),
-        };
-        let identifier: ast::Identifier = match pattern {
-            ast::Pattern::Identifier(id) => id.into(),
-            ast::Pattern::MutIdentifier(id) => id.into(),
-            _ => panic!(),
-        };
-        self.check_identifier_sanity(&identifier);
-
-        match self.ctx.find_in_current_scope(identifier.as_str()) {
-            Some(symbol) => {
-                let error = DiagnosticKind::DuplicateIdentifier {
-                    name: identifier.as_str().to_string(),
-                };
-                self.error(error, identifier.loc);
-                symbol.borrow().access.read(identifier.loc);
-                return None;
-            }
-            None => {
-                let dependencies = value
-                    .dependencies()
-                    .map(|identifier| identifier.symbol.clone())
-                    .collect::<Vec<_>>();
-                let symbol = self.ctx.register_symbol(SymbolData {
-                    name: identifier.as_str().to_string(),
-                    ty: value.ty(),
-                    kind: SymbolKind::Value { mutable },
-                    defined_at: identifier.loc,
-                    dependencies,
-                    ..Default::default()
-                });
-                Some(ir::VariableDeclaration {
-                    loc: decl.loc,
-                    mutable: false,
-                    symbol,
-                    value,
-                })
-            }
+        if !matches!(pattern, Constructor(_) | Tuple(_)) {
+            return (vec![], Some(value));
         }
-    }
 
-    pub fn visit_binding(
-        &mut self,
-        docs: Option<ast::Docs>,
-        loc: Location,
-        binding: Binding,
-    ) -> Option<ir::VariableDeclaration> {
-        let Binding {
-            mutable,
-            id: identifier,
+        let id = self.make_temp_variable(value.loc(), &value);
+        let decl = ir::VariableDeclaration {
+            loc: value.loc(),
+            mutable: false,
+            symbol: id.symbol.clone(),
             value,
-        } = binding;
-        self.check_identifier_sanity(&identifier);
-        match self.ctx.find_in_current_scope(identifier.as_str()) {
-            Some(symbol) => {
-                let error = DiagnosticKind::DuplicateIdentifier {
-                    name: identifier.as_str().to_string(),
-                };
-                self.error(error, identifier.loc);
-                symbol.borrow().access.read(identifier.loc);
-                None
-            }
-            None => {
-                let value = self.visit_expression(value);
-                let dependencies = value.as_ref().map_or(vec![], |value| {
-                    value
-                        .dependencies()
-                        .map(|identifier| identifier.symbol.clone())
-                        .collect::<Vec<_>>()
-                });
-                let symbol = self.ctx.register_symbol(SymbolData {
-                    name: identifier.as_str().to_string(),
-                    ty: value.as_ref().map_or(TypeStore::UNKNOWN, |v| v.ty()),
-                    kind: SymbolKind::Value { mutable },
-                    docs: docs.map(|d| d.text),
-                    defined_at: identifier.loc,
-                    dependencies,
-                    ..Default::default()
-                });
-                Some(ir::VariableDeclaration {
-                    loc,
-                    mutable,
-                    symbol,
-                    value: value?,
-                })
-            }
-        }
+        };
+        (vec![decl], Some(id.into()))
     }
 
-    fn check_identifier_sanity(&mut self, identifier: &ast::Identifier) {
+    pub(crate) fn check_identifier_sanity(&mut self, identifier: &ast::Identifier) {
         if identifier.as_str().contains("$") {
             self.error(DiagnosticKind::InvalidIdentifierDollar, identifier.loc);
         }

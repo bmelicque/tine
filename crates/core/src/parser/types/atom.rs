@@ -17,6 +17,10 @@ impl Parser<'_> {
         let Some((Ok(Token::Ident(name)), mut range)) = self.tokens.next() else {
             panic!()
         };
+        let name = ast::Identifier {
+            loc: self.localize(range.clone()),
+            text: name,
+        };
 
         let args = if let Some((Ok(Token::Lt), _)) = self.tokens.peek() {
             let (args, end) = self.parse_type_args();

@@ -203,10 +203,15 @@ pub struct BinaryExpression {
     pub ty: TypeId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct BooleanLiteral {
     pub loc: Location,
     pub value: bool,
+}
+impl std::fmt::Display for BooleanLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -228,10 +233,22 @@ impl Block {
 
 impl From<Expression> for Block {
     fn from(value: Expression) -> Self {
+        match value {
+            Expression::Block(b) => b,
+            _ => Block {
+                loc: value.loc(),
+                ty: value.ty(),
+                statements: vec![Statement::Expression(value)],
+            },
+        }
+    }
+}
+impl From<Statement> for Block {
+    fn from(value: Statement) -> Self {
         Block {
             loc: value.loc(),
-            ty: value.ty(),
-            statements: vec![Statement::Expression(value)],
+            ty: TypeStore::UNIT,
+            statements: vec![value],
         }
     }
 }
@@ -263,6 +280,11 @@ pub struct Attribute {
 pub struct FloatLiteral {
     pub loc: Location,
     pub value: f64,
+}
+impl std::fmt::Display for FloatLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -297,10 +319,21 @@ pub struct FunctionParams {
     pub params: Vec<Identifier>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier {
     pub loc: Location,
     pub symbol: SymbolRef,
+}
+
+impl From<Identifier> for SymbolRef {
+    fn from(value: Identifier) -> Self {
+        value.symbol
+    }
+}
+impl From<&Identifier> for SymbolRef {
+    fn from(value: &Identifier) -> Self {
+        value.symbol.clone()
+    }
 }
 
 impl Identifier {
@@ -310,6 +343,13 @@ impl Identifier {
 
     pub fn ty(&self) -> TypeId {
         self.symbol.borrow().ty
+    }
+
+    pub fn locless(symbol: SymbolRef) -> Self {
+        Self {
+            loc: Location::dummy(),
+            symbol,
+        }
     }
 }
 
@@ -331,6 +371,11 @@ pub struct IfExpression {
 pub struct IntLiteral {
     pub loc: Location,
     pub value: i64,
+}
+impl std::fmt::Display for IntLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -359,6 +404,11 @@ pub struct MemberExpression {
 pub struct StringLiteral {
     pub loc: Location,
     pub value: String,
+}
+impl std::fmt::Display for StringLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
 }
 
 #[derive(Debug, Clone)]

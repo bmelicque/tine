@@ -2,12 +2,9 @@ use crate::{
     ast,
     diagnostics::DiagnosticKind,
     ir,
-    type_checker::{
-        analysis_context::{type_store::TypeStore, SymbolData},
-        utils::{make_simple_declaration, make_tmp_identifier},
-    },
+    type_checker::{analysis_context::type_store::TypeStore, patterns::lower_pattern},
     types::{self, OptionType, TypeId},
-    SymbolKind,
+    Location,
 };
 
 use super::TypeChecker;
@@ -42,117 +39,66 @@ impl TypeChecker<'_> {
         &mut self,
         node: ast::ForInExpression,
     ) -> Option<ir::ForInExpression> {
-        let node = self.lower_for_in_expression(node);
-
-        let (iterable, iter_type) = match node.iterable {
-            Some(i) => self.visit_for_in_iterable(*i),
-            None => (None, TypeStore::UNKNOWN),
-        };
-
-        let (Some(pattern), Some(iterable)) = (node.pattern, iterable) else {
-            self.visit_block_expression(node.body?);
+        let pattern_loc = node
+            .pattern
+            .as_ref()
+            .map_or(Location::default(), |p| p.loc());
+        let Some((pattern, iterable, element)) = (|| {
+            let (iterable, element_type) = self.visit_for_in_iterable(*node.iterable?);
+            let iterable = iterable?;
+            let pattern = self.visit_pattern(node.pattern?, &iterable, true)?;
+            Some((pattern, iterable, element_type))
+        })() else {
+            node.body.map(|b| self.visit_block_expression(b));
             return None;
         };
 
-        let ast::Pattern::Identifier(ast::IdentifierPattern(ident)) = pattern else {
-            panic!("expected an identifier pattern (other cases should've been lowered)")
-        };
+        let lowered = lower_pattern(pattern, iterable.clone());
+        self.with_scope(|self_| {
+            let element = self_.make_temp_variable_with_type(pattern_loc, &iterable, element);
+            let mut body = node.body.map(|b| self_.visit_block_expression(b))?;
+            body.statements.splice(
+                0..0,
+                lowered
+                    .decls
+                    .into_iter()
+                    .map(Into::into)
+                    .collect::<Vec<_>>(),
+            );
 
-        let body = node.body?;
-        let (ident, body) = self.with_scope(|self_| {
-            let ident = ir::Identifier {
-                loc: ident.loc,
-                symbol: self_.ctx.register_symbol(SymbolData {
-                    name: ident.text,
-                    ty: iter_type,
-                    kind: SymbolKind::Value { mutable: false },
-                    defined_at: ident.loc,
-                    dependencies: iterable.dependencies().map(|d| d.symbol.clone()).collect(),
-                    ..Default::default()
-                }),
-            };
-            let body = self_.visit_block_expression(body);
-            (ident, body)
-        });
+            let guard = self_.make_guard(lowered.test, element.loc)?;
+            body.statements.insert(0, guard);
 
-        let ty = self.get_loop_type(&body);
-
-        Some(ir::ForInExpression {
-            loc: node.loc,
-            element: ident,
-            iterable: Box::new(iterable),
-            body,
-            ty,
+            Some(ir::ForInExpression {
+                loc: node.loc,
+                element,
+                iterable: Box::new(iterable),
+                ty: self_.get_loop_type(&body),
+                body,
+            })
         })
     }
 
-    /// Lower pattern matching in the loop.
-    ///
-    /// For example:
-    ///
-    /// ```tine
-    /// for User {name, age} in users {
-    ///     ...
-    /// }
-    ///
-    /// // becomes
-    /// for tmp in userResults {
-    ///     const name = tmp.name
-    ///     const age = tmp.age
-    ///     ...
-    /// }
-    /// ```
-    fn lower_for_in_expression(&mut self, node: ast::ForInExpression) -> ast::ForInExpression {
-        match &node.pattern {
-            Some(ast::Pattern::Identifier(_)) | None => return node,
-            Some(_) => {}
+    fn make_guard(&mut self, test: Option<ir::Expression>, loc: Location) -> Option<ir::Statement> {
+        let Some(test) = test else {
+            self.error(DiagnosticKind::RefutablePatternExpected, loc);
+            return None;
         };
-        let pattern = node.pattern.unwrap();
-        let element = make_tmp_identifier(pattern.loc());
 
-        let desugared = self.desugar_pattern(pattern, element.clone().into());
-        let guard = desugared.test.map(|test| {
-            let loc = test.loc();
-            ast::Statement::Expression(ast::ExpressionStatement {
-                expression: Box::new(ast::Expression::If(ast::IfExpression {
+        Some(ir::Statement::Expression(ir::Expression::If(
+            ir::IfExpression {
+                loc,
+                consequent: ir::Block::from(ir::Statement::Continue(ir::ContinueStatement { loc })),
+                condition: Box::new(ir::Expression::Unary(ir::UnaryExpression {
                     loc,
-                    condition: Some(Box::new(ast::Expression::Unary(ast::UnaryExpression {
-                        loc,
-                        operator: ast::UnaryOperator::Bang,
-                        operand: Some(Box::new(test)),
-                    }))),
-                    consequent: Some(ast::BlockExpression {
-                        loc,
-                        statements: vec![ast::Statement::Continue(ast::ContinueStatement { loc })],
-                    }),
-                    alternate: None,
+                    operator: ir::UnaryOperator::Bang,
+                    operand: Box::new(test),
+                    ty: TypeStore::BOOLEAN,
                 })),
-            })
-        });
-        let mut statements: Vec<ast::Statement> = desugared
-            .bindings
-            .into_iter()
-            .map(|binding| make_simple_declaration(binding).into())
-            .collect();
-        if let Some(guard) = guard {
-            statements.insert(0, guard);
-        }
-        let body = match node.body {
-            Some(body) => ast::BlockExpression {
-                loc: body.loc,
-                statements: vec![statements, body.statements].concat(),
+                alternate: None,
+                ty: TypeStore::UNIT,
             },
-            None => ast::BlockExpression {
-                loc: node.loc,
-                statements,
-            },
-        };
-        ast::ForInExpression {
-            loc: node.loc,
-            pattern: Some(element.into()),
-            iterable: node.iterable,
-            body: Some(body),
-        }
+        )))
     }
 
     fn visit_for_in_iterable(

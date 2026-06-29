@@ -361,7 +361,10 @@ mod tests {
                 }))),
                 type_args: Some(vec![ast::Type::Named(ast::NamedType {
                     loc: Location::new(0, Span::new(10, 11)),
-                    name: "T".to_string(),
+                    name: ast::Identifier {
+                        loc: Location::new(0, Span::new(10, 11)),
+                        text: "T".to_string(),
+                    },
                     args: None,
                 })]),
                 args: vec![],
