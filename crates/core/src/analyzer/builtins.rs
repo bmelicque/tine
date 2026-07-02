@@ -1,5 +1,5 @@
 use crate::{
-    type_checker::{substitutions::SubstitutionTable, MethodReceiverKind, SymbolHandle},
+    type_checker::{analysis_context::MethodReceiverKind, substitutions::SubstitutionTable},
     types::{FunctionType, Type},
     Session, SymbolData, SymbolKind, SymbolRef, TypeStore,
 };

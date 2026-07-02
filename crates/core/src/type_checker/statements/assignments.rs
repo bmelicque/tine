@@ -1,12 +1,12 @@
 use crate::{
     ast::{self, Pattern},
     ir::{self, root_identifier},
-    type_checker::{patterns::lower_pattern, TypeChecker},
+    type_checker::{patterns::lower_pattern, type_store::TypeStore, TypeChecker},
     types::{self, Type, TypeId},
-    DiagnosticKind, TypeStore,
+    DiagnosticKind,
 };
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_assignment(&mut self, node: ast::Assignment) -> Vec<ir::Statement> {
         let value = node.value.and_then(|v| self.visit_expression(v));
         let Some(pattern) = node.pattern else {
@@ -28,7 +28,7 @@ impl TypeChecker<'_> {
                 let mut stmts = Vec::new();
                 let loc = pattern.loc();
 
-                let id: ir::Expression = self.make_temp_variable(loc, &value).into();
+                let id: ir::Expression = self.make_temp_variable(loc, &value).0.into();
                 stmts.push(ir::Statement::Assignment(ir::Assignment {
                     loc,
                     pattern: id.clone(),
@@ -78,14 +78,10 @@ impl TypeChecker<'_> {
     ) -> Option<ir::Expression> {
         let ast::IdentifierPattern(identifier) = pattern;
         let identifier = self.visit_identifier(identifier)?;
-        let handle = self.get_handle(identifier.symbol.clone())?;
-        if !handle.borrow().is_mutable() {
-            let error = DiagnosticKind::AssignmentToConstant {
-                name: identifier.as_name(),
-            };
-            self.error(error, identifier.loc);
-        }
-        self.check_assigned_type(handle.borrow().get_type(), against, false, identifier.loc);
+        let ty = self.symbol_type_id(identifier.symbol);
+        self.check_mutability(&identifier);
+
+        self.check_assigned_type(ty, against, false, identifier.loc);
         Some(identifier.into())
     }
 
@@ -96,19 +92,24 @@ impl TypeChecker<'_> {
     ) -> Option<ir::Expression> {
         let expression = self.visit_member_expression(expr)?.into();
         if let Some(root) = root_identifier(&expression) {
-            if let Some(handle) = self.session.get_handle(root.symbol.clone()) {
-                // visit expression adds a read that need to be converted to write
-                handle.read_to_write(root.loc);
-            }
-            if !root.symbol.borrow().is_mutable() {
-                let error = DiagnosticKind::AssignmentToConstant {
-                    name: root.as_name(),
-                };
-                self.error(error, expression.loc());
-            }
+            // visit expression adds a read that need to be converted to write
+            self.symbols
+                .get_symbol_mut(root.symbol)
+                .access()
+                .read_to_write(root.loc);
+
+            self.check_mutability(root);
         }
         self.check_assigned_type(against, expression.ty(), false, expression.loc());
         Some(expression)
+    }
+
+    fn check_mutability(&mut self, id: &ir::Identifier) {
+        if !self.symbols.is_mutable(id.symbol) {
+            let name = self.symbol_name(id.symbol).to_string();
+            let error = DiagnosticKind::AssignmentToConstant { name };
+            self.error(error, id.loc);
+        }
     }
 
     fn visit_indirect_assignee(
@@ -117,16 +118,19 @@ impl TypeChecker<'_> {
         against: TypeId,
     ) -> Option<ir::Expression> {
         let name = node.identifier.as_str();
-        let Some(info) = self.lookup_mut(&name) else {
+        let Some(symbol_id) = self.get_symbol_id(name) else {
             let error = DiagnosticKind::CannotFindName {
                 name: name.to_string(),
             };
             self.error(error, node.identifier.loc);
             return None;
         };
-        info.write(node.identifier.loc);
-        let ty = info.borrow().get_type();
-        let ty = match self.resolve(ty).clone() {
+        self.symbols
+            .get_symbol_mut(symbol_id)
+            .access()
+            .write(node.identifier.loc);
+        let symbol_ty = self.symbol_type_id(symbol_id);
+        let ty = match self.resolve(symbol_ty).clone() {
             Type::Signal(t) => {
                 self.check_assigned_type(t.inner, against, false, node.loc);
                 t.inner
@@ -137,7 +141,7 @@ impl TypeChecker<'_> {
             }
             _ => {
                 let error = DiagnosticKind::NotDereferenceable {
-                    type_name: self.session.display_type(ty),
+                    type_name: self.types.display(symbol_ty),
                 };
                 self.error(error, node.loc);
                 return None;
@@ -149,7 +153,8 @@ impl TypeChecker<'_> {
             operator: ir::UnaryOperator::Star,
             operand: Box::new(ir::Expression::Identifier(ir::Identifier {
                 loc: node.loc,
-                symbol: info.readonly(),
+                symbol: symbol_id,
+                ty: symbol_ty,
             })),
             ty,
         }))
@@ -160,14 +165,9 @@ impl TypeChecker<'_> {
 mod tests {
     use crate::{
         ast,
-        type_checker::{test_utils::MockLoader, TypeChecker},
-        DiagnosticKind, Location, Session, SymbolData, SymbolKind, TypeStore,
+        type_checker::{symbols::*, type_store::TypeStore, TypeChecker},
+        DiagnosticKind, Location,
     };
-
-    fn make_type_checker() -> TypeChecker<'static> {
-        let session = Session::new(Box::new(MockLoader));
-        TypeChecker::new(Box::leak(Box::new(session)), 0)
-    }
 
     fn dummy_assignment() -> ast::Assignment {
         ast::Assignment {
@@ -187,11 +187,11 @@ mod tests {
 
     #[test]
     fn visit_assignment_simple() {
-        let mut checker = make_type_checker();
-        checker.ctx.register_symbol(SymbolData {
+        let mut checker = TypeChecker::new();
+        checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
             name: "a".to_string(),
             ty: TypeStore::INTEGER,
-            kind: SymbolKind::Value { mutable: true },
+            mutable: true,
             ..Default::default()
         });
 
@@ -201,11 +201,10 @@ mod tests {
 
     #[test]
     fn visit_assignment_to_constant() {
-        let mut checker = make_type_checker();
-        checker.ctx.register_symbol(SymbolData {
+        let mut checker = TypeChecker::new();
+        checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
             name: "a".to_string(),
             ty: TypeStore::INTEGER,
-            kind: SymbolKind::Value { mutable: false },
             ..Default::default()
         });
         checker.visit_assignment(dummy_assignment());
@@ -218,11 +217,11 @@ mod tests {
 
     #[test]
     fn visit_assignment_bad_type() {
-        let mut checker = make_type_checker();
-        checker.ctx.register_symbol(SymbolData {
+        let mut checker = TypeChecker::new();
+        checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
             name: "a".to_string(),
             ty: TypeStore::FLOAT,
-            kind: SymbolKind::Value { mutable: true },
+            mutable: true,
             ..Default::default()
         });
         checker.visit_assignment(dummy_assignment());
@@ -235,7 +234,7 @@ mod tests {
 
     #[test]
     fn visit_assignment_unknown_variable() {
-        let mut checker = make_type_checker();
+        let mut checker = TypeChecker::new();
         checker.visit_assignment(dummy_assignment());
         assert_eq!(checker.diagnostics.len(), 1);
         assert!(matches!(

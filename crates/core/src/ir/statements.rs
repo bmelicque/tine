@@ -1,10 +1,10 @@
 use enum_from_derive::EnumFrom;
 
 use crate::{
-    ir::{Block, Expression, FunctionExpression, Identifier},
-    type_checker::TypeSymbolBody,
+    ir::{Block, Expression, FunctionExpression},
+    type_checker::symbols::*,
     types::TypeId,
-    Location, ModuleId, ModulePath, SymbolRef,
+    Location, ModuleId, ModulePath,
 };
 
 #[derive(Debug, Clone, EnumFrom)]
@@ -87,36 +87,31 @@ pub struct ContinueStatement {
 #[derive(Debug, Clone)]
 pub struct EnumDefinition {
     pub loc: Location,
-    pub name: Identifier,
-}
-impl EnumDefinition {
-    pub fn ty(&self) -> TypeId {
-        self.name.symbol.as_type()
-    }
-
-    pub fn variants(&self) -> Vec<SymbolRef> {
-        self.name.symbol.as_variants().unwrap()
-    }
-
-    pub fn methods(&self) -> Vec<SymbolRef> {
-        self.name.symbol.as_methods().unwrap()
-    }
+    pub symbol: EnumSymbolId,
 }
 
 #[derive(Debug, Clone)]
 pub struct FunctionDefinition {
     pub loc: Location,
-    pub name: Identifier,
-    pub params: Vec<Identifier>,
+    pub name: (Location, FunctionName),
+    pub params: Vec<(Location, VariableSymbolId)>,
     pub body: Block,
     pub ty: TypeId,
+}
+#[derive(Debug, Clone, EnumFrom)]
+pub enum FunctionName {
+    Function(FunctionSymbolId),
+    StaticMethod(MethodSymbolId),
 }
 
 impl Into<FunctionExpression> for FunctionDefinition {
     fn into(self) -> FunctionExpression {
         FunctionExpression {
             loc: self.loc,
-            name: Some(self.name),
+            name: match &self.name.1 {
+                FunctionName::Function(f) => Some((self.name.0, *f)),
+                FunctionName::StaticMethod(_) => panic!(),
+            },
             params: self.params,
             body: self.body,
             ty: self.ty,
@@ -127,10 +122,10 @@ impl Into<FunctionExpression> for FunctionDefinition {
 #[derive(Debug, Clone)]
 pub struct MethodDefinition {
     pub loc: Location,
-    pub receiver: Identifier,
+    pub receiver: (Location, TypeSymbolId),
     pub mutating: bool,
-    pub name: Identifier,
-    pub params: Vec<Identifier>,
+    pub name: (Location, MethodSymbolId),
+    pub params: Vec<(Location, VariableSymbolId)>,
     pub body: Block,
     pub ty: TypeId,
 }
@@ -144,20 +139,7 @@ pub struct ReturnStatement {
 #[derive(Debug, Clone)]
 pub struct StructDefinition {
     pub loc: Location,
-    pub name: Identifier,
-}
-impl StructDefinition {
-    pub fn ty(&self) -> TypeId {
-        self.name.symbol.as_type()
-    }
-
-    pub fn body(&self) -> TypeSymbolBody {
-        self.name.symbol.as_type_body().unwrap()
-    }
-
-    pub fn methods(&self) -> Vec<SymbolRef> {
-        self.name.symbol.as_methods().unwrap()
-    }
+    pub symbol: StructSymbolId,
 }
 
 #[derive(Debug, Clone)]
@@ -165,13 +147,13 @@ pub struct UseDeclaration {
     pub loc: Location,
     pub module: ModuleId,
     pub path: ModulePath,
-    pub symbols: Vec<SymbolRef>,
+    pub symbols: Vec<SymbolId>,
 }
 
 #[derive(Debug, Clone)]
 pub struct VariableDeclaration {
     pub loc: Location,
     pub mutable: bool,
-    pub symbol: SymbolRef,
+    pub symbol: VariableSymbolId,
     pub value: Expression,
 }

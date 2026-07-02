@@ -2,11 +2,11 @@ use crate::{
     ast,
     diagnostics::DiagnosticKind,
     ir,
-    type_checker::{analysis_context::type_store::TypeStore, patterns::lower_pattern, TypeChecker},
+    type_checker::{patterns::lower_pattern, type_store::TypeStore, TypeChecker},
     types::{self, OptionType, TypeId},
 };
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_if_expression(&mut self, node: ast::IfExpression) -> Option<ir::IfExpression> {
         let condition = node.condition.and_then(|c| self.visit_condition(*c));
         let consequent = node
@@ -46,7 +46,7 @@ impl TypeChecker<'_> {
         let condition_type = condition.ty();
         if condition_type != TypeStore::BOOLEAN && condition_type != TypeStore::UNKNOWN {
             let error = DiagnosticKind::InvalidCondition {
-                type_name: self.session.display_type(condition_type),
+                type_name: self.types.display(condition_type),
             };
             self.error(error, condition.loc());
         }
@@ -120,8 +120,8 @@ impl TypeChecker<'_> {
         if let Some(expected) = expected {
             if !self.can_be_assigned_to(alternate.ty, expected) {
                 let error = DiagnosticKind::MismatchedBranchTypes {
-                    expected: self.session.display_type(expected),
-                    got: self.session.display_type(alternate.ty),
+                    expected: self.types.display(expected),
+                    got: self.types.display(alternate.ty),
                 };
                 self.error(error, alternate.loc);
             }
@@ -147,13 +147,12 @@ impl TypeChecker<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{type_checker::test_utils::MockLoader, types, Location, Session};
+    use crate::{types, Location};
 
     use super::*;
 
-    fn visit_if_expression(node: ast::IfExpression) -> (TypeId, TypeChecker<'static>) {
-        let session = Session::new(Box::new(MockLoader));
-        let mut checker = TypeChecker::new(Box::leak(Box::new(session)), 0);
+    fn visit_if_expression(node: ast::IfExpression) -> (TypeId, TypeChecker) {
+        let mut checker = TypeChecker::new();
         let ty = checker
             .visit_if_expression(node)
             .map_or(TypeStore::UNKNOWN, |e| e.ty);
@@ -204,11 +203,11 @@ mod tests {
             consequent: Some(int_block_expression()),
             alternate: None,
         };
-        let (ty, checker) = visit_if_expression(node);
+        let (ty, mut checker) = visit_if_expression(node);
         assert_eq!(checker.diagnostics.len(), 0);
         assert_eq!(
             ty,
-            checker.session.intern(types::Type::Option(OptionType {
+            checker.types.add(types::Type::Option(OptionType {
                 some: TypeStore::INTEGER
             }))
         );

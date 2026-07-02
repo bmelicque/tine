@@ -5,7 +5,6 @@ use crate::{
     locations::Span,
     type_checker::{CheckResult, TypeChecker},
     types::{Type, TypeId},
-    SymbolRef, Token, TypeStore,
 };
 
 #[derive(Debug, Clone)]
@@ -31,7 +30,6 @@ impl Session {
                 .get_mut(&module_id)
                 .unwrap()
                 .append(&mut result.diagnostics);
-            self.symbols.append(&mut result.symbols);
             self.exports.insert(module_id, result.exports);
             self.ir.insert(module_id, result.ir);
         }
@@ -41,8 +39,8 @@ impl Session {
         let module = &self.module_graph.nodes[id];
         match module.name.clone() {
             ModulePath::Real(_) => {
-                let checker = TypeChecker::new(&self, id);
-                checker.check()
+                let checker = TypeChecker::new(self, id);
+                checker.check_module()
             }
             ModulePath::Virtual(name) => self.check_virtual_module(id, &name),
         }

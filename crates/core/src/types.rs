@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::SymbolRef;
+use crate::type_checker::symbols::Symbol;
 
 pub type TypeId = u32;
 
@@ -229,11 +229,11 @@ pub struct StructField {
     pub name: String,
     pub def: TypeId,
 }
-impl From<&SymbolRef> for StructField {
-    fn from(s: &SymbolRef) -> Self {
+impl From<&dyn Symbol> for StructField {
+    fn from(s: &dyn Symbol) -> Self {
         StructField {
-            name: s.as_name(),
-            def: s.as_type(),
+            name: s.name().to_string(),
+            def: s.ty(),
         }
     }
 }

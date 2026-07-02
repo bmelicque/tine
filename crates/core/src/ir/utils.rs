@@ -3,7 +3,7 @@ use crate::ir::{
     ReturnStatement, Statement,
 };
 
-fn find_breaks(expr: &Expression) -> Vec<BreakStatement> {
+fn find_breaks(expr: &Expression) -> Vec<&BreakStatement> {
     match expr {
         Expression::Block(expr) => expr.find_breaks(),
         Expression::For(expr) => expr.find_breaks(),
@@ -14,21 +14,20 @@ fn find_breaks(expr: &Expression) -> Vec<BreakStatement> {
 }
 
 impl Block {
-    pub fn find_breaks(&self) -> Vec<BreakStatement> {
-        let mut stmts = Vec::new();
-        for statement in self.statements.iter() {
-            match statement {
-                Statement::Break(stmt) => stmts.push(stmt.clone()),
-                Statement::Expression(expr) => stmts.extend(find_breaks(&expr)),
-                _ => (),
-            }
-        }
-        stmts
+    pub fn find_breaks(&self) -> Vec<&BreakStatement> {
+        self.statements
+            .iter()
+            .flat_map(|stmt| match stmt {
+                Statement::Break(stmt) => vec![stmt],
+                Statement::Expression(expr) => find_breaks(&expr),
+                _ => vec![],
+            })
+            .collect()
     }
 }
 
 impl IfExpression {
-    pub fn find_breaks(&self) -> Vec<BreakStatement> {
+    pub fn find_breaks(&self) -> Vec<&BreakStatement> {
         vec![
             self.consequent.find_breaks(),
             self.alternate.as_ref().map_or(vec![], |a| a.find_breaks()),
@@ -38,18 +37,18 @@ impl IfExpression {
 }
 
 impl ForExpression {
-    pub fn find_breaks(&self) -> Vec<BreakStatement> {
+    pub fn find_breaks(&self) -> Vec<&BreakStatement> {
         self.body.find_breaks()
     }
 }
 
 impl ForInExpression {
-    pub fn find_breaks(&self) -> Vec<BreakStatement> {
+    pub fn find_breaks(&self) -> Vec<&BreakStatement> {
         self.body.find_breaks()
     }
 }
 
-fn find_returns(expr: &Expression) -> Vec<ReturnStatement> {
+fn find_returns(expr: &Expression) -> Vec<&ReturnStatement> {
     match expr {
         Expression::Block(expr) => expr.find_returns(),
         Expression::For(expr) => expr.find_returns(),
@@ -60,11 +59,11 @@ fn find_returns(expr: &Expression) -> Vec<ReturnStatement> {
 }
 
 impl Block {
-    pub fn find_returns(&self) -> Vec<ReturnStatement> {
+    pub fn find_returns(&self) -> Vec<&ReturnStatement> {
         let mut stmts = Vec::new();
         for statement in self.statements.iter() {
             match statement {
-                Statement::Return(stmt) => stmts.push(stmt.clone()),
+                Statement::Return(stmt) => stmts.push(stmt),
                 Statement::Expression(expr) => stmts.extend(find_returns(&expr)),
                 _ => (),
             }
@@ -74,7 +73,7 @@ impl Block {
 }
 
 impl IfExpression {
-    pub fn find_returns(&self) -> Vec<ReturnStatement> {
+    pub fn find_returns(&self) -> Vec<&ReturnStatement> {
         vec![
             self.consequent.find_returns(),
             self.alternate.as_ref().map_or(vec![], |a| a.find_returns()),
@@ -84,13 +83,13 @@ impl IfExpression {
 }
 
 impl ForExpression {
-    pub fn find_returns(&self) -> Vec<ReturnStatement> {
+    pub fn find_returns(&self) -> Vec<&ReturnStatement> {
         self.body.find_returns()
     }
 }
 
 impl ForInExpression {
-    pub fn find_returns(&self) -> Vec<ReturnStatement> {
+    pub fn find_returns(&self) -> Vec<&ReturnStatement> {
         self.body.find_returns()
     }
 }

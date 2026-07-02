@@ -1,18 +1,19 @@
 use crate::{
     ast, ir,
     type_checker::{
-        analysis_context::{symbols::TypeSymbolBody, type_store::TypeStore},
         substitutions::{SubstitutionTable, Substitutions},
+        symbols::{MethodSymbolId, StructSymbol, StructSymbolId, TypeSymbolBody},
+        type_store::TypeStore,
         TypeChecker,
     },
-    types, DiagnosticKind, SymbolKind, SymbolRef,
+    types, DiagnosticKind, Location,
 };
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_member_expression(
         &mut self,
         expr: ast::MemberExpression,
-    ) -> Option<ir::MemberExpression> {
+    ) -> Option<ir::Expression> {
         let Some(member) = &expr.prop else {
             expr.object.and_then(|o| self.visit_expression(*o));
             // missing member already reported during parsing phase
@@ -20,17 +21,17 @@ impl TypeChecker<'_> {
         };
         match member {
             ast::MemberProp::FieldName(_) => self.visit_field_access(expr),
-            ast::MemberProp::Index(_) => self.visit_tuple_indexing(expr),
+            ast::MemberProp::Index(_) => self.visit_tuple_indexing(expr).map(Into::into),
         }
     }
 
-    fn visit_field_access(&mut self, expr: ast::MemberExpression) -> Option<ir::MemberExpression> {
+    fn visit_field_access(&mut self, expr: ast::MemberExpression) -> Option<ir::Expression> {
         debug_assert!(matches!(expr.prop, Some(ast::MemberProp::FieldName(_))));
         let object = expr.object.and_then(|o| self.visit_expression(*o))?;
         let Some(ast::MemberProp::FieldName(field_name)) = expr.prop else {
             unreachable!()
         };
-        let Some(root_symbol) = self.resolve_type_symbol(object.ty()) else {
+        let Some(root_symbol) = self.get_struct_symbol(object.ty()).cloned() else {
             let error = DiagnosticKind::UnknownMember {
                 member: field_name.as_str().to_string(),
             };
@@ -39,66 +40,81 @@ impl TypeChecker<'_> {
         };
         let substitutions = self.infer_type_args(&root_symbol, object.ty());
 
-        let SymbolKind::Struct {
-            body: TypeSymbolBody::Struct(fields),
-            methods,
-        } = &root_symbol.borrow().kind
-        else {
-            panic!();
+        let (object, field) =
+            match self.visit_field_as_prop(&root_symbol, object, field_name, &substitutions) {
+                Ok(expr) => return Some(expr.into()),
+                Err(r) => r,
+            };
+        self.visit_field_as_method(object, field, &root_symbol.methods, &substitutions)
+            .map(Into::into)
+    }
+
+    /// Return the `root` back on error
+    fn visit_field_as_prop(
+        &mut self,
+        root_symbol: &StructSymbol,
+        root: ir::Expression,
+        field: ast::Identifier,
+        substitutions: &Substitutions,
+    ) -> Result<ir::MemberExpression, (ir::Expression, ast::Identifier)> {
+        let fields = match &root_symbol.body {
+            TypeSymbolBody::Struct(s) => s,
+            _ => return Err((root, field)),
         };
 
-        let field = fields.iter().find(|(name, _)| *name == field_name.text);
-        if let Some((_, symbol)) = field {
-            let ty = substitutions.apply(&mut self.session.types(), symbol.as_type());
-            return Some(ir::MemberExpression {
-                loc: expr.loc,
-                object: Box::new(object),
-                ty,
-                member: ir::Identifier {
-                    loc: field_name.loc,
-                    symbol: symbol.to_owned(),
-                },
-            });
-        }
+        let Some((_, symbol_id)) = fields.iter().find(|(name, _)| *name == field.text) else {
+            return Err((root, field));
+        };
+        let ty = self.symbol_type_id(*symbol_id);
+        let ty = substitutions.apply(&mut self.types, ty);
+        Ok(ir::MemberExpression {
+            loc: Location::merge(root.loc(), field.loc),
+            object: Box::new(root),
+            ty,
+            member: (field.loc, *symbol_id),
+        })
+    }
 
+    fn visit_field_as_method(
+        &mut self,
+        object: ir::Expression,
+        field: ast::Identifier,
+        methods: &Vec<MethodSymbolId>,
+        substitutions: &Substitutions,
+    ) -> Option<ir::MethodExpression> {
         let matching_methods = methods
-            .iter()
+            .into_iter()
             .filter(|m| {
-                self.method_matches(m, field_name.as_str(), object.is_mutable(), &substitutions)
+                let is_mutable = self.is_mutable(&object);
+                self.method_matches(**m, field.as_str(), is_mutable, &substitutions)
             })
             .collect::<Vec<_>>();
 
         if matching_methods.len() == 0 {
             let error = DiagnosticKind::UnknownMember {
-                member: field_name.as_str().to_string(),
+                member: field.as_str().to_string(),
             };
-            self.error(error, field_name.loc);
+            self.error(error, field.loc);
             return None;
         }
 
-        let most_concrete = matching_methods
+        let &most_concrete_id = matching_methods
             .into_iter()
-            .max_by_key(|m| method_concreteness(m))?;
-        let object_mutablity = object.is_mutable();
-        let is_method_mutating = match &most_concrete.borrow().kind {
-            SymbolKind::Method { receiver, .. } => receiver.is_mutable(), // TODO: handle mutability
-            // Other symbol kinds should have been filtered out above
-            _ => unreachable!(),
-        };
+            .max_by_key(|m| self.symbols.get(**m).concreteness())?;
+        let object_mutablity = self.is_mutable(&object);
+        let is_method_mutating = self.symbols.get(most_concrete_id).is_mutating();
         if is_method_mutating && object_mutablity == Some(false) {
-            self.error(DiagnosticKind::MutatingMethodOnImmutable, field_name.loc);
+            self.error(DiagnosticKind::MutatingMethodOnImmutable, field.loc);
         }
 
-        let ty = substitutions.apply(&mut self.session.types(), most_concrete.as_type());
+        let ty = self.symbol_type_id(most_concrete_id);
+        let ty = substitutions.apply(&mut self.types, ty);
 
-        Some(ir::MemberExpression {
-            loc: expr.loc,
-            object: Box::new(object),
+        Some(ir::MethodExpression {
+            loc: Location::merge(object.loc(), field.loc),
+            host: Box::new(object),
             ty,
-            member: ir::Identifier {
-                loc: field_name.loc,
-                symbol: most_concrete.to_owned(),
-            },
+            method: (field.loc, most_concrete_id),
         })
     }
 
@@ -112,7 +128,7 @@ impl TypeChecker<'_> {
 
         // check object
         let object = expr.object.and_then(|o| self.visit_expression(*o))?;
-        let Some(root_symbol) = self.resolve_type_symbol(object.ty()) else {
+        let Some(root_symbol) = self.get_struct_symbol(object.ty()).cloned() else {
             let error = DiagnosticKind::UnknownMember {
                 member: index.value.to_string(),
             };
@@ -123,18 +139,15 @@ impl TypeChecker<'_> {
         let types::Type::Tuple(ty) = self.resolve(object.ty()) else {
             if object.ty() != TypeStore::UNKNOWN {
                 let error = DiagnosticKind::ExpectedTuple {
-                    got: self.session.display_type(object.ty()),
+                    got: self.types.display(object.ty()),
                 };
                 self.error(error, object.loc());
             }
             return None;
         };
-        let SymbolKind::Struct {
-            body: TypeSymbolBody::Tuple(elements),
-            ..
-        } = &root_symbol.borrow().kind
-        else {
-            panic!();
+        let elements = match &root_symbol.body {
+            TypeSymbolBody::Struct(s) => s,
+            _ => panic!(),
         };
 
         // check index is in range
@@ -154,56 +167,39 @@ impl TypeChecker<'_> {
             return None;
         }
 
-        let member = ir::Identifier {
-            loc: index.loc,
-            symbol: elements[value].clone(),
-        };
-
         Some(ir::MemberExpression {
             loc: expr.loc,
             object: Box::new(object),
             ty: ty.elements[value],
-            member,
+            member: (index.loc, elements[value].1),
         })
+    }
+
+    fn get_struct_symbol(&self, mut ty: types::TypeId) -> Option<&StructSymbol> {
+        while let types::Type::Ref(r) = self.resolve(ty) {
+            ty = r.inner
+        }
+        self.symbols.find::<StructSymbolId, _>(|s| s.ty == ty)
     }
 
     fn method_matches(
         &self,
-        symbol: &SymbolRef,
+        symbol_id: MethodSymbolId,
         name: &str,
         mutable: Option<bool>,
         type_args: &Substitutions,
     ) -> bool {
+        let symbol = self.symbols.get(symbol_id);
         // Keeping methods with same name
-        if symbol.borrow().name != name {
-            return false;
-        }
-        let SymbolKind::Method {
-            owner_args,
-            receiver,
-            ..
-        } = &symbol.borrow().kind
-        else {
-            return false;
-        };
-
-        // TODO: remove this
-        if receiver.is_mutable() && mutable == Some(false) {
+        if symbol.name != name {
             return false;
         }
 
-        // No type args or generic implementation
-        if owner_args.len() == 0 {
-            return true;
+        if symbol.is_mutating() && mutable == Some(false) {
+            return false;
         }
 
-        return *owner_args == SubstitutionTable::from(type_args);
+        symbol.concreteness() == 0
+            || symbol.matches_substitutions(&SubstitutionTable::from(type_args))
     }
-}
-
-fn method_concreteness(method: &SymbolRef) -> usize {
-    let SymbolKind::Method { owner_args, .. } = &method.borrow().kind else {
-        panic!()
-    };
-    owner_args.len()
 }

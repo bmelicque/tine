@@ -3,11 +3,11 @@ use crate::{
     ast::{self, UseTree},
     common::{use_decl_to_paths, ModuleImports},
     ir,
-    type_checker::TypeChecker,
-    DiagnosticKind, Location, SymbolRef,
+    type_checker::{symbols::SymbolId, TypeChecker},
+    DiagnosticKind, Location,
 };
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_item(&mut self, node: ast::Item) -> Vec<ir::Statement> {
         match node {
             ast::Item::Invalid(_) => vec![],
@@ -37,7 +37,7 @@ impl TypeChecker<'_> {
     ) -> Option<ir::UseDeclaration> {
         debug_assert_eq!(node.relative_count, 0);
         let module_name = node.tree.path[0].as_str();
-        let Some(module_id) = self.session.get_module_id(module_name.into()) else {
+        let Some(module_id) = self.loader.find_id(&module_name.into()) else {
             let error = DiagnosticKind::CannotFindModule {
                 name: module_name.to_string(),
             };
@@ -61,7 +61,7 @@ impl TypeChecker<'_> {
                 .collect()
         };
 
-        let path = self.session.read_module(module_id).name.clone();
+        let path = self.loader.get_name(module_id).clone();
         Some(ir::UseDeclaration {
             loc: node.loc,
             module: module_id,
@@ -72,8 +72,8 @@ impl TypeChecker<'_> {
 
     fn visit_use_real_modules(&mut self, node: ast::UseDeclaration) -> Vec<ir::UseDeclaration> {
         debug_assert_ne!(node.relative_count, 0);
-        let base_path = self.get_file_name();
-        let imports = use_decl_to_paths(&base_path, &node);
+        let base_path = self.module_path();
+        let imports = use_decl_to_paths(base_path, &node);
 
         imports
             .into_iter()
@@ -90,7 +90,7 @@ impl TypeChecker<'_> {
         loc: Location,
     ) -> Option<ir::UseDeclaration> {
         let module_name = imports.module_name;
-        let Some(module_id) = self.session.get_module_id(module_name.clone()) else {
+        let Some(module_id) = self.loader.find_id(&module_name) else {
             panic!("Cannot find module '{}' within parsed modules", module_name)
         };
         let symbols = imports
@@ -112,18 +112,21 @@ impl TypeChecker<'_> {
     /// Visit an imported element.
     ///
     /// Subvalue imports (like `use Module.value.subvalue`) are not permitted (yet?).
-    fn visit_imported_name(&mut self, module: ModuleId, tree: &UseTree) -> Option<SymbolRef> {
+    fn visit_imported_name(&mut self, module: ModuleId, tree: &UseTree) -> Option<SymbolId> {
         let path_element = &tree.path[0];
         let name = path_element.as_str();
-        let Some(symbol) = self.session.find_export(module, name) else {
+        let Some(symbol) = self.find_export(module, name) else {
             let error = DiagnosticKind::UnknownMember {
                 member: name.to_string(),
             };
             self.error(error, path_element.loc());
             return None;
         };
-        symbol.borrow().access.read(path_element.loc());
-        self.ctx.import(symbol.clone());
+        self.symbols
+            .get_symbol_mut(symbol)
+            .access()
+            .read(path_element.loc());
+        self.current_scope().bind(name.to_string(), symbol);
         if tree.path.len() > 1 || tree.sub_trees.len() > 0 {
             self.error(DiagnosticKind::UnexpectedModuleTree, tree.loc());
             return None;

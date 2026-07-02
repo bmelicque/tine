@@ -6,11 +6,15 @@ use std::{
 use anyhow::anyhow;
 
 use crate::{
+    analysis_context::{symbols::SymbolId, type_store::TypeStore},
     analyzer::{graph::ModuleGraph, loader::ModuleLoader, modules::Module, ModuleId},
     ast, ir, pretty_print_error,
-    type_checker::{display_raw_type, display_type, SymbolHandle},
+    type_checker::analysis_context::{
+        symbols::{MethodSymbol, SymbolTable},
+        type_display::{display_raw_type, display_type},
+    },
     types::{Type, TypeId},
-    Diagnostic, ModulePath, SymbolKind, SymbolRef, TypeStore,
+    Diagnostic, ModulePath,
 };
 
 pub type SessionLoader = dyn ModuleLoader + Sync + Send;
@@ -27,12 +31,12 @@ pub struct Session {
     /// module's type checker.
     pub(super) types: Mutex<TypeStore>,
     /// An arena for all the symbols (i.e. names) declared and defined accross
-    /// the project. See `SymbolHandle` for more details.
-    pub(super) symbols: Vec<SymbolHandle>,
+    /// the project.
+    pub symbols: SymbolTable,
     /// A list of builtin functions and types
-    pub(super) builtins: Vec<SymbolRef>,
+    pub(super) builtins: Vec<SymbolId>,
     /// All symbols exported by each module.
-    pub(super) exports: HashMap<ModuleId, Vec<SymbolRef>>,
+    pub(super) exports: HashMap<ModuleId, Vec<SymbolId>>,
     pub(super) diagnostics: HashMap<ModuleId, Vec<Diagnostic>>,
 }
 
@@ -45,7 +49,7 @@ impl Session {
             parsed: HashMap::new(),
             ir: HashMap::new(),
             types: Mutex::new(TypeStore::new()),
-            symbols: Vec::new(),
+            symbols: SymbolTable::default(),
             builtins: Vec::new(),
             exports: HashMap::new(),
             diagnostics: HashMap::new(),
@@ -127,14 +131,6 @@ impl Session {
         self.types.lock().unwrap()
     }
 
-    pub fn symbols(&self) -> Vec<SymbolRef> {
-        self.symbols.iter().map(|s| s.readonly()).collect()
-    }
-
-    pub fn get_handle(&self, symbol: SymbolRef) -> Option<SymbolHandle> {
-        self.symbols.iter().find(|s| s.has_ref(&symbol)).cloned()
-    }
-
     pub fn find_type(&self, ty: &Type) -> Option<TypeId> {
         self.types.lock().unwrap().find_id(ty)
     }
@@ -147,7 +143,7 @@ impl Session {
         display_raw_type(&types, id)
     }
 
-    pub fn find_method(&self, name: &str, ty: TypeId) -> Option<SymbolRef> {
+    pub fn find_method(&self, name: &str, ty: TypeId) -> Option<&MethodSymbol> {
         self.symbols
             .iter()
             .find(|s| {

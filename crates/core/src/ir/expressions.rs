@@ -3,7 +3,7 @@ use enum_from_derive::EnumFrom;
 use crate::{
     ast,
     ir::Statement,
-    type_checker::{SymbolRef, TypeStore},
+    type_checker::{symbols::*, type_store::TypeStore},
     types::TypeId,
     Location,
 };
@@ -25,6 +25,7 @@ pub enum Expression {
     IntLiteral(IntLiteral),
     Map(MapLiteral),
     Member(MemberExpression),
+    Method(MethodExpression),
     StringLiteral(StringLiteral),
     Struct(StructLiteral),
     Tuple(TupleExpression),
@@ -50,6 +51,7 @@ impl Expression {
             Expression::IntLiteral(i) => i.loc,
             Expression::Map(m) => m.loc,
             Expression::Member(m) => m.loc,
+            Expression::Method(m) => m.loc,
             Expression::StringLiteral(s) => s.loc,
             Expression::Struct(s) => s.loc,
             Expression::Tuple(tuple) => tuple.loc,
@@ -70,11 +72,12 @@ impl Expression {
             Expression::For(f) => f.ty,
             Expression::ForIn(f) => f.ty,
             Expression::Function(function) => function.ty,
-            Expression::Identifier(identifier) => identifier.ty(),
+            Expression::Identifier(identifier) => identifier.ty,
             Expression::If(if_expression) => if_expression.ty,
             Expression::IntLiteral(_) => TypeStore::INTEGER,
             Expression::Map(m) => m.ty,
             Expression::Member(m) => m.ty,
+            Expression::Method(m) => m.ty,
             Expression::StringLiteral(_) => TypeStore::STRING,
             Expression::Struct(s) => s.ty,
             Expression::Tuple(tuple) => tuple.ty,
@@ -143,6 +146,7 @@ impl Expression {
                     Box::new(acc.chain(entry.key.walk()).chain(entry.value.walk()))
                 }),
             Self::Member(m) => m.object.walk(),
+            Self::Method(m) => m.host.walk(),
             Self::Struct(s) => s
                 .fields
                 .iter()
@@ -154,30 +158,11 @@ impl Expression {
             Self::Unary(u) => u.operand.walk(),
         }
     }
-
-    /// Iterates through all the symbols captured by this expression
-    pub fn dependencies<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Identifier> + 'a> {
-        Box::new(
-            self.walk()
-                .filter_map(|child| child.as_identifier())
-                .filter(|i| !i.loc.is_within(self.loc())),
-        )
-    }
-
-    pub fn is_pure(&self) -> bool {
-        self.dependencies().next().is_none()
-    }
-
-    pub fn is_mutable(&self) -> Option<bool> {
-        match self {
-            Expression::Identifier(id) => Some(id.symbol.borrow().is_mutable()),
-            Expression::Member(m) => m.object.is_mutable(),
-            _ => None,
-        }
-    }
 }
 
-fn iterate<'a>(expressions: &'a [Expression]) -> Box<dyn Iterator<Item = &'a Expression> + 'a> {
+fn iterate<'i: 's, 's>(
+    expressions: &'i [Expression],
+) -> Box<dyn Iterator<Item = &'i Expression> + 'i> {
     expressions
         .iter()
         .fold(Box::new(std::iter::empty()), |acc, arg| {
@@ -298,7 +283,7 @@ pub struct ForExpression {
 #[derive(Debug, Clone)]
 pub struct ForInExpression {
     pub loc: Location,
-    pub element: Identifier,
+    pub element: (Location, VariableSymbolId),
     pub iterable: Box<Expression>,
     pub body: Block,
     pub ty: TypeId,
@@ -307,49 +292,27 @@ pub struct ForInExpression {
 #[derive(Debug, Clone)]
 pub struct FunctionExpression {
     pub loc: Location,
-    pub name: Option<Identifier>,
-    pub params: Vec<Identifier>,
+    pub name: Option<(Location, FunctionSymbolId)>,
+    pub params: Vec<(Location, VariableSymbolId)>,
     pub body: Block,
     pub ty: TypeId,
-}
-
-#[derive(Debug, Clone)]
-pub struct FunctionParams {
-    pub loc: Location,
-    pub params: Vec<Identifier>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier {
     pub loc: Location,
-    pub symbol: SymbolRef,
+    pub symbol: SymbolId,
+    pub ty: TypeId,
 }
 
-impl From<Identifier> for SymbolRef {
+impl From<Identifier> for SymbolId {
     fn from(value: Identifier) -> Self {
         value.symbol
     }
 }
-impl From<&Identifier> for SymbolRef {
+impl From<&Identifier> for SymbolId {
     fn from(value: &Identifier) -> Self {
-        value.symbol.clone()
-    }
-}
-
-impl Identifier {
-    pub fn as_name(&self) -> String {
-        self.symbol.borrow().name.clone()
-    }
-
-    pub fn ty(&self) -> TypeId {
-        self.symbol.borrow().ty
-    }
-
-    pub fn locless(symbol: SymbolRef) -> Self {
-        Self {
-            loc: Location::dummy(),
-            symbol,
-        }
+        value.symbol
     }
 }
 
@@ -396,7 +359,15 @@ pub struct MapEntry {
 pub struct MemberExpression {
     pub loc: Location,
     pub object: Box<Expression>,
-    pub member: Identifier,
+    pub member: (Location, MemberSymbolId),
+    pub ty: TypeId,
+}
+
+#[derive(Debug, Clone)]
+pub struct MethodExpression {
+    pub loc: Location,
+    pub host: Box<Expression>,
+    pub method: (Location, MethodSymbolId),
     pub ty: TypeId,
 }
 
@@ -414,18 +385,21 @@ impl std::fmt::Display for StringLiteral {
 #[derive(Debug, Clone)]
 pub struct StructLiteral {
     pub loc: Location,
-    /// A ref to the struct/enum constructor
-    pub constructor: SymbolRef,
-    /// If this has been constructed from an enum variant, contains a ref to the given variant.
-    pub variant: Option<SymbolRef>,
+    pub constructor: StructConstructor,
     pub fields: Vec<StructLiteralField>,
     pub ty: TypeId,
 }
 
 #[derive(Debug, Clone)]
+pub enum StructConstructor {
+    Struct(Location, StructSymbolId),
+    Enum(Location, EnumSymbolId, VariantSymbolId),
+}
+
+#[derive(Debug, Clone)]
 pub struct StructLiteralField {
     pub loc: Location,
-    pub name: Identifier,
+    pub name: (Location, MemberSymbolId),
     pub value: Expression,
 }
 
@@ -440,7 +414,7 @@ pub struct TupleExpression {
 pub struct TypeMatch {
     pub loc: Location,
     pub expr: Box<Expression>,
-    pub constructor: SymbolRef,
+    pub variant: VariantSymbolId,
 }
 
 pub type UnaryOperator = ast::UnaryOperator;

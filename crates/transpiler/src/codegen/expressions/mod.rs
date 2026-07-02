@@ -352,7 +352,7 @@ impl CodeGenerator<'_> {
                 obj: Box::new(obj_result.expr),
                 prop: swc::MemberProp::Ident(ident_from_str("$tag").into()),
             })),
-            right: Box::new(create_str(&node.constructor.as_name())),
+            right: Box::new(create_str(&node.variant.as_name())),
         };
 
         ExpressionResult {

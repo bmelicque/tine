@@ -1,12 +1,13 @@
 use crate::{
+    analysis_context::symbols::{FunctionSymbol, FunctionSymbolId},
     type_checker::{CheckResult, TypeChecker},
     types::{FunctionType, SignalType, Type},
-    ModuleId, Session, SymbolData, SymbolKind,
+    ModuleId, Session,
 };
 
 impl Session {
     pub fn check_signals_module(&mut self, id: ModuleId) -> CheckResult {
-        let mut checker = TypeChecker::new(&self, id);
+        let mut checker = TypeChecker::new(self, id);
 
         register_state_symbol(&mut checker);
         register_derived_symbol(&mut checker);
@@ -14,7 +15,6 @@ impl Session {
         let main_scope = &checker.ctx.scopes[0];
 
         CheckResult {
-            symbols: checker.ctx.symbols,
             exports: main_scope.bindings.clone(),
             ..Default::default()
         }
@@ -31,12 +31,10 @@ fn register_state_symbol(checker: &mut TypeChecker) {
         type_params: vec![param_type],
         return_type,
     }));
-    checker.ctx.register_symbol(SymbolData {
+    checker.symbols.insert::<FunctionSymbolId>(FunctionSymbol {
         name: "state".to_string(),
         ty: state_type,
-        kind: SymbolKind::Function {
-            param_names: vec!["initialValue".to_string()],
-        },
+        param_names: vec!["initialValue".to_string()],
         docs: Some(
             r#"Creates a reactive state variable.
             
@@ -65,12 +63,10 @@ fn register_derived_symbol(checker: &mut TypeChecker) {
         return_type: param_type.id,
         type_params: vec![param_type],
     }));
-    checker.ctx.register_symbol(SymbolData {
+    checker.symbols.insert::<FunctionSymbolId>(FunctionSymbol {
         name: "computed$".to_string(),
         ty: derived_type,
-        kind: SymbolKind::Function {
-            param_names: vec!["expression".to_string()],
-        },
+        param_names: vec!["expression".to_string()],
         docs: Some(
             r#"Creates a derived reactive variable from the given expression.
 

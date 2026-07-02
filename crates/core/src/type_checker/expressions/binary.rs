@@ -2,14 +2,14 @@ use crate::{
     ast,
     diagnostics::DiagnosticKind,
     ir,
-    type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
+    type_checker::{type_store::TypeStore, TypeChecker},
     types::TypeId,
     Location,
 };
 
 const VALID_ADD_TYPES: [TypeId; 3] = [TypeStore::INTEGER, TypeStore::FLOAT, TypeStore::STRING];
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_binary_expression(
         &mut self,
         node: ast::BinaryExpression,
@@ -34,8 +34,8 @@ impl TypeChecker<'_> {
                 };
                 if left_is_ok && right_is_ok && left_type != right_type {
                     let error = DiagnosticKind::MismatchedTypes {
-                        left_name: self.session.display_type(left_type),
-                        right_name: self.session.display_type(right_type),
+                        left_name: self.types.display(left_type),
+                        right_name: self.types.display(right_type),
                     };
                     self.error(error, node.loc);
                 };
@@ -60,8 +60,8 @@ impl TypeChecker<'_> {
                 };
                 if left_is_num && right_is_num && left_type != right_type {
                     let error = DiagnosticKind::MismatchedTypes {
-                        left_name: self.session.display_type(left_type),
-                        right_name: self.session.display_type(right_type),
+                        left_name: self.types.display(left_type),
+                        right_name: self.types.display(right_type),
                     };
                     self.error(error, node.loc);
                 };
@@ -72,8 +72,8 @@ impl TypeChecker<'_> {
                     || right_type == TypeStore::UNKNOWN;
                 if !allow_comparison {
                     let error = DiagnosticKind::MismatchedTypes {
-                        left_name: self.session.display_type(left_type),
-                        right_name: self.session.display_type(right_type),
+                        left_name: self.types.display(left_type),
+                        right_name: self.types.display(right_type),
                     };
                     self.error(error, node.loc);
                 }
@@ -102,7 +102,7 @@ impl TypeChecker<'_> {
     fn push_binary_error(&mut self, op: ast::BinaryOperator, ty: TypeId, loc: Location) {
         let error = DiagnosticKind::InvalidTypeForOperator {
             operator: op,
-            type_name: self.session.display_type(ty),
+            type_name: self.types.display(ty),
         };
         self.error(error, loc)
     }
@@ -138,13 +138,12 @@ fn get_binary_expression_type(op: ast::BinaryOperator, left: TypeId, right: Type
 
 #[cfg(test)]
 mod tests {
-    use crate::{type_checker::test_utils::MockLoader, Diagnostic, Session};
+    use crate::Diagnostic;
 
     use super::*;
 
     fn visit_binary_expression(node: ast::BinaryExpression) -> (TypeId, Vec<Diagnostic>) {
-        let session = Session::new(Box::new(MockLoader));
-        let mut checker = TypeChecker::new(&session, 0);
+        let mut checker = TypeChecker::new();
         let ty = checker
             .visit_binary_expression(node)
             .map_or(TypeStore::UNKNOWN, |n| n.ty);

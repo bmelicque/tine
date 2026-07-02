@@ -1,11 +1,11 @@
 use crate::{
     ast, ir,
-    type_checker::{substitutions::Substitutions, TypeChecker},
+    type_checker::{substitutions::Substitutions, symbols::StructSymbol, TypeChecker},
     types::{self, TypeId},
-    DiagnosticKind, Location, SymbolRef,
+    DiagnosticKind, Location,
 };
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn check_assigned_type(
         &mut self,
         expected: TypeId,
@@ -21,8 +21,8 @@ impl TypeChecker<'_> {
                 });
 
         if !ok {
-            let got = self.session.display_type(got);
-            let expected = self.session.display_type(expected);
+            let got = self.types.display(got);
+            let expected = self.types.display(expected);
             let error = DiagnosticKind::WrongType { expected, got };
             self.error(error, loc);
         }
@@ -65,7 +65,7 @@ impl TypeChecker<'_> {
         let loc = node.loc();
         let got = self.visit_expression(node);
         if let Some(got) = &got {
-            substitutions.unify(&mut self.session.types(), expected, got.ty(), loc);
+            substitutions.unify(&mut self.types, expected, got.ty(), loc);
         }
         got
     }
@@ -73,10 +73,10 @@ impl TypeChecker<'_> {
     /// Get the concrete type arguments for an expression of generic type.
     pub fn infer_type_args(
         &mut self,
-        type_symbol: &SymbolRef,
+        type_symbol: &StructSymbol,
         concrete_id: TypeId,
     ) -> Substitutions {
-        let params = match self.resolve(type_symbol.as_type()) {
+        let params = match self.resolve(type_symbol.ty) {
             types::Type::Generic(g) => g.params,
             _ => vec![],
         };

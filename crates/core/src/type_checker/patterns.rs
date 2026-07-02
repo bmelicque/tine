@@ -6,9 +6,11 @@ use crate::{
         expressions::expressions::{
             visit_boolean_literal, visit_float_literal, visit_int_literal, visit_string_literal,
         },
+        symbols::*,
+        type_store::TypeStore,
         TypeChecker,
     },
-    types, DiagnosticKind, Location, SymbolData, SymbolKind, SymbolRef, TypeStore, TypeSymbolBody,
+    types, DiagnosticKind, Location,
 };
 
 #[derive(Debug, Default)]
@@ -47,61 +49,49 @@ pub enum Pattern {
     Struct(StructPattern),
     Tuple(TuplePattern),
 }
-impl From<ir::Identifier> for Pattern {
-    fn from(value: ir::Identifier) -> Self {
-        Self::Identifier(value.into())
-    }
-}
-impl Pattern {
-    pub fn as_literal(&self) -> Option<&LiteralPattern> {
-        match self {
-            Pattern::Literal(p) => Some(p),
-            _ => None,
-        }
-    }
 
-    pub fn as_constructor(&self) -> Option<&ConstructorPattern> {
-        match self {
-            Pattern::Constructor(c) => Some(c),
-            _ => None,
-        }
-    }
-}
-impl std::fmt::Display for Pattern {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Pattern::Wildcard => write!(f, "_"),
-            Pattern::Identifier(i) => write!(f, "{}", i.identifier.as_name()),
-            Pattern::Constructor(c) => match &c.arg {
-                Some(arg) => write!(f, "{}({})", c.identifier.as_name(), *arg),
-                None => write!(f, "{}", c.identifier.as_name()),
-            },
-            Pattern::Literal(l) => match l {
-                LiteralPattern::Bool(l) => l.fmt(f),
-                LiteralPattern::Int(l) => l.fmt(f),
-                LiteralPattern::Float(l) => l.fmt(f),
-                LiteralPattern::String(l) => l.fmt(f),
-            },
-            Pattern::Struct(s) => {
-                let fields = s
-                    .fields
-                    .iter()
-                    .map(|f| format!("{}: {}", f.0.as_name(), f.1))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                write!(f, "{{{}}}", fields)
+pub fn display_pattern(pattern: &Pattern, symbols: &SymbolTable) -> String {
+    match pattern {
+        Pattern::Wildcard => "_".to_string(),
+        Pattern::Identifier(i) => i.name.to_string(),
+        Pattern::Constructor(c) => {
+            let name = symbols.get_symbol(c.identifier.symbol).name();
+            match &c.arg {
+                Some(arg) => format!("{}({})", name, display_pattern(&arg, symbols)),
+                None => name.to_string(),
             }
-            Pattern::Tuple(t) => {
-                let items = t
-                    .items
-                    .iter()
-                    .map(|f| format!("{}", f.1))
-                    .collect::<Vec<_>>()
-                    .join(", ");
+        }
+        Pattern::Literal(l) => match l {
+            LiteralPattern::Bool(l) => format!("{}", l.value),
+            LiteralPattern::Int(l) => format!("{}", l.value),
+            LiteralPattern::Float(l) => format!("{}", l.value),
+            LiteralPattern::String(l) => format!("\"{}\"", l.value),
+        },
+        Pattern::Struct(s) => {
+            let fields = s
+                .fields
+                .iter()
+                .map(|f| {
+                    format!(
+                        "{}: {}",
+                        symbols.get_symbol(f.0.symbol).name(),
+                        display_pattern(&f.1, symbols)
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
 
-                write!(f, "({})", items)
-            }
+            format!("{{{}}}", fields)
+        }
+        Pattern::Tuple(t) => {
+            let items = t
+                .items
+                .iter()
+                .map(|f| display_pattern(&f.1, symbols))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            format!("({})", items)
         }
     }
 }
@@ -133,7 +123,7 @@ fn lower_identifier_pattern(pattern: IdentifierPattern, value: ir::Expression) -
     let decl = ir::VariableDeclaration {
         loc: Location::merge(pattern.identifier.loc, value.loc()),
         mutable: pattern.mut_kw,
-        symbol: pattern.identifier.symbol,
+        symbol: pattern.identifier.symbol.as_variable().unwrap(),
         value,
     };
 
@@ -146,7 +136,7 @@ fn lower_constructor_pattern(pattern: ConstructorPattern, value: ir::Expression)
     let test = Some(ir::Expression::TypeMatch(ir::TypeMatch {
         loc: Location::merge(pattern.identifier.loc, value.loc()),
         expr: Box::new(value.clone()),
-        constructor: pattern.identifier.symbol,
+        variant: pattern.identifier.symbol.as_variant().unwrap(),
     }));
     let lowered = LoweredPattern {
         test,
@@ -180,30 +170,38 @@ fn lower_pattern_field(field: PatternField, value: ir::Expression) -> LoweredPat
     let value = ir::Expression::Member(ir::MemberExpression {
         loc: value.loc(),
         object: Box::new(value),
-        member: field.0,
+        member: (field.0.loc, field.0.symbol.as_member().unwrap()),
         ty: TypeStore::UNKNOWN,
     });
     lower_pattern(field.1, value)
 }
 
+macro_rules! impl_pattern {
+    ($name:ident, $variant:ident, $as_name:ident) => {
+        impl From<$name> for Pattern {
+            fn from(p: $name) -> Self {
+                Self::$variant(p)
+            }
+        }
+
+        impl Pattern {
+            pub fn $as_name(&self) -> Option<&$name> {
+                match self {
+                    Self::$variant(p) => Some(p),
+                    _ => None,
+                }
+            }
+        }
+    };
+}
+
 #[derive(Debug, Clone)]
 pub struct IdentifierPattern {
     pub mut_kw: bool,
+    pub name: String,
     pub identifier: ir::Identifier,
 }
-impl From<IdentifierPattern> for Pattern {
-    fn from(p: IdentifierPattern) -> Self {
-        Self::Identifier(p)
-    }
-}
-impl From<ir::Identifier> for IdentifierPattern {
-    fn from(value: ir::Identifier) -> Self {
-        Self {
-            mut_kw: false,
-            identifier: value,
-        }
-    }
-}
+impl_pattern!(IdentifierPattern, Identifier, as_identifier);
 
 #[derive(Debug, EnumFrom, Clone)]
 pub enum LiteralPattern {
@@ -212,11 +210,8 @@ pub enum LiteralPattern {
     Float(ir::FloatLiteral),
     String(ir::StringLiteral),
 }
-impl From<LiteralPattern> for Pattern {
-    fn from(p: LiteralPattern) -> Self {
-        Self::Literal(p)
-    }
-}
+impl_pattern!(LiteralPattern, Literal, as_literal);
+
 impl From<LiteralPattern> for ir::Expression {
     fn from(p: LiteralPattern) -> Self {
         use ir::Expression::*;
@@ -272,11 +267,7 @@ impl LiteralPattern {
 pub struct StructPattern {
     pub fields: Vec<PatternField>,
 }
-impl From<StructPattern> for Pattern {
-    fn from(p: StructPattern) -> Self {
-        Self::Struct(p)
-    }
-}
+impl_pattern!(StructPattern, Struct, as_struct);
 
 #[derive(Debug, Clone)]
 pub struct PatternField(pub ir::Identifier, pub Pattern);
@@ -286,27 +277,19 @@ pub struct ConstructorPattern {
     pub identifier: ir::Identifier,
     pub arg: Option<Box<Pattern>>,
 }
-impl From<ConstructorPattern> for Pattern {
-    fn from(value: ConstructorPattern) -> Self {
-        Self::Constructor(value)
-    }
-}
+impl_pattern!(ConstructorPattern, Constructor, as_constructor);
 
 #[derive(Debug, Default, Clone)]
 pub struct TuplePattern {
     pub items: Vec<PatternField>,
 }
-impl From<TuplePattern> for Pattern {
-    fn from(p: TuplePattern) -> Self {
-        Self::Tuple(p)
-    }
-}
+impl_pattern!(TuplePattern, Tuple, as_tuple);
 
-struct PatternVisitor<'deps, 'tc, 'ctx> {
+struct PatternVisitor<'deps, 'tc> {
     is_declaration: bool,
     /// All the dependencies of the expression the pattern is matched against
     dependencies: &'deps [ir::Identifier],
-    type_checker: &'tc mut TypeChecker<'ctx>,
+    tc: &'tc mut TypeChecker,
 }
 
 fn visit_pattern(
@@ -338,84 +321,99 @@ fn visit_constructor_pattern(
         Variant(v) => v.variant_name?,
     };
 
-    let symbol = visitor.type_checker.resolve_type_symbol(expected)?;
-    let kind = symbol.borrow().kind.clone();
-    match kind {
-        SymbolKind::Struct { body, .. } => visit_type_symbol_body(visitor, pattern.body, body),
-        SymbolKind::Enum { variants, .. } => {
-            let variant = variants.iter().find(|v| got_name.as_str() == &v.as_name());
+    let symbol = visitor.tc.resolve_type_symbol(expected)?;
+    match symbol {
+        TypeSymbolId::Struct(s) => {
+            let body = &visitor.tc.symbols.get(s).body.clone();
+            visit_type_symbol_body(visitor, pattern.body, body)
+        }
+        TypeSymbolId::Enum(e) => {
+            let variants = &visitor.tc.symbols.get(e).variants;
+            let variant = variants
+                .iter()
+                .find(|v| got_name.as_str() == visitor.tc.symbol_name(**v));
             let Some(variant) = variant else {
                 visitor
-                    .type_checker
+                    .tc
                     .error(DiagnosticKind::InvalidPattern, pattern.loc);
                 return None;
             };
             let identifier = ir::Identifier {
                 loc: got_name.loc,
-                symbol: variant.clone(),
+                symbol: (*variant).into(),
+                ty: visitor.tc.symbol_type_id(e),
             };
-            let arg = variant
-                .as_type_body()
-                .and_then(|b| visit_type_symbol_body(visitor, pattern.body, b))
+            let body = visitor.tc.symbols.get(*variant).body.as_ref().cloned();
+            let arg = body
+                .and_then(|b| visit_type_symbol_body(visitor, pattern.body, &b))
                 .map(Into::into);
             Some(Pattern::Constructor(ConstructorPattern { identifier, arg }))
         }
-        _ => unreachable!(),
     }
 }
 fn visit_type_symbol_body(
     visitor: &mut PatternVisitor,
     pattern: Option<ast::ConstructorPatternBody>,
-    expected: TypeSymbolBody,
+    expected: &TypeSymbolBody,
 ) -> Option<Pattern> {
     use ast::ConstructorPatternBody::*;
     match (expected, pattern?) {
-        (TypeSymbolBody::Struct(expected), Struct(s)) => {
-            let fields = s
-                .fields
-                .into_iter()
-                .map(|f| visit_pattern_field(visitor, f, &expected))
-                .collect::<Option<Vec<_>>>()?;
-            Some(StructPattern { fields }.into())
-        }
-        (TypeSymbolBody::Tuple(expected), Tuple(t)) => {
-            if expected.len() < t.elements.len() {
-                visitor
-                    .type_checker
-                    .error(DiagnosticKind::InvalidPattern, t.loc);
-            }
-            let items: Vec<PatternField> = t
-                .elements
-                .into_iter()
-                .enumerate()
-                .map(|(i, e)| {
-                    let symbol = expected.get(i);
-                    let identifier = ir::Identifier {
-                        loc: e.loc(),
-                        symbol: symbol?.clone(),
-                    };
-                    let pattern = visit_pattern(
-                        e,
-                        visitor,
-                        symbol.map_or(TypeStore::UNKNOWN, |e| e.as_type()),
-                    );
-                    Some(PatternField(identifier, pattern?))
-                })
-                .collect::<Option<Vec<_>>>()?;
-            Some(TuplePattern { items }.into())
-        }
+        (TypeSymbolBody::Struct(expected), Struct(s)) => visit_struct_body(visitor, s, expected),
+        (TypeSymbolBody::Tuple(expected), Tuple(t)) => visit_tuple_body(visitor, t, expected),
         (_, p) => {
-            visitor
-                .type_checker
-                .error(DiagnosticKind::InvalidPattern, p.loc());
+            visitor.tc.error(DiagnosticKind::InvalidPattern, p.loc());
             None
         }
     }
 }
+
+/// Visit a struct body, comparing it to its expected type
+fn visit_struct_body(
+    visitor: &mut PatternVisitor,
+    pattern: ast::StructPatternBody,
+    expected: &[(String, MemberSymbolId)],
+) -> Option<Pattern> {
+    let fields = pattern
+        .fields
+        .into_iter()
+        .map(|f| visit_pattern_field(visitor, f, &expected))
+        .collect::<Option<Vec<_>>>()?;
+    Some(StructPattern { fields }.into())
+}
+
+fn visit_tuple_body(
+    visitor: &mut PatternVisitor,
+    pattern: ast::TuplePattern,
+    expected: &[MemberSymbolId],
+) -> Option<Pattern> {
+    if expected.len() < pattern.elements.len() {
+        visitor
+            .tc
+            .error(DiagnosticKind::InvalidPattern, pattern.loc);
+    }
+    let items: Vec<PatternField> = pattern
+        .elements
+        .into_iter()
+        .enumerate()
+        .map(|(i, e)| {
+            let symbol_id = *expected.get(i)?;
+            let symbol = visitor.tc.symbols.get(symbol_id);
+            let identifier = ir::Identifier {
+                loc: e.loc(),
+                symbol: symbol_id.into(),
+                ty: symbol.ty,
+            };
+            let pattern = visit_pattern(e, visitor, symbol.ty);
+            Some(PatternField(identifier, pattern?))
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(TuplePattern { items }.into())
+}
+
 fn visit_pattern_field(
     visitor: &mut PatternVisitor,
     field: ast::StructPatternField,
-    expected: &[(String, SymbolRef)],
+    expected: &[(String, MemberSymbolId)],
 ) -> Option<PatternField> {
     let identifier = match field.identifier {
         Some(ast::FieldPatternIdentifier::Const(i)) => i.0,
@@ -424,16 +422,16 @@ fn visit_pattern_field(
     };
     let expected = expected.iter().find(|&(n, _)| n == identifier.as_str());
     let Some((_, expected)) = expected else {
-        visitor
-            .type_checker
-            .error(DiagnosticKind::InvalidMember, field.loc);
+        visitor.tc.error(DiagnosticKind::InvalidMember, field.loc);
         return None;
     };
+    let ty = visitor.tc.symbol_type_id(*expected);
     let identifier = ir::Identifier {
         loc: identifier.loc,
-        symbol: expected.clone(),
+        symbol: (*expected).into(),
+        ty,
     };
-    let pattern = visit_pattern(field.pattern?, visitor, expected.as_type())?;
+    let pattern = visit_pattern(field.pattern?, visitor, ty)?;
     Some(PatternField(identifier, pattern))
 }
 
@@ -454,18 +452,21 @@ fn visit_identifier_pattern(
     mutable: bool,
 ) -> Option<Pattern> {
     use Pattern::*;
+    let name = pattern.as_str().to_string();
     let identifier: ir::Identifier = if visitor.is_declaration {
         let symbol = declare_variable(visitor, &pattern.0, expected, mutable)?;
         ir::Identifier {
             loc: pattern.loc(),
-            symbol,
+            symbol: symbol.into(),
+            ty: expected,
         }
     } else {
-        visitor.type_checker.visit_identifier(pattern.0)?
+        visitor.tc.visit_identifier(pattern.0)?
     };
 
     Some(Identifier(IdentifierPattern {
         mut_kw: mutable,
+        name,
         identifier,
     }))
 }
@@ -475,32 +476,33 @@ fn declare_variable(
     identifier: &ast::Identifier,
     ty: types::TypeId,
     mutable: bool,
-) -> Option<SymbolRef> {
-    visitor.type_checker.check_identifier_sanity(&identifier);
+) -> Option<VariableSymbolId> {
+    visitor.tc.check_identifier_sanity(&identifier);
 
-    match visitor
-        .type_checker
-        .ctx
-        .find_in_current_scope(identifier.as_str())
-    {
+    let in_current_scope = visitor.tc.current_scope().lookup(identifier.as_str());
+    match in_current_scope {
         Some(symbol) => {
-            let error = DiagnosticKind::DuplicateIdentifier {
-                name: identifier.as_str().to_string(),
-            };
-            visitor.type_checker.error(error, identifier.loc);
-            symbol.borrow().access.read(identifier.loc);
+            let name = identifier.as_str().to_string();
+            let error = DiagnosticKind::DuplicateIdentifier { name };
+            visitor.tc.error(error, identifier.loc);
+            visitor
+                .tc
+                .symbols
+                .get_symbol_mut(symbol)
+                .access()
+                .read(identifier.loc);
             None
         }
         None => {
             let dependencies = visitor
                 .dependencies
                 .iter()
-                .map(|d| d.symbol.clone())
+                .filter_map(|d| d.symbol.as_variable())
                 .collect();
-            let symbol = visitor.type_checker.ctx.register_symbol(SymbolData {
+            let symbol = visitor.tc.symbols.insert(VariableSymbol {
                 name: identifier.as_str().to_string(),
                 ty,
-                kind: SymbolKind::Value { mutable },
+                mutable,
                 defined_at: identifier.loc,
                 dependencies,
                 ..Default::default()
@@ -515,15 +517,15 @@ fn visit_tuple_pattern(
     visitor: &mut PatternVisitor,
     expected: types::TypeId,
 ) -> Option<TuplePattern> {
-    let types::Type::Tuple(tuple) = visitor.type_checker.resolve(expected) else {
+    let types::Type::Tuple(tuple) = visitor.tc.resolve(expected) else {
         visitor
-            .type_checker
+            .tc
             .error(DiagnosticKind::InvalidPattern, pattern.loc);
         return None;
     };
     if tuple.elements.len() < pattern.elements.len() {
         visitor
-            .type_checker
+            .tc
             .error(DiagnosticKind::InvalidPattern, pattern.loc);
     }
     let items = pattern
@@ -532,11 +534,20 @@ fn visit_tuple_pattern(
         .enumerate()
         .map(|(i, pattern)| {
             // TODO: against type
+            let expected = tuple.elements.get(i).copied().unwrap_or(TypeStore::UNKNOWN);
+            let symbol_id = visitor.tc.symbols.insert::<MemberSymbolId>(MemberSymbol {
+                name: format!("_{i}"),
+                // FIXME:
+                owner: StructSymbolId::from_index(0).into(),
+                defined_at: pattern.loc(),
+                ty: expected,
+                ..Default::default()
+            });
             let identifier = ir::Identifier {
                 loc: pattern.loc(),
-                symbol: SymbolRef::new(format!("_{i}"), pattern.loc()),
+                symbol: symbol_id.into(),
+                ty: expected,
             };
-            let expected = tuple.elements.get(i).copied().unwrap_or(TypeStore::UNKNOWN);
             let pattern = visit_pattern(pattern, visitor, expected)?;
 
             Some(PatternField(identifier, pattern))
@@ -546,7 +557,7 @@ fn visit_tuple_pattern(
     Some(TuplePattern { items })
 }
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_pattern(
         &mut self,
         pattern: ast::Pattern,
@@ -554,9 +565,9 @@ impl TypeChecker<'_> {
         is_declaration: bool,
     ) -> Option<Pattern> {
         let expected_type = against.ty();
-        let dependencies = against.dependencies().cloned().collect::<Vec<_>>();
+        let dependencies = self.dependencies(against).cloned().collect::<Vec<_>>();
         let mut visitor = PatternVisitor {
-            type_checker: self,
+            tc: self,
             dependencies: &dependencies,
             is_declaration,
         };

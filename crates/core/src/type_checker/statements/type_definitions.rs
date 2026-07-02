@@ -2,11 +2,8 @@ use enum_from_derive::EnumFrom;
 
 use crate::{
     ast, ir,
-    type_checker::{
-        analysis_context::{symbols::TypeSymbolBody, type_store::TypeStore},
-        SymbolHandle,
-    },
-    types, DiagnosticKind, Location, SymbolData, SymbolKind, SymbolRef,
+    type_checker::{symbols::*, type_store::TypeStore},
+    types, DiagnosticKind,
 };
 
 use super::TypeChecker;
@@ -33,7 +30,7 @@ impl Into<types::Type> for TypeBody {
     }
 }
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_type_alias(&mut self, node: ast::TypeAlias) {
         let (ty, params) = if let Some(definition) = node.definition {
             self.with_type_params(&node.params, |checker| checker.visit_type(definition))
@@ -46,8 +43,14 @@ impl TypeChecker<'_> {
             _ => self.intern(types::GenericDef { params, def: ty }),
         };
 
-        if let Some(ref name) = node.name {
-            self.add_type_to_scope(name.text.clone(), node.loc, ty, SymbolKind::TypeAlias);
+        if let Some(name) = node.name {
+            self.symbols.insert::<TypeAliasSymbolId>(TypeAliasSymbol {
+                name: name.text.clone(),
+                ty,
+                defined_at: node.loc,
+                ..Default::default()
+            });
+            self.types.add_alias(ty, name.text);
         }
     }
 
@@ -60,37 +63,31 @@ impl TypeChecker<'_> {
             self.fallback_check_body(body);
             return None;
         };
-        let owner = self.add_type_to_scope(
-            name.text.clone(),
-            node.loc,
-            TypeStore::UNKNOWN,
-            SymbolKind::Struct {
-                body: TypeSymbolBody::Struct(vec![]),
-                methods: vec![],
-            },
-        );
-        let Some(owner) = owner else {
+        if self.current_scope().has(name.as_str()) {
+            let error = DiagnosticKind::DuplicateIdentifier { name: name.text };
+            self.error(error, name.loc);
             self.fallback_check_body(body);
             return None;
-        };
+        }
+        let owner_id: StructSymbolId = self.insert(StructSymbol {
+            name: name.text.clone(),
+            defined_at: node.loc,
+            ..Default::default()
+        });
 
         let ((mut ty, body), params) = self.with_type_params(&node.params, |checker| {
-            checker.visit_type_body(body, owner.readonly())
+            checker.visit_type_body(body, owner_id.into())
         });
         ty.set_params(params);
 
-        owner.borrow().ty = self.intern_unique(ty);
-        owner.borrow().kind = SymbolKind::Struct {
-            body,
-            methods: vec![],
-        };
+        let ty = self.intern_unique(ty);
+        let owner = self.symbols.get_mut(owner_id);
+        owner.ty = ty;
+        owner.body = body;
 
         Some(ir::StructDefinition {
             loc: node.loc,
-            name: ir::Identifier {
-                loc: name.loc,
-                symbol: owner.readonly(),
-            },
+            symbol: owner_id.into(),
         })
     }
 
@@ -99,31 +96,29 @@ impl TypeChecker<'_> {
         node: ast::EnumDefinition,
     ) -> Option<ir::EnumDefinition> {
         let name = node.name?;
-        let owner = self.add_type_to_scope(
-            name.as_str().to_string(),
-            node.loc,
-            TypeStore::UNKNOWN,
-            SymbolKind::Enum {
-                variants: vec![],
-                methods: vec![],
-            },
-        );
-        let Some(owner) = owner else {
+        if self.current_scope().has(name.as_str()) {
+            let error = DiagnosticKind::DuplicateIdentifier { name: name.text };
+            self.error(error, name.loc);
             self.fallback_check_variants(node.variants);
             return None;
-        };
+        }
+        let owner_id: EnumSymbolId = self.insert(EnumSymbol {
+            name: name.text.clone(),
+            defined_at: node.loc,
+            ..Default::default()
+        });
 
         let (variants, params) = self.with_type_params(&node.params, |self_| {
             node.variants
                 .into_iter()
-                .filter_map(|variant| self_.visit_enum_variant(variant, owner.readonly()))
+                .filter_map(|variant| self_.visit_enum_variant(variant, owner_id))
                 .collect::<Vec<_>>()
         });
         let type_variants = variants
             .iter()
             .map(|v| types::Variant {
-                name: v.as_name(),
-                def: v.as_type(),
+                name: self.symbol_name(*v).into(),
+                def: self.symbol_type_id(*v),
             })
             .collect::<Vec<_>>();
         let ty = self.intern_unique(types::EnumType {
@@ -132,41 +127,37 @@ impl TypeChecker<'_> {
             variants: type_variants,
         });
 
-        owner.borrow().ty = ty;
-        owner.borrow().kind = SymbolKind::Enum {
-            variants,
-            methods: vec![],
-        };
+        let owner = self.symbols.get_mut(owner_id);
+        owner.ty = ty;
+        owner.variants = variants;
 
         Some(ir::EnumDefinition {
             loc: node.loc,
-            name: ir::Identifier {
-                loc: name.loc,
-                symbol: owner.readonly(),
-            },
+            symbol: owner_id,
         })
     }
 
     fn visit_enum_variant(
         &mut self,
         variant: ast::VariantDefinition,
-        owner: SymbolRef,
-    ) -> Option<SymbolRef> {
+        owner: EnumSymbolId,
+    ) -> Option<VariantSymbolId> {
         let Some(ident) = variant.name else {
             if let Some(body) = variant.body {
                 self.fallback_check_body(body);
             }
             return None;
         };
-
         let body = variant
             .body
-            .map(|body| self.visit_type_body(body, owner.clone()).1);
+            .map(|body| self.visit_type_body(body, owner.into()).1);
+        let ty = self.symbol_type_id(owner);
 
-        Some(self.ctx.register_symbol(SymbolData {
+        Some(self.symbols.insert(VariantSymbol {
             name: ident.text,
-            ty: owner.as_type(),
-            kind: SymbolKind::Constructor { owner, body },
+            ty,
+            owner,
+            body,
             defined_at: variant.loc,
             ..Default::default()
         }))
@@ -176,7 +167,7 @@ impl TypeChecker<'_> {
     fn visit_type_body(
         &mut self,
         body: ast::TypeBody,
-        owner: SymbolRef,
+        owner: TypeSymbolId,
     ) -> (TypeBody, TypeSymbolBody) {
         match body {
             ast::TypeBody::Struct(body) => self.visit_type_struct_body(body, owner),
@@ -187,16 +178,19 @@ impl TypeChecker<'_> {
     fn visit_type_struct_body(
         &mut self,
         body: ast::StructBody,
-        owner: SymbolRef,
+        owner: TypeSymbolId,
     ) -> (TypeBody, TypeSymbolBody) {
         let symbols = body
             .fields
             .into_iter()
-            .filter_map(|field| self.visit_struct_definition_field(owner.clone(), field))
+            .filter_map(|field| self.visit_struct_definition_field(owner, field))
             .collect::<Vec<_>>();
         let fields = symbols
             .iter()
-            .map(|s| types::StructField::from(s))
+            .map(|s| types::StructField {
+                name: self.symbol_name(*s).into(),
+                def: self.symbol_type_id(*s),
+            })
             .collect();
         let id = 0;
         let ty = types::StructType {
@@ -207,7 +201,7 @@ impl TypeChecker<'_> {
         let body = TypeSymbolBody::Struct(
             symbols
                 .into_iter()
-                .map(|s| (s.borrow().name.clone(), s.clone()))
+                .map(|s| (self.symbol_name(s).to_string(), s))
                 .collect(),
         );
         (ty.into(), body)
@@ -215,14 +209,14 @@ impl TypeChecker<'_> {
 
     fn visit_struct_definition_field(
         &mut self,
-        owner: SymbolRef,
+        owner: TypeSymbolId,
         field: ast::StructDefinitionField,
-    ) -> Option<SymbolRef> {
+    ) -> Option<MemberSymbolId> {
         let ty = self.visit_type(field.definition?);
-        Some(self.ctx.register_symbol(SymbolData {
+        Some(self.symbols.insert(MemberSymbol {
             name: field.name?.text,
             ty,
-            kind: SymbolKind::Member { owner },
+            owner,
             defined_at: field.loc,
             ..Default::default()
         }))
@@ -231,7 +225,7 @@ impl TypeChecker<'_> {
     fn visit_type_tuple_body(
         &mut self,
         body: ast::TupleType,
-        owner: SymbolRef,
+        owner: TypeSymbolId,
     ) -> (TypeBody, TypeSymbolBody) {
         let symbols = body
             .elements
@@ -240,18 +234,16 @@ impl TypeChecker<'_> {
             .map(|(i, ty)| {
                 let loc = ty.loc();
                 let ty = self.visit_type(ty);
-                self.ctx.register_symbol(SymbolData {
+                self.symbols.insert(MemberSymbol {
                     name: format!("_{}", i),
                     ty,
-                    kind: SymbolKind::Member {
-                        owner: owner.clone(),
-                    },
+                    owner,
                     defined_at: loc,
                     ..Default::default()
                 })
             })
             .collect::<Vec<_>>();
-        let elements = symbols.iter().map(|s| s.borrow().ty).collect();
+        let elements = symbols.iter().map(|s| self.symbol_type_id(*s)).collect();
         let ty = types::TupleType {
             elements,
             ..Default::default()
@@ -280,30 +272,5 @@ impl TypeChecker<'_> {
         body.into_iter()
             .filter_map(|v| v.body)
             .for_each(|b| self.fallback_check_body(b));
-    }
-
-    // OLD
-    fn add_type_to_scope(
-        &mut self,
-        name: String,
-        loc: Location,
-        ty: types::TypeId,
-        kind: SymbolKind,
-    ) -> Option<SymbolHandle> {
-        if self.ctx.find_in_current_scope(&name).is_some() {
-            let error = DiagnosticKind::DuplicateIdentifier { name };
-            self.error(error, loc);
-            return None;
-        }
-
-        let symbol = self.ctx.register_symbol(SymbolData {
-            name: name.clone(),
-            ty,
-            kind,
-            defined_at: loc,
-            ..Default::default()
-        });
-        self.session.types().add_alias(ty, name);
-        self.session.get_handle(symbol)
     }
 }

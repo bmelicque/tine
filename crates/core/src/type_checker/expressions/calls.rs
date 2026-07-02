@@ -5,15 +5,16 @@ use crate::{
     diagnostics::DiagnosticKind,
     ir,
     type_checker::{
-        analysis_context::{type_store::TypeStore, SymbolData},
         substitutions::Substitutions,
+        symbols::{VariableSymbol, VariableSymbolId},
+        type_store::TypeStore,
         TypeChecker,
     },
     types::{self, Type, TypeId},
-    Location, SymbolKind,
+    Location,
 };
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_call_expression(
         &mut self,
         node: ast::CallExpression,
@@ -37,7 +38,7 @@ impl TypeChecker<'_> {
         let args =
             self.check_arguments(node.args, &callee_type.params, &mut substitutions, node.loc);
 
-        let ty = substitutions.apply(&mut self.session.types(), callee_type.return_type);
+        let ty = substitutions.apply(&mut self.types, callee_type.return_type);
 
         Some(ir::CallExpression {
             loc: node.loc,
@@ -63,7 +64,7 @@ impl TypeChecker<'_> {
             types::Type::Unknown => Err(anyhow!("")),
             _ => {
                 let error = DiagnosticKind::NotCallable {
-                    type_name: self.session.display_type(callee.ty()),
+                    type_name: self.types.display(callee.ty()),
                 };
                 self.error(error, callee.loc());
                 Err(anyhow!(""))
@@ -118,7 +119,7 @@ impl TypeChecker<'_> {
         let expected = self.resolve(expected_id);
         let Type::Function(expected) = expected else {
             let error = DiagnosticKind::UnexpectedCallback {
-                expected: self.session.display_type(expected_id),
+                expected: self.types.display(expected_id),
             };
             self.error(error, node.loc);
             return None;
@@ -143,12 +144,7 @@ impl TypeChecker<'_> {
                 body => {
                     let body = s.visit_expression(body);
                     if let Some(body) = &body {
-                        substitutions.unify(
-                            &mut self.session.types(),
-                            return_type,
-                            body.ty(),
-                            body.loc(),
-                        );
+                        substitutions.unify(&mut s.types, return_type, body.ty(), body.loc());
                     }
                     body.map(Into::into)
                 }
@@ -174,15 +170,10 @@ impl TypeChecker<'_> {
         substitutions: &mut Substitutions,
     ) -> Option<ir::Block> {
         let body_type = self.visit_block_expression(body);
-        substitutions.unify(
-            &mut self.session.types(),
-            expected_type,
-            body_type.ty,
-            body_type.loc,
-        );
+        substitutions.unify(&mut self.types, expected_type, body_type.ty, body_type.loc);
         let returns = body_type.find_returns();
         for ret in returns {
-            let ty = ret.expression.map_or(TypeStore::UNIT, |r| r.ty());
+            let ty = ret.expression.as_ref().map_or(TypeStore::UNIT, |r| r.ty());
             self.check_assigned_type(expected_type, ty, true, ret.loc);
         }
 
@@ -195,7 +186,7 @@ impl TypeChecker<'_> {
         &mut self,
         got: Vec<ast::CallbackParam>,
         expected: &Vec<TypeId>,
-    ) -> Option<Vec<ir::Identifier>> {
+    ) -> Option<Vec<(Location, VariableSymbolId)>> {
         got.into_iter()
             .zip(expected.iter())
             .map(|(got, expected)| self.visit_callback_param(got, *expected))
@@ -206,61 +197,48 @@ impl TypeChecker<'_> {
         &mut self,
         got: ast::CallbackParam,
         expected: TypeId,
-    ) -> Option<ir::Identifier> {
+    ) -> Option<(Location, VariableSymbolId)> {
         match got {
             ast::CallbackParam::Identifier(id) => {
-                let symbol = self.ctx.register_symbol(SymbolData {
-                    name: id.as_str().into(),
+                let symbol = self.symbols.insert(VariableSymbol {
+                    name: id.text,
                     ty: expected,
-                    kind: SymbolKind::constant(),
                     defined_at: id.loc,
                     ..Default::default()
                 });
-                Some(ir::Identifier {
-                    loc: id.loc,
-                    symbol,
-                })
+                Some((id.loc, symbol))
             }
             ast::CallbackParam::Param(param) => {
                 let id = param.name?;
                 let type_annotation = self.visit_type(param.type_annotation.unwrap());
                 let name = id.as_str().into();
-                let kind = SymbolKind::constant();
                 let defined_at = id.loc;
                 match type_annotation {
                     TypeStore::UNKNOWN => {
                         let ty = expected;
-                        let symbol = self.ctx.register_symbol(SymbolData {
+                        let symbol = self.symbols.insert(VariableSymbol {
                             name,
                             ty,
-                            kind,
                             defined_at,
                             ..Default::default()
                         });
-                        Some(ir::Identifier {
-                            loc: defined_at,
-                            symbol,
-                        })
+                        Some((defined_at, symbol))
                     }
                     ty => {
-                        let symbol = self.ctx.register_symbol(SymbolData {
+                        let symbol = self.symbols.insert(VariableSymbol {
                             name,
                             ty,
-                            kind,
                             defined_at,
                             ..Default::default()
                         });
                         if ty != expected {
                             let error = DiagnosticKind::MismatchedTypes {
-                                left_name: self.session.display_type(expected),
-                                right_name: self.session.display_type(ty),
+                                left_name: self.types.display(expected),
+                                right_name: self.types.display(ty),
                             };
                             self.error(error, defined_at);
                         }
-                        Some(ir::Identifier {
-                            loc: id.loc,
-                            symbol,
-                        })
+                        Some((id.loc, symbol))
                     }
                 }
             }
@@ -279,11 +257,8 @@ impl TypeChecker<'_> {
             return None;
         }
 
-        let (arg, mut deps) = match node.args.into_iter().next() {
-            Some(ast::CallArgument::Expression(e)) => {
-                let (arg, deps) = self.with_dependencies(|s| s.visit_expression(e));
-                (arg?, deps)
-            }
+        let arg = match node.args.into_iter().next() {
+            Some(ast::CallArgument::Expression(e)) => self.visit_expression(e)?,
             Some(ast::CallArgument::Callback(c)) => {
                 let error = DiagnosticKind::UnexpectedCallback {
                     expected: "expression".to_string(),
@@ -294,27 +269,21 @@ impl TypeChecker<'_> {
             // caught by length check above
             None => unreachable!(),
         };
-        self.ctx.add_dependencies(deps.clone());
-        deps.retain(|dep| self.resolve(dep.borrow().get_type()).is_reactive());
+        let deps = self
+            .dependencies(&arg)
+            .filter(|dep| self.symbol_type(dep.symbol).is_reactive())
+            .cloned()
+            .collect::<Vec<_>>();
         if deps.len() == 0 {
             self.error(DiagnosticKind::NonReactiveExpression, node.loc);
         }
-        let deps: Vec<ir::Expression> = deps
-            .into_iter()
-            .map(|symbol| {
-                ir::Expression::Identifier(ir::Identifier {
-                    loc: node.loc,
-                    symbol,
-                })
-            })
-            .collect();
         let dependency_array = ir::Expression::Tuple(ir::TupleExpression {
             loc: node.loc,
             ty: self.intern(types::TupleType {
-                elements: deps.iter().map(|e| e.ty()).collect(),
+                elements: deps.iter().map(|e| e.ty).collect(),
                 ..Default::default()
             }),
-            elements: deps,
+            elements: deps.into_iter().map(Into::into).collect(),
         });
 
         let return_type = self.intern(types::Type::Listener(types::ListenerType {

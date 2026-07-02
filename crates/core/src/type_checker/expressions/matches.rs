@@ -1,14 +1,13 @@
 use crate::{
     ast, ir,
     type_checker::{
-        exhaustiveness::usefulness,
-        patterns::{lower_pattern, Pattern},
+        patterns::{display_pattern, lower_pattern, Pattern},
         TypeChecker,
     },
     types, DiagnosticKind, Location,
 };
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_match_expression(&mut self, node: ast::MatchExpression) -> Option<ir::Expression> {
         let scrutinee = node.scrutinee.and_then(|s| self.visit_expression(*s));
         let arms = node
@@ -50,9 +49,12 @@ impl TypeChecker<'_> {
             .into_iter()
             .map(|pat| vec![pat])
             .collect::<Vec<_>>();
-        let u = usefulness(&matrix, &vec![&Pattern::Wildcard]);
+        let u = self.usefulness(&matrix, &vec![&Pattern::Wildcard]);
         if !u.is_empty() {
-            let missing = u.into_iter().map(|r| format!("{}", r[0])).collect();
+            let missing = u
+                .into_iter()
+                .map(|r| display_pattern(&r[0], &self.symbols))
+                .collect();
             let diag = DiagnosticKind::NonExhaustiveMatch { missing };
             self.error(diag, scrutinee_loc);
             return false;
