@@ -1,10 +1,11 @@
 use enum_from_derive::EnumFrom;
 
 use crate::{
+    common::module_path::{ModuleId, ModulePath},
     ir::{Block, Expression, FunctionExpression},
     type_checker::symbols::*,
     types::TypeId,
-    Location, ModuleId, ModulePath,
+    Location,
 };
 
 #[derive(Debug, Clone, EnumFrom)]

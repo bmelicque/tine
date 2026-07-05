@@ -179,7 +179,7 @@ mod tests {
         let tc = visit_variable_declaration(&node);
         assert_eq!(tc.diagnostics.len(), 1);
         assert_eq!(
-            tc.diagnostics[0].kind,
+            tc.diagnostics[&0][0].kind,
             DiagnosticKind::InvalidIdentifierDollar
         );
     }

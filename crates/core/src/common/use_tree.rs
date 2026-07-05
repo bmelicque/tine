@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use crate::{
-    analyzer::ModulePath,
     ast::{self, UseTree},
+    common::module_path::ModulePath,
 };
 
 #[derive(Debug, PartialEq)]

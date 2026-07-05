@@ -1,7 +1,6 @@
 use crate::{
-    analyzer::ModuleId,
     ast::{self, UseTree},
-    common::{use_decl_to_paths, ModuleImports},
+    common::{module_path::ModuleId, use_decl_to_paths, ModuleImports},
     ir,
     type_checker::{symbols::SymbolId, TypeChecker},
     DiagnosticKind, Location,

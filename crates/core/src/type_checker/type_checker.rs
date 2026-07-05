@@ -1,17 +1,29 @@
 use std::collections::HashMap;
 
-use crate::analyzer::ModuleId;
+use crate::common::module_path::{ModuleId, ModulePath};
 use crate::diagnostics::{Diagnostic, DiagnosticKind, DiagnosticLevel};
+use crate::type_checker::loader::{CheckerLoader, LoadedModule, MockLoader, ModuleLoader};
 use crate::type_checker::symbols::*;
 use crate::type_checker::type_store::TypeStore;
 use crate::types::{self, Type, TypeId};
-use crate::{ast, ir, Location, ModulePath};
+use crate::{ir, Location, ProjectParser};
 
 #[derive(Debug, Default)]
 pub struct CheckResult {
-    pub ir: ir::Program,
-    pub exports: HashMap<String, SymbolId>,
-    pub diagnostics: Vec<Diagnostic>,
+    pub ir: HashMap<ModuleId, ir::Program>,
+    pub types: TypeStore,
+    pub symbols: SymbolTable,
+    pub diagnostics: HashMap<ModuleId, Vec<Diagnostic>>,
+}
+
+pub fn check_project(project: ProjectParser) -> CheckResult {
+    let sorted_modules = project.try_sorted_vec().unwrap();
+    let loader: CheckerLoader = project.into();
+    let mut tc = TypeChecker::with_loader(Box::new(loader));
+    for module in sorted_modules {
+        tc.check_module(module);
+    }
+    tc.results()
 }
 
 pub struct TypeChecker {
@@ -23,35 +35,46 @@ pub struct TypeChecker {
     /// the project.
     pub symbols: SymbolTable,
     pub(crate) scopes: Vec<Scope>,
-    pub diagnostics: Vec<Diagnostic>,
 
     pub(super) loader: Box<dyn ModuleLoader>,
 
     ir: HashMap<ModuleId, ir::Program>,
     exports: HashMap<ModuleId, HashMap<String, SymbolId>>,
+    pub(super) diagnostics: HashMap<ModuleId, Vec<Diagnostic>>,
 }
 
 impl TypeChecker {
-    pub fn new() -> TypeChecker {
-        TypeChecker {
+    pub fn new() -> Self {
+        let mut tc = Self {
             current_module: 0,
             types: TypeStore::new(),
             symbols: SymbolTable::default(),
-            scopes: vec![],
-            diagnostics: vec![],
+            scopes: vec![Scope::new()],
 
-            loader: Box::new(MockLoader::new()),
+            loader: Box::new(MockLoader),
 
             ir: HashMap::new(),
             exports: HashMap::new(),
-        }
+            diagnostics: HashMap::new(),
+        };
+        tc.init_builtins();
+        tc
     }
 
-    pub fn set_loader(&mut self, loader: Box<dyn ModuleLoader>) {
-        self.loader = loader;
+    pub fn with_loader(loader: Box<dyn ModuleLoader>) -> Self {
+        let mut tc = Self::new();
+        tc.loader = loader;
+        tc
     }
 
-    pub fn check_module(mut self, module: ast::Program) -> CheckResult {
+    pub fn check_module(&mut self, module_id: ModuleId) {
+        let module = match self.loader.module(module_id) {
+            LoadedModule::Real(m) => m,
+            LoadedModule::Virtual(m) => {
+                self.delegated_check(m);
+                return;
+            }
+        };
         self.scopes.push(Scope::new());
         let program = ir::Program {
             statements: module
@@ -62,9 +85,26 @@ impl TypeChecker {
         };
         let scope = self.scopes.pop().unwrap();
 
+        self.ir.insert(module_id, program);
+        self.exports.insert(module_id, scope.as_bindings());
+    }
+
+    pub fn delegated_check<F>(&mut self, cb: F)
+    where
+        F: Fn(&mut Self),
+    {
+        cb(self)
+    }
+
+    pub(super) fn add_exports(&mut self, id: ModuleId, exports: HashMap<String, SymbolId>) {
+        self.exports.insert(id, exports);
+    }
+
+    pub fn results(self) -> CheckResult {
         CheckResult {
-            ir: program,
-            exports: scope.as_bindings(),
+            ir: self.ir,
+            types: self.types,
+            symbols: self.symbols,
             diagnostics: self.diagnostics,
         }
     }
@@ -130,18 +170,19 @@ impl TypeChecker {
         let symbol = symbol.into();
         match symbol {
             TypeSymbolId::Enum(s) => &self.symbols.get(s).methods,
+            TypeSymbolId::Primitive(s) => &self.symbols.get(s).methods,
             TypeSymbolId::Struct(s) => &self.symbols.get(s).methods,
         }
     }
-
-    pub fn symbol_body<'s, S>(&'s self, symbol: S) -> &'s [MethodSymbolId]
+    pub fn symbol_methods_mut<'s, S>(&'s mut self, symbol: S) -> &'s mut Vec<MethodSymbolId>
     where
         S: Into<TypeSymbolId>,
     {
         let symbol = symbol.into();
         match symbol {
-            TypeSymbolId::Enum(s) => &self.symbols.get(s).methods,
-            TypeSymbolId::Struct(s) => &self.symbols.get(s).methods,
+            TypeSymbolId::Enum(s) => &mut self.symbols.get_mut(s).methods,
+            TypeSymbolId::Primitive(s) => &mut self.symbols.get_mut(s).methods,
+            TypeSymbolId::Struct(s) => &mut self.symbols.get_mut(s).methods,
         }
     }
 
@@ -164,11 +205,14 @@ impl TypeChecker {
     }
 
     pub fn error(&mut self, kind: DiagnosticKind, loc: Location) {
-        self.diagnostics.push(Diagnostic {
-            level: DiagnosticLevel::Error,
-            loc,
-            kind,
-        });
+        self.diagnostics
+            .entry(self.current_module)
+            .or_default()
+            .push(Diagnostic {
+                level: DiagnosticLevel::Error,
+                loc,
+                kind,
+            });
     }
 
     pub fn get_symbol_id(&self, name: &str) -> Option<SymbolId> {
@@ -305,32 +349,5 @@ impl Scope {
 
     pub fn as_bindings(self) -> HashMap<String, SymbolId> {
         self.bindings
-    }
-}
-
-pub(super) trait ModuleLoader {
-    fn find_id(&self, name: &ModulePath) -> Option<ModuleId>;
-    fn get_name(&self, module: ModuleId) -> &ModulePath;
-    fn module(&self, id: ModuleId) -> ast::Program;
-}
-
-struct MockLoader(ModulePath);
-impl MockLoader {
-    fn new() -> Self {
-        Self(ModulePath::Virtual("".to_string()))
-    }
-}
-impl ModuleLoader for MockLoader {
-    fn find_id(&self, _name: &ModulePath) -> Option<ModuleId> {
-        None
-    }
-    fn get_name(&self, _module: ModuleId) -> &ModulePath {
-        &self.0
-    }
-    fn module(&self, _id: ModuleId) -> ast::Program {
-        ast::Program {
-            loc: Location::dummy(),
-            items: vec![],
-        }
     }
 }

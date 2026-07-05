@@ -37,6 +37,7 @@ pub enum SymbolId {
     Struct(StructSymbolId),
     Enum(EnumSymbolId),
     Variant(VariantSymbolId),
+    Primitive(PrimitiveTypeSymbolId),
     TypeAlias(TypeAliasSymbolId),
     Method(MethodSymbolId),
     Member(MemberSymbolId),
@@ -69,6 +70,7 @@ macro_rules! impl_as_id {
 pub enum TypeSymbolId {
     Struct(StructSymbolId),
     Enum(EnumSymbolId),
+    Primitive(PrimitiveTypeSymbolId),
 }
 impl Default for TypeSymbolId {
     fn default() -> Self {
@@ -80,6 +82,7 @@ impl From<TypeSymbolId> for SymbolId {
         match value {
             TypeSymbolId::Enum(t) => t.into(),
             TypeSymbolId::Struct(t) => t.into(),
+            TypeSymbolId::Primitive(t) => t.into(),
         }
     }
 }
@@ -96,6 +99,8 @@ pub struct EnumSymbolId(usize);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VariantSymbolId(usize);
 impl_as_id!(VariantSymbolId, Variant, as_variant);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PrimitiveTypeSymbolId(usize);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TypeAliasSymbolId(usize);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -134,9 +139,10 @@ pub struct FunctionSymbol {
     pub access: SymbolAccessManager,
 }
 
+#[derive(Clone, Debug, Default)]
 pub struct PrimitiveTypeSymbol {
     pub name: String,
-    pub methods: Vec<MethodSymbol>,
+    pub methods: Vec<MethodSymbolId>,
     pub ty: TypeId,
     pub docs: Option<String>,
     pub defined_at: Location,
@@ -273,17 +279,14 @@ impl SymbolAccessManager {
     }
 }
 
-fn methods_overlap(a: &MethodSymbol, b: &MethodSymbol) -> bool {
-    a.name == b.name && a.owner_args == b.owner_args
-}
-
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SymbolTable {
     variables: Vec<VariableSymbol>,
     functions: Vec<FunctionSymbol>,
     structs: Vec<StructSymbol>,
     enums: Vec<EnumSymbol>,
     variants: Vec<VariantSymbol>,
+    primitives: Vec<PrimitiveTypeSymbol>,
     aliases: Vec<TypeAliasSymbol>,
     members: Vec<MemberSymbol>,
     methods: Vec<MethodSymbol>,
@@ -311,6 +314,7 @@ impl SymbolTable {
             Struct(s) => self.get(s),
             Enum(e) => self.get(e),
             Variant(v) => self.get(v),
+            Primitive(p) => self.get(p),
             TypeAlias(s) => self.get(s),
             Method(m) => self.get(m),
             Member(m) => self.get(m),
@@ -324,6 +328,7 @@ impl SymbolTable {
             Struct(s) => self.get_mut(s),
             Enum(e) => self.get_mut(e),
             Variant(v) => self.get_mut(v),
+            Primitive(p) => self.get_mut(p),
             TypeAlias(t) => self.get_mut(t),
             Method(m) => self.get_mut(m),
             Member(m) => self.get_mut(m),
@@ -390,6 +395,7 @@ define_symbol_index!(FunctionSymbol, FunctionSymbolId, functions);
 define_symbol_index!(StructSymbol, StructSymbolId, structs);
 define_symbol_index!(EnumSymbol, EnumSymbolId, enums);
 define_symbol_index!(VariantSymbol, VariantSymbolId, variants);
+define_symbol_index!(PrimitiveTypeSymbol, PrimitiveTypeSymbolId, primitives);
 define_symbol_index!(TypeAliasSymbol, TypeAliasSymbolId, aliases);
 define_symbol_index!(MethodSymbol, MethodSymbolId, methods);
 define_symbol_index!(MemberSymbol, MemberSymbolId, members);
@@ -430,6 +436,7 @@ impl_symbol!(FunctionSymbol);
 impl_symbol!(StructSymbol);
 impl_symbol!(EnumSymbol);
 impl_symbol!(VariantSymbol);
+impl_symbol!(PrimitiveTypeSymbol);
 impl_symbol!(TypeAliasSymbol);
 impl_symbol!(MethodSymbol);
 impl_symbol!(MemberSymbol);

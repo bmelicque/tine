@@ -1,37 +1,35 @@
+use std::collections::HashMap;
+
 use crate::{
-    analysis_context::symbols::{FunctionSymbol, FunctionSymbolId},
-    type_checker::{CheckResult, TypeChecker},
+    common::module_path::ModuleId,
+    symbols::*,
+    type_checker::TypeChecker,
     types::{FunctionType, SignalType, Type},
-    ModuleId, Session,
 };
 
-impl Session {
-    pub fn check_signals_module(&mut self, id: ModuleId) -> CheckResult {
-        let mut checker = TypeChecker::new(self, id);
+pub fn check_signals_module(module: ModuleId, tc: &mut TypeChecker) {
+    let mut exports = HashMap::new();
 
-        register_state_symbol(&mut checker);
-        register_derived_symbol(&mut checker);
+    let state_symbol = register_state_symbol(tc);
+    exports.insert("state".to_string(), state_symbol.into());
 
-        let main_scope = &checker.ctx.scopes[0];
+    let computed_symbol = register_computed_symbol(tc);
+    exports.insert("computed$".to_string(), computed_symbol.into());
 
-        CheckResult {
-            exports: main_scope.bindings.clone(),
-            ..Default::default()
-        }
-    }
+    tc.add_exports(module, exports);
 }
 
-fn register_state_symbol(checker: &mut TypeChecker) {
-    let param_type = checker.add_type_param("Type".to_string());
-    let return_type = checker.intern(Type::Signal(SignalType {
+fn register_state_symbol(tc: &mut TypeChecker) -> FunctionSymbolId {
+    let param_type = tc.add_type_param("Type".to_string());
+    let return_type = tc.intern(Type::Signal(SignalType {
         inner: param_type.id,
     }));
-    let state_type = checker.intern_unique(Type::Function(FunctionType {
+    let state_type = tc.intern_unique(Type::Function(FunctionType {
         params: vec![param_type.id],
         type_params: vec![param_type],
         return_type,
     }));
-    checker.symbols.insert::<FunctionSymbolId>(FunctionSymbol {
+    tc.symbols.insert::<FunctionSymbolId>(FunctionSymbol {
         name: "state".to_string(),
         ty: state_type,
         param_names: vec!["initialValue".to_string()],
@@ -53,17 +51,17 @@ fn reset() {
             .to_string(),
         ),
         ..Default::default()
-    });
+    })
 }
 
-fn register_derived_symbol(checker: &mut TypeChecker) {
-    let param_type = checker.add_type_param("Type".to_string());
-    let derived_type = checker.intern_unique(Type::Function(FunctionType {
+fn register_computed_symbol(tc: &mut TypeChecker) -> FunctionSymbolId {
+    let param_type = tc.add_type_param("Type".to_string());
+    let derived_type = tc.intern_unique(Type::Function(FunctionType {
         params: vec![param_type.id],
         return_type: param_type.id,
         type_params: vec![param_type],
     }));
-    checker.symbols.insert::<FunctionSymbolId>(FunctionSymbol {
+    tc.symbols.insert::<FunctionSymbolId>(FunctionSymbol {
         name: "computed$".to_string(),
         ty: derived_type,
         param_names: vec!["expression".to_string()],
@@ -85,5 +83,5 @@ let nextValue = *nextCounter
             .to_string(),
         ),
         ..Default::default()
-    });
+    })
 }

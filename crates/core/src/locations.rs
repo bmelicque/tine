@@ -1,6 +1,6 @@
 use std::cmp::{max, min, Ordering};
 
-use crate::analyzer::ModuleId;
+use crate::common::module_path::ModuleId;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Span {

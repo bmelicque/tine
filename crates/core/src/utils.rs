@@ -1,4 +1,4 @@
-use crate::{analyzer::Source, diagnostics::Diagnostic};
+use crate::{common::sources::Source, diagnostics::Diagnostic};
 
 pub fn pretty_print_error(src: &Source, diag: &Diagnostic) {
     let loc = &diag.loc;

@@ -147,7 +147,7 @@ mod tests {
         let ty = checker
             .visit_binary_expression(node)
             .map_or(TypeStore::UNKNOWN, |n| n.ty);
-        (ty, checker.diagnostics)
+        (ty, checker.diagnostics[&0].clone())
     }
 
     #[test]

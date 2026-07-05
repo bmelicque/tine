@@ -349,6 +349,7 @@ fn visit_constructor_pattern(
                 .map(Into::into);
             Some(Pattern::Constructor(ConstructorPattern { identifier, arg }))
         }
+        _ => panic!(),
     }
 }
 fn visit_type_symbol_body(

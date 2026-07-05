@@ -107,7 +107,7 @@ impl TypeChecker {
         let (_, substitutions) = self.visit_type_args(named.args, &expected_type_params, named.loc);
         let symbol_id = match symbol {
             TypeSymbolId::Struct(st) => st,
-            TypeSymbolId::Enum(_) => {
+            _ => {
                 self.error(DiagnosticKind::ExpectedStructGotEnum, named.loc);
                 return None;
             }

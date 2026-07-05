@@ -150,31 +150,24 @@ impl TypeChecker {
             return true;
         }
         match symbol {
-            TypeSymbolId::Enum(_) => false,
             TypeSymbolId::Struct(s) => match &self.symbols.get(s).body {
                 TypeSymbolBody::Struct(s) => s.iter().find(|(n, _)| n == field).is_some(),
                 _ => false,
             },
+            _ => false,
         }
     }
 
     fn has_method(&self, symbol: TypeSymbolId, field: &str) -> bool {
-        match symbol {
-            TypeSymbolId::Enum(s) => self
-                .symbols
-                .get(s)
-                .methods
-                .iter()
-                .find(|m| self.symbol_name(**m) == field)
-                .is_some(),
-            TypeSymbolId::Struct(s) => self
-                .symbols
-                .get(s)
-                .methods
-                .iter()
-                .find(|m| self.symbol_name(**m) == field)
-                .is_some(),
-        }
+        let methods = match symbol {
+            TypeSymbolId::Enum(s) => &self.symbols.get(s).methods,
+            TypeSymbolId::Struct(s) => &self.symbols.get(s).methods,
+            TypeSymbolId::Primitive(s) => &self.symbols.get(s).methods,
+        };
+        methods
+            .into_iter()
+            .find(|m| self.symbol_name(**m) == field)
+            .is_some()
     }
 
     fn visit_static_definition(
@@ -243,10 +236,12 @@ impl TypeChecker {
 
         self.add_method_to_store(&symbol);
         let symbol_id = self.symbols.insert(symbol);
-        match host {
-            TypeSymbolId::Enum(s) => self.symbols.get_mut(s).methods.push(symbol_id),
-            TypeSymbolId::Struct(s) => self.symbols.get_mut(s).methods.push(symbol_id),
-        }
+        let methods = match host {
+            TypeSymbolId::Enum(s) => &mut self.symbols.get_mut(s).methods,
+            TypeSymbolId::Primitive(s) => &mut self.symbols.get_mut(s).methods,
+            TypeSymbolId::Struct(s) => &mut self.symbols.get_mut(s).methods,
+        };
+        methods.push(symbol_id);
         Some(symbol_id)
     }
     fn add_method_to_store(&mut self, symbol: &MethodSymbol) {

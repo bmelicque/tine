@@ -224,7 +224,7 @@ mod tests {
         let (_, checker) = visit_if_expression(node);
         assert_eq!(checker.diagnostics.len(), 1);
         assert!(matches!(
-            checker.diagnostics[0].kind,
+            &checker.diagnostics[&0][0].kind,
             DiagnosticKind::InvalidCondition { .. }
         ));
     }
@@ -253,7 +253,7 @@ mod tests {
         let (_, checker) = visit_if_expression(node);
         assert_eq!(checker.diagnostics.len(), 1);
         assert!(matches!(
-            checker.diagnostics[0].kind,
+            &checker.diagnostics[&0][0].kind,
             DiagnosticKind::MismatchedBranchTypes { .. }
         ))
     }

@@ -81,7 +81,3 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 fn generate_id() -> usize {
     COUNTER.fetch_add(1, Ordering::Relaxed)
 }
-
-pub fn identifier_name<'s>(id: &ir::Identifier, symbols: &'s SymbolTable) -> &'s str {
-    symbols.get_symbol(id.symbol).name()
-}
