@@ -500,7 +500,7 @@ pub fn declare_variable(
                 .iter()
                 .filter_map(|d| d.symbol.as_variable())
                 .collect();
-            let symbol = visitor.tc.symbols.insert(VariableSymbol {
+            let symbol: VariableSymbolId = visitor.tc.symbols.insert(VariableSymbol {
                 name: identifier.as_str().to_string(),
                 ty,
                 mutable,
@@ -508,6 +508,10 @@ pub fn declare_variable(
                 dependencies,
                 ..Default::default()
             });
+            visitor
+                .tc
+                .current_scope()
+                .bind(identifier.as_str().to_string(), symbol.into());
             Some(symbol)
         }
     }

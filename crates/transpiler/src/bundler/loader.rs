@@ -18,7 +18,7 @@ impl SwcLoader {
     // TODO: avoid all this cloning
     fn load_real_module(&self, file: &FileName) -> anyhow::Result<swc_bundler::ModuleData> {
         let module_path = match file {
-            FileName::Real(f) => ModulePath::Real(f.clone()),
+            FileName::Real(f) => ModulePath::Real(f.canonicalize()?.clone()),
             FileName::Custom(f) => ModulePath::Virtual(f.clone()),
             _ => unreachable!(),
         };

@@ -192,6 +192,7 @@ impl ProjectParser {
             name => anyhow::bail!("Cannot find module '{}'", name),
         };
         let id = self.add_module(module);
+        self.ast.insert(id, ast::Program::dummy());
         Ok(id)
     }
 }

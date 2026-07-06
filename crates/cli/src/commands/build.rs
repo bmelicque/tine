@@ -4,7 +4,7 @@ use tine_core::{ModulePath, pretty_print_error};
 use tine_transpiler::{self, SwcLoader};
 
 pub fn run(args: BuildArgs) {
-    let path_buf = PathBuf::from(args.input);
+    let path_buf = PathBuf::from(args.input).canonicalize().unwrap();
     let module_path = ModulePath::from(&path_buf);
     let project_result = tine_core::parse_project(module_path.clone());
     let check_result = tine_core::check_project(project_result);

@@ -1,10 +1,6 @@
 use crate::{
     ast, ir,
-    type_checker::{
-        symbols::{FunctionSymbol, VariableSymbol, VariableSymbolId},
-        type_store::TypeStore,
-        TypeChecker,
-    },
+    type_checker::{symbols::*, type_store::TypeStore, TypeChecker},
     types::{FunctionType, TypeId},
     Location,
 };
@@ -45,8 +41,8 @@ impl TypeChecker {
 
         let name = match node.name {
             Some(id) => {
-                let symbol = self.symbols.insert(FunctionSymbol {
-                    name: id.text,
+                let symbol: FunctionSymbolId = self.symbols.insert(FunctionSymbol {
+                    name: id.text.clone(),
                     ty,
                     param_names: params
                         .iter()
@@ -56,6 +52,7 @@ impl TypeChecker {
                     docs,
                     ..Default::default()
                 });
+                self.current_scope().bind(id.text, symbol.into());
                 Some((id.loc, symbol))
             }
             None => None,
