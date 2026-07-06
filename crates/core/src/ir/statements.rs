@@ -123,7 +123,8 @@ impl Into<FunctionExpression> for FunctionDefinition {
 #[derive(Debug, Clone)]
 pub struct MethodDefinition {
     pub loc: Location,
-    pub receiver: (Location, TypeSymbolId),
+    pub receiver_name: (Location, VariableSymbolId),
+    pub receiver_type: (Location, TypeSymbolId),
     pub mutating: bool,
     pub name: (Location, MethodSymbolId),
     pub params: Vec<(Location, VariableSymbolId)>,

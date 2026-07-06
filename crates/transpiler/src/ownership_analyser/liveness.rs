@@ -1,7 +1,7 @@
 // First pass of the ownership checker.
 //
 // Produces a `UseSites` map: for every variable (identified by its
-// `SymbolRef`), the list of `Location`s where that variable is read, with some
+// `SymbolId`), the list of `Location`s where that variable is read, with some
 // context information relevant for the ownership analysis.
 //
 // Being captured by a loop or a closure effectively affects the variable's
@@ -9,7 +9,11 @@
 
 use std::collections::HashMap;
 
-use tine_core::{ir, Location, SymbolRef};
+use tine_core::{
+    ir,
+    symbols::{SymbolId, SymbolTable},
+    Location,
+};
 
 /// A single use of a variable, with relevant context information.
 #[derive(Debug, Default, Clone, Copy)]
@@ -49,14 +53,14 @@ impl UseSite {
 ///
 /// Contains all the `UseSite`s for any given variable.
 #[derive(Debug, Default)]
-pub struct UseSites(pub HashMap<SymbolRef, Vec<UseSite>>);
+pub struct UseSites(pub HashMap<SymbolId, Vec<UseSite>>);
 
 impl UseSites {
     /// All use-sites of `sym` that occur strictly *after* `loc`.
     ///
     /// This also include the use-site at given location if it is captured by
     /// a loop (since the loop's body could be executed several times).
-    pub fn uses_after(&self, sym: SymbolRef, loc: Location) -> &[UseSite] {
+    pub fn uses_after(&self, sym: SymbolId, loc: Location) -> &[UseSite] {
         let Some(sites) = self.0.get(&sym) else {
             return &[];
         };
@@ -82,7 +86,7 @@ impl UseSites {
             .is_some()
     }
 
-    pub fn is_external(&self, sym: &SymbolRef) -> bool {
+    pub fn is_external(&self, sym: &SymbolId) -> bool {
         self.0
             .get(sym)
             .unwrap_or(&vec![])
@@ -92,7 +96,7 @@ impl UseSites {
     }
 
     /// True if `sym` is captured by a closure anywhere.
-    pub fn captured_by_closure(&self, sym: &SymbolRef) -> bool {
+    pub fn captured_by_closure(&self, sym: &SymbolId) -> bool {
         self.0
             .get(sym)
             .map(|sites| sites.iter().any(|s| s.in_closure))
@@ -111,16 +115,28 @@ impl UseSites {
 
 /// The context threaded through the traversal.
 /// Keeps track of current loop and closure bodies.
-#[derive(Clone, Copy, Default)]
-struct Ctx {
+#[derive(Clone, Copy)]
+struct Ctx<'sym> {
     loop_ctx: Option<Location>,
     closure_ctx: Option<Location>,
     in_param: bool,
     assignment_lhs: bool,
     in_callee: bool,
+    symbols: &'sym SymbolTable,
 }
 
-impl Ctx {
+impl Ctx<'_> {
+    fn new<'sym>(symbols: &'sym SymbolTable) -> Ctx<'sym> {
+        Ctx {
+            loop_ctx: None,
+            closure_ctx: None,
+            in_param: false,
+            assignment_lhs: false,
+            in_callee: false,
+            symbols,
+        }
+    }
+
     fn enter_loop(self, loc: Location) -> Self {
         Self {
             loop_ctx: Some(loc),
@@ -146,23 +162,25 @@ impl Ctx {
         }
     }
 
-    fn loop_captures(&self, sym: &SymbolRef) -> bool {
+    fn loop_captures(&self, sym: SymbolId) -> bool {
+        let defined_at = self.symbols.get_symbol(sym).defined_at();
         self.loop_ctx
-            .map(|ctx| sym.borrow().defined_at.is_within(ctx))
+            .map(|ctx| defined_at.is_within(ctx))
             .unwrap_or(false)
     }
-    fn closure_captures(&self, sym: &SymbolRef) -> bool {
+    fn closure_captures(&self, sym: SymbolId) -> bool {
+        let defined_at = self.symbols.get_symbol(sym).defined_at();
         self.closure_ctx
-            .map(|ctx| sym.borrow().defined_at.is_within(ctx))
+            .map(|ctx| defined_at.is_within(ctx))
             .unwrap_or(false)
     }
 }
 
 /// Analyse the liveness of all symbols in the given program and returns a map
 /// of their use-sites.
-pub fn analyse_liveness(program: &ir::Program) -> UseSites {
+pub fn analyse_liveness(program: &ir::Program, symbols: &SymbolTable) -> UseSites {
     let mut sites = UseSites::default();
-    let ctx = Ctx::default();
+    let ctx = Ctx::new(symbols);
     for stmt in &program.statements {
         visit_stmt(stmt, ctx, &mut sites);
     }
@@ -198,33 +216,30 @@ fn visit_stmt(stmt: &ir::Statement, ctx: Ctx, out: &mut UseSites) {
         }
         ir::Statement::Function(f) => {
             for param in &f.params {
-                out.0
-                    .entry(param.symbol.clone())
-                    .or_default()
-                    .push(UseSite {
-                        loc: param.loc,
-                        in_loop: false,
-                        in_closure: false,
-                        is_external: true,
-                        is_mutated: false,
-                    })
+                out.0.entry(param.1.into()).or_default().push(UseSite {
+                    loc: param.0,
+                    in_loop: false,
+                    in_closure: false,
+                    is_external: true,
+                    is_mutated: false,
+                })
             }
             visit_block(&f.body, ctx.enter_closure(f.body.loc), out);
         }
         ir::Statement::Method(m) => {
             out.0.insert(
-                m.receiver.symbol.clone(),
+                m.receiver_type.1.into(),
                 vec![UseSite {
-                    loc: m.receiver.loc,
+                    loc: m.receiver_type.0,
                     is_external: true,
                     ..Default::default()
                 }],
             );
             for param in &m.params {
                 out.0.insert(
-                    param.symbol.clone(),
+                    param.1.into(),
                     vec![UseSite {
-                        loc: param.loc,
+                        loc: param.0,
                         is_external: true,
                         ..Default::default()
                     }],
@@ -245,8 +260,8 @@ fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
     match expr {
         // Leaf: record the use-site
         ir::Expression::Identifier(id) => {
-            let in_loop = ctx.loop_captures(&id.symbol);
-            let in_closure = ctx.closure_captures(&id.symbol);
+            let in_loop = ctx.loop_captures(id.symbol);
+            let in_closure = ctx.closure_captures(id.symbol);
             out.0.entry(id.symbol.clone()).or_default().push(UseSite {
                 loc: id.loc,
                 in_loop,
@@ -263,6 +278,7 @@ fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
 
         ir::Expression::Unary(u) => visit_expr(&u.operand, ctx, out),
         ir::Expression::Member(m) => visit_expr(&m.object, ctx, out),
+        ir::Expression::Method(m) => visit_expr(&m.host, ctx, out),
         ir::Expression::Binary(b) => {
             visit_expr(&b.left, ctx, out);
             visit_expr(&b.right, ctx, out);
@@ -333,9 +349,9 @@ fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
             visit_expr(iterable, ctx, out);
             // The element binding is freshly introduced each iteration;
             out.0
-                .entry(element.symbol.clone())
+                .entry(element.1.into())
                 .or_default()
-                .push(UseSite::declaration(element.loc));
+                .push(UseSite::declaration(element.0));
             visit_block(body, ctx.enter_loop(*loc), out);
         }
 
@@ -343,14 +359,11 @@ fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
             body, loc, params, ..
         }) => {
             for param in params {
-                out.0
-                    .entry(param.symbol.clone())
-                    .or_default()
-                    .push(UseSite {
-                        loc: param.loc,
-                        is_external: true,
-                        ..Default::default()
-                    })
+                out.0.entry(param.1.into()).or_default().push(UseSite {
+                    loc: param.0,
+                    is_external: true,
+                    ..Default::default()
+                })
             }
             visit_block(body, ctx.enter_closure(*loc), out);
         }

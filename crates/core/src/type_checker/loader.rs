@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+
 use enum_from_derive::EnumFrom;
 
 use crate::{
     ast,
     common::module_path::ModuleId,
     type_checker::std::{dom::check_dom_module, signals::check_signals_module},
-    ModulePath, ProjectParser, TypeChecker,
+    ModulePath, TypeChecker,
 };
 
 #[derive(EnumFrom)]
@@ -19,18 +21,17 @@ pub trait ModuleLoader {
     fn module(&mut self, id: ModuleId) -> LoadedModule;
 }
 
-pub struct CheckerLoader(ProjectParser);
-impl From<ProjectParser> for CheckerLoader {
-    fn from(value: ProjectParser) -> Self {
-        Self(value)
-    }
+pub struct CheckerLoader {
+    pub names: Vec<ModulePath>,
+    pub ids: HashMap<ModulePath, ModuleId>,
+    pub ast: HashMap<ModuleId, ast::Program>,
 }
 impl ModuleLoader for CheckerLoader {
     fn find_id(&self, name: &ModulePath) -> Option<ModuleId> {
-        self.0.get_id(name)
+        self.ids.get(name).copied()
     }
     fn get_name(&self, module: ModuleId) -> &ModulePath {
-        self.0.name(module)
+        &self.names[module]
     }
     fn module(&mut self, id: ModuleId) -> LoadedModule {
         let name = self.get_name(id);
@@ -51,7 +52,7 @@ impl ModuleLoader for CheckerLoader {
             _ => {}
         }
 
-        self.0.consume_ast(id).into()
+        self.ast.remove(&id).unwrap().into()
     }
 }
 

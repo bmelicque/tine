@@ -3,8 +3,8 @@ use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 use tine_core::ir;
 
-impl CodeGenerator<'_> {
-    pub fn handle_unary_expression(&mut self, node: &ir::UnaryExpression) -> ExpressionResult {
+impl CodeGenerator<'_, '_> {
+    pub fn handle_unary_expression(&mut self, node: ir::UnaryExpression) -> ExpressionResult {
         match node.operator {
             ir::UnaryOperator::Bang => self.handle_logical_not(node),
             ir::UnaryOperator::Minus => self.handle_negation(node),
@@ -16,8 +16,8 @@ impl CodeGenerator<'_> {
     /**
      * `*expr` => `expr.$get()`
      */
-    fn handle_deref(&mut self, node: &ir::UnaryExpression) -> ExpressionResult {
-        let obj_result = self.handle_expression(&node.operand);
+    fn handle_deref(&mut self, node: ir::UnaryExpression) -> ExpressionResult {
+        let obj_result = self.handle_expression(*node.operand);
 
         let expr = swc::Expr::Call(swc::CallExpr {
             span: DUMMY_SP,
@@ -37,8 +37,8 @@ impl CodeGenerator<'_> {
         }
     }
 
-    fn handle_negation(&mut self, node: &ir::UnaryExpression) -> ExpressionResult {
-        let arg_result = self.handle_expression(&node.operand);
+    fn handle_negation(&mut self, node: ir::UnaryExpression) -> ExpressionResult {
+        let arg_result = self.handle_expression(*node.operand);
 
         let expr = swc::Expr::Unary(swc::UnaryExpr {
             span: DUMMY_SP,
@@ -52,8 +52,8 @@ impl CodeGenerator<'_> {
         }
     }
 
-    fn handle_logical_not(&mut self, node: &ir::UnaryExpression) -> ExpressionResult {
-        let arg_result = self.handle_expression(&node.operand);
+    fn handle_logical_not(&mut self, node: ir::UnaryExpression) -> ExpressionResult {
+        let arg_result = self.handle_expression(*node.operand);
 
         let expr = swc::Expr::Unary(swc::UnaryExpr {
             span: DUMMY_SP,

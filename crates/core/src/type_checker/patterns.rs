@@ -285,11 +285,11 @@ pub struct TuplePattern {
 }
 impl_pattern!(TuplePattern, Tuple, as_tuple);
 
-struct PatternVisitor<'deps, 'tc> {
-    is_declaration: bool,
+pub(super) struct PatternVisitor<'deps, 'tc> {
+    pub(super) is_declaration: bool,
     /// All the dependencies of the expression the pattern is matched against
-    dependencies: &'deps [ir::Identifier],
-    tc: &'tc mut TypeChecker,
+    pub(super) dependencies: &'deps [ir::Identifier],
+    pub(super) tc: &'tc mut TypeChecker,
 }
 
 fn visit_pattern(
@@ -472,7 +472,7 @@ fn visit_identifier_pattern(
     }))
 }
 
-fn declare_variable(
+pub fn declare_variable(
     visitor: &mut PatternVisitor,
     identifier: &ast::Identifier,
     ty: types::TypeId,

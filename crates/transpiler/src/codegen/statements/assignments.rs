@@ -7,8 +7,8 @@ use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 use tine_core::ir;
 
-impl CodeGenerator<'_> {
-    pub fn handle_assignment(&mut self, node: &ir::Assignment) -> Vec<swc::Stmt> {
+impl CodeGenerator<'_, '_> {
+    pub fn handle_assignment(&mut self, node: ir::Assignment) -> Vec<swc::Stmt> {
         let result = self.handle_assignment_as_expr(node);
         let mut stmts = result.prelim_stmts;
         stmts.push(swc::Stmt::Expr(swc::ExprStmt {
@@ -18,15 +18,15 @@ impl CodeGenerator<'_> {
         stmts
     }
 
-    pub fn handle_assignment_as_expr(&mut self, node: &ir::Assignment) -> ExpressionResult {
+    pub fn handle_assignment_as_expr(&mut self, node: ir::Assignment) -> ExpressionResult {
         match &node.pattern {
             ir::Expression::Identifier(_) if is_handled_by_ref(&node.pattern) => {
-                self.handle_method_assign(&node.pattern, &node.value)
+                self.handle_method_assign(node.pattern, node.value)
             }
-            ir::Expression::Identifier(_) => self.handle_raw_assign(&node.pattern, &node.value),
-            ir::Expression::Member(_) => self.handle_raw_assign(&node.pattern, &node.value),
+            ir::Expression::Identifier(_) => self.handle_raw_assign(node.pattern, node.value),
+            ir::Expression::Member(_) => self.handle_raw_assign(node.pattern, node.value),
             ir::Expression::Unary(u) if u.operator == ir::UnaryOperator::Star => {
-                self.handle_method_assign(&u.operand, &node.value)
+                self.handle_method_assign(*u.operand.clone(), node.value)
             }
             _ => unimplemented!(),
         }
@@ -34,10 +34,10 @@ impl CodeGenerator<'_> {
 
     fn handle_raw_assign(
         &mut self,
-        assign_target: &ir::Expression,
-        value: &ir::Expression,
+        assign_target: ir::Expression,
+        value: ir::Expression,
     ) -> ExpressionResult {
-        let is_current_this = self.is_current_this(assign_target);
+        let is_current_this = self.is_current_this(&assign_target);
 
         let value_result = self.handle_assigned_value(value);
 
@@ -79,8 +79,8 @@ impl CodeGenerator<'_> {
 
     fn handle_method_assign(
         &mut self,
-        assign_target: &ir::Expression,
-        value: &ir::Expression,
+        assign_target: ir::Expression,
+        value: ir::Expression,
     ) -> ExpressionResult {
         let value_result = self.handle_expression(value);
 
@@ -106,10 +106,11 @@ impl CodeGenerator<'_> {
         ExpressionResult { prelim_stmts, expr }
     }
 
-    pub(crate) fn handle_assigned_value(&mut self, value: &ir::Expression) -> ExpressionResult {
+    pub(crate) fn handle_assigned_value(&mut self, value: ir::Expression) -> ExpressionResult {
+        let is_ref = is_handled_by_ref(&value);
         let mut result = self.handle_expression(value);
 
-        if is_handled_by_ref(value) {
+        if is_ref {
             result.expr = swc::Expr::Call(swc::CallExpr {
                 callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
                     span: DUMMY_SP,

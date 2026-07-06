@@ -8,7 +8,11 @@ mod type_checker;
 pub mod types;
 mod utils;
 
-pub use common::{module_path::ModulePath, use_decl_to_paths, ModuleImports};
+pub use common::{
+    module_path::{ModuleId, ModulePath},
+    sources::Source,
+    use_decl_to_paths, ModuleImports,
+};
 pub use diagnostics::*;
 pub use locations::{Location, Span};
 pub use parser::{parse_project, ParseResult, ProjectParser};

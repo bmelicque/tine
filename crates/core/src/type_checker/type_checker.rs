@@ -6,7 +6,7 @@ use crate::type_checker::loader::{CheckerLoader, LoadedModule, MockLoader, Modul
 use crate::type_checker::symbols::*;
 use crate::type_checker::type_store::TypeStore;
 use crate::types::{self, Type, TypeId};
-use crate::{ir, Location, ProjectParser};
+use crate::{ir, Location, ProjectParser, Source};
 
 #[derive(Debug, Default)]
 pub struct CheckResult {
@@ -16,14 +16,41 @@ pub struct CheckResult {
     pub diagnostics: HashMap<ModuleId, Vec<Diagnostic>>,
 }
 
-pub fn check_project(project: ProjectParser) -> CheckResult {
+#[derive(Debug, Default)]
+pub struct CheckProjectResult {
+    pub names: Vec<ModulePath>,
+    pub ids: HashMap<ModulePath, ModuleId>,
+
+    pub sources: HashMap<ModuleId, Source>,
+    pub ir: HashMap<ModuleId, ir::Program>,
+    pub types: TypeStore,
+    pub symbols: SymbolTable,
+    pub diagnostics: HashMap<ModuleId, Vec<Diagnostic>>,
+}
+
+pub fn check_project(project: ProjectParser) -> CheckProjectResult {
     let sorted_modules = project.try_sorted_vec().unwrap();
-    let loader: CheckerLoader = project.into();
+    let names = project.names.clone();
+    let ids = project.ids.clone();
+    let loader = CheckerLoader {
+        names: project.names,
+        ids: project.ids,
+        ast: project.ast,
+    };
     let mut tc = TypeChecker::with_loader(Box::new(loader));
     for module in sorted_modules {
         tc.check_module(module);
     }
-    tc.results()
+    let r = tc.results();
+    CheckProjectResult {
+        names,
+        ids,
+        sources: project.sources,
+        ir: r.ir,
+        types: r.types,
+        symbols: r.symbols,
+        diagnostics: r.diagnostics,
+    }
 }
 
 pub struct TypeChecker {

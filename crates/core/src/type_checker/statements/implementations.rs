@@ -1,7 +1,13 @@
 use crate::{
     ast::{self, ImplementationBody},
     ir,
-    type_checker::{substitutions::Substitutions, symbols::*, TypeChecker},
+    type_checker::{
+        patterns::{declare_variable, PatternVisitor},
+        substitutions::Substitutions,
+        symbols::*,
+        TypeChecker,
+    },
+    type_store::TypeStore,
     types::{self, TraitMethod, TypeId},
     DiagnosticKind, Location,
 };
@@ -88,11 +94,25 @@ impl TypeChecker {
         host: Option<(Location, TypeSymbolId)>,
         host_args: &Substitutions,
     ) -> Option<ir::MethodDefinition> {
-        let ((params, visited_body), type_params) = self.with_type_params(&node.type_params, |s| {
-            let params = s.visit_function_params(node.params);
-            let visited_body = s.visit_function_body(node.return_type, node.body);
-            (params, visited_body)
-        });
+        let host_type = host.map_or(TypeStore::UNKNOWN, |h| self.symbol_type_id(h.1));
+        let ((receiver_symbol, params, visited_body), type_params) =
+            self.with_type_params(&node.type_params, |s| {
+                let receiver = node
+                    .receiver
+                    .pattern
+                    .and_then(|p| p.as_identifier().cloned())
+                    .and_then(|i| {
+                        let mut visitor = PatternVisitor {
+                            is_declaration: true,
+                            dependencies: &vec![],
+                            tc: s,
+                        };
+                        declare_variable(&mut visitor, &i.0, host_type, false)
+                    });
+                let params = s.visit_function_params(node.params);
+                let visited_body = s.visit_function_body(node.return_type, node.body);
+                (receiver, params, visited_body)
+            });
         let (_, host_symbol) = host?;
 
         let (params, (return_type, body)) = (params?, visited_body?);
@@ -136,7 +156,8 @@ impl TypeChecker {
 
         Some(ir::MethodDefinition {
             loc: node.loc,
-            receiver: host?,
+            receiver_name: (host?.0, receiver_symbol?),
+            receiver_type: host?,
             mutating: node.receiver.mutable,
             name: (name.loc, symbol),
             params,

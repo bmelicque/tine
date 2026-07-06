@@ -1,17 +1,17 @@
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
-use tine_core::{ir, SymbolRef, TypeSymbolBody};
+use tine_core::{ir, symbols::*};
 
 use crate::codegen::{
     statements::types::utils::this_assignment, utils::ident_from_str, CodeGenerator,
 };
 
-impl CodeGenerator<'_> {
-    pub(crate) fn struct_def_to_swc(&mut self, node: &ir::StructDefinition) -> swc::ClassDecl {
-        let body_symbols = match node.body() {
-            TypeSymbolBody::Struct(st) => {
-                st.into_iter().map(|(_, symbol)| symbol.clone()).collect()
-            }
+impl CodeGenerator<'_, '_> {
+    pub(crate) fn struct_def_to_swc(&mut self, node: ir::StructDefinition) -> swc::ClassDecl {
+        let body = &self.symbols.get(node.symbol).body;
+
+        let body_symbols = match body {
+            TypeSymbolBody::Struct(st) => &st.into_iter().map(|(_, symbol)| *symbol).collect(),
             TypeSymbolBody::Tuple(t) => t,
         };
 
@@ -20,7 +20,8 @@ impl CodeGenerator<'_> {
         let constructor = self.struct_fields_to_swc_constructor(body_symbols);
         let mut body = vec![constructor.into(), get.into(), set.into()];
 
-        let child_classes = self.generate_concrete_classes(&node.methods());
+        let methods = &self.symbols.get(node.symbol).methods;
+        let child_classes = self.generate_concrete_classes(methods);
         body.extend(child_classes);
 
         let class = swc::Class {
@@ -29,21 +30,23 @@ impl CodeGenerator<'_> {
             ..Default::default()
         };
 
+        let name = &self.symbols.get(node.symbol).name;
         swc::ClassDecl {
-            ident: ident_from_str(&node.name.as_name()),
+            ident: ident_from_str(name),
             declare: false,
             class: Box::new(class),
         }
     }
 
-    fn struct_fields_to_swc_constructor(&mut self, body: Vec<SymbolRef>) -> swc::Constructor {
+    fn struct_fields_to_swc_constructor(&mut self, body: &[MemberSymbolId]) -> swc::Constructor {
         let params = body
             .iter()
             .map(|symbol| {
+                let name = &self.symbols.get(*symbol).name;
                 swc::ParamOrTsParamProp::Param(swc::Param {
                     span: DUMMY_SP,
                     decorators: vec![],
-                    pat: swc::Pat::Ident(ident_from_str(&symbol.as_name()).into()),
+                    pat: swc::Pat::Ident(ident_from_str(name).into()),
                 })
             })
             .collect();
@@ -52,10 +55,8 @@ impl CodeGenerator<'_> {
             stmts: body
                 .into_iter()
                 .map(|symbol| {
-                    this_assignment(
-                        ident_from_str(&symbol.as_name()),
-                        ident_from_str(&symbol.as_name()).into(),
-                    )
+                    let name = &self.symbols.get(*symbol).name;
+                    this_assignment(ident_from_str(name), ident_from_str(name).into())
                 })
                 .collect(),
             ..Default::default()
@@ -69,8 +70,8 @@ impl CodeGenerator<'_> {
         }
     }
 
-    fn make_struct_getter(&mut self, fields: &Vec<SymbolRef>) -> swc::ClassMethod {
-        let args = fields.iter().map(|f| self.get_field(f).into()).collect();
+    fn make_struct_getter(&mut self, fields: &[MemberSymbolId]) -> swc::ClassMethod {
+        let args = fields.iter().map(|f| self.get_field(*f).into()).collect();
 
         let stmt = swc::Stmt::Expr(swc::ExprStmt {
             span: DUMMY_SP,
@@ -94,7 +95,7 @@ impl CodeGenerator<'_> {
         }
     }
 
-    fn make_setter(&mut self, fields: &Vec<SymbolRef>) -> swc::ClassMethod {
+    fn make_setter(&mut self, fields: &[MemberSymbolId]) -> swc::ClassMethod {
         let stmts = self.set_fields(fields);
 
         swc::ClassMethod {

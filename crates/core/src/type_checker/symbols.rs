@@ -51,6 +51,10 @@ impl SymbolId {
             _ => None,
         }
     }
+
+    pub fn dummy() -> Self {
+        Self::Variable(VariableSymbolId(usize::MAX))
+    }
 }
 
 macro_rules! impl_as_id {

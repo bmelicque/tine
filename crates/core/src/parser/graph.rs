@@ -40,12 +40,12 @@ pub struct ProjectParser {
     entry_point: ModulePath,
     loader: Box<dyn Loader>,
 
-    ids: HashMap<ModulePath, ModuleId>,
-    names: Vec<ModulePath>,
+    pub ids: HashMap<ModulePath, ModuleId>,
+    pub names: Vec<ModulePath>,
 
-    sources: HashMap<ModuleId, Source>,
-    ast: HashMap<ModuleId, ast::Program>,
-    diagnostics: HashMap<ModuleId, Vec<Diagnostic>>,
+    pub sources: HashMap<ModuleId, Source>,
+    pub ast: HashMap<ModuleId, ast::Program>,
+    pub diagnostics: HashMap<ModuleId, Vec<Diagnostic>>,
 
     edges: HashSet<GraphEdge>,
 }
@@ -179,7 +179,9 @@ impl ProjectParser {
 
         let result = Parser::new(id, &src).parse();
         self.ast.insert(id, result.node);
-        self.diagnostics.insert(id, result.diagnostics);
+        if !result.diagnostics.is_empty() {
+            self.diagnostics.insert(id, result.diagnostics);
+        }
 
         Ok(id)
     }

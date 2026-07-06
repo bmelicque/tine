@@ -2,31 +2,34 @@ use std::collections::HashSet;
 
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
-use tine_core::{types::TypeId, SymbolKind, SymbolRef};
+use tine_core::{symbols::MethodSymbolId, types::TypeId};
 
 use crate::codegen::{utils::args_to_string, CodeGenerator};
 
-impl CodeGenerator<'_> {
-    pub fn generate_concrete_classes(&mut self, methods: &[SymbolRef]) -> Vec<swc::ClassMember> {
+impl CodeGenerator<'_, '_> {
+    pub fn generate_concrete_classes(
+        &mut self,
+        methods: &[MethodSymbolId],
+    ) -> Vec<swc::ClassMember> {
         methods
-            .iter()
-            .filter_map(|m| get_method_receiver_args(m))
+            .into_iter()
+            .map(|m| self.get_method_receiver_args(*m))
             .collect::<HashSet<_>>()
             .into_iter()
             .map(|args| args_to_string(&args))
             .map(|s| child_class_decl(s))
             .collect()
     }
-}
 
-fn get_method_receiver_args(method: &SymbolRef) -> Option<Vec<TypeId>> {
-    match &method.borrow().kind {
-        SymbolKind::Method { owner_args, .. } => {
-            let mut entries = owner_args.iter().collect::<Vec<_>>();
-            entries.sort_by(|a, b| a.0.id.cmp(&b.0.id));
-            Some(entries.into_iter().map(|(_, t)| *t).collect())
-        }
-        _ => None,
+    fn get_method_receiver_args(&self, method: MethodSymbolId) -> Vec<TypeId> {
+        let mut entries = self
+            .symbols
+            .get(method)
+            .owner_args
+            .iter()
+            .collect::<Vec<_>>();
+        entries.sort_by(|a, b| a.0.id.cmp(&b.0.id));
+        entries.into_iter().map(|(_, t)| *t).collect()
     }
 }
 

@@ -30,6 +30,13 @@ impl Pattern {
         }
     }
 
+    pub fn as_identifier(&self) -> Option<&IdentifierPattern> {
+        match self {
+            Pattern::Identifier(i) => Some(i),
+            _ => None,
+        }
+    }
+
     pub fn is_identifier(&self) -> bool {
         match self {
             Pattern::Identifier(_) => true,

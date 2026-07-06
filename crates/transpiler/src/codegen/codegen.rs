@@ -4,14 +4,20 @@ use crate::{
 };
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
-use tine_core::{ir, types, ModuleId, ModulePath, Session, SymbolRef};
+use tine_core::{
+    ir,
+    symbols::{SymbolId, SymbolTable, VariableSymbolId},
+    type_store::TypeStore,
+    types, ModulePath,
+};
 
-pub struct CodeGenerator<'sess> {
+pub struct CodeGenerator<'ty, 'sym> {
     _source_map: Lrc<SourceMap>,
 
+    pub types: &'ty TypeStore,
+    pub symbols: &'sym SymbolTable,
     ownership: OwnershipMap,
-    pub(super) session: &'sess Session,
-    pub(crate) module: ModuleId,
+    pub(super) name: ModulePath,
     /// Should the `break` statements be converted to `return` statements.
     /// This is used when generating `for` and `for ... in` expressions, which are translated to IIFEs.
     next_temp_id: usize,
@@ -19,28 +25,33 @@ pub struct CodeGenerator<'sess> {
     // Used when replacing `break X` by `TARGET = X; break`
     pub(crate) break_target: Option<swc::Ident>,
 
-    pub(crate) this_stack: Vec<SymbolRef>,
+    pub(crate) this_stack: Vec<VariableSymbolId>,
 }
 
-impl CodeGenerator<'_> {
-    pub fn new<'sess>(session: &'sess Session, module: ModuleId) -> CodeGenerator<'sess> {
+impl CodeGenerator<'_, '_> {
+    pub fn new<'ty, 'sym>(
+        name: ModulePath,
+        types: &'ty TypeStore,
+        symbols: &'sym SymbolTable,
+    ) -> CodeGenerator<'ty, 'sym> {
         CodeGenerator {
-            ownership: OwnershipMap::default(),
-            session,
-            module,
             _source_map: Lrc::new(SourceMap::new(Default::default())),
+
+            types,
+            symbols,
+            ownership: OwnershipMap::default(),
+            name,
             next_temp_id: 0,
             break_target: None,
             this_stack: vec![],
         }
     }
 
-    pub fn program_to_swc_module(&mut self) -> swc::Module {
-        let node = self.session.get_ir(self.module);
-        self.ownership = analyse_program(node, self.session);
-        let items: Vec<swc::ModuleItem> = node
+    pub fn program_to_swc_module(&mut self, ir: ir::Program) -> swc::Module {
+        self.ownership = analyse_program(&ir, self.types, self.symbols);
+        let items: Vec<swc::ModuleItem> = ir
             .statements
-            .iter()
+            .into_iter()
             .flat_map(|item| self.item_to_swc(item))
             .collect();
 
@@ -74,9 +85,18 @@ impl CodeGenerator<'_> {
         }
     }
 
-    pub fn get_filename(&self) -> &ModulePath {
-        let module = self.session.read_module(self.module);
-        &module.name
+    pub(super) fn symbol_name<I>(&self, id: I) -> &str
+    where
+        I: Into<SymbolId>,
+    {
+        self.symbols.get_symbol(id.into()).name()
+    }
+
+    pub(super) fn symbol_type_id<I>(&self, id: I) -> types::TypeId
+    where
+        I: Into<SymbolId>,
+    {
+        self.symbols.get_symbol(id.into()).ty()
     }
 
     pub(crate) fn with_break_target<F, T>(&mut self, target: swc::Ident, callback: F) -> T
@@ -96,11 +116,11 @@ impl CodeGenerator<'_> {
         ident
     }
 
-    pub(crate) fn resolve(&self, ty: types::TypeId) -> types::Type {
-        self.session.get_type(ty)
+    pub(crate) fn resolve(&self, ty: types::TypeId) -> &types::Type {
+        self.types.get(ty)
     }
 
-    pub(crate) fn with_this<F, T>(&mut self, this: SymbolRef, callback: F) -> T
+    pub(crate) fn with_this<F, T>(&mut self, this: VariableSymbolId, callback: F) -> T
     where
         F: FnOnce(&mut Self) -> T,
     {
@@ -111,7 +131,9 @@ impl CodeGenerator<'_> {
     }
     pub(crate) fn is_current_this(&self, expr: &ir::Expression) -> bool {
         match expr {
-            ir::Expression::Identifier(id) => Some(&id.symbol) == self.this_stack.last(),
+            ir::Expression::Identifier(id) => {
+                Some(id.symbol) == self.this_stack.last().copied().map(Into::into)
+            }
             _ => false,
         }
     }

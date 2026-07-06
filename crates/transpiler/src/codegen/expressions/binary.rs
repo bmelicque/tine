@@ -1,14 +1,12 @@
 use swc_common::DUMMY_SP;
-use tine_core::{ir, TypeStore};
+use tine_core::{ir, type_store::TypeStore};
 
 use crate::codegen::{expressions::ExpressionResult, CodeGenerator};
 
 use swc_ecma_ast as swc;
 
-impl CodeGenerator<'_> {
-    pub fn handle_binary_expression(&mut self, node: &ir::BinaryExpression) -> ExpressionResult {
-        let (left, right) = self.handle_binary_operands(node);
-
+impl CodeGenerator<'_, '_> {
+    pub fn handle_binary_expression(&mut self, node: ir::BinaryExpression) -> ExpressionResult {
         let op = match node.op {
             ir::BinaryOperator::Add => swc::BinaryOp::Add,
             ir::BinaryOperator::Div => swc::BinaryOp::Div,
@@ -25,6 +23,9 @@ impl CodeGenerator<'_> {
             ir::BinaryOperator::Pow => swc::BinaryOp::Exp,
             ir::BinaryOperator::Sub => swc::BinaryOp::Sub,
         };
+        let is_int = node.ty == TypeStore::INTEGER;
+
+        let (left, right) = self.handle_binary_operands(node);
 
         let mut expr = swc::BinExpr {
             span: DUMMY_SP,
@@ -32,7 +33,7 @@ impl CodeGenerator<'_> {
             left: Box::new(left.expr),
             right: Box::new(right.expr),
         };
-        if node.ty == TypeStore::INTEGER {
+        if is_int {
             expr = swc::BinExpr {
                 span: DUMMY_SP,
                 op: swc::BinaryOp::BitOr,
@@ -53,10 +54,10 @@ impl CodeGenerator<'_> {
 
     fn handle_binary_operands(
         &mut self,
-        node: &ir::BinaryExpression,
+        node: ir::BinaryExpression,
     ) -> (ExpressionResult, ExpressionResult) {
-        let left = self.handle_expression(&node.left);
-        let right = self.handle_expression(&node.right);
+        let left = self.handle_expression(*node.left);
+        let right = self.handle_expression(*node.right);
 
         match (left.prelim_stmts.is_empty(), right.prelim_stmts.is_empty()) {
             (false, false) | (true, true) => (left, right),

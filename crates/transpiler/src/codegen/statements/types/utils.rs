@@ -1,8 +1,8 @@
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 use tine_core::{
+    symbols::*,
     types::{self, TypeId},
-    SymbolRef,
 };
 
 use crate::codegen::{
@@ -11,33 +11,34 @@ use crate::codegen::{
     CodeGenerator,
 };
 
-impl CodeGenerator<'_> {
-    pub(crate) fn get_field(&mut self, field: &SymbolRef) -> swc::Expr {
-        match self.resolve(field.as_type()) {
+impl CodeGenerator<'_, '_> {
+    pub(crate) fn get_field(&mut self, field: MemberSymbolId) -> swc::Expr {
+        let ty = self.symbol_type_id(field);
+        match self.resolve(ty) {
             types::Type::Array(_) | types::Type::Tuple(_) => {
-                std_method_call("cloneArray", vec![this_field(field).into()]).into()
+                std_method_call("cloneArray", vec![self.this_field(field).into()]).into()
             }
             types::Type::Param(_) => {
-                std_method_call("clone", vec![this_field(field).into()]).into()
+                std_method_call("clone", vec![self.this_field(field).into()]).into()
             }
-            ty if is_primitive(&ty) => this_field(field),
-            _ => get_this_field(field).into(),
+            ty if is_primitive(&ty) => self.this_field(field),
+            _ => self.get_this_field(field).into(),
         }
     }
 
-    pub(crate) fn set_fields(&mut self, fields: &[SymbolRef]) -> Vec<swc::Stmt> {
+    pub(crate) fn set_fields(&mut self, fields: &[MemberSymbolId]) -> Vec<swc::Stmt> {
         fields
             .iter()
             .map(|f| {
-                let target = this_field(f);
-                let src = member(ident_from_str("src").into(), &f.as_name()).into();
-                self.set_field(target, src, f.as_type())
+                let target = self.this_field(*f);
+                let src = member(ident_from_str("src").into(), self.symbol_name(*f)).into();
+                self.set_field(target, src, self.symbol_type_id(*f))
             })
             .collect()
     }
 
     pub(crate) fn set_field(&mut self, target: swc::Expr, src: swc::Expr, ty: TypeId) -> swc::Stmt {
-        match self.resolve(ty) {
+        match self.resolve(ty).clone() {
             types::Type::Array(a) => self.set_array_field(target, src, a).into(),
             types::Type::Param(_) => assignment(
                 target.clone(),
@@ -109,17 +110,45 @@ impl CodeGenerator<'_> {
         let s = swc::Expr::from(ident_from_str("s"));
         let stmts = ty
             .elements
-            .into_iter()
+            .iter()
             .enumerate()
             .map(|(i, ty)| {
                 let i = format!("_{}", i);
                 let target = member(t.clone(), &i).into();
                 let src = member(s.clone(), &i).into();
-                self.set_field(target, src, ty)
+                self.set_field(target, src, *ty)
             })
             .collect();
         swc::BlockStmt {
             stmts: vec![vec![target_declaration, src_declaration], stmts].concat(),
+            ..Default::default()
+        }
+    }
+
+    /// `this.FIELD_NAME`
+    pub fn this_field<S>(&self, field: S) -> swc::Expr
+    where
+        S: Into<SymbolId>,
+    {
+        let name = self.symbol_name(field);
+        swc::Expr::Member(swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(swc::Expr::This(swc::ThisExpr { span: DUMMY_SP })),
+            prop: swc::MemberProp::Ident(ident_from_str(name).into()),
+        })
+    }
+
+    /// `this.FIELD_NAME.$get()`
+    fn get_this_field<S>(&self, field: S) -> swc::CallExpr
+    where
+        S: Into<SymbolId>,
+    {
+        swc::CallExpr {
+            callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(self.this_field(field)),
+                prop: swc::MemberProp::Ident(ident_from_str("$get").into()),
+            }))),
             ..Default::default()
         }
     }
@@ -205,27 +234,6 @@ pub fn member_assignment(object: swc::Expr, prop: swc::Ident, value: swc::Expr) 
             ..Default::default()
         })),
         ..Default::default()
-    })
-}
-
-/// `this.FIELD_NAME.$get()`
-fn get_this_field(field: &SymbolRef) -> swc::CallExpr {
-    swc::CallExpr {
-        callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
-            span: DUMMY_SP,
-            obj: Box::new(this_field(field)),
-            prop: swc::MemberProp::Ident(ident_from_str("$get").into()),
-        }))),
-        ..Default::default()
-    }
-}
-
-/// `this.FIELD_NAME`
-pub fn this_field(field: &SymbolRef) -> swc::Expr {
-    swc::Expr::Member(swc::MemberExpr {
-        span: DUMMY_SP,
-        obj: Box::new(swc::Expr::This(swc::ThisExpr { span: DUMMY_SP })),
-        prop: swc::MemberProp::Ident(ident_from_str(&field.as_name()).into()),
     })
 }
 

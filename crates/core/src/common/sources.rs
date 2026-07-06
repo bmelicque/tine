@@ -1,5 +1,6 @@
 use crate::Span;
 
+#[derive(Debug, Default)]
 pub struct Source {
     text: String,
     line_offsets: Vec<u32>,
