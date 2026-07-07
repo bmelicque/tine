@@ -38,7 +38,7 @@ impl TypeChecker {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```tine
     /// let User{ age, name } = fetchUser()
     ///
     /// // Bad

@@ -83,12 +83,14 @@ impl TypeChecker {
         let ty = node
             .type_annotation
             .map_or(TypeStore::UNKNOWN, |t| self.visit_type(t));
-        Some(self.symbols.insert(VariableSymbol {
+        let id = self.symbols.insert::<VariableSymbolId>(VariableSymbol {
             name: name.as_str().into(),
             ty,
             defined_at: name.loc,
             ..Default::default()
-        }))
+        });
+        self.current_scope().bind(name.text, id.into());
+        Some(id)
     }
 
     /// Return (function return type, visited body)
@@ -193,7 +195,11 @@ mod tests {
                 ..Default::default()
             })
         );
-        assert!(checker.diagnostics.is_empty());
+        assert!(
+            checker.diagnostics.is_empty(),
+            "expected no error, found {:?}",
+            checker.diagnostics
+        );
     }
 
     #[test]
@@ -223,7 +229,11 @@ mod tests {
         };
 
         let result = checker.visit_function_expression(function_expression, None);
-        assert!(checker.diagnostics.is_empty());
+        assert!(
+            checker.diagnostics.is_empty(),
+            "expected no errors, got {:?}",
+            checker.diagnostics
+        );
 
         let result = checker.resolve(result.map_or(TypeStore::UNKNOWN, |r| r.ty));
 

@@ -188,12 +188,13 @@ mod tests {
     #[test]
     fn visit_assignment_simple() {
         let mut checker = TypeChecker::new();
-        checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
+        let id = checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
             name: "a".to_string(),
             ty: TypeStore::INTEGER,
             mutable: true,
             ..Default::default()
         });
+        checker.current_scope().bind("a".to_string(), id.into());
 
         checker.visit_assignment(dummy_assignment());
         assert!(checker.diagnostics.is_empty());
@@ -202,11 +203,13 @@ mod tests {
     #[test]
     fn visit_assignment_to_constant() {
         let mut checker = TypeChecker::new();
-        checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
+        let id = checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
             name: "a".to_string(),
             ty: TypeStore::INTEGER,
             ..Default::default()
         });
+        checker.current_scope().bind("a".to_string(), id.into());
+
         checker.visit_assignment(dummy_assignment());
         assert_eq!(checker.diagnostics.len(), 1);
         assert!(matches!(
@@ -218,12 +221,14 @@ mod tests {
     #[test]
     fn visit_assignment_bad_type() {
         let mut checker = TypeChecker::new();
-        checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
+        let id = checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
             name: "a".to_string(),
             ty: TypeStore::FLOAT,
             mutable: true,
             ..Default::default()
         });
+        checker.current_scope().bind("a".to_string(), id.into());
+
         checker.visit_assignment(dummy_assignment());
         assert_eq!(checker.diagnostics.len(), 1);
         assert!(matches!(

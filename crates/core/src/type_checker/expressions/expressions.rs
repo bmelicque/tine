@@ -325,17 +325,19 @@ mod tests {
     #[test]
     fn test_visit_identifier() {
         let mut checker = TypeChecker::new();
-        checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
+        let id = checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
             name: "x".into(),
             ty: TypeStore::INTEGER,
             defined_at: loc("x"),
             ..Default::default()
         });
+        checker.current_scope().bind("x".into(), id.into());
 
         let identifier = ident("x");
 
-        let Some(result) = checker.visit_identifier(identifier) else {
-            panic!()
+        let result = checker.visit_identifier(identifier);
+        let Some(result) = result else {
+            panic!("expected Identifier, got {:?}", result)
         };
         assert!(checker.diagnostics.is_empty());
         assert_eq!(result.ty, TypeStore::INTEGER);

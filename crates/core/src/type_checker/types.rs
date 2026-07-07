@@ -242,12 +242,13 @@ mod tests {
             id: 7,
             ..Default::default()
         }));
-        checker.symbols.insert::<StructSymbolId>(StructSymbol {
+        let id = checker.symbols.insert::<StructSymbolId>(StructSymbol {
             name: "Box".into(),
             ty: def,
             body: TypeSymbolBody::Struct(vec![]),
             ..Default::default()
         });
+        checker.current_scope().bind("Box".into(), id.into());
 
         let named_type = ast::NamedType {
             name: ast::Identifier {
@@ -259,7 +260,11 @@ mod tests {
 
         let result = checker.visit_named_type(named_type);
         let result = checker.resolve(result).clone();
-        assert!(matches!(result, Type::Struct(_)));
+        assert!(
+            matches!(result, Type::Struct(_)),
+            "expected struct, got {:?}",
+            result
+        );
     }
 
     #[test]

@@ -147,7 +147,8 @@ mod tests {
         let ty = checker
             .visit_binary_expression(node)
             .map_or(TypeStore::UNKNOWN, |n| n.ty);
-        (ty, checker.diagnostics[&0].clone())
+        let diagnostics = checker.diagnostics.get(&0).map_or(vec![], |d| d.clone());
+        (ty, diagnostics)
     }
 
     #[test]

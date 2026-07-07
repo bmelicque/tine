@@ -26,7 +26,7 @@ impl TypeChecker {
             for param in params {
                 let ty = checker.add_type_param(param.text.clone());
                 // FIXME: spans
-                checker
+                let id = checker
                     .symbols
                     .insert::<TypeAliasSymbolId>(TypeAliasSymbol {
                         name: param.text.clone(),
@@ -34,6 +34,7 @@ impl TypeChecker {
                         defined_at: param.loc,
                         ..Default::default()
                     });
+                checker.current_scope().bind(param.text.clone(), id.into());
                 checker.types.add_alias(ty.id, param.text.clone());
                 param_types.push(ty);
             }
