@@ -6,7 +6,7 @@ mod variable_declarations;
 use super::TypeChecker;
 use crate::{ast, ir};
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_statement(&mut self, node: ast::Statement) -> Vec<ir::Statement> {
         match node {
             ast::Statement::Assignment(node) => self.visit_assignment(node),
@@ -18,10 +18,10 @@ impl TypeChecker<'_> {
                     loc: node.loc,
                 })]
             }
-            ast::Statement::Enum(node) => {
-                self.visit_enum_definition(node);
-                vec![]
-            }
+            ast::Statement::Enum(node) => match self.visit_enum_definition(node) {
+                Some(def) => vec![def.into()],
+                None => vec![],
+            },
             ast::Statement::Expression(node) => self
                 .visit_expression(*node.expression)
                 .map_or(vec![], |e| vec![e.into()]),
@@ -71,7 +71,7 @@ impl TypeChecker<'_> {
         let definition = self.visit_function_expression(definition, docs)?;
         Some(ir::FunctionDefinition {
             loc: definition.loc,
-            name: definition.name?,
+            name: definition.name.map(|(loc, s)| (loc, s.into()))?,
             params: definition.params,
             body: definition.body,
             ty: definition.ty,

@@ -14,25 +14,28 @@
 // rather on their alias group.
 
 use std::collections::HashMap;
+use std::usize;
 
-use tine_core::{ir, Location, Session, SymbolKind, SymbolRef};
+use tine_core::symbols::{SymbolId, SymbolTable, VariableSymbolId};
+use tine_core::type_store::TypeStore;
+use tine_core::{ir, Location};
 
 use super::liveness::UseSites;
 use super::semantics::SemanticsChecker;
 
-/// A simple Union-Find (disjoint-set) over `SymbolRef`.
+/// A simple Union-Find (disjoint-set) over `SymbolId`s.
 ///
 /// Each set represents a group of variables that may share the same JS object.
 #[derive(Debug, Default)]
 struct UnionFind {
     /// Maps each symbol to its canonical representative.
     /// If absent, the symbol is its own representative.
-    parent: HashMap<SymbolRef, SymbolRef>,
+    parent: HashMap<SymbolId, SymbolId>,
 }
 
 impl UnionFind {
     /// Find the canonical representative of `sym`, with path compression.
-    fn find(&mut self, sym: SymbolRef) -> SymbolRef {
+    fn find(&mut self, sym: SymbolId) -> SymbolId {
         let Some(parent) = self.parent.get(&sym).cloned() else {
             return sym;
         };
@@ -46,7 +49,7 @@ impl UnionFind {
     }
 
     /// Union the groups of `a` and `b`.
-    fn union(&mut self, a: SymbolRef, b: SymbolRef) {
+    fn union(&mut self, a: SymbolId, b: SymbolId) {
         let ra = self.find(a);
         let rb = self.find(b);
         if ra != rb {
@@ -66,17 +69,21 @@ pub struct AliasSignature {
     params: Vec<bool>,
     /// All the constants captured by the functions that are intricated with
     /// the function's return value.
-    captures: Vec<SymbolRef>,
+    captures: Vec<SymbolId>,
     /// `true` if the function is a method and its receiver might aliases the
     /// return value.
     is_receiver_aliased: bool,
 }
 
 impl AliasSignature {
-    fn infer_from_function(def: &ir::FunctionExpression, return_group: Vec<SymbolRef>) -> Self {
+    fn infer_from_function(
+        def: &ir::FunctionExpression,
+        return_group: Vec<SymbolId>,
+        semantics: &SemanticsChecker,
+    ) -> Self {
         let def_loc = def.loc;
         let params = get_param_aliases(&def.params, &return_group);
-        let captures = get_captures(return_group, def_loc);
+        let captures = get_captures(return_group, def_loc, semantics);
 
         Self {
             params,
@@ -85,14 +92,18 @@ impl AliasSignature {
         }
     }
 
-    fn infer_from_method(def: &ir::MethodDefinition, return_group: Vec<SymbolRef>) -> Self {
+    fn infer_from_method(
+        def: &ir::MethodDefinition,
+        return_group: Vec<SymbolId>,
+        semantics: &SemanticsChecker,
+    ) -> Self {
         let def_loc = def.loc;
         let is_receiver_aliased = return_group
             .iter()
-            .find(|id| id.is(&def.receiver.symbol))
+            .find(|id| **id == def.receiver_type.1.into())
             .is_some();
         let params = get_param_aliases(&def.params, &return_group);
-        let captures = get_captures(return_group, def_loc);
+        let captures = get_captures(return_group, def_loc, semantics);
 
         Self {
             params,
@@ -109,16 +120,23 @@ impl AliasSignature {
         self.is_receiver_aliased
     }
 }
-fn get_param_aliases(params: &[ir::Identifier], return_group: &[SymbolRef]) -> Vec<bool> {
+fn get_param_aliases(
+    params: &[(Location, VariableSymbolId)],
+    return_group: &[SymbolId],
+) -> Vec<bool> {
     params
         .iter()
-        .map(|p| return_group.contains(&p.symbol))
+        .map(|p| return_group.contains(&p.1.into()))
         .collect()
 }
-fn get_captures(return_group: Vec<SymbolRef>, loc: Location) -> Vec<SymbolRef> {
+fn get_captures(
+    return_group: Vec<SymbolId>,
+    loc: Location,
+    semantics: &SemanticsChecker,
+) -> Vec<SymbolId> {
     return_group
         .into_iter()
-        .filter(|s| !s.borrow().defined_at.is_within(loc))
+        .filter(|s| !semantics.get_symbol(*s).defined_at().is_within(loc))
         .collect()
 }
 
@@ -127,19 +145,19 @@ fn get_captures(return_group: Vec<SymbolRef>, loc: Location) -> Vec<SymbolRef> {
 pub struct AliasMap {
     /// This symbol represents unknown aliases, that could thus live forever.
     /// A symbol aliased with this can never be moved.
-    forever: SymbolRef,
+    forever: SymbolId,
     uf: UnionFind,
     /// All functions charts organized by definition location.
     signatures: HashMap<Location, AliasSignature>,
     /// All known symbols, so we can enumerate group members.
-    all_symbols: Vec<SymbolRef>,
+    all_symbols: Vec<SymbolId>,
 }
 
 impl AliasMap {
     /// Create a new `AliasMap`
     pub fn new() -> Self {
         Self {
-            forever: SymbolRef::dummy(Location::default()),
+            forever: SymbolId::dummy(),
             uf: UnionFind::default(),
             signatures: HashMap::new(),
             all_symbols: vec![],
@@ -147,7 +165,7 @@ impl AliasMap {
     }
 
     /// Return all symbols in the same alias group as `sym`.
-    pub fn group_members(&mut self, sym: &SymbolRef) -> Vec<SymbolRef> {
+    pub fn group_members(&mut self, sym: &SymbolId) -> Vec<SymbolId> {
         let root = self.uf.find(sym.clone());
         self.all_symbols
             .iter()
@@ -162,22 +180,22 @@ impl AliasMap {
     pub fn group_live_after(&mut self, id: &ir::Identifier, sites: &UseSites) -> bool {
         self.group_members(&id.symbol)
             .into_iter()
-            .any(|member| member.is(&self.forever) || !sites.uses_after(member, id.loc).is_empty())
+            .any(|member| member == self.forever || !sites.uses_after(member, id.loc).is_empty())
     }
 
-    fn register(&mut self, sym: SymbolRef) {
+    fn register(&mut self, sym: SymbolId) {
         if !self.all_symbols.contains(&sym) {
             self.all_symbols.push(sym);
         }
     }
 
-    fn union(&mut self, a: SymbolRef, b: SymbolRef) {
+    fn union(&mut self, a: SymbolId, b: SymbolId) {
         self.register(a.clone());
         self.register(b.clone());
         self.uf.union(a, b);
     }
 
-    fn union_all(&mut self, syms: &[SymbolRef]) {
+    fn union_all(&mut self, syms: &[SymbolId]) {
         if syms.len() < 2 {
             return;
         }
@@ -193,21 +211,18 @@ impl AliasMap {
         checker: &SemanticsChecker,
     ) -> Option<&'map AliasSignature> {
         match callee {
-            ir::Expression::Identifier(i) => self.signatures.get(&i.symbol.borrow().defined_at),
-            ir::Expression::Member(m) => {
-                if checker.is_trait(m.object.ty()) {
+            ir::Expression::Identifier(i) => self
+                .signatures
+                .get(&checker.get_symbol(i.symbol).defined_at()),
+            ir::Expression::Method(m) => {
+                if checker.is_trait(m.host.ty()) {
                     return None;
                 }
-                match m.member.symbol.borrow().kind {
-                    SymbolKind::Method { .. } => {
-                        eprintln!("Cannot perform function signature optimization on methods (not implemented yet). Defaulting to safe mode.");
-                        None
-                    }
-                    _ => None,
-                }
+                eprintln!("Cannot perform function signature optimization on methods (not implemented yet). Defaulting to safe mode.");
+                None
             }
             ir::Expression::Function(f) => {
-                let loc = f.name.as_ref().map_or(f.loc, |n| n.loc);
+                let loc = f.name.as_ref().map_or(f.loc, |n| n.0);
                 self.signatures.get(&loc)
             }
             _ => None,
@@ -216,20 +231,20 @@ impl AliasMap {
 }
 
 /// Analyse the program to determine which variables are aliased.
-pub fn analyse_aliases(program: &ir::Program, session: &Session) -> AliasMap {
+pub fn analyse_aliases(
+    program: &ir::Program,
+    types: &TypeStore,
+    symbols: &SymbolTable,
+) -> AliasMap {
     let mut map = AliasMap::new();
-    let checker = SemanticsChecker::new(session);
+    let checker = SemanticsChecker::new(types, symbols);
     for stmt in &program.statements {
         visit_stmt(stmt, &checker, &mut map);
     }
     map
 }
 
-fn visit_block(
-    block: &ir::Block,
-    checker: &SemanticsChecker,
-    map: &mut AliasMap,
-) -> Vec<SymbolRef> {
+fn visit_block(block: &ir::Block, checker: &SemanticsChecker, map: &mut AliasMap) -> Vec<SymbolId> {
     block
         .statements
         .iter()
@@ -245,12 +260,13 @@ fn visit_stmt(stmt: &ir::Statement, checker: &SemanticsChecker, map: &mut AliasM
     match stmt {
         ir::Statement::Variable(v) => {
             let roots = visit_expr(&v.value, checker, map);
-            if !v.mutable && !checker.is_copy(v.symbol.as_type()) {
-                map.register(v.symbol.clone());
+            let ty = checker.get_symbol(v.symbol.into()).ty();
+            if !v.mutable && !checker.is_copy(ty) {
+                map.register(v.symbol.into());
                 roots
-                    .iter()
-                    .filter(|root| !root.borrow().is_mutable())
-                    .for_each(|root| map.union(v.symbol.clone(), root.clone()));
+                    .into_iter()
+                    .filter(|root| !checker.is_mutable(*root))
+                    .for_each(|root| map.union(v.symbol.into(), root));
             }
         }
 
@@ -290,15 +306,15 @@ fn visit_expr(
     expr: &ir::Expression,
     checker: &SemanticsChecker,
     map: &mut AliasMap,
-) -> Vec<SymbolRef> {
+) -> Vec<SymbolId> {
     match expr {
         ir::Expression::Identifier(id) => {
-            let sym = &id.symbol;
-            if sym.borrow().is_mutable() || checker.is_copy(sym.as_type()) {
+            let ty = checker.get_symbol(id.symbol.into()).ty();
+            if checker.is_mutable(id.symbol) || checker.is_copy(ty) {
                 return vec![];
             }
-            map.register(sym.clone());
-            return vec![sym.clone()];
+            map.register(id.symbol.into());
+            return vec![id.symbol.into()];
         }
         ir::Expression::Member(m) => {
             if checker.is_copy(m.ty) {
@@ -306,6 +322,10 @@ fn visit_expr(
                 return vec![];
             }
             visit_expr(&m.object, checker, map)
+        }
+        ir::Expression::Method(m) => {
+            visit_expr(&m.host, checker, map);
+            vec![]
         }
 
         ir::Expression::BooleanLiteral(_)
@@ -416,11 +436,13 @@ fn visit_expr(
         }
         ir::Expression::ForIn(f) => {
             let iterable = visit_expr(&f.iterable, checker, map);
-            if !checker.is_copy(f.element.symbol.as_type()) {
-                map.register(f.element.symbol.clone());
+
+            let ty = checker.get_symbol(f.element.1.into()).ty();
+            if !checker.is_copy(ty) {
+                map.register(f.element.1.into());
                 iterable
                     .iter()
-                    .for_each(|sym| map.union(f.element.symbol.clone(), sym.clone()));
+                    .for_each(|sym| map.union(f.element.1.into(), *sym));
             }
             visit_loop_body(&f.body, checker, map)
         }
@@ -432,12 +454,12 @@ fn visit_loop_body(
     body: &ir::Block,
     checker: &SemanticsChecker,
     map: &mut AliasMap,
-) -> Vec<SymbolRef> {
+) -> Vec<SymbolId> {
     visit_block(body, checker, map);
     let breaks = body
         .find_breaks()
         .into_iter()
-        .filter_map(|r| r.expression)
+        .filter_map(|r| r.expression.as_ref())
         .flat_map(|expr| visit_expr(&expr, checker, map))
         .collect::<Vec<_>>();
     map.union_all(&breaks);
@@ -448,22 +470,22 @@ fn visit_function_expression(
     f: &ir::FunctionExpression,
     checker: &SemanticsChecker,
     map: &mut AliasMap,
-) -> Vec<SymbolRef> {
-    for param in &f.params {
-        map.register(param.symbol.clone());
-    }
+) -> Vec<SymbolId> {
+    f.params.iter().for_each(|p| map.register(p.1.into()));
     let mut returns = visit_block(&f.body, checker, map);
     f.body
         .find_returns()
         .into_iter()
-        .filter_map(|r| r.expression)
+        .filter_map(|r| r.expression.as_ref())
         .for_each(|expr| returns.extend(visit_expr(&expr, checker, map)));
     map.union_all(&returns);
 
     if returns.len() > 0 {
-        let loc = f.name.as_ref().map_or(f.loc, |n| n.loc);
-        map.signatures
-            .insert(loc, AliasSignature::infer_from_function(f, returns));
+        let loc = f.name.as_ref().map_or(f.loc, |n| n.0);
+        map.signatures.insert(
+            loc,
+            AliasSignature::infer_from_function(f, returns, checker),
+        );
     }
 
     vec![]
@@ -473,22 +495,20 @@ fn visit_method(
     m: &ir::MethodDefinition,
     checker: &SemanticsChecker,
     map: &mut AliasMap,
-) -> Vec<SymbolRef> {
-    for param in &m.params {
-        map.register(param.symbol.clone());
-    }
+) -> Vec<SymbolId> {
+    m.params.iter().for_each(|p| map.register(p.1.into()));
     let mut returns = visit_block(&m.body, checker, map);
     m.body
         .find_returns()
         .into_iter()
-        .filter_map(|r| r.expression)
+        .filter_map(|r| r.expression.as_ref())
         .for_each(|expr| returns.extend(visit_expr(&expr, checker, map)));
     map.union_all(&returns);
 
     if returns.len() > 0 {
-        let loc = m.name.loc;
+        let loc = m.name.0;
         map.signatures
-            .insert(loc, AliasSignature::infer_from_method(m, returns));
+            .insert(loc, AliasSignature::infer_from_method(m, returns, checker));
     }
 
     vec![]

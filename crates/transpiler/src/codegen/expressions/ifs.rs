@@ -10,23 +10,22 @@ use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 use tine_core::ir;
 
-impl CodeGenerator<'_> {
-    pub fn handle_if_expression(&mut self, node: &ir::IfExpression) -> ExpressionResult {
+impl CodeGenerator<'_, '_> {
+    pub fn handle_if_expression(&mut self, node: ir::IfExpression) -> ExpressionResult {
         if node.consequent.statements.len() == 0 && node.alternate.is_none() {
             undefined().into()
-        } else if can_ifexpr_be_inlined(node) {
+        } else if can_ifexpr_be_inlined(&node) {
             self.inlined_if(node).into()
         } else {
             self.extracted_if(node)
         }
     }
 
-    fn inlined_if(&mut self, node: &ir::IfExpression) -> swc::CondExpr {
-        let test = Box::new(self.handle_expression(&node.condition).expr);
-        let cons = Box::new(self.inlined_block(&node.consequent));
+    fn inlined_if(&mut self, node: ir::IfExpression) -> swc::CondExpr {
+        let test = Box::new(self.handle_expression(*node.condition).expr);
+        let cons = Box::new(self.inlined_block(node.consequent));
         let alt = Box::new(
             node.alternate
-                .as_ref()
                 .map_or(self.none().into(), |alt| self.inlined_block(alt)),
         );
 
@@ -38,7 +37,7 @@ impl CodeGenerator<'_> {
         }
     }
 
-    fn extracted_if(&mut self, node: &ir::IfExpression) -> ExpressionResult {
+    fn extracted_if(&mut self, node: ir::IfExpression) -> ExpressionResult {
         let temp = self.get_temp_id();
         let decl = ident_to_declaration(temp.clone());
         let mut stmts = self.if_to_swc_stmt(node);
@@ -58,7 +57,7 @@ impl CodeGenerator<'_> {
 mod tests {
     use super::*;
     use swc_ecma_ast as swc;
-    use tine_core::{Location, ModuleLoader, Session, TypeStore};
+    use tine_core::{symbols::SymbolTable, type_store::TypeStore, Location, ModulePath};
 
     fn mock_expr() -> ir::Expression {
         ir::Expression::IntLiteral(ir::IntLiteral {
@@ -85,23 +84,15 @@ mod tests {
         }
     }
 
-    struct MockLoader;
-    impl ModuleLoader for MockLoader {
-        fn load(&self, _: &tine_core::ModulePath) -> anyhow::Result<String> {
-            Ok("".to_string())
-        }
-    }
-
-    impl CodeGenerator<'_> {
-        fn new_for_test() -> Self {
-            let session = Box::leak(Box::new(Session::new(Box::new(MockLoader))));
-            CodeGenerator::new(session, 0)
-        }
+    fn mock_generator() -> CodeGenerator<'static, 'static> {
+        let types = Box::leak(Box::new(TypeStore::new()));
+        let symbols = Box::leak(Box::new(SymbolTable::default()));
+        CodeGenerator::new(ModulePath::Virtual("".to_string()), types, symbols)
     }
 
     #[test]
     fn returns_undefined_for_empty_if() {
-        let mut gen = CodeGenerator::new_for_test();
+        let mut gen = mock_generator();
         let node = ir::IfExpression {
             loc: Location::dummy(),
             condition: Box::new(mock_expr()),
@@ -114,7 +105,7 @@ mod tests {
             ty: TypeStore::UNKNOWN,
         };
 
-        let result = gen.handle_if_expression(&node).expr;
+        let result = gen.handle_if_expression(node).expr;
         match result {
             swc::Expr::Ident(ident) => {
                 assert_eq!(ident.sym.to_string(), "undefined");
@@ -125,12 +116,12 @@ mod tests {
 
     #[test]
     fn generates_cond_expr_for_inlined_if() {
-        let mut gen = CodeGenerator::new_for_test();
+        let mut gen = mock_generator();
         let node = mock_if_expr(true);
 
         assert!(crate::codegen::utils::can_ifexpr_be_inlined(&node));
 
-        let result = gen.handle_if_expression(&node).expr;
+        let result = gen.handle_if_expression(node).expr;
         match result {
             swc::Expr::Cond(cond) => {
                 assert!(matches!(*cond.test, swc::Expr::Lit(_)));
@@ -143,10 +134,10 @@ mod tests {
 
     #[test]
     fn generates_cond_expr_for_inlined_if_with_else() {
-        let mut gen = CodeGenerator::new_for_test();
+        let mut gen = mock_generator();
         let node = mock_if_expr(true);
 
-        let result = gen.inlined_if(&node);
+        let result = gen.inlined_if(node);
         assert!(
             matches!(*result.alt, swc::Expr::Lit(_)),
             "got {:?}",

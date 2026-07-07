@@ -5,6 +5,8 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields};
 #[proc_macro_derive(EnumFrom)]
 pub fn derive_enum_from(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
+    let generics = input.generics;
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let enum_name = input.ident;
 
@@ -34,7 +36,7 @@ pub fn derive_enum_from(input: TokenStream) -> TokenStream {
         };
 
         impls.push(quote! {
-            impl From<#field_ty> for #enum_name {
+            impl #impl_generics From<#field_ty> for #enum_name #ty_generics #where_clause {
                 fn from(value: #field_ty) -> Self {
                     #enum_name::#variant_name(value)
                 }

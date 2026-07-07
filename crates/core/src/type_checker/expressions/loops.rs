@@ -2,14 +2,14 @@ use crate::{
     ast,
     diagnostics::DiagnosticKind,
     ir,
-    type_checker::{analysis_context::type_store::TypeStore, patterns::lower_pattern},
+    type_checker::{patterns::lower_pattern, type_store::TypeStore},
     types::{self, OptionType, TypeId},
     Location,
 };
 
 use super::TypeChecker;
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_loop(&mut self, node: ast::Loop) -> Option<ir::Expression> {
         match node {
             ast::Loop::For(node) => self.visit_for_expression(node).map(Into::into),
@@ -66,12 +66,12 @@ impl TypeChecker<'_> {
                     .collect::<Vec<_>>(),
             );
 
-            let guard = self_.make_guard(lowered.test, element.loc)?;
+            let guard = self_.make_guard(lowered.test, pattern_loc)?;
             body.statements.insert(0, guard);
 
             Some(ir::ForInExpression {
                 loc: node.loc,
-                element,
+                element: (pattern_loc, element),
                 iterable: Box::new(iterable),
                 ty: self_.get_loop_type(&body),
                 body,
@@ -112,7 +112,7 @@ impl TypeChecker<'_> {
             types::Type::Array(a) => a.element,
             _ => {
                 let error = DiagnosticKind::NotIterable {
-                    type_name: self.session.display_type(iterable.ty()),
+                    type_name: self.types.display(iterable.ty()),
                 };
                 self.error(error, iterable.loc());
                 TypeStore::UNKNOWN
@@ -132,7 +132,7 @@ impl TypeChecker<'_> {
         for stmt in breaks.iter().skip(1) {
             let curr = self.break_type(stmt);
             let got_immutable = match &stmt.expression {
-                Some(expr) => expr.is_mutable() == Some(false),
+                Some(expr) => self.is_mutable(expr) == Some(false),
                 None => false,
             };
             self.check_assigned_type(ty, curr, got_immutable, stmt.loc);

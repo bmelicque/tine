@@ -2,69 +2,88 @@ use crate::{
     ast::{self, ImplementationBody},
     ir,
     type_checker::{
-        analysis_context::symbols::MethodReceiverKind, substitutions::Substitutions, TypeChecker,
+        patterns::{declare_variable, PatternVisitor},
+        substitutions::Substitutions,
+        symbols::*,
+        TypeChecker,
     },
-    types::{self, TraitMethod},
-    DiagnosticKind, Location, SymbolData, SymbolKind, SymbolRef,
+    type_store::TypeStore,
+    types::{self, TraitMethod, TypeId},
+    DiagnosticKind, Location,
 };
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub(super) fn visit_implementation(&mut self, node: ast::Implementation) -> Vec<ir::Statement> {
-        let Some(owner) = node
-            .implemented_type
-            .as_ref()
-            .and_then(|t| self.lookup(t.name.as_str()))
-        else {
-            if node.implemented_type.is_some() {
-                let ast::NamedType { name, loc, .. } = node.implemented_type.as_ref().unwrap();
-                let name = name.clone();
-                self.error(DiagnosticKind::CannotFindName { name: name.text }, *loc);
-            }
+        let Some((loc, host, actual_type)) = self.visit_impl_host(node.implemented_type) else {
             self.fallback_check_impl_body(node.body);
             return vec![];
         };
 
-        let receiver_loc = node.implemented_type.as_ref().unwrap().loc;
-        let Some(receiver_type) = node.implemented_type.map(|t| self.visit_named_type(t)) else {
-            self.fallback_check_impl_body(node.body);
-            return vec![];
-        };
-
-        let owner_type = self.resolve(owner.as_type());
-        let type_params = owner_type.as_params().unwrap_or(&[]);
-        let type_args = match self.resolve(receiver_type) {
-            types::Type::Ref(r) => r.args,
-            _ => vec![],
-        };
-
-        let substitutions = Substitutions::with_initial(type_params, &type_args);
+        let substitutions = self.get_host_substitutions(host, actual_type);
 
         let Some(body) = node.body else {
             return vec![];
         };
 
-        let owner = ir::Identifier {
-            loc: receiver_loc,
-            symbol: owner,
-        };
+        let host = (loc, host);
         body.items
             .into_iter()
-            .filter_map(|item| self.visit_impl_item(Some(owner.clone()), &substitutions, item))
+            .filter_map(|item| self.visit_impl_item(Some(host), &substitutions, item))
             .collect()
+    }
+
+    /// Visit the ast node representing the implementation's host.
+    ///
+    /// Returns (its location, its corresponding type symbol, its type id).
+    ///
+    /// Note that the type id could be different from the one present in the
+    /// symbol because of type arguments.
+    fn visit_impl_host(
+        &mut self,
+        host: Option<ast::NamedType>,
+    ) -> Option<(Location, TypeSymbolId, TypeId)> {
+        let host = host?;
+        let loc = host.loc;
+
+        let Some(symbol) = self.get_symbol_id(host.name.as_str()) else {
+            let name = host.name.text;
+            self.error(DiagnosticKind::CannotFindName { name }, loc);
+            return None;
+        };
+        let Some(symbol) = symbol.as_type_symbol_id() else {
+            self.error(DiagnosticKind::ExpectedTypeGotValue, loc);
+            return None;
+        };
+
+        let receiver_type = self.visit_named_type(host);
+
+        Some((loc, symbol, receiver_type))
+    }
+
+    /// If the actual type is a concrete instance of the host's symbol type,
+    /// returns the needed type substitutions.
+    fn get_host_substitutions(&self, host: TypeSymbolId, actual_type: TypeId) -> Substitutions {
+        let owner_type = self.symbol_type(host);
+        let type_params = owner_type.as_params().unwrap_or(&[]);
+        let type_args = match self.resolve(actual_type) {
+            types::Type::Ref(r) => r.args,
+            _ => vec![],
+        };
+        Substitutions::with_initial(type_params, &type_args)
     }
 
     fn visit_impl_item(
         &mut self,
-        owner: Option<ir::Identifier>,
-        owner_args: &Substitutions,
+        host: Option<(Location, TypeSymbolId)>,
+        host_args: &Substitutions,
         item: ast::ImplementationItem,
     ) -> Option<ir::Statement> {
         match item {
             ast::ImplementationItem::Method(m) => self
-                .visit_method_definition(m, owner, owner_args)
+                .visit_method_definition(m, host, host_args)
                 .map(Into::into),
             ast::ImplementationItem::StaticMethod(m) => self
-                .visit_static_definition(m, owner.map(|o| o.symbol), owner_args)
+                .visit_static_definition(m, host, host_args)
                 .map(Into::into),
         }
     }
@@ -72,18 +91,35 @@ impl TypeChecker<'_> {
     fn visit_method_definition(
         &mut self,
         node: ast::MethodDefinition,
-        receiver: Option<ir::Identifier>,
-        owner_args: &Substitutions,
+        host: Option<(Location, TypeSymbolId)>,
+        host_args: &Substitutions,
     ) -> Option<ir::MethodDefinition> {
-        let ((params, visited_body), type_params) = self.with_type_params(&node.type_params, |s| {
-            let params = s.visit_function_params(node.params);
-            let visited_body = s.visit_function_body(node.return_type, node.body);
-            (params, visited_body)
-        });
-        let receiver = receiver?;
+        let host_type = host.map_or(TypeStore::UNKNOWN, |h| self.symbol_type_id(h.1));
+        let ((receiver_symbol, params, visited_body), type_params) =
+            self.with_type_params(&node.type_params, |s| {
+                let receiver = node
+                    .receiver
+                    .pattern
+                    .and_then(|p| p.as_identifier().cloned())
+                    .and_then(|i| {
+                        let mut visitor = PatternVisitor {
+                            is_declaration: true,
+                            dependencies: &vec![],
+                            tc: s,
+                        };
+                        declare_variable(&mut visitor, &i.0, host_type, false)
+                    });
+                let params = s.visit_function_params(node.params);
+                let visited_body = s.visit_function_body(node.return_type, node.body);
+                (receiver, params, visited_body)
+            });
+        let (_, host_symbol) = host?;
 
         let (params, (return_type, body)) = (params?, visited_body?);
-        let param_types = params.iter().map(|p| p.ty()).collect::<Vec<_>>();
+        let param_types = params
+            .iter()
+            .map(|(_, s)| self.symbol_type_id(*s))
+            .collect::<Vec<_>>();
 
         let ty = self.intern(types::FunctionType {
             type_params,
@@ -92,53 +128,74 @@ impl TypeChecker<'_> {
         });
 
         let name = node.name?;
-        if receiver.symbol.has_field(&name.text) {
-            let error = DiagnosticKind::DuplicateFieldName {
-                name: name.text.clone(),
-            };
+        if self.has_member(host_symbol, &name.text) {
+            let error = DiagnosticKind::DuplicateFieldName { name: name.text };
             self.error(error, name.loc);
             return None;
         }
-        let data_kind = SymbolKind::Method {
-            owner: receiver.symbol.clone(),
-            owner_args: owner_args.clone().into(),
-            receiver: if node.receiver.mutable {
-                MethodReceiverKind::Mutable
-            } else {
-                MethodReceiverKind::Immutable
-            },
-            param_names: params.iter().map(|p| p.as_name()).collect(),
+        let receiver = if node.receiver.mutable {
+            MethodReceiverKind::Mutable
+        } else {
+            MethodReceiverKind::Immutable
         };
-        let symbol_data = SymbolData {
+        let method_symbol = MethodSymbol {
             name: name.text,
+            owner: host_symbol,
+            owner_args: host_args.clone().into(),
+            receiver,
+            param_names: params
+                .iter()
+                .map(|p| self.symbol_name(p.1).to_string())
+                .collect(),
             ty,
-            kind: data_kind,
-            defined_at: name.loc,
             docs: node.docs.map(|d| d.text),
+            defined_at: name.loc,
             ..Default::default()
         };
-        let symbol = self.attach_method(symbol_data, receiver.symbol.clone(), name.loc);
-        let name = ir::Identifier {
-            loc: name.loc,
-            symbol,
-        };
+        let symbol = self.attach_method(method_symbol, host_symbol, name.loc)?;
 
         Some(ir::MethodDefinition {
             loc: node.loc,
-            receiver,
+            receiver_name: (host?.0, receiver_symbol?),
+            receiver_type: host?,
             mutating: node.receiver.mutable,
-            name,
+            name: (name.loc, symbol),
             params,
             body,
             ty,
         })
     }
 
+    fn has_member(&self, symbol: TypeSymbolId, field: &str) -> bool {
+        if self.has_method(symbol, field) {
+            return true;
+        }
+        match symbol {
+            TypeSymbolId::Struct(s) => match &self.symbols.get(s).body {
+                TypeSymbolBody::Struct(s) => s.iter().find(|(n, _)| n == field).is_some(),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    fn has_method(&self, symbol: TypeSymbolId, field: &str) -> bool {
+        let methods = match symbol {
+            TypeSymbolId::Enum(s) => &self.symbols.get(s).methods,
+            TypeSymbolId::Struct(s) => &self.symbols.get(s).methods,
+            TypeSymbolId::Primitive(s) => &self.symbols.get(s).methods,
+        };
+        methods
+            .into_iter()
+            .find(|m| self.symbol_name(**m) == field)
+            .is_some()
+    }
+
     fn visit_static_definition(
         &mut self,
         node: ast::FunctionDefinition,
-        owner: Option<SymbolRef>,
-        owner_args: &Substitutions,
+        host: Option<(Location, TypeSymbolId)>,
+        host_args: &Substitutions,
     ) -> Option<ir::FunctionDefinition> {
         let ((params, visited_body), type_params) =
             self.with_type_params(&node.definition.type_params, |s| {
@@ -148,74 +205,78 @@ impl TypeChecker<'_> {
                 (params, visited_body)
             });
 
-        let owner = owner?;
+        let (_, host_symbol) = host?;
         let (params, (return_type, body)) = (params?, visited_body?);
 
         let ty = self.intern(types::FunctionType {
             type_params,
-            params: params.iter().map(|p| p.ty()).collect::<Vec<_>>(),
+            params: params
+                .iter()
+                .map(|p| self.symbol_type_id(p.1))
+                .collect::<Vec<_>>(),
             return_type,
         });
 
         let name = node.definition.name?;
-        let data_kind = SymbolKind::Method {
-            owner: owner.clone(),
-            owner_args: owner_args.clone().into(),
-            receiver: MethodReceiverKind::Static,
-            param_names: params.iter().map(|p| p.as_name()).collect(),
-        };
-        let symbol_data = SymbolData {
+        let method_symbol = MethodSymbol {
             name: name.text,
+            owner: host_symbol,
+            owner_args: host_args.clone().into(),
+            receiver: MethodReceiverKind::Static,
+            param_names: params
+                .iter()
+                .map(|p| self.symbol_name(p.1).to_string())
+                .collect(),
             ty,
-            kind: data_kind,
-            defined_at: name.loc,
             docs: node.docs.map(|d| d.text),
+            defined_at: name.loc,
             ..Default::default()
         };
-        let symbol = self.attach_method(symbol_data, owner, name.loc);
-        let name = ir::Identifier {
-            loc: name.loc,
-            symbol,
-        };
+        let symbol = self.attach_method(method_symbol, host_symbol, name.loc)?;
 
         Some(ir::FunctionDefinition {
             loc: node.definition.loc,
-            name,
+            name: (name.loc, symbol.into()),
             params,
             body,
             ty,
         })
     }
 
-    fn attach_method(&mut self, data: SymbolData, receiver: SymbolRef, at: Location) -> SymbolRef {
-        let symbol = self.ctx.register_symbol(data);
-        if receiver.has_method(&symbol) {
-            let name = symbol.as_name();
+    fn attach_method(
+        &mut self,
+        symbol: MethodSymbol,
+        host: TypeSymbolId,
+        at: Location,
+    ) -> Option<MethodSymbolId> {
+        if self.has_method(host, &symbol.name) {
+            let name = symbol.name;
             self.error(DiagnosticKind::DuplicateMethodName { name }, at);
-        } else {
-            let receiver = self.session.get_handle(symbol.clone()).unwrap();
-            receiver.attach_method(symbol.clone());
-            self.add_method_to_store(&symbol);
+            return None;
         }
-        symbol
-    }
-    fn add_method_to_store(&mut self, symbol: &SymbolRef) {
-        let SymbolKind::Method { receiver, .. } = &symbol.borrow().kind else {
-            panic!()
+
+        self.add_method_to_store(&symbol);
+        let symbol_id = self.symbols.insert(symbol);
+        let methods = match host {
+            TypeSymbolId::Enum(s) => &mut self.symbols.get_mut(s).methods,
+            TypeSymbolId::Primitive(s) => &mut self.symbols.get_mut(s).methods,
+            TypeSymbolId::Struct(s) => &mut self.symbols.get_mut(s).methods,
         };
-        if receiver.is_static() {
+        methods.push(symbol_id);
+        Some(symbol_id)
+    }
+    fn add_method_to_store(&mut self, symbol: &MethodSymbol) {
+        if symbol.is_static() {
             return;
         }
-        let types::Type::Function(mut f) = self.resolve(symbol.as_type()) else {
-            panic!()
-        };
-        let name = symbol.as_name();
-        let receiver = f.params[0];
-        f.params = f.params[1..].to_vec();
-        let def = self.intern(f);
-        self.session
-            .types()
-            .add_method(receiver, TraitMethod { name, def });
+        debug_assert!(matches!(self.resolve(symbol.ty), types::Type::Function(_)));
+        self.types.add_method(
+            self.symbol_type_id(symbol.owner),
+            TraitMethod {
+                name: symbol.name.clone(),
+                def: symbol.ty,
+            },
+        );
     }
 
     fn fallback_check_impl_body(&mut self, body: Option<ImplementationBody>) {

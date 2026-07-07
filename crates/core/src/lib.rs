@@ -1,4 +1,3 @@
-mod analyzer;
 pub mod ast;
 mod common;
 pub mod diagnostics;
@@ -9,15 +8,13 @@ mod type_checker;
 pub mod types;
 mod utils;
 
-pub use analyzer::{
-    analyze, Module, ModuleId, ModuleLoader, ModulePath, ModuleTypeData, Session, SessionLoader,
-    Source,
+pub use common::{
+    module_path::{ModuleId, ModulePath},
+    sources::Source,
+    use_decl_to_paths, ModuleImports,
 };
-pub use common::{use_decl_to_paths, ModuleImports};
 pub use diagnostics::*;
 pub use locations::{Location, Span};
-pub use type_checker::{
-    display_raw_type, display_type, substitutions::Substitutions, MemberToken, MethodReceiverKind,
-    SymbolData, SymbolKind, SymbolRef, SymbolToken, Token, TypeStore, TypeSymbolBody,
-};
+pub use parser::{parse_project, Loader, ParseResult, ProjectParser};
+pub use type_checker::*;
 pub use utils::pretty_print_error;

@@ -6,6 +6,7 @@ pub use expressions::*;
 pub use statements::*;
 pub use utils::*;
 
+#[derive(Clone, Debug, Default)]
 pub struct Program {
     pub statements: Vec<Statement>,
 }

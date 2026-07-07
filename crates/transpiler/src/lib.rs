@@ -5,9 +5,11 @@ mod utils;
 
 use std::path::PathBuf;
 
-use tine_core::SessionLoader;
+pub use crate::bundler::SwcLoader;
+use crate::bundler::{bundle_entry, SwcResolver};
 
-pub fn transpile(entry_point: &PathBuf, loader: Box<SessionLoader>) -> anyhow::Result<String> {
+pub fn transpile(entry_point: &PathBuf, loader: SwcLoader) -> anyhow::Result<String> {
     let filename = tine_core::ModulePath::Real(entry_point.canonicalize().unwrap());
-    bundler::transpile(&filename, loader)
+    let resolver = SwcResolver::new();
+    bundle_entry(&filename, loader, resolver)
 }

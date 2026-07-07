@@ -4,8 +4,9 @@ use swc_ecma_ast as swc;
 
 use tine_core::{
     ir,
+    symbols::SymbolId,
+    type_store::TypeStore,
     types::{self, TypeId},
-    SymbolRef, TypeStore,
 };
 
 use super::CodeGenerator;
@@ -153,14 +154,7 @@ pub fn is_primitive(ty: TypeId) -> bool {
 }
 
 pub fn is_handled_by_ref(node: &ir::Expression) -> bool {
-    if !is_primitive(node.ty()) {
-        return true;
-    }
-
-    match node {
-        ir::Expression::Identifier(i) => i.symbol.is_referenced(),
-        _ => false,
-    }
+    !is_primitive(node.ty())
 }
 
 pub fn undefined() -> swc::Expr {
@@ -184,7 +178,7 @@ pub fn std_method_call(name: &str, args: Vec<swc::ExprOrSpread>) -> swc::CallExp
     }
 }
 
-impl CodeGenerator<'_> {
+impl CodeGenerator<'_, '_> {
     pub fn none(&mut self) -> swc::NewExpr {
         let args = vec![swc::ExprOrSpread {
             spread: None,
@@ -201,6 +195,23 @@ impl CodeGenerator<'_> {
             })),
             args: Some(args),
             type_args: None,
+        }
+    }
+
+    pub fn generate_constructor_name(
+        &self,
+        constructor_id: SymbolId,
+        ty_args: &HashMap<types::TypeParam, types::TypeId>,
+    ) -> swc::Expr {
+        let name = self.symbols.get_symbol(constructor_id).name();
+        let ty = ident_from_str(name);
+        match ty_args.len() {
+            0 => ty.into(),
+            _ => member(
+                ty.into(),
+                &args_to_string(&ty_args.iter().map(|(_, ty)| *ty).collect::<Vec<_>>()),
+            )
+            .into(),
         }
     }
 }
@@ -221,20 +232,5 @@ pub fn member(object: swc::Expr, prop: &str) -> swc::MemberExpr {
         span: DUMMY_SP,
         obj: Box::new(object),
         prop: swc::MemberProp::Ident(ident_from_str(prop).into()),
-    }
-}
-
-pub fn generate_constructor_name(
-    ty: &SymbolRef,
-    ty_args: &HashMap<types::TypeParam, types::TypeId>,
-) -> swc::Expr {
-    let ty = ident_from_str(&ty.as_name());
-    match ty_args.len() {
-        0 => ty.into(),
-        _ => member(
-            ty.into(),
-            &args_to_string(&ty_args.iter().map(|(_, ty)| *ty).collect::<Vec<_>>()),
-        )
-        .into(),
     }
 }

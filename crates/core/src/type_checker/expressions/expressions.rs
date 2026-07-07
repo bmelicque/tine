@@ -2,14 +2,13 @@ use crate::{
     ast,
     diagnostics::DiagnosticKind,
     ir,
-    type_checker::analysis_context::type_store::TypeStore,
-    types::{self, ArrayType},
-    SymbolKind,
+    type_checker::{symbols::SymbolId, type_store::TypeStore},
+    types,
 };
 
 use super::TypeChecker;
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_expression(&mut self, node: ast::Expression) -> Option<ir::Expression> {
         match node {
             ast::Expression::Array(node) => Some(self.visit_array_expression(node).into()),
@@ -53,12 +52,12 @@ impl TypeChecker<'_> {
             self.check_assigned_type(
                 element_type,
                 element.ty(),
-                element.is_mutable() == Some(false),
+                self.is_mutable(element) == Some(false),
                 node.loc,
             );
         }
 
-        let ty = self.intern(ArrayType {
+        let ty = self.intern(types::ArrayType {
             element: element_type,
         });
         ir::ArrayExpression {
@@ -91,14 +90,17 @@ impl TypeChecker<'_> {
     }
 
     pub fn visit_identifier(&mut self, node: ast::Identifier) -> Option<ir::Identifier> {
-        let var = self.lookup_mut(node.as_str());
-        match var {
-            Some(handle) => {
-                handle.read(node.loc);
-                self.ctx.add_dependencies(vec![handle.readonly()]);
+        let symbol_id = self.get_symbol_id(node.as_str());
+        match symbol_id {
+            Some(symbol_id) => {
+                self.symbols
+                    .get_symbol_mut(symbol_id)
+                    .access()
+                    .read(node.loc);
                 Some(ir::Identifier {
                     loc: node.loc,
-                    symbol: handle.readonly(),
+                    symbol: symbol_id,
+                    ty: self.symbol_type_id(symbol_id),
                 })
             }
             None => {
@@ -146,26 +148,27 @@ impl TypeChecker<'_> {
 
     fn visit_type_match(&mut self, node: ast::TypeMatch) -> Option<ir::TypeMatch> {
         let expression = node.expression.and_then(|e| self.visit_expression(*e));
-        let Some(symbol) = self.lookup(&node.constructor.enum_name.name.as_str()) else {
+        let Some(symbol_id) = self.get_symbol_id(node.constructor.enum_name.name.as_str()) else {
             let error = DiagnosticKind::CannotFindName {
                 name: node.constructor.enum_name.name.as_str().to_string(),
             };
             self.error(error, node.constructor.enum_name.loc);
             return None;
         };
-        let SymbolKind::Enum { variants, .. } = &symbol.borrow().kind else {
+        let SymbolId::Enum(e) = symbol_id else {
             self.error(DiagnosticKind::InvalidTypeConstructor, node.constructor.loc);
             return None;
         };
+        let e = self.symbols.get(e);
         let variant_name = node.constructor.variant_name?;
-        let variant = variants
+        let variant = *e
+            .variants
             .iter()
-            .find(|constructor| constructor.borrow().name == variant_name.text)
-            .cloned()?;
+            .find(|&&v| self.symbol_name(v) == variant_name.text)?;
         Some(ir::TypeMatch {
             loc: node.loc,
             expr: Box::new(expression?),
-            constructor: variant,
+            variant,
         })
     }
 }
@@ -201,19 +204,12 @@ pub fn visit_string_literal(node: ast::StringLiteral) -> ir::StringLiteral {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::session::Session;
     use crate::ast;
     use crate::locations::Span;
-    use crate::type_checker::test_utils::MockLoader;
+    use crate::type_checker::symbols::VariableSymbol;
+    use crate::type_checker::symbols::VariableSymbolId;
     use crate::types::*;
     use crate::Location;
-    use crate::SymbolData;
-    use crate::SymbolKind;
-
-    fn create_type_checker() -> TypeChecker<'static> {
-        let session = Box::leak(Box::new(Session::new(Box::new(MockLoader))));
-        TypeChecker::new(session, 0)
-    }
 
     fn loc(text: &'static str) -> Location {
         let span = Span::new(0, text.len() as u32);
@@ -229,7 +225,7 @@ mod tests {
 
     #[test]
     fn test_visit_array_expression_empty() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         let array_expression = ast::ArrayExpression {
             elements: vec![],
             loc: Location::dummy(),
@@ -247,7 +243,7 @@ mod tests {
 
     #[test]
     fn test_visit_array_expression_consistent_types() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         let array_expression = ast::ArrayExpression {
             elements: vec![
                 ast::Expression::IntLiteral(ast::IntLiteral {
@@ -275,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_visit_array_expression_mixed_types() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         let array_expression = ast::ArrayExpression {
             elements: vec![
                 ast::Expression::IntLiteral(ast::IntLiteral {
@@ -303,7 +299,7 @@ mod tests {
 
     #[test]
     fn test_visit_binary_expression() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         let binary_expression = ast::BinaryExpression {
             left: Some(Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
@@ -328,27 +324,28 @@ mod tests {
 
     #[test]
     fn test_visit_identifier() {
-        let mut checker = create_type_checker();
-        checker.ctx.register_symbol(SymbolData {
+        let mut checker = TypeChecker::new();
+        let id = checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
             name: "x".into(),
             ty: TypeStore::INTEGER,
-            kind: SymbolKind::constant(),
             defined_at: loc("x"),
             ..Default::default()
         });
+        checker.current_scope().bind("x".into(), id.into());
 
         let identifier = ident("x");
 
-        let Some(result) = checker.visit_identifier(identifier) else {
-            panic!()
+        let result = checker.visit_identifier(identifier);
+        let Some(result) = result else {
+            panic!("expected Identifier, got {:?}", result)
         };
         assert!(checker.diagnostics.is_empty());
-        assert_eq!(result.ty(), TypeStore::INTEGER);
+        assert_eq!(result.ty, TypeStore::INTEGER);
     }
 
     #[test]
     fn test_visit_tuple_expression_empty() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         let tuple_expression = ast::TupleExpression {
             elements: vec![],
             loc: Location::dummy(),
@@ -362,7 +359,7 @@ mod tests {
 
     #[test]
     fn test_visit_tuple_expression_multiple_elements() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         let tuple_expression = ast::TupleExpression {
             elements: vec![
                 ast::Expression::IntLiteral(ast::IntLiteral {
@@ -395,7 +392,7 @@ mod tests {
 
     #[test]
     fn test_visit_tuple_expression_nested() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         let tuple_expression = ast::TupleExpression {
             elements: vec![
                 ast::Expression::IntLiteral(ast::IntLiteral {

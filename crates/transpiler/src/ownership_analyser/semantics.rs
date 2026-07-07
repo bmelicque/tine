@@ -1,15 +1,21 @@
-use tine_core::{types, Session};
+use tine_core::{symbols::*, type_store::TypeStore, types};
 
-pub struct SemanticsChecker<'a>(&'a Session);
+pub struct SemanticsChecker<'ty, 'sym> {
+    types: &'ty TypeStore,
+    symbols: &'sym SymbolTable,
+}
 
-impl<'a> SemanticsChecker<'a> {
-    pub fn new(session: &'a Session) -> Self {
-        SemanticsChecker(session)
+impl SemanticsChecker<'_, '_> {
+    pub fn new<'ty, 'sym>(
+        types: &'ty TypeStore,
+        symbols: &'sym SymbolTable,
+    ) -> SemanticsChecker<'ty, 'sym> {
+        SemanticsChecker { types, symbols }
     }
 
     /// Check if the given type implements Copy semantics.
     pub fn is_copy(&self, ty: types::TypeId) -> bool {
-        let ty = self.0.get_type(ty);
+        let ty = self.types.get(ty);
         match ty {
             types::Type::Boolean
             | types::Type::Float
@@ -22,7 +28,15 @@ impl<'a> SemanticsChecker<'a> {
     }
 
     pub fn is_trait(&self, ty: types::TypeId) -> bool {
-        let ty = self.0.get_type(ty);
+        let ty = self.types.get(ty);
         matches!(ty, types::Type::Trait(_))
+    }
+
+    pub fn get_symbol(&self, id: SymbolId) -> &dyn Symbol {
+        self.symbols.get_symbol(id)
+    }
+
+    pub fn is_mutable(&self, id: SymbolId) -> bool {
+        self.symbols.is_mutable(id)
     }
 }

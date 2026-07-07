@@ -1,89 +1,94 @@
 use tine_core::{
-    display_raw_type, display_type,
+    symbols::*,
+    type_store::{display_raw_type, display_type, TypeStore},
     types::{FunctionType, Type, TypeId},
-    SymbolKind, TypeStore,
 };
 
-use crate::{tokens::ServerSymbol, Backend};
+use crate::Backend;
 
 impl Backend {
-    pub fn display_signature(&self, symbol: &ServerSymbol) -> String {
-        let session = self.session.read().unwrap();
-        let name = &symbol.0.name;
-        let ty = symbol.0.ty;
-        match &symbol.0.kind {
-            SymbolKind::Function { .. } => self.display_function_symbol(&symbol),
-            SymbolKind::PrimitiveType { .. } => display_raw_type(&session.types(), ty),
-            SymbolKind::TypeAlias => {
-                format!("type {} = {}", name, display_raw_type(&session.types(), ty))
+    pub fn display_signature(&self, symbol: SymbolId) -> String {
+        let symbols = self.symbols();
+        use SymbolId::*;
+        match symbol {
+            Function(s) => self.display_function_symbol(s),
+            Primitive(s) => display_raw_type(&self.types(), self.symbols().get(s).ty),
+            TypeAlias(s) => {
+                let s = symbols.get(s);
+                format!(
+                    "type {} = {}",
+                    s.name,
+                    display_raw_type(&self.types(), s.ty)
+                )
             }
-            SymbolKind::Struct { .. } => {
-                format!("struct {} {}", name, display_raw_type(&session.types(), ty))
+            Struct(s) => {
+                let s = symbols.get(s);
+                format!(
+                    "struct {} {}",
+                    s.name,
+                    display_raw_type(&self.types(), s.ty)
+                )
             }
-            SymbolKind::Enum { .. } => {
-                format!("enum {} {}", name, display_raw_type(&session.types(), ty))
+            Enum(s) => {
+                let s = symbols.get(s);
+                format!("enum {} {}", s.name, display_raw_type(&self.types(), s.ty))
             }
-            SymbolKind::Value { mutable } => {
-                let ty = display_type(&session.types(), ty);
-                let operator = if *mutable { "var" } else { "const" };
-                format!("{} {} {}", operator, name, ty)
+            Variable(s) => {
+                let s = symbols.get(s);
+                let operator = if s.mutable { "let mut" } else { "let" };
+                format!("{} {} {}", operator, s.name, s.ty)
             }
-            SymbolKind::Member { owner } => {
-                let owner_name = &owner.borrow().name;
-                let member_name = name;
-                let displayed_type = display_type(&session.types(), ty);
+            Member(s) => {
+                let s = symbols.get(s);
+                let owner_name = symbols.get_symbol(s.owner.into()).name();
+                let member_name = &s.name;
+                let displayed_type = display_type(&self.types(), s.ty);
                 format!("{}.{} {}", owner_name, member_name, displayed_type)
             }
-            SymbolKind::Method { .. } => self.display_method_symbol(symbol),
-            SymbolKind::Constructor { owner, .. } => {
-                let owner_name = &owner.borrow().name;
+            Method(s) => self.display_method_symbol(s),
+            Variant(s) => {
+                let s = symbols.get(s);
+                let owner_name = symbols.get_symbol(s.owner.into()).name();
                 // TODO: FIXME:
-                format!("{}.{}", owner_name, name)
+                format!("{}.{}", owner_name, s.name)
             }
         }
     }
 
-    fn display_function_symbol(&self, symbol: &ServerSymbol) -> String {
-        let SymbolKind::Function { param_names } = &symbol.0.kind else {
-            panic!()
-        };
-        let session = self.session.read().unwrap();
-        let name = &symbol.0.name;
-        let ty = symbol.0.ty;
+    fn display_function_symbol(&self, symbol: FunctionSymbolId) -> String {
+        let symbols = self.symbols.read().unwrap();
+        let symbol = symbols.get(symbol);
 
-        let params = self.display_function_params(ty, param_names);
+        let name = &symbol.name;
+        let ty = symbol.ty;
+
+        let params = self.display_function_params(ty, &symbol.param_names);
         let return_type = self.get_return_type(ty);
         match return_type {
             TypeStore::UNIT => format!("fn {}({})", name, params),
             _ => format!(
-                "fn {}({}) {}",
+                "fn {}({}): {}",
                 name,
                 params,
-                display_type(&session.types(), return_type)
+                display_type(&self.types.read().unwrap(), return_type)
             ),
         }
     }
 
-    fn display_method_symbol(&self, symbol: &ServerSymbol) -> String {
-        let SymbolKind::Method {
-            owner,
-            owner_args,
-            receiver,
-            param_names,
-        } = &symbol.0.kind
-        else {
-            panic!()
-        };
-        let session = self.session.read().unwrap();
-        let name = &symbol.0.name;
-        let ty = symbol.0.ty;
-        let receiver = if receiver.is_static() {
+    fn display_method_symbol(&self, symbol: MethodSymbolId) -> String {
+        let symbol = self.symbols().get(symbol).clone();
+        let receiver = if symbol.receiver.is_static() {
             String::new()
         } else {
-            let owner_name = &owner.borrow().name;
-            let args = owner_args
+            let owner_name = self
+                .symbols()
+                .get_symbol(symbol.owner.into())
+                .name()
+                .to_string();
+            let args = symbol
+                .owner_args
                 .iter()
-                .map(|arg| display_type(&session.types(), *arg.1))
+                .map(|arg| display_type(&self.types(), *arg.1))
                 .collect::<Vec<_>>()
                 .join(", ");
             match args.len() {
@@ -92,18 +97,16 @@ impl Backend {
             }
         };
 
-        let method_name = name;
-        let params = self.display_function_params(ty, param_names);
-        let return_type = match self.get_return_type(ty) {
+        let params = self.display_function_params(symbol.ty, &symbol.param_names);
+        let return_type = match self.get_return_type(symbol.ty) {
             TypeStore::UNIT => String::new(),
-            t => format!(" {}", display_type(&session.types(), t)),
+            t => format!(" {}", display_type(&self.types(), t)),
         };
-        format!("fn {}{}({}){}", receiver, method_name, params, return_type)
+        format!("fn {}{}({}){}", receiver, symbol.name, params, return_type)
     }
 
     fn display_function_params(&self, ty: TypeId, names: &Vec<String>) -> String {
-        let session = self.session.read().unwrap();
-        let store = session.types();
+        let store = self.types();
         let Type::Function(f) = store.get(ty) else {
             panic!("expected function type")
         };
@@ -120,8 +123,7 @@ impl Backend {
 
     /// Get the return type of a function or generic function
     fn get_return_type(&self, ty: TypeId) -> TypeId {
-        let session = self.session.read().unwrap();
-        let ty = session.types().get(ty).to_owned();
+        let ty = self.types().get(ty).to_owned();
         match ty {
             Type::Function(FunctionType {
                 ref return_type, ..

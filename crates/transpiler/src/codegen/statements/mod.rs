@@ -10,8 +10,8 @@ use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 use tine_core::ir;
 
-impl CodeGenerator<'_> {
-    pub fn stmt_to_swc(&mut self, node: &ir::Statement) -> Vec<swc::Stmt> {
+impl CodeGenerator<'_, '_> {
+    pub fn stmt_to_swc(&mut self, node: ir::Statement) -> Vec<swc::Stmt> {
         match node {
             ir::Statement::Assignment(a) => self.handle_assignment(a),
             ir::Statement::Break(b) => self.handle_break(b),
@@ -37,10 +37,10 @@ impl CodeGenerator<'_> {
         }
     }
 
-    pub fn block_to_swc_stmt(&mut self, node: &ir::Block) -> swc::BlockStmt {
+    pub fn block_to_swc_stmt(&mut self, node: ir::Block) -> swc::BlockStmt {
         let stmts = node
             .statements
-            .iter()
+            .into_iter()
             .flat_map(|stmt| self.stmt_to_swc(stmt))
             .collect::<Vec<_>>();
 
@@ -50,10 +50,10 @@ impl CodeGenerator<'_> {
         }
     }
 
-    fn handle_break(&mut self, node: &ir::BreakStatement) -> Vec<swc::Stmt> {
+    fn handle_break(&mut self, node: ir::BreakStatement) -> Vec<swc::Stmt> {
         match &self.break_target {
-            Some(target) => match &node.expression {
-                Some(value) => self.handle_break_assign(target.clone(), &value),
+            Some(target) => match node.expression {
+                Some(value) => self.handle_break_assign(target.clone(), *value),
                 None => vec![swc::Stmt::Expr(swc::ExprStmt {
                     span: DUMMY_SP,
                     expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
@@ -69,7 +69,7 @@ impl CodeGenerator<'_> {
     fn handle_break_assign(
         &mut self,
         assign_target: swc::Ident,
-        value: &ir::Expression,
+        value: ir::Expression,
     ) -> Vec<swc::Stmt> {
         let value_result = self.handle_assigned_value(value);
 
@@ -89,7 +89,7 @@ impl CodeGenerator<'_> {
         stmts
     }
 
-    fn handle_expression_statement(&mut self, node: &ir::Expression) -> Vec<swc::Stmt> {
+    fn handle_expression_statement(&mut self, node: ir::Expression) -> Vec<swc::Stmt> {
         let result = self.handle_expression(node);
         let mut stmts = result.prelim_stmts;
         stmts.push(swc::Stmt::Expr(swc::ExprStmt {
@@ -99,14 +99,13 @@ impl CodeGenerator<'_> {
         stmts
     }
 
-    pub fn if_to_swc_stmt(&mut self, node: &ir::IfExpression) -> Vec<swc::Stmt> {
-        let test_result = self.handle_expression(&node.condition);
+    pub fn if_to_swc_stmt(&mut self, node: ir::IfExpression) -> Vec<swc::Stmt> {
+        let test_result = self.handle_expression(*node.condition);
         let mut stmts = test_result.prelim_stmts;
-        let block = self.block_to_swc_stmt(&node.consequent);
+        let block = self.block_to_swc_stmt(node.consequent);
         let cons = Box::new(block.into());
         let alt = node
             .alternate
-            .as_ref()
             .map(|alt| self.block_to_swc_stmt(alt).into())
             .map(Box::new);
         stmts.push(swc::Stmt::If(swc::IfStmt {
@@ -118,9 +117,9 @@ impl CodeGenerator<'_> {
         stmts
     }
 
-    pub fn for_to_swc_stmt(&mut self, node: &ir::ForExpression) -> Vec<swc::Stmt> {
-        let test_result = match node.condition.as_ref() {
-            Some(condition) => self.handle_expression(condition),
+    pub fn for_to_swc_stmt(&mut self, node: ir::ForExpression) -> Vec<swc::Stmt> {
+        let test_result = match node.condition {
+            Some(condition) => self.handle_expression(*condition),
             None => {
                 let expr = swc::Expr::Lit(swc::Lit::Bool(swc::Bool {
                     span: DUMMY_SP,
@@ -133,7 +132,7 @@ impl CodeGenerator<'_> {
             }
         };
         let mut stmts = test_result.prelim_stmts;
-        let body = Box::new(self.block_to_swc_stmt(&node.body).into());
+        let body = Box::new(self.block_to_swc_stmt(node.body).into());
         stmts.push(swc::Stmt::While(swc::WhileStmt {
             span: DUMMY_SP,
             test: Box::new(test_result.expr),
@@ -142,32 +141,33 @@ impl CodeGenerator<'_> {
         stmts
     }
 
-    pub fn for_in_to_swc_stmt(&mut self, node: &ir::ForInExpression) -> Vec<swc::Stmt> {
-        let iterable_result = self.handle_expression(&node.iterable);
+    pub fn for_in_to_swc_stmt(&mut self, node: ir::ForInExpression) -> Vec<swc::Stmt> {
+        let iterable_result = self.handle_expression(*node.iterable);
         let mut stmts = iterable_result.prelim_stmts;
 
+        let name = &self.symbols.get(node.element.1).name;
         stmts.push(swc::Stmt::ForOf(swc::ForOfStmt {
             left: swc::ForHead::VarDecl(Box::new(swc::VarDecl {
                 decls: vec![swc::VarDeclarator {
                     span: DUMMY_SP,
-                    name: ident_from_str(&node.element.as_name()).into(),
+                    name: ident_from_str(name).into(),
                     init: None,
                     definite: false,
                 }],
                 ..Default::default()
             })),
             right: Box::new(iterable_result.expr),
-            body: Box::new(self.block_to_swc_stmt(&node.body).into()),
+            body: Box::new(self.block_to_swc_stmt(node.body).into()),
             ..Default::default()
         }));
 
         stmts
     }
 
-    fn return_to_swc(&mut self, node: &ir::ReturnStatement) -> Vec<swc::Stmt> {
-        let (mut stmts, arg) = match &node.expression {
+    fn return_to_swc(&mut self, node: ir::ReturnStatement) -> Vec<swc::Stmt> {
+        let (mut stmts, arg) = match node.expression {
             Some(e) => {
-                let result = self.handle_expression(e);
+                let result = self.handle_expression(*e);
                 (result.prelim_stmts, Some(result.expr))
             }
             None => (vec![], None),
@@ -181,18 +181,19 @@ impl CodeGenerator<'_> {
         stmts
     }
 
-    fn handle_declaration(&mut self, node: &ir::VariableDeclaration) -> Vec<swc::Stmt> {
+    fn handle_declaration(&mut self, node: ir::VariableDeclaration) -> Vec<swc::Stmt> {
         let kind = if node.mutable {
             swc::VarDeclKind::Let
         } else {
             swc::VarDeclKind::Const
         };
 
-        let expr_result = self.handle_expression(&node.value);
+        let expr_result = self.handle_expression(node.value);
         let mut stmts = expr_result.prelim_stmts;
 
         let expr = expr_result.expr;
 
+        let name = &self.symbols.get(node.symbol).name;
         stmts.push(swc::Stmt::Decl(swc::Decl::Var(Box::new(swc::VarDecl {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
@@ -200,7 +201,7 @@ impl CodeGenerator<'_> {
             declare: false,
             decls: vec![swc::VarDeclarator {
                 span: DUMMY_SP,
-                name: swc::Pat::Ident(ident_from_str(&node.symbol.as_name()).into()),
+                name: swc::Pat::Ident(ident_from_str(name).into()),
                 init: Some(Box::new(expr)),
                 definite: false,
             }],

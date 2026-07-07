@@ -1,4 +1,5 @@
 mod expressions;
+mod graph;
 mod items;
 mod patterns;
 mod statements;
@@ -9,11 +10,13 @@ mod test_utils;
 mod tokens;
 mod utils;
 
+pub use graph::{parse_project, Loader, ProjectParser};
 use std::{iter::Peekable, ops::Range};
 
 use crate::{
-    ast, parser::tokens::Token, Diagnostic, DiagnosticKind, DiagnosticLevel, Location, ModuleId,
-    Span,
+    ast,
+    parser::{graph::ModuleId, tokens::Token},
+    Diagnostic, DiagnosticKind, DiagnosticLevel, Location, Span,
 };
 use logos::{Logos, SpannedIter};
 

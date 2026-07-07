@@ -1,168 +1,32 @@
 mod display;
 mod loader;
+mod lsp;
 mod tokens;
 mod utils;
 
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use tine_core::{analyze, ModuleId, Session, Source, Span};
+use tine_core::symbols::SymbolTable;
+use tine_core::type_store::TypeStore;
 use tine_core::{Diagnostic as ParserDiagnostic, ModulePath};
-use tower_lsp::jsonrpc::Result;
+use tine_core::{ModuleId, Source, Span};
 use tower_lsp::Client;
 use tower_lsp::{lsp_types::*, LspService, Server};
 use url::Url;
 
 use crate::loader::LspLoader;
-use crate::utils::normalize_file_url;
-
-#[derive(Debug, Clone)]
-pub struct ModuleSummary {
-    pub id: ModuleId,
-    pub uri: Url,
-    pub src: Source,
-    pub diagnostics: Vec<ParserDiagnostic>,
-}
 
 #[derive(Clone)]
 struct Backend {
     client: Client,
-    session: Arc<RwLock<Session>>,
+    ids: Arc<RwLock<HashMap<ModulePath, ModuleId>>>,
+    sources: Arc<RwLock<HashMap<ModuleId, Source>>>,
+    types: Arc<RwLock<TypeStore>>,
+    symbols: Arc<RwLock<SymbolTable>>,
     semantic_legend: SemanticTokensLegend,
     open_files: Arc<RwLock<HashMap<Url, String>>>,
-}
-
-#[tower_lsp::async_trait]
-impl tower_lsp::LanguageServer for Backend {
-    async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
-        // TODO:
-        let _root = params.root_uri.and_then(|u| u.to_file_path().ok());
-
-        Ok(InitializeResult {
-            capabilities: ServerCapabilities {
-                text_document_sync: Some(TextDocumentSyncCapability::Kind(
-                    TextDocumentSyncKind::FULL,
-                )),
-                hover_provider: Some(HoverProviderCapability::Simple(true)),
-                semantic_tokens_provider: Some(
-                    SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(
-                        SemanticTokensRegistrationOptions {
-                            text_document_registration_options: TextDocumentRegistrationOptions {
-                                document_selector: Some(vec![DocumentFilter {
-                                    language: Some("tine".into()),
-                                    scheme: None,
-                                    pattern: None,
-                                }]),
-                            },
-                            semantic_tokens_options: SemanticTokensOptions {
-                                work_done_progress_options: Default::default(),
-                                legend: self.semantic_legend.clone(),
-                                range: None,
-                                full: Some(SemanticTokensFullOptions::Bool(true)),
-                            },
-                            static_registration_options: Default::default(),
-                        },
-                    ),
-                ),
-                ..Default::default()
-            },
-            server_info: None,
-        })
-    }
-
-    async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        let uri = normalize_file_url(&params.text_document.uri).unwrap();
-        self.open_files
-            .write()
-            .unwrap()
-            .insert(uri.clone(), params.text_document.text);
-        if let Ok(path) = uri.to_file_path() {
-            self.run_project_analysis(path).await;
-        } else {
-            self.client
-                .log_message(
-                    MessageType::WARNING,
-                    format!("didOpen: cannot convert uri {} to path", uri),
-                )
-                .await;
-        }
-    }
-
-    async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        let uri = normalize_file_url(&params.text_document.uri).unwrap();
-        if let Some(file) = self.open_files.write().unwrap().get_mut(&uri) {
-            *file = params.content_changes[0].text.clone();
-        }
-        if let Ok(path) = uri.to_file_path() {
-            self.run_project_analysis(path).await;
-        }
-    }
-
-    async fn did_close(&self, params: DidCloseTextDocumentParams) {
-        let uri = normalize_file_url(&params.text_document.uri).unwrap();
-        self.open_files.write().unwrap().remove(&uri);
-    }
-
-    async fn semantic_tokens_full(
-        &self,
-        params: SemanticTokensParams,
-    ) -> Result<Option<SemanticTokensResult>> {
-        let uri = normalize_file_url(&params.text_document.uri).unwrap();
-        let Some(module_id) = self.find_module(&uri) else {
-            return Ok(None);
-        };
-        let session = self.session.read().unwrap();
-        let src = &session.read_module(module_id).src;
-        let data = self.tokens_to_semantic(module_id, src);
-
-        Ok(Some(SemanticTokensResult::Tokens(SemanticTokens {
-            result_id: None,
-            data,
-        })))
-    }
-
-    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
-        let uri = &params.text_document_position_params.text_document.uri;
-        let uri = normalize_file_url(uri).unwrap();
-        let Some(module_id) = self.find_module(&uri) else {
-            return Ok(None);
-        };
-
-        let session = self.session.read().unwrap();
-        let src = &session.read_module(module_id).src;
-
-        let position = params.text_document_position_params.position;
-        for symbol in &session.symbols() {
-            for loc in symbol.uses().iter().filter(|l| l.module() == module_id) {
-                if position_in_span(src, loc.span(), position) {
-                    let type_display = self.display_signature(&symbol.into());
-
-                    let docs = symbol.borrow().docs.clone().unwrap_or("".into());
-
-                    let contents = HoverContents::Scalar(MarkedString::String(format!(
-                        r#"```tine
-{}
-```
----
-
-{}
-"#,
-                        type_display, docs
-                    )));
-
-                    return Ok(Some(Hover {
-                        contents,
-                        range: Some(span_to_range(src, loc.span())),
-                    }));
-                }
-            }
-        }
-        return Ok(None);
-    }
-
-    async fn shutdown(&self) -> Result<()> {
-        Ok(())
-    }
 }
 
 impl Backend {
@@ -183,9 +47,10 @@ impl Backend {
         Self {
             semantic_legend,
             client,
-            session: Arc::new(RwLock::new(Session::new(Box::new(LspLoader::new(
-                open_files.clone(),
-            ))))),
+            ids: Arc::new(RwLock::new(HashMap::new())),
+            sources: Arc::new(RwLock::new(HashMap::new())),
+            types: Arc::new(RwLock::new(TypeStore::new())),
+            symbols: Arc::new(RwLock::new(SymbolTable::default())),
             open_files,
         }
     }
@@ -197,13 +62,31 @@ impl Backend {
     async fn run_project_analysis(&self, entry_path: PathBuf) {
         let client = self.client.clone();
 
+        let module_path = ModulePath::from(&entry_path);
+        let loader = self.loader();
+        let parse_result = tine_core::parse_project(module_path.clone(), Some(Box::new(loader)));
+        let result = tine_core::check_project(parse_result);
         {
-            let mut session = self.session.write().unwrap();
-            let loader = self.loader();
-            *session = analyze(entry_path.into(), Box::new(loader));
+            let mut types = self.types.write().unwrap();
+            *types = result.types;
+            let mut symbols = self.symbols.write().unwrap();
+            *symbols = result.symbols;
         }
 
-        let diagnostics = self.get_diagnostics();
+        let diagnostics = result.diagnostics;
+        let diagnostics = diagnostics.into_iter().filter_map(|(id, diags)| {
+            let ModulePath::Real(name) = result.names[id].clone() else {
+                return None;
+            };
+            let uri = Url::from_file_path(name).unwrap();
+            let len = diags.len();
+            let diags = diags
+                .iter()
+                .map(|diag| error_to_lsp(&result.sources[&id], diag))
+                .collect::<Vec<_>>();
+            Some((uri, diags, len))
+        });
+
         for (uri, diags, len) in diagnostics {
             client.publish_diagnostics(uri.clone(), diags, None).await;
             client
@@ -220,36 +103,20 @@ impl Backend {
         let _ = client.semantic_tokens_refresh().await;
     }
 
-    fn get_diagnostics(&self) -> Vec<(Url, Vec<Diagnostic>, usize)> {
-        let session = self.session.read().unwrap();
-        session
-            .diagnostics()
-            .iter()
-            .map(|(&m, diags)| {
-                let module = session.read_module(m);
-                let ModulePath::Real(name) = &module.name else {
-                    return None;
-                };
-
-                let uri = Url::from_file_path(name).unwrap();
-                let len = diags.len();
-                let diags = diags
-                    .iter()
-                    .map(|diag| error_to_lsp(&module.src, diag))
-                    .collect::<Vec<_>>();
-
-                Some((uri, diags, len))
-            })
-            .flatten()
-            .collect::<Vec<_>>()
+    fn find_module(&self, uri: &Url) -> Option<ModuleId> {
+        let path = PathBuf::from(OsString::from(uri.path()))
+            .canonicalize()
+            .ok()?;
+        let ids = self.ids.read().unwrap();
+        ids.get(&ModulePath::Real(path)).copied()
     }
 
-    fn find_module(&self, uri: &Url) -> Option<ModuleId> {
-        let session = self.session.read().unwrap();
-        session.modules().iter().position(|m| match &m.name {
-            ModulePath::Real(path) => Url::from_file_path(path).unwrap() == *uri,
-            _ => false,
-        })
+    fn symbols(&self) -> std::sync::RwLockReadGuard<'_, SymbolTable> {
+        self.symbols.read().unwrap()
+    }
+
+    fn types(&self) -> std::sync::RwLockReadGuard<'_, TypeStore> {
+        self.types.read().unwrap()
     }
 }
 

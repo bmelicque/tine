@@ -1,8 +1,12 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::{ast, ir, type_checker::TypeChecker, types, Location, SymbolData, SymbolKind};
+use crate::{
+    ast, ir,
+    type_checker::{symbols::*, TypeChecker},
+    types, Location,
+};
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     /// Create a local scope containing the given type params, then run the
     /// `visit` function inside that scope.
     pub fn with_type_params<F, R>(
@@ -22,39 +26,54 @@ impl TypeChecker<'_> {
             for param in params {
                 let ty = checker.add_type_param(param.text.clone());
                 // FIXME: spans
-                checker.ctx.register_symbol(SymbolData {
-                    name: param.text.clone(),
-                    ty: ty.id,
-                    kind: SymbolKind::TypeAlias,
-                    defined_at: param.loc,
-                    ..Default::default()
-                });
+                let id = checker
+                    .symbols
+                    .insert::<TypeAliasSymbolId>(TypeAliasSymbol {
+                        name: param.text.clone(),
+                        ty: ty.id,
+                        defined_at: param.loc,
+                        ..Default::default()
+                    });
+                checker.current_scope().bind(param.text.clone(), id.into());
+                checker.types.add_alias(ty.id, param.text.clone());
                 param_types.push(ty);
             }
             (visit(checker), param_types)
         })
     }
 
-    pub fn make_temp_variable(&mut self, at: Location, value: &ir::Expression) -> ir::Identifier {
+    pub fn make_temp_variable(
+        &mut self,
+        at: Location,
+        value: &ir::Expression,
+    ) -> (ir::Identifier, VariableSymbolId) {
         let ty = value.ty();
-        self.make_temp_variable_with_type(at, value, ty)
+        let symbol = self.make_temp_variable_with_type(at, value, ty);
+        let node = ir::Identifier {
+            loc: at,
+            symbol: symbol.into(),
+            ty,
+        };
+        (node, symbol)
     }
     pub fn make_temp_variable_with_type(
         &mut self,
         at: Location,
         value: &ir::Expression,
         ty: types::TypeId,
-    ) -> ir::Identifier {
+    ) -> VariableSymbolId {
         let name = format!("${}", generate_id());
-        let symbol = self.ctx.register_symbol(SymbolData {
+        let dependencies = self
+            .dependencies(value)
+            .filter_map(|i| i.symbol.as_variable())
+            .collect();
+        self.symbols.insert::<VariableSymbolId>(VariableSymbol {
             name,
             ty,
-            kind: SymbolKind::constant(),
             defined_at: at,
-            dependencies: value.dependencies().map(Into::into).collect::<Vec<_>>(),
+            dependencies,
             ..Default::default()
-        });
-        ir::Identifier { loc: at, symbol }
+        })
     }
 }
 

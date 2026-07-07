@@ -13,7 +13,9 @@
 
 use std::collections::HashMap;
 
-use tine_core::{ir, Location, Session};
+use tine_core::symbols::SymbolTable;
+use tine_core::type_store::TypeStore;
+use tine_core::{ir, Location};
 
 use super::alias::AliasMap;
 use super::liveness::UseSites;
@@ -120,11 +122,12 @@ pub fn analyse_ownership(
     program: &ir::Program,
     sites: &UseSites,
     aliases: &mut AliasMap,
-    session: &Session,
+    types: &TypeStore,
+    symbols: &SymbolTable,
 ) -> OwnershipMap {
     let mut map = OwnershipMap::default();
     let ctx = Ctx::root();
-    let semantics = SemanticsChecker::new(session);
+    let semantics = SemanticsChecker::new(types, symbols);
     for stmt in &program.statements {
         visit_stmt(stmt, ctx, sites, aliases, &semantics, &mut map);
     }
@@ -137,15 +140,17 @@ fn resolve(
     ctx: Ctx,
     sites: &UseSites,
     aliases: &mut AliasMap,
+    semantics: &SemanticsChecker,
 ) -> OwnershipAction {
     if ctx.in_expression() {
         return OwnershipAction::Borrow;
     }
 
-    if id.symbol.borrow().is_mutable() {
+    let is_mutable = semantics.is_mutable(id.symbol);
+    if is_mutable {
         resolve_mutable(id, ctx, sites)
     } else {
-        resolve_immutable(id, ctx, sites, aliases)
+        resolve_immutable(id, ctx, sites, aliases, semantics)
     }
 }
 
@@ -155,8 +160,9 @@ fn resolve_immutable(
     ctx: Ctx,
     sites: &UseSites,
     aliases: &mut AliasMap,
+    semantics: &SemanticsChecker,
 ) -> OwnershipAction {
-    let defined_at = id.symbol.borrow().defined_at;
+    let defined_at = semantics.get_symbol(id.symbol).defined_at();
     match ctx.binding {
         Binding::None | Binding::Immutable(_) | Binding::Any(_) => return OwnershipAction::Borrow,
         Binding::Mutable(loc) if defined_at.is_within(loc) => return OwnershipAction::Borrow,
@@ -313,10 +319,10 @@ fn visit_expr(
     match expr {
         // --- The core annotation site ---
         ir::Expression::Identifier(id) => {
-            let action = if ctx.forced_copy || semantics.is_copy(id.ty()) {
+            let action = if ctx.forced_copy || semantics.is_copy(id.ty) {
                 OwnershipAction::Copy
             } else {
-                resolve(id, ctx, sites, aliases)
+                resolve(id, ctx, sites, aliases, semantics)
             };
             out.0.insert(id.loc, action);
         }
@@ -328,6 +334,9 @@ fn visit_expr(
                 ctx
             };
             visit_expr(&m.object, ctx, sites, aliases, semantics, out)
+        }
+        ir::Expression::Method(m) => {
+            visit_expr(&m.host, ctx.force_copying(), sites, aliases, semantics, out)
         }
 
         ir::Expression::BooleanLiteral(_)
@@ -448,7 +457,7 @@ fn visit_expr(
             }
 
             let value_aliases_callee = signature.map_or(true, |s| s.is_receiver_aliased());
-            if c.callee.is_mutable() == Some(true) && value_aliases_callee {
+            if is_mutable(&c.callee, semantics) == Some(true) && value_aliases_callee {
                 out.0.insert(c.loc, OwnershipAction::Clone);
             }
         }
@@ -498,7 +507,7 @@ fn visit_expr(
             visit_expr(iterable, ctx.clone(), sites, aliases, semantics, out);
             // The element binding is a fresh value each iteration: always
             // borrowed, never moved out of the loop.
-            out.0.insert(element.loc, OwnershipAction::Borrow);
+            out.0.insert(element.0, OwnershipAction::Borrow);
             visit_block(
                 body,
                 ctx.enter_loop(ctx.binding),
@@ -512,5 +521,14 @@ fn visit_expr(
         ir::Expression::Function(ir::FunctionExpression { body, .. }) => {
             visit_block(body, ctx, sites, aliases, semantics, out);
         }
+    }
+}
+
+fn is_mutable(expr: &ir::Expression, semantics: &SemanticsChecker) -> Option<bool> {
+    use ir::Expression::*;
+    match expr {
+        Identifier(i) => Some(semantics.is_mutable(i.symbol)),
+        Member(m) => is_mutable(&m.object, semantics),
+        _ => None,
     }
 }

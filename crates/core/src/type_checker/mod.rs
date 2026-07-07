@@ -1,17 +1,15 @@
-mod analysis_context;
 mod exhaustiveness;
 mod expressions;
 mod items;
+mod loader;
 mod patterns;
 mod statements;
+mod std;
 pub mod substitutions;
-mod test_utils;
+pub mod symbols;
 mod type_checker;
+pub mod type_store;
 mod types;
 mod utils;
 
-pub use analysis_context::{
-    type_display::*, type_store::TypeStore, MemberToken, MethodReceiverKind, SymbolData,
-    SymbolHandle, SymbolKind, SymbolRef, SymbolToken, Token, TypeSymbolBody,
-};
-pub use type_checker::{CheckResult, TypeChecker};
+pub use type_checker::{check_project, CheckProjectResult, CheckResult, TypeChecker};

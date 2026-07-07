@@ -1,17 +1,17 @@
 use crate::{
     ast, ir,
-    type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
+    type_checker::{symbols::*, type_store::TypeStore, TypeChecker},
     types::{FunctionType, TypeId},
-    SymbolData, SymbolKind,
+    Location,
 };
 
 struct FunctionResult {
-    pub params: Vec<ir::Identifier>,
+    pub params: Vec<(Location, VariableSymbolId)>,
     pub return_type: TypeId,
     pub body: ir::Block,
 }
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_function_expression(
         &mut self,
         node: ast::FunctionExpression,
@@ -35,26 +35,25 @@ impl TypeChecker<'_> {
 
         let ty = self.intern(FunctionType {
             type_params,
-            params: params.iter().map(|p| p.ty()).collect(),
+            params: params.iter().map(|p| self.symbol_type_id(p.1)).collect(),
             return_type,
         });
 
         let name = match node.name {
             Some(id) => {
-                let symbol = self.ctx.register_symbol(SymbolData {
-                    name: id.text,
+                let symbol: FunctionSymbolId = self.symbols.insert(FunctionSymbol {
+                    name: id.text.clone(),
                     ty,
-                    kind: SymbolKind::Function {
-                        param_names: params.iter().map(|p| p.as_name()).collect(),
-                    },
+                    param_names: params
+                        .iter()
+                        .map(|p| self.symbol_name(p.1).to_string())
+                        .collect(),
                     defined_at: id.loc,
                     docs,
                     ..Default::default()
                 });
-                Some(ir::Identifier {
-                    loc: id.loc,
-                    symbol,
-                })
+                self.current_scope().bind(id.text, symbol.into());
+                Some((id.loc, symbol))
             }
             None => None,
         };
@@ -71,30 +70,27 @@ impl TypeChecker<'_> {
     pub fn visit_function_params(
         &mut self,
         node: Option<ast::FunctionParams>,
-    ) -> Option<Vec<ir::Identifier>> {
+    ) -> Option<Vec<(Location, VariableSymbolId)>> {
         let node = node?;
         node.params
             .into_iter()
-            .map(|p| self.visit_function_param(p))
+            .map(|p| Some((p.loc, self.visit_function_param(p)?)))
             .collect::<Option<Vec<_>>>()
     }
 
-    fn visit_function_param(&mut self, node: ast::FunctionParam) -> Option<ir::Identifier> {
+    fn visit_function_param(&mut self, node: ast::FunctionParam) -> Option<VariableSymbolId> {
         let name = node.name?;
         let ty = node
             .type_annotation
             .map_or(TypeStore::UNKNOWN, |t| self.visit_type(t));
-        let symbol = self.ctx.register_symbol(SymbolData {
+        let id = self.symbols.insert::<VariableSymbolId>(VariableSymbol {
             name: name.as_str().into(),
             ty,
-            kind: SymbolKind::constant(),
             defined_at: name.loc,
             ..Default::default()
         });
-        Some(ir::Identifier {
-            loc: name.loc,
-            symbol,
-        })
+        self.current_scope().bind(name.text, id.into());
+        Some(id)
     }
 
     /// Return (function return type, visited body)
@@ -123,17 +119,10 @@ impl TypeChecker<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::analyzer::session::Session;
     use crate::ast;
     use crate::locations::Span;
-    use crate::type_checker::test_utils::MockLoader;
     use crate::types::*;
     use crate::Location;
-
-    fn create_type_checker() -> TypeChecker<'static> {
-        let session = Box::leak(Box::new(Session::new(Box::new(MockLoader))));
-        TypeChecker::new(session, 0)
-    }
 
     fn ident(text: &str) -> ast::Identifier {
         ast::Identifier {
@@ -144,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_visit_function_expression() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         let function_expression = ast::FunctionExpression {
             loc: Location::dummy(),
             name: None,
@@ -206,12 +195,16 @@ mod tests {
                 ..Default::default()
             })
         );
-        assert!(checker.diagnostics.is_empty());
+        assert!(
+            checker.diagnostics.is_empty(),
+            "expected no error, found {:?}",
+            checker.diagnostics
+        );
     }
 
     #[test]
     fn test_visit_generic_function_expression() {
-        let mut checker = create_type_checker();
+        let mut checker = TypeChecker::new();
         let function_expression = ast::FunctionExpression {
             type_params: Some(vec![ast::Identifier {
                 text: "T".to_string(),
@@ -236,7 +229,11 @@ mod tests {
         };
 
         let result = checker.visit_function_expression(function_expression, None);
-        assert!(checker.diagnostics.is_empty());
+        assert!(
+            checker.diagnostics.is_empty(),
+            "expected no errors, got {:?}",
+            checker.diagnostics
+        );
 
         let result = checker.resolve(result.map_or(TypeStore::UNKNOWN, |r| r.ty));
 

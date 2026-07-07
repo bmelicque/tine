@@ -1,11 +1,8 @@
 use crate::{
-    ast, ir,
-    type_checker::{analysis_context::type_store::TypeStore, TypeChecker},
-    types::Type,
-    DiagnosticKind,
+    ast, ir, type_checker::type_store::TypeStore, types::Type, DiagnosticKind, TypeChecker,
 };
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_unary_expression(
         &mut self,
         node: ast::UnaryExpression,
@@ -29,7 +26,7 @@ impl TypeChecker<'_> {
             Type::Unknown => return None,
             _ => {
                 let error = DiagnosticKind::NotDereferenceable {
-                    type_name: self.session.display_type(operand.ty()),
+                    type_name: self.types.display(operand.ty()),
                 };
                 self.error(error, node.loc);
                 return None;
@@ -61,7 +58,7 @@ impl TypeChecker<'_> {
             TypeStore::UNKNOWN => None,
             _ => {
                 let error = DiagnosticKind::ExpectedNumber {
-                    got: self.session.display_type(operand_type),
+                    got: self.types.display(operand_type),
                 };
                 self.error(error, operand.loc());
                 None
@@ -79,7 +76,7 @@ impl TypeChecker<'_> {
         let operand_type = operand.ty();
         if operand_type != TypeStore::BOOLEAN && operand_type != TypeStore::UNKNOWN {
             let error = DiagnosticKind::ExpectedBool {
-                got: self.session.display_type(operand_type),
+                got: self.types.display(operand_type),
             };
             self.error(error, operand.loc());
             return None;

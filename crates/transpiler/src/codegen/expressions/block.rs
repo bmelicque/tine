@@ -12,23 +12,23 @@ use crate::codegen::{
 
 use swc_ecma_ast as swc;
 
-impl CodeGenerator<'_> {
-    pub fn handle_block(&mut self, node: &ir::Block) -> ExpressionResult {
+impl CodeGenerator<'_, '_> {
+    pub fn handle_block(&mut self, node: ir::Block) -> ExpressionResult {
         if node.statements.len() == 0 {
             ExpressionResult {
                 prelim_stmts: vec![],
                 expr: undefined(),
             }
-        } else if can_block_be_inlined(node) {
+        } else if can_block_be_inlined(&node) {
             self.inlined_block(node).into()
         } else {
             self.block_to_extracted(node)
         }
     }
 
-    pub fn inlined_block(&mut self, node: &ir::Block) -> swc::Expr {
+    pub fn inlined_block(&mut self, mut node: ir::Block) -> swc::Expr {
         if node.statements.len() == 1 {
-            let ir::Statement::Expression(expr) = &node.statements[0] else {
+            let ir::Statement::Expression(expr) = node.statements.remove(0) else {
                 panic!()
             };
             let result = self.handle_expression(expr);
@@ -38,7 +38,7 @@ impl CodeGenerator<'_> {
 
         let exprs = node
             .statements
-            .iter()
+            .into_iter()
             .map(|stmt| match stmt {
                 ir::Statement::Assignment(a) => {
                     Box::new(self.handle_assignment_as_expr(a).expr.into())
@@ -58,7 +58,7 @@ impl CodeGenerator<'_> {
         })
     }
 
-    fn block_to_extracted(&mut self, node: &ir::Block) -> ExpressionResult {
+    fn block_to_extracted(&mut self, node: ir::Block) -> ExpressionResult {
         let temp = self.get_temp_id();
         let decl = ident_to_declaration(temp.clone());
         let mut block = self.block_to_swc_stmt(node);

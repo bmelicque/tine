@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    type_checker::analysis_context::type_display::display_type,
+    type_checker::type_store::{display_type, TypeStore},
     types::{self, Type, TypeId, TypeParam},
-    DiagnosticKind, Location, TypeStore,
+    DiagnosticKind, Location,
 };
 
 pub type SubstitutionTable = HashMap<TypeParam, TypeId>;

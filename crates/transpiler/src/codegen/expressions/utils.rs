@@ -3,7 +3,7 @@ use swc_ecma_ast as swc;
 
 use crate::codegen::{expressions::ExpressionResult, CodeGenerator};
 
-impl CodeGenerator<'_> {
+impl CodeGenerator<'_, '_> {
     pub(super) fn extract_expression(&mut self, expr: swc::Expr) -> ExpressionResult {
         let temp = self.get_temp_id();
         let prelim = swc::Stmt::Decl(swc::Decl::Var(Box::new(swc::VarDecl {

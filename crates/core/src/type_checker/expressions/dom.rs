@@ -1,8 +1,14 @@
 use std::collections::HashMap;
 
-use crate::{ast, diagnostics::DiagnosticKind, ir, type_checker::TypeChecker, Location, TypeStore};
+use crate::{
+    ast,
+    diagnostics::DiagnosticKind,
+    ir,
+    type_checker::{type_store::TypeStore, TypeChecker},
+    Location,
+};
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_element_expression(
         &mut self,
         node: ast::ElementExpression,
@@ -87,7 +93,7 @@ impl TypeChecker<'_> {
 
     fn visit_child(&mut self, child: ast::ElementChild) -> Option<ir::Expression> {
         match child {
-            ast::ElementChild::Expression(e) => self.visit_dom_expression(e),
+            ast::ElementChild::Expression(e) => self.visit_expression(e),
             ast::ElementChild::Text(t) => Some(ir::Expression::StringLiteral(ir::StringLiteral {
                 loc: t.loc,
                 value: t.text,
@@ -99,13 +105,5 @@ impl TypeChecker<'_> {
                 self.visit_element_expression(v.into()).map(Into::into)
             }
         }
-    }
-
-    fn visit_dom_expression(&mut self, expr: ast::Expression) -> Option<ir::Expression> {
-        let (expr, deps) = self.with_dependencies(|s| s.visit_expression(expr));
-        let expr = expr?;
-        self.save_reactive_dependencies(&deps, expr.loc());
-        self.ctx.add_dependencies(deps);
-        Some(expr)
     }
 }

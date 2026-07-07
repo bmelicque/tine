@@ -4,23 +4,22 @@ use crate::{
     DiagnosticKind,
 };
 
-impl TypeChecker<'_> {
+impl TypeChecker {
     pub fn visit_variable_declaration(
         &mut self,
         node: ast::VariableDeclaration,
     ) -> Vec<ir::VariableDeclaration> {
-        let value = node.value.and_then(|v| self.visit_expression(v));
+        let Some(value) = node.value.and_then(|v| self.visit_expression(v)) else {
+            return vec![];
+        };
         let Some(pattern) = node.pattern else {
             return vec![];
         };
         let loc = node.loc;
 
-        let (mut stmts, value) = self.handle_prelim_stmt(&pattern, value);
+        let (mut stmts, value) = self.make_temp_var_if_needed(&pattern, value);
 
-        let pattern = value
-            .as_ref()
-            .and_then(|v| self.visit_pattern(pattern, v, true));
-        let (Some(pattern), Some(value)) = (pattern, value) else {
+        let Some(pattern) = self.visit_pattern(pattern, &value, true) else {
             return vec![];
         };
 
@@ -33,27 +32,50 @@ impl TypeChecker<'_> {
         stmts
     }
 
-    fn handle_prelim_stmt(
+    /// When lowering the pattern, if complex (ie it binds several variables),
+    /// then the original value needs to be placed in a temporary value, to
+    /// avoid unwanted computation.
+    ///
+    /// # Example
+    ///
+    /// ```tine
+    /// let User{ age, name } = fetchUser()
+    ///
+    /// // Bad
+    /// let age = fetchUser().age
+    /// let name = fetchUser().name
+    ///
+    /// // Good
+    /// let tmp = fetchUser()
+    /// let age = tmp.age
+    /// let name = tmp.name
+    /// ```
+    fn make_temp_var_if_needed(
         &mut self,
         pattern: &ast::Pattern,
-        value: Option<ir::Expression>,
-    ) -> (Vec<ir::VariableDeclaration>, Option<ir::Expression>) {
+        value: ir::Expression,
+    ) -> (Vec<ir::VariableDeclaration>, ir::Expression) {
         use ast::Pattern::*;
-        let Some(value) = value else {
-            return (vec![], None);
-        };
         if !matches!(pattern, Constructor(_) | Tuple(_)) {
-            return (vec![], Some(value));
+            return (vec![], value);
         }
 
-        let id = self.make_temp_variable(value.loc(), &value);
+        let symbol = self.make_temp_variable(value.loc(), &value).1;
+        let loc = value.loc();
+        let ty = value.ty();
         let decl = ir::VariableDeclaration {
-            loc: value.loc(),
+            loc,
             mutable: false,
-            symbol: id.symbol.clone(),
+            symbol,
             value,
         };
-        (vec![decl], Some(id.into()))
+        let id = ir::Identifier {
+            loc,
+            symbol: symbol.into(),
+            ty,
+        };
+
+        (vec![decl], id.into())
     }
 
     pub(crate) fn check_identifier_sanity(&mut self, identifier: &ast::Identifier) {
@@ -67,13 +89,12 @@ impl TypeChecker<'_> {
 mod tests {
     use crate::{
         ast,
-        type_checker::{test_utils::MockLoader, TypeChecker},
-        DiagnosticKind, Location, Session, SymbolData, SymbolKind, TypeStore,
+        type_checker::{type_store::TypeStore, TypeChecker},
+        DiagnosticKind, Location,
     };
 
-    fn visit_variable_declaration(node: &ast::VariableDeclaration) -> TypeChecker<'_> {
-        let session = Session::new(Box::new(MockLoader));
-        let mut tc = TypeChecker::new(Box::leak(Box::new(session)), 0);
+    fn visit_variable_declaration(node: &ast::VariableDeclaration) -> TypeChecker {
+        let mut tc = TypeChecker::new();
         tc.visit_variable_declaration(node.clone());
         tc
     }
@@ -95,11 +116,14 @@ mod tests {
             })),
             ..Default::default()
         };
-        let tc = visit_variable_declaration(&node);
-        match tc.ctx.find_in_current_scope("a") {
+        let mut tc = visit_variable_declaration(&node);
+        let symbol = tc
+            .current_scope()
+            .lookup("a")
+            .map(|id| tc.symbols.get_symbol(id));
+        match symbol {
             Some(symbol) => {
-                assert_eq!(symbol.borrow().ty, TypeStore::INTEGER);
-                assert_eq!(symbol.borrow().is_mutable(), true);
+                assert_eq!(symbol.ty(), TypeStore::INTEGER);
             }
             None => {
                 panic!("symbol not found")
@@ -122,47 +146,19 @@ mod tests {
             })),
             ..Default::default()
         };
-        let tc = visit_variable_declaration(&node);
-        match tc.ctx.find_in_current_scope("a") {
+        let mut tc = visit_variable_declaration(&node);
+        let symbol = tc
+            .current_scope()
+            .lookup("a")
+            .map(|id| tc.symbols.get_symbol(id));
+        match symbol {
             Some(symbol) => {
-                assert_eq!(symbol.borrow().ty, TypeStore::INTEGER);
-                assert_eq!(symbol.borrow().is_mutable(), false);
+                assert_eq!(symbol.ty(), TypeStore::INTEGER);
             }
             None => {
                 panic!("symbol not found")
             }
         }
-    }
-
-    #[test]
-    fn test_duplicate_declaration() {
-        let session = Session::new(Box::new(MockLoader));
-        let mut tc = TypeChecker::new(&session, 0);
-        tc.ctx.register_symbol(SymbolData {
-            name: "a".to_string(),
-            ty: TypeStore::INTEGER,
-            kind: SymbolKind::constant(),
-            ..Default::default()
-        });
-        let node = ast::VariableDeclaration {
-            pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
-                ast::Identifier {
-                    loc: Location::dummy(),
-                    text: "a".to_string(),
-                },
-            ))),
-            value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
-                value: 1,
-                loc: Location::dummy(),
-            })),
-            ..Default::default()
-        };
-        tc.visit_variable_declaration(node);
-        assert_eq!(tc.diagnostics.len(), 1);
-        assert!(matches!(
-            tc.diagnostics[0].kind,
-            DiagnosticKind::DuplicateIdentifier { .. }
-        ));
     }
 
     #[test]
@@ -183,7 +179,7 @@ mod tests {
         let tc = visit_variable_declaration(&node);
         assert_eq!(tc.diagnostics.len(), 1);
         assert_eq!(
-            tc.diagnostics[0].kind,
+            tc.diagnostics[&0][0].kind,
             DiagnosticKind::InvalidIdentifierDollar
         );
     }

@@ -2,8 +2,7 @@ mod bundler;
 mod internals;
 mod loader;
 mod resolver;
-mod transpiler;
 
-use loader::SwcLoader;
-use resolver::SwcResolver;
-pub use transpiler::transpile;
+pub use bundler::bundle_entry;
+pub use loader::SwcLoader;
+pub use resolver::SwcResolver;

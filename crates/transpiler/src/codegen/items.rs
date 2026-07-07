@@ -8,21 +8,24 @@ use tine_core::{ir, ModulePath};
 use swc_common::{FileName, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-impl CodeGenerator<'_> {
-    pub fn item_to_swc(&mut self, node: &ir::Statement) -> Vec<swc::ModuleItem> {
+impl CodeGenerator<'_, '_> {
+    pub fn item_to_swc(&mut self, node: ir::Statement) -> Vec<swc::ModuleItem> {
         match node {
             ir::Statement::Use(u) => vec![self.use_decl_to_swc(u).into()],
             stmt => self.stmt_to_swc(stmt).into_iter().map(Into::into).collect(),
         }
     }
 
-    fn use_decl_to_swc(&mut self, node: &ir::UseDeclaration) -> swc::ModuleItem {
+    fn use_decl_to_swc(&mut self, node: ir::UseDeclaration) -> swc::ModuleItem {
         let module_name = modulepath_to_filename(&node.path);
         let src = self.get_imports_src(module_name);
         let specifiers = node
             .symbols
             .iter()
-            .map(|s| self.specifier_to_swc(&s.as_name()))
+            .map(|s| {
+                let name = self.symbols.get_symbol(*s).name();
+                self.specifier_to_swc(name)
+            })
             .collect();
 
         swc::ModuleItem::ModuleDecl(swc::ModuleDecl::Import(swc::ImportDecl {
@@ -38,7 +41,7 @@ impl CodeGenerator<'_> {
     fn get_imports_src(&self, name: FileName) -> Box<swc::Str> {
         match name {
             FileName::Real(filename) => {
-                let ModulePath::Real(current) = self.get_filename() else {
+                let ModulePath::Real(current) = &self.name else {
                     panic!("unexpected filename variant")
                 };
                 let relative = make_relative(current, &filename);

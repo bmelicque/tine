@@ -1,43 +1,31 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use tine_core::{
+    symbols::SymbolId,
     types::{Type, TypeId},
-    ModuleId, Source, SymbolData, SymbolKind, SymbolRef,
+    ModuleId, Source,
 };
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
 use crate::Backend;
 
-#[derive(Debug, Clone)]
-pub struct ServerSymbol(pub(crate) Arc<SymbolData>);
-
-impl From<SymbolRef> for ServerSymbol {
-    fn from(value: SymbolRef) -> Self {
-        ServerSymbol(Arc::new(value.borrow().clone()))
-    }
-}
-impl From<&SymbolRef> for ServerSymbol {
-    fn from(value: &SymbolRef) -> Self {
-        ServerSymbol(Arc::new(value.borrow().clone()))
-    }
-}
-
 impl Backend {
     pub fn tokens_to_semantic(&self, id: ModuleId, src: &Source) -> Vec<SemanticToken> {
+        let symbols = self.symbols();
         let mut data = Vec::new();
         let mut map = HashMap::new();
-        let symbols = self.session.read().unwrap().symbols();
-        for symbol in &symbols {
-            let symbol = ServerSymbol::from(symbol);
-            map.insert(symbol.0.defined_at.span(), symbol.clone());
+        for symbol_id in symbols.all_ids() {
+            let symbol = symbols.get_symbol(symbol_id);
+            let defined_at = symbol.defined_at();
+            if defined_at.module() == id {
+                map.insert(symbol.defined_at().span(), symbol_id);
+            }
             symbol
-                .0
-                .access
                 .uses()
                 .filter(|l| l.module() == id)
                 .map(|l| l.span())
                 .for_each(|s| {
-                    map.insert(s, symbol.clone());
+                    map.insert(s, symbol_id);
                 });
         }
         let mut tokens = map.into_iter().collect::<Vec<_>>();
@@ -71,28 +59,30 @@ impl Backend {
                 continue;
             };
 
-            let type_name = match symbol.0.kind {
-                SymbolKind::Enum { .. }
-                | SymbolKind::PrimitiveType { .. }
-                | SymbolKind::TypeAlias
-                | SymbolKind::Struct { .. } => SemanticTokenType::TYPE,
-                SymbolKind::Value { .. } => {
-                    if let Type::Function(_) = self.get_type(symbol.0.ty) {
+            let type_name = match symbol {
+                SymbolId::Enum(_)
+                | SymbolId::Primitive(_)
+                | SymbolId::TypeAlias(_)
+                | SymbolId::Struct(_) => SemanticTokenType::TYPE,
+                SymbolId::Variable(s) => {
+                    let ty = symbols.get(s).ty;
+                    if let Type::Function(_) = self.get_type(ty) {
                         SemanticTokenType::FUNCTION
                     } else {
                         SemanticTokenType::VARIABLE
                     }
                 }
-                SymbolKind::Member { .. } => {
-                    if let Type::Function(_) = self.get_type(symbol.0.ty) {
+                SymbolId::Member(s) => {
+                    let ty = symbols.get(s).ty;
+                    if let Type::Function(_) = self.get_type(ty) {
                         SemanticTokenType::METHOD
                     } else {
                         SemanticTokenType::PROPERTY
                     }
                 }
-                SymbolKind::Function { .. } => SemanticTokenType::FUNCTION,
-                SymbolKind::Method { .. } => SemanticTokenType::METHOD,
-                SymbolKind::Constructor { .. } => SemanticTokenType::ENUM_MEMBER,
+                SymbolId::Function(_) => SemanticTokenType::FUNCTION,
+                SymbolId::Method(_) => SemanticTokenType::METHOD,
+                SymbolId::Variant(_) => SemanticTokenType::ENUM_MEMBER,
             };
             let token_type_index = self
                 .semantic_legend
@@ -101,7 +91,7 @@ impl Backend {
                 .position(|s| *s == type_name)
                 .unwrap_or(0); // fallback
 
-            let modifier_mask = if !symbol.0.is_mutable() {
+            let modifier_mask = if !symbols.is_mutable(symbol) {
                 1 << readonly_index
             } else {
                 0
@@ -123,8 +113,7 @@ impl Backend {
     }
 
     fn get_type(&self, id: TypeId) -> Type {
-        let session = self.session.read().unwrap();
-        let type_store = session.types();
+        let type_store = self.types();
         type_store.get(id).clone()
     }
 }
