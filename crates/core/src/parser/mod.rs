@@ -10,7 +10,7 @@ mod test_utils;
 mod tokens;
 mod utils;
 
-pub use graph::{parse_project, ProjectParser};
+pub use graph::{parse_project, Loader, ProjectParser};
 use std::{iter::Peekable, ops::Range};
 
 use crate::{

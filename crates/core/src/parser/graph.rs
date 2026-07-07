@@ -30,8 +30,9 @@ impl Loader for ParserLoader {
 
 pub type ModuleId = usize;
 
-pub fn parse_project(entry_point: ModulePath) -> ProjectParser {
-    let mut parser = ProjectParser::new(Box::new(ParserLoader));
+pub fn parse_project(entry_point: ModulePath, loader: Option<Box<dyn Loader>>) -> ProjectParser {
+    let loader = loader.unwrap_or(Box::new(ParserLoader));
+    let mut parser = ProjectParser::new(loader);
     let _ = parser.parse_project(entry_point);
     parser
 }

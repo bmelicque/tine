@@ -6,7 +6,7 @@ use tine_transpiler::{self, SwcLoader};
 pub fn run(args: BuildArgs) {
     let path_buf = PathBuf::from(args.input).canonicalize().unwrap();
     let module_path = ModulePath::from(&path_buf);
-    let project_result = tine_core::parse_project(module_path.clone());
+    let project_result = tine_core::parse_project(module_path.clone(), None);
     let check_result = tine_core::check_project(project_result);
     if !check_result.diagnostics.is_empty() {
         for (module_id, diagnostics) in check_result.diagnostics {

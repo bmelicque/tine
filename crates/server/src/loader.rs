@@ -4,7 +4,7 @@ use std::{
     fs,
     sync::{Arc, RwLock},
 };
-use tine_core::{ModuleLoader, ModulePath};
+use tine_core::{Loader, ModulePath};
 use url::Url;
 
 pub type OpenFiles = Arc<RwLock<HashMap<Url, String>>>;
@@ -19,7 +19,7 @@ impl LspLoader {
     }
 }
 
-impl ModuleLoader for LspLoader {
+impl Loader for LspLoader {
     fn load(&self, path: &ModulePath) -> Result<String> {
         match path {
             ModulePath::Real(p) => {

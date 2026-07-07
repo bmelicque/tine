@@ -5,7 +5,7 @@ use tine_core::{DiagnosticLevel, ModulePath, pretty_print_error};
 
 pub fn run(args: CheckArgs) {
     let module_path = ModulePath::from(&PathBuf::from(args.input));
-    let project_result = tine_core::parse_project(module_path.clone());
+    let project_result = tine_core::parse_project(module_path.clone(), None);
     let check_result = tine_core::check_project(project_result);
     let error_count = check_result
         .diagnostics

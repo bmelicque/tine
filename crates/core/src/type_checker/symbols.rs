@@ -364,6 +364,43 @@ impl SymbolTable {
             .find(|(_, s)| predicate(s))
             .map(|(i, _)| I::from_index(i))
     }
+
+    pub fn all(&self) -> Vec<&dyn Symbol> {
+        let mut symbols: Vec<&dyn Symbol> = Vec::new();
+
+        symbols.extend(self.variables.iter().map(|s| s as &dyn Symbol));
+        symbols.extend(self.functions.iter().map(|s| s as &dyn Symbol));
+        symbols.extend(self.structs.iter().map(|s| s as &dyn Symbol));
+        symbols.extend(self.enums.iter().map(|s| s as &dyn Symbol));
+        symbols.extend(self.variants.iter().map(|s| s as &dyn Symbol));
+        symbols.extend(self.primitives.iter().map(|s| s as &dyn Symbol));
+        symbols.extend(self.aliases.iter().map(|s| s as &dyn Symbol));
+        symbols.extend(self.members.iter().map(|s| s as &dyn Symbol));
+        symbols.extend(self.methods.iter().map(|s| s as &dyn Symbol));
+
+        symbols
+    }
+
+    pub fn all_ids(&self) -> impl Iterator<Item = SymbolId> + '_ {
+        ids::<VariableSymbolId>(&self.variables)
+            .chain(ids::<FunctionSymbolId>(&self.functions))
+            .chain(ids::<StructSymbolId>(&self.structs))
+            .chain(ids::<EnumSymbolId>(&self.enums))
+            .chain(ids::<VariantSymbolId>(&self.variants))
+            .chain(ids::<PrimitiveTypeSymbolId>(&self.primitives))
+            .chain(ids::<TypeAliasSymbolId>(&self.aliases))
+            .chain(ids::<MemberSymbolId>(&self.members))
+            .chain(ids::<MethodSymbolId>(&self.methods))
+    }
+}
+fn ids<S: SymbolIndex>(symbols: &[S::SymbolKind]) -> impl Iterator<Item = SymbolId> + '_
+where
+    S: Into<SymbolId>,
+{
+    symbols
+        .into_iter()
+        .enumerate()
+        .map(|(id, _)| S::from_index(id).into())
 }
 
 pub trait SymbolIndex {
@@ -405,9 +442,11 @@ define_symbol_index!(MethodSymbol, MethodSymbolId, methods);
 define_symbol_index!(MemberSymbol, MemberSymbolId, members);
 
 pub trait Symbol {
+    fn docs(&self) -> Option<&String>;
     fn name(&self) -> &str;
     fn ty(&self) -> TypeId;
     fn defined_at(&self) -> Location;
+    fn uses(&self) -> Box<dyn Iterator<Item = Location> + '_>;
 }
 pub trait SymbolMut {
     fn access(&mut self) -> &mut SymbolAccessManager;
@@ -415,6 +454,10 @@ pub trait SymbolMut {
 macro_rules! impl_symbol {
     ($symbol:ident) => {
         impl Symbol for $symbol {
+            fn docs(&self) -> Option<&String> {
+                self.docs.as_ref()
+            }
+
             fn name(&self) -> &str {
                 &self.name
             }
@@ -425,6 +468,10 @@ macro_rules! impl_symbol {
 
             fn defined_at(&self) -> Location {
                 self.defined_at
+            }
+
+            fn uses(&self) -> Box<dyn Iterator<Item = Location> + '_> {
+                Box::new(self.access.uses())
             }
         }
 

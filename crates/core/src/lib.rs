@@ -15,6 +15,6 @@ pub use common::{
 };
 pub use diagnostics::*;
 pub use locations::{Location, Span};
-pub use parser::{parse_project, ParseResult, ProjectParser};
+pub use parser::{parse_project, Loader, ParseResult, ProjectParser};
 pub use type_checker::*;
 pub use utils::pretty_print_error;
