@@ -53,6 +53,7 @@ impl ImplementationItem {
 pub struct MethodDefinition {
     pub docs: Option<Docs>,
     pub loc: Location,
+    pub public: bool,
     pub receiver: MethodReceiver,
     pub name: Option<Identifier>,
     pub type_params: Option<Vec<Identifier>>,

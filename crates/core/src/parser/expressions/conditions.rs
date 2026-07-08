@@ -15,7 +15,7 @@ impl Parser<'_> {
     }
 
     fn parse_if_pattern_expression(&mut self, kw: Location) -> ast::IfPatExpression {
-        let declaration = self.parse_variable_declaration(None);
+        let declaration = self.parse_variable_declaration(None, None);
         let body = self.parse_if_body();
         let alternate = match self.tokens.peek() {
             Some((Ok(Token::Else), _)) => self.parse_alternate(),
