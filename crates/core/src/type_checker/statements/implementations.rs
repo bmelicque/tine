@@ -8,7 +8,7 @@ use crate::{
         TypeChecker,
     },
     type_store::TypeStore,
-    types::{self, TraitMethod, TypeId},
+    types::{self, TypeId},
     DiagnosticKind, Location,
 };
 
@@ -256,7 +256,6 @@ impl TypeChecker {
             return None;
         }
 
-        self.add_method_to_store(&symbol);
         let symbol_id = self.symbols.insert(symbol);
         let methods = match host {
             TypeSymbolId::Enum(s) => &mut self.symbols.get_mut(s).methods,
@@ -265,19 +264,6 @@ impl TypeChecker {
         };
         methods.push(symbol_id);
         Some(symbol_id)
-    }
-    fn add_method_to_store(&mut self, symbol: &MethodSymbol) {
-        if symbol.is_static() {
-            return;
-        }
-        debug_assert!(matches!(self.resolve(symbol.ty), types::Type::Function(_)));
-        self.types.add_method(
-            self.symbol_type_id(symbol.owner),
-            TraitMethod {
-                name: symbol.name.clone(),
-                def: symbol.ty,
-            },
-        );
     }
 
     fn fallback_check_impl_body(&mut self, body: Option<ImplementationBody>) {

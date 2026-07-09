@@ -219,8 +219,20 @@ impl TypeChecker {
         }
     }
 
-    pub fn can_be_assigned_to(&self, got: TypeId, expected: TypeId) -> bool {
-        self.types.can_assign_to(got, expected)
+    pub fn can_be_assigned_to(
+        &self,
+        got: TypeId,
+        expected_id: TypeId,
+        got_immutable: bool,
+    ) -> bool {
+        let actual = self.types.get(got);
+        let expected = self.types.get(expected_id);
+        match (&expected, &actual) {
+            (Type::Unknown, _) | (_, Type::Unknown) => true,
+            (Type::Trait(t), _) => self.implements_trait(got, t, got_immutable),
+            (e, Type::Ref(a)) if e.is_generic() => a.inner == expected_id,
+            (_, _) => actual == expected,
+        }
     }
 
     pub fn with_scope<F, T>(&mut self, predicate: F) -> T
@@ -306,42 +318,45 @@ impl TypeChecker {
     /// Given a value whose type implements the given trait, check if an
     /// immutable version of the type also implements the trait (since some
     /// methods might be defined with a mutable receiver).
-    pub(super) fn immutable_implements_trait(
+    pub(super) fn implements_trait(
         &self,
         ty: types::TypeId,
-        trait_: &types::TraitType,
+        expected_trait: &types::TraitType,
+        got_immutable: bool,
     ) -> bool {
-        // Node: `value.ty()` should implement `trait_`!
-        if let Type::Trait(test) = &self.resolve(ty) {
-            if *test == *trait_ {
+        if expected_trait.methods.is_empty() {
+            return true;
+        }
+        if let Type::Trait(test) = &self.types.get(ty) {
+            if *test == *expected_trait {
                 return true;
             }
         }
-
         let Some(type_symbol) = self.resolve_type_symbol(ty) else {
-            panic!()
+            return false;
         };
+        let mut methods = self.symbol_methods(type_symbol).to_vec();
+        methods.retain(|m| self.is_visible((*m).into()));
+        if got_immutable {
+            methods.retain(|m| !self.symbols.get(*m).is_mutating());
+        }
 
-        let value_methods = self
-            .symbol_methods(type_symbol)
+        let got = methods
             .into_iter()
             .map(|m| {
-                let name = self.symbol_name(*m).to_string();
-                let def = self.symbol_type_id(*m);
-                (types::TraitMethod { name, def }, m)
+                let symbol = self.symbols.get(m);
+                types::TraitMethod {
+                    name: symbol.name.clone(),
+                    def: symbol.ty,
+                }
             })
             .collect::<Vec<_>>();
-        for trait_method in &trait_.methods {
-            let (_, value_method) = value_methods.iter().find(|m| m.0 == *trait_method).unwrap();
-            if self
-                .symbols
-                .get::<MethodSymbolId>(**value_method)
-                .is_mutating()
-            {
-                return false;
-            }
-        }
-        true
+
+        expected_trait
+            .methods
+            .iter()
+            .find(|expected| !got.contains(*expected))
+            .is_none()
     }
 
     pub(super) fn find_export(&self, module: ModuleId, name: &str) -> Option<SymbolId> {

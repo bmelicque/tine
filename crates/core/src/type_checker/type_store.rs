@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 
-use crate::types::{StructType, TraitMethod, TraitType, Type, TypeId};
+use crate::types::{StructType, Type, TypeId};
 
 #[derive(Debug, Default, Clone)]
 pub struct TypeStore {
     arena: Vec<Type>,
     lookup: HashMap<Type, TypeId>,
     aliases: Vec<(TypeId, String)>,
-    methods: HashMap<TypeId, Vec<TraitMethod>>,
 }
 
 impl TypeStore {
@@ -77,12 +76,6 @@ impl TypeStore {
     pub fn add_alias(&mut self, ty: TypeId, name: String) {
         self.aliases.push((ty, name));
     }
-    pub fn add_method(&mut self, host: TypeId, method: TraitMethod) {
-        let methods = self.methods.entry(host).or_insert_with(Vec::new);
-        if !methods.contains(&method) {
-            methods.push(method);
-        }
-    }
 
     pub fn get(&self, id: TypeId) -> &Type {
         &self.arena[id as usize]
@@ -104,38 +97,6 @@ impl TypeStore {
                 .is_some(),
             _ => false,
         }
-    }
-
-    pub fn can_assign_to(&self, actual_id: TypeId, expected_id: TypeId) -> bool {
-        let actual = self.get(actual_id);
-        let expected = self.get(expected_id);
-        match (&expected, &actual) {
-            (Type::Unknown, _) | (_, Type::Unknown) => true,
-            (Type::Trait(t), _) => self.implements(actual_id, t),
-            (e, Type::Ref(a)) if e.is_generic() => a.inner == expected_id,
-            (_, _) => actual == expected,
-        }
-    }
-
-    /// Check if the `test` type implements given trait.
-    pub(crate) fn implements(&self, test: TypeId, trait_: &TraitType) -> bool {
-        if trait_.methods.is_empty() {
-            return false;
-        }
-        if let Type::Trait(test) = &self.get(test) {
-            if *test == *trait_ {
-                return true;
-            }
-        }
-        let Some(methods) = self.methods.get(&test) else {
-            return false;
-        };
-
-        trait_
-            .methods
-            .iter()
-            .find(|m| !methods.contains(m))
-            .is_none()
     }
 
     pub fn display(&self, ty: TypeId) -> String {
