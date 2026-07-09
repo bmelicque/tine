@@ -353,6 +353,20 @@ impl SymbolTable {
             _ => false,
         }
     }
+    pub fn is_public(&self, id: SymbolId) -> bool {
+        use SymbolId::*;
+        match id {
+            Variable(v) => self.get(v).public,
+            Function(f) => self.get(f).public,
+            Struct(s) => self.get(s).public,
+            Enum(e) => self.get(e).public,
+            Variant(_) => true,
+            Primitive(_) => true,
+            TypeAlias(t) => self.get(t).public,
+            Method(m) => self.get(m).public,
+            Member(m) => self.get(m).public,
+        }
+    }
 
     pub fn find<I: SymbolIndex, F>(&self, mut predicate: F) -> Option<&I::SymbolKind>
     where

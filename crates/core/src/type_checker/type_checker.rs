@@ -88,6 +88,10 @@ impl TypeChecker {
         tc
     }
 
+    pub fn current_module(&self) -> ModuleId {
+        self.current_module
+    }
+
     pub fn with_loader(loader: Box<dyn ModuleLoader>) -> Self {
         let mut tc = Self::new();
         tc.loader = loader;
@@ -113,7 +117,9 @@ impl TypeChecker {
         let scope = self.scopes.pop().unwrap();
 
         self.ir.insert(module_id, program);
-        self.exports.insert(module_id, scope.as_bindings());
+        let mut exports = scope.as_bindings();
+        exports.retain(|_, id| self.symbols.is_public(*id));
+        self.exports.insert(module_id, exports);
     }
 
     pub fn delegated_check<F>(&mut self, cb: F)

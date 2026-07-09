@@ -76,6 +76,7 @@ pub enum DiagnosticKind {
     ExpectedVariantTuple,
     ExpectedVariantUnit,
     ExpectedValueGotType,
+    FieldIsPrivate(String),
     InvalidCondition {
         type_name: String,
     },
@@ -96,7 +97,7 @@ pub enum DiagnosticKind {
     InvalidTypeName,
     InvalidVariantKind,
     IrrefutablePatternExpected,
-    RefutablePatternExpected,
+    MethodIsPrivate(String),
     MismatchedBranchTypes {
         expected: String,
         got: String,
@@ -143,6 +144,7 @@ pub enum DiagnosticKind {
     RefToConstant {
         name: String,
     },
+    RefutablePatternExpected,
     ReservedName {
         name: String,
     },
@@ -233,6 +235,7 @@ impl Display for DiagnosticKind {
             Self::ExpectedVariantTuple => write!(f, "expected tuple variant"),
             Self::ExpectedVariantUnit => write!(f, "expected unit variant"),
             Self::ExpectedValueGotType => write!(f, "expected a value but got a type"),
+            Self::FieldIsPrivate(s) => write!(f, "field `{}` is private", s),
             Self::InvalidCondition { type_name } => {
                 write!(
                     f,
@@ -271,6 +274,7 @@ impl Display for DiagnosticKind {
             Self::InvalidTypeName => write!(f, "invalid type name: name should be in PascalCase"),
             Self::InvalidVariantKind => write!(f, "invalid variant kind (unit, tuple or struct)"),
             Self::IrrefutablePatternExpected => write!(f, "irrefutable pattern expected"),
+            Self::MethodIsPrivate(s) => write!(f, "method `{}` is private", s),
             Self::MismatchedBranchTypes { expected, got } => {
                 write!(
                     f,

@@ -1,5 +1,6 @@
 use crate::{
     ast, ir,
+    symbols::SymbolId,
     type_checker::{
         substitutions::{SubstitutionTable, Substitutions},
         symbols::{MethodSymbolId, StructSymbol, StructSymbolId, TypeSymbolBody},
@@ -65,6 +66,10 @@ impl TypeChecker {
         let Some((_, symbol_id)) = fields.iter().find(|(name, _)| *name == field.text) else {
             return Err((root, field));
         };
+        if !self.is_visible((*symbol_id).into()) {
+            let error = DiagnosticKind::FieldIsPrivate(field.text.clone());
+            self.error(error, field.loc);
+        }
         let ty = self.symbol_type_id(*symbol_id);
         let ty = substitutions.apply(&mut self.types, ty);
         Ok(ir::MemberExpression {
@@ -105,6 +110,10 @@ impl TypeChecker {
         let is_method_mutating = self.symbols.get(most_concrete_id).is_mutating();
         if is_method_mutating && object_mutablity == Some(false) {
             self.error(DiagnosticKind::MutatingMethodOnImmutable, field.loc);
+        }
+        if !self.is_visible(most_concrete_id.into()) {
+            let error = DiagnosticKind::MethodIsPrivate(field.text.clone());
+            self.error(error, field.loc);
         }
 
         let ty = self.symbol_type_id(most_concrete_id);
@@ -180,6 +189,13 @@ impl TypeChecker {
             ty = r.inner
         }
         self.symbols.find::<StructSymbolId, _>(|s| s.ty == ty)
+    }
+
+    pub(crate) fn is_visible(&self, symbol: SymbolId) -> bool {
+        if self.symbols.is_public(symbol) {
+            return true;
+        }
+        self.symbols.get_symbol(symbol).defined_at().module() == self.current_module()
     }
 
     fn method_matches(
