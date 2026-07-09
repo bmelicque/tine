@@ -5,9 +5,13 @@ use crate::{
 };
 
 impl Parser<'_> {
-    pub fn parse_enum(&mut self, docs: Option<ast::Docs>) -> ast::EnumDefinition {
-        let start_range = self.eat(&[Token::Enum]);
-        let start = self.localize(start_range);
+    pub fn parse_enum(
+        &mut self,
+        docs: Option<ast::Docs>,
+        pub_loc: Option<Location>,
+    ) -> ast::EnumDefinition {
+        let kw_range = self.eat(&[Token::Enum]);
+        let start = pub_loc.unwrap_or(self.localize(kw_range));
 
         let (name, params) = self.try_parse_type_name();
         self.expect(Token::LBrace);
@@ -18,6 +22,7 @@ impl Parser<'_> {
         ast::EnumDefinition {
             docs,
             loc: Location::merge(start, end),
+            public: pub_loc.is_some(),
             name,
             params,
             variants,

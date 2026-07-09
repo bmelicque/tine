@@ -11,7 +11,13 @@ use swc_ecma_ast as swc;
 impl CodeGenerator<'_, '_> {
     pub fn item_to_swc(&mut self, node: ir::Statement) -> Vec<swc::ModuleItem> {
         match node {
+            ir::Statement::Enum(e) => vec![self.enum_def_to_swc(e).into()],
+            ir::Statement::Function(f) => {
+                vec![self.handle_top_level_function(f)]
+            }
+            ir::Statement::Struct(s) => vec![self.struct_def_to_swc(s).into()],
             ir::Statement::Use(u) => vec![self.use_decl_to_swc(u).into()],
+            ir::Statement::Variable(node) => self.handle_top_level_declaration(node),
             stmt => self.stmt_to_swc(stmt).into_iter().map(Into::into).collect(),
         }
     }
@@ -60,5 +66,34 @@ impl CodeGenerator<'_, '_> {
             imported: Some(swc::ModuleExportName::Ident(id)),
             is_type_only: false,
         })
+    }
+
+    fn handle_top_level_function(&mut self, node: ir::FunctionDefinition) -> swc::ModuleItem {
+        match node.name.1 {
+            ir::FunctionName::Function(f) => {
+                let name = &self.symbols.get(f).name;
+                swc::ModuleItem::from(swc::FnDecl {
+                    ident: ident_from_str(name),
+                    declare: false,
+                    function: Box::new(self.handle_function(node.params, node.body)),
+                })
+            }
+            ir::FunctionName::StaticMethod(m) => self.handle_static_method(node, m).into(),
+        }
+    }
+
+    fn handle_top_level_declaration(
+        &mut self,
+        node: ir::VariableDeclaration,
+    ) -> Vec<swc::ModuleItem> {
+        let (stmts, decl) = self.declaration_helper(node);
+        let mut items = stmts.into_iter().map(Into::into).collect::<Vec<_>>();
+        items.push(swc::ModuleItem::ModuleDecl(swc::ModuleDecl::ExportDecl(
+            swc::ExportDecl {
+                span: DUMMY_SP,
+                decl,
+            },
+        )));
+        items
     }
 }

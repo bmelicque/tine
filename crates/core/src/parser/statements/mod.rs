@@ -30,13 +30,14 @@ impl Parser<'_> {
         match token {
             Token::Break => Some(self.parse_break_statement().into()),
             Token::Continue => Some(self.parse_continue_statement().into()),
-            Token::Enum => Some(self.parse_enum(docs).into()),
-            Token::Fn => Some(self.parse_function_definition(docs).into()),
+            Token::Enum => Some(self.parse_enum(docs, None).into()),
+            Token::Fn => Some(self.parse_function_definition(docs, None).into()),
             Token::Impl => Some(self.parse_implementations().into()),
-            Token::Let => Some(self.parse_variable_declaration(docs).into()),
+            Token::Let => Some(self.parse_variable_declaration(docs, None).into()),
+            Token::Pub => self.parse_pub(docs),
             Token::Return => Some(self.parse_return_statement().into()),
-            Token::Struct => Some(self.parse_struct_definition(docs).into()),
-            Token::Type => Some(self.parse_type_alias(docs).into()),
+            Token::Struct => Some(self.parse_struct_definition(docs, None).into()),
+            Token::Type => Some(self.parse_type_alias(docs, None).into()),
             _ => self.parse_assignment(),
         }
     }
@@ -55,6 +56,37 @@ impl Parser<'_> {
         ast::Docs {
             text,
             loc: self.localize(start..end),
+        }
+    }
+
+    fn parse_pub(&mut self, docs: Option<ast::Docs>) -> Option<ast::Statement> {
+        let start = self.eat(&[Token::Pub]);
+        let start = self.localize(start);
+
+        let tokens = [
+            Token::Enum,
+            Token::Fn,
+            Token::Let,
+            Token::Struct,
+            Token::Type,
+        ];
+
+        let token = match self.tokens.peek() {
+            Some((Ok(tok), r)) if tokens.contains(tok) => tok.to_owned(),
+            _ => {
+                self.recover_before(&tokens, &[Token::Newline]);
+                return None;
+            }
+        };
+
+        // TODO: peek next token
+        match token {
+            Token::Enum => Some(self.parse_enum(docs, Some(start)).into()),
+            Token::Fn => Some(self.parse_function_definition(docs, Some(start)).into()),
+            Token::Let => Some(self.parse_variable_declaration(docs, Some(start)).into()),
+            Token::Struct => Some(self.parse_struct_definition(docs, Some(start)).into()),
+            Token::Type => Some(self.parse_type_alias(docs, Some(start)).into()),
+            _ => unreachable!(),
         }
     }
 }

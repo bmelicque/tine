@@ -70,7 +70,7 @@ impl TypeChecker {
         let pattern_loc = pattern.loc();
 
         let (test, consequent) = self.with_scope(|self_| {
-            let pattern = self_.visit_pattern(pattern, &value, true)?;
+            let pattern = self_.visit_pattern(pattern, &value, true, false)?;
             let lowered = lower_pattern(pattern, value);
             let mut consequent = node.consequent.map(|c| self_.visit_block_expression(c));
             if let Some(ref mut consequent) = consequent {
@@ -118,7 +118,7 @@ impl TypeChecker {
                 .map(|e| ir::Expression::If(e).into()),
         }?;
         if let Some(expected) = expected {
-            if !self.can_be_assigned_to(alternate.ty, expected) {
+            if !self.can_be_assigned_to(alternate.ty, expected, true) {
                 let error = DiagnosticKind::MismatchedBranchTypes {
                     expected: self.types.display(expected),
                     got: self.types.display(alternate.ty),

@@ -76,7 +76,7 @@ impl TypeChecker {
         });
 
         let ((mut ty, body), params) = self.with_type_params(&node.params, |checker| {
-            checker.visit_type_body(body, owner_id.into())
+            checker.visit_type_body(body, owner_id.into(), false)
         });
         ty.set_params(params);
 
@@ -150,7 +150,7 @@ impl TypeChecker {
         };
         let body = variant
             .body
-            .map(|body| self.visit_type_body(body, owner.into()).1);
+            .map(|body| self.visit_type_body(body, owner.into(), true).1);
         let ty = self.symbol_type_id(owner);
 
         Some(self.symbols.insert(VariantSymbol {
@@ -168,10 +168,11 @@ impl TypeChecker {
         &mut self,
         body: ast::TypeBody,
         owner: TypeSymbolId,
+        is_enum: bool,
     ) -> (TypeBody, TypeSymbolBody) {
         match body {
-            ast::TypeBody::Struct(body) => self.visit_type_struct_body(body, owner),
-            ast::TypeBody::Tuple(body) => self.visit_type_tuple_body(body, owner),
+            ast::TypeBody::Struct(body) => self.visit_type_struct_body(body, owner, is_enum),
+            ast::TypeBody::Tuple(body) => self.visit_type_tuple_body(body, owner, is_enum),
         }
     }
 
@@ -179,11 +180,12 @@ impl TypeChecker {
         &mut self,
         body: ast::StructBody,
         owner: TypeSymbolId,
+        is_enum: bool,
     ) -> (TypeBody, TypeSymbolBody) {
         let symbols = body
             .fields
             .into_iter()
-            .filter_map(|field| self.visit_struct_definition_field(owner, field))
+            .filter_map(|field| self.visit_struct_definition_field(owner, field, is_enum))
             .collect::<Vec<_>>();
         let fields = symbols
             .iter()
@@ -211,10 +213,12 @@ impl TypeChecker {
         &mut self,
         owner: TypeSymbolId,
         field: ast::StructDefinitionField,
+        is_enum: bool,
     ) -> Option<MemberSymbolId> {
         let ty = self.visit_type(field.definition?);
         Some(self.symbols.insert(MemberSymbol {
             name: field.name?.text,
+            public: field.public || is_enum,
             ty,
             owner,
             defined_at: field.loc,
@@ -224,18 +228,20 @@ impl TypeChecker {
 
     fn visit_type_tuple_body(
         &mut self,
-        body: ast::TupleType,
+        body: ast::TupleBody,
         owner: TypeSymbolId,
+        is_enum: bool,
     ) -> (TypeBody, TypeSymbolBody) {
         let symbols = body
             .elements
             .into_iter()
             .enumerate()
-            .map(|(i, ty)| {
+            .map(|(i, (public, ty))| {
                 let loc = ty.loc();
                 let ty = self.visit_type(ty);
                 self.symbols.insert(MemberSymbol {
                     name: format!("_{}", i),
+                    public: public || is_enum,
                     ty,
                     owner,
                     defined_at: loc,
@@ -263,7 +269,9 @@ impl TypeChecker {
                     })
             }
             ast::TypeBody::Tuple(t) => {
-                self.visit_tuple_type(t);
+                t.elements.into_iter().for_each(|(_, ty)| {
+                    self.visit_type(ty);
+                });
             }
         }
     }

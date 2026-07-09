@@ -4,7 +4,7 @@ use enum_from_derive::EnumFrom;
 
 pub use crate::ast::statements::implementations::*;
 use crate::{
-    ast::{InvalidExpression, MemberExpression, TupleType},
+    ast::{InvalidExpression, MemberExpression},
     Location,
 };
 
@@ -41,6 +41,7 @@ pub struct VariableDeclaration {
     pub docs: Option<Docs>,
     /// This is the span of the actual declaration, and does not include the `docs` (if any)
     pub loc: Location,
+    pub public: bool,
     pub mutable: bool,
     pub pattern: Option<Pattern>,
     pub annotation: Option<Type>,
@@ -51,6 +52,7 @@ pub struct VariableDeclaration {
 pub struct TypeAlias {
     pub docs: Option<Docs>,
     pub loc: Location,
+    pub public: bool,
     pub name: Option<Identifier>,
     pub params: Option<Vec<Identifier>>,
     pub definition: Option<Type>,
@@ -60,6 +62,7 @@ pub struct TypeAlias {
 pub struct StructDefinition {
     pub docs: Option<Docs>,
     pub loc: Location,
+    pub public: bool,
     pub name: Option<Identifier>,
     pub params: Option<Vec<Identifier>>,
     pub body: Option<TypeBody>,
@@ -68,7 +71,7 @@ pub struct StructDefinition {
 #[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
 pub enum TypeBody {
     Struct(StructBody),
-    Tuple(TupleType),
+    Tuple(TupleBody),
 }
 
 impl TypeBody {
@@ -89,14 +92,23 @@ pub struct StructBody {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructDefinitionField {
     pub loc: Location,
+    pub public: bool,
     pub name: Option<Identifier>,
     pub definition: Option<Type>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TupleBody {
+    pub loc: Location,
+    /// (is_public, type)
+    pub elements: Vec<(bool, Type)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EnumDefinition {
     pub docs: Option<Docs>,
     pub loc: Location,
+    pub public: bool,
     pub name: Option<Identifier>,
     pub params: Option<Vec<Identifier>>,
     pub variants: Vec<VariantDefinition>,
@@ -169,6 +181,7 @@ impl From<Expression> for ExpressionStatement {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionDefinition {
     pub docs: Option<Docs>,
+    pub public: bool,
     pub definition: FunctionExpression,
 }
 

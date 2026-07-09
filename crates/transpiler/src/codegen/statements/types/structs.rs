@@ -17,8 +17,17 @@ impl CodeGenerator<'_, '_> {
 
         let get = self.make_struct_getter(&body_symbols);
         let set = self.make_setter(&body_symbols);
-        let constructor = self.struct_fields_to_swc_constructor(body_symbols);
-        let mut body = vec![constructor.into(), get.into(), set.into()];
+
+        let can_be_constructed = body_symbols
+            .iter()
+            .find(|s| !self.symbols.get(**s).public)
+            .is_none();
+        let mut body = if can_be_constructed {
+            let constructor = self.struct_fields_to_swc_constructor(body_symbols);
+            vec![constructor.into(), get.into(), set.into()]
+        } else {
+            vec![get.into(), set.into()]
+        };
 
         let methods = &self.symbols.get(node.symbol).methods;
         let child_classes = self.generate_concrete_classes(methods);

@@ -5,14 +5,21 @@ use crate::{
 };
 
 impl Parser<'_> {
-    pub fn parse_struct_definition(&mut self, docs: Option<ast::Docs>) -> ast::StructDefinition {
-        let start_range = self.eat(&[Token::Struct]);
-        let mut loc = self.localize(start_range);
+    pub fn parse_struct_definition(
+        &mut self,
+        docs: Option<ast::Docs>,
+        pub_loc: Option<Location>,
+    ) -> ast::StructDefinition {
+        let kw_range = self.eat(&[Token::Struct]);
+        let kw_loc = self.localize(kw_range);
+        let mut loc = pub_loc.map_or(kw_loc, |l| Location::merge(l, kw_loc));
+        let public = pub_loc.is_some();
 
         let Ok(type_name) = self.parse_type_name(&[Token::LBrace, Token::LParen]) else {
             return ast::StructDefinition {
                 docs,
                 loc,
+                public,
                 name: None,
                 params: None,
                 body: None,
@@ -30,6 +37,7 @@ impl Parser<'_> {
         ast::StructDefinition {
             docs,
             loc,
+            public,
             name: type_name.as_ref().map(|t| t.name.clone()),
             params: type_name.and_then(|t| t.params),
             body,
@@ -53,6 +61,7 @@ mod tests {
             expected: ast::Statement::StructDefinition(ast::StructDefinition {
                 docs: None,
                 loc: Location::new(0, Span::new(0, 13)),
+                public: false,
                 name: Some(ast::Identifier {
                     loc: Location::new(0, Span::new(7, 10)),
                     text: "Foo".to_string(),
@@ -93,6 +102,7 @@ mod tests {
                             },
                             args: None,
                         })),
+                        public: false,
                     }],
                 })),
                 ..Default::default()

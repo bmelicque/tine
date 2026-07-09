@@ -66,7 +66,9 @@ impl TypeChecker {
         &mut self,
         node: ast::FunctionDefinition,
     ) -> Option<ir::FunctionDefinition> {
-        let ast::FunctionDefinition { docs, definition } = node;
+        let ast::FunctionDefinition {
+            docs, definition, ..
+        } = node;
         let docs = docs.map(|d| d.text);
         let definition = self.visit_function_expression(definition, docs)?;
         Some(ir::FunctionDefinition {

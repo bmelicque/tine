@@ -144,7 +144,7 @@ impl TypeChecker {
                 body => {
                     let body = s.visit_expression(body);
                     if let Some(body) = &body {
-                        substitutions.unify(&mut s.types, return_type, body.ty(), body.loc());
+                        substitutions.unify(s, return_type, body.ty(), body.loc());
                     }
                     body.map(Into::into)
                 }
@@ -170,7 +170,7 @@ impl TypeChecker {
         substitutions: &mut Substitutions,
     ) -> Option<ir::Block> {
         let body_type = self.visit_block_expression(body);
-        substitutions.unify(&mut self.types, expected_type, body_type.ty, body_type.loc);
+        substitutions.unify(self, expected_type, body_type.ty, body_type.loc);
         let returns = body_type.find_returns();
         for ret in returns {
             let ty = ret.expression.as_ref().map_or(TypeStore::UNIT, |r| r.ty());

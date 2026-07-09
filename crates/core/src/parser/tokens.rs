@@ -32,6 +32,8 @@ pub enum Token {
     Match,
     #[token("mut")]
     Mut,
+    #[token("pub")]
+    Pub,
     #[token("return")]
     Return,
     #[token("struct")]
@@ -202,6 +204,7 @@ impl Token {
             Token::Let => "let".to_string(),
             Token::Match => "match".to_string(),
             Token::Mut => "mut".to_string(),
+            Token::Pub => "pub".to_string(),
             Token::Return => "return".to_string(),
             Token::Struct => "struct".to_string(),
             Token::Trait => "trait".to_string(),

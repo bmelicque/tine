@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     type_checker::type_store::{display_type, TypeStore},
     types::{self, Type, TypeId, TypeParam},
-    DiagnosticKind, Location,
+    DiagnosticKind, Location, TypeChecker,
 };
 
 pub type SubstitutionTable = HashMap<TypeParam, TypeId>;
@@ -56,19 +56,19 @@ impl Substitutions {
     /// the given concrete type.
     pub fn unify(
         &mut self,
-        store: &mut TypeStore,
+        tc: &mut TypeChecker,
         generic: TypeId,
         concrete: TypeId,
         loc: Location,
     ) {
-        let g = store.get(generic).clone();
-        let c = store.get(concrete).clone();
+        let g = tc.types.get(generic).clone();
+        let c = tc.types.get(concrete).clone();
         match (g, c) {
             (Type::Param(p), a) => {
                 match self.table.get(&p) {
                     Some(&p) => {
-                        if !store.can_assign_to(p, concrete) {
-                            self.push_mismatched(store, p, concrete);
+                        if !tc.can_be_assigned_to(concrete, p, true) {
+                            self.push_mismatched(&tc.types, p, concrete);
                         }
                     }
                     None => match &a {
@@ -80,7 +80,7 @@ impl Substitutions {
                 };
             }
             (Type::Array(e), Type::Array(a)) => {
-                self.unify(store, e.element, a.element, loc);
+                self.unify(tc, e.element, a.element, loc);
             }
             (Type::Function(e), Type::Function(a)) => {
                 if e.params.len() != a.params.len() {
@@ -88,25 +88,25 @@ impl Substitutions {
                     return;
                 }
                 for (e, a) in e.params.iter().zip(a.params.iter()) {
-                    self.unify(store, *e, *a, loc);
+                    self.unify(tc, *e, *a, loc);
                 }
-                self.unify(store, e.return_type, a.return_type, loc);
+                self.unify(tc, e.return_type, a.return_type, loc);
             }
             (Type::Listener(e), Type::Listener(a)) => {
-                self.unify(store, e.inner, a.inner, loc);
+                self.unify(tc, e.inner, a.inner, loc);
             }
             (Type::Map(e), Type::Map(a)) => {
-                self.unify(store, e.key, a.key, loc);
-                self.unify(store, e.value, a.value, loc);
+                self.unify(tc, e.key, a.key, loc);
+                self.unify(tc, e.value, a.value, loc);
             }
             (Type::Option(e), Type::Option(a)) => {
-                self.unify(store, e.some, a.some, loc);
+                self.unify(tc, e.some, a.some, loc);
             }
             (Type::Result(e), Type::Result(a)) => {
-                self.unify(store, e.ok, a.ok, loc);
+                self.unify(tc, e.ok, a.ok, loc);
                 match (&e.error, &a.error) {
                     (Some(e), Some(a)) => {
-                        self.unify(store, *e, *a, loc);
+                        self.unify(tc, *e, *a, loc);
                     }
                     (None, None) => {}
                     _ => {
@@ -115,14 +115,14 @@ impl Substitutions {
                 }
             }
             (Type::Signal(e), Type::Signal(a)) => {
-                self.unify(store, e.inner, a.inner, loc);
+                self.unify(tc, e.inner, a.inner, loc);
             }
             (Type::Tuple(e), Type::Tuple(a)) => {
                 if e.elements.len() != a.elements.len() {
                     self.mismatched_pairs.push((generic, concrete));
                 }
                 for (e, a) in e.elements.iter().zip(a.elements.iter()) {
-                    self.unify(store, *e, *a, loc);
+                    self.unify(tc, *e, *a, loc);
                 }
             }
             (e, a) => {

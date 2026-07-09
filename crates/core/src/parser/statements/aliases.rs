@@ -5,14 +5,21 @@ use crate::{
 };
 
 impl Parser<'_> {
-    pub fn parse_type_alias(&mut self, docs: Option<ast::Docs>) -> ast::TypeAlias {
-        let start_range = self.eat(&[Token::Type]);
-        let mut loc = self.localize(start_range);
+    pub fn parse_type_alias(
+        &mut self,
+        docs: Option<ast::Docs>,
+        pub_loc: Option<Location>,
+    ) -> ast::TypeAlias {
+        let kw_range = self.eat(&[Token::Struct]);
+        let kw_loc = self.localize(kw_range);
+        let mut loc = pub_loc.map_or(kw_loc, |l| Location::merge(l, kw_loc));
+        let public = pub_loc.is_some();
 
         let Ok(type_name) = self.parse_type_name(&[Token::Eq]) else {
             return ast::TypeAlias {
                 docs,
                 loc,
+                public,
                 name: None,
                 params: None,
                 definition: None,
@@ -39,6 +46,7 @@ impl Parser<'_> {
                 return ast::TypeAlias {
                     docs,
                     loc,
+                    public,
                     name,
                     params,
                     definition: None,
@@ -54,6 +62,7 @@ impl Parser<'_> {
         ast::TypeAlias {
             docs,
             loc,
+            public,
             name,
             params,
             definition,

@@ -46,7 +46,7 @@ impl TypeChecker {
         let Some((pattern, iterable, element)) = (|| {
             let (iterable, element_type) = self.visit_for_in_iterable(*node.iterable?);
             let iterable = iterable?;
-            let pattern = self.visit_pattern(node.pattern?, &iterable, true)?;
+            let pattern = self.visit_pattern(node.pattern?, &iterable, true, false)?;
             Some((pattern, iterable, element_type))
         })() else {
             node.body.map(|b| self.visit_block_expression(b));

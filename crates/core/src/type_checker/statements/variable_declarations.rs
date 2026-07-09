@@ -19,7 +19,7 @@ impl TypeChecker {
 
         let (mut stmts, value) = self.make_temp_var_if_needed(&pattern, value);
 
-        let Some(pattern) = self.visit_pattern(pattern, &value, true) else {
+        let Some(pattern) = self.visit_pattern(pattern, &value, true, node.public) else {
             return vec![];
         };
 

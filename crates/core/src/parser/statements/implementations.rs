@@ -65,6 +65,8 @@ impl Parser<'_> {
             _ => None,
         };
 
+        let public = self.eat_if(&[Token::Pub]).is_some();
+
         let Some((Ok(Token::Fn), _)) = self.tokens.peek() else {
             return None;
         };
@@ -87,6 +89,7 @@ impl Parser<'_> {
                 let mut method = ast::MethodDefinition {
                     docs,
                     loc,
+                    public,
                     ..Default::default()
                 };
                 method.copy_function(function.unwrap_or(ast::FunctionExpression {
@@ -101,7 +104,11 @@ impl Parser<'_> {
                 let mut definition = function.unwrap_or(ast::FunctionExpression::default());
                 definition.loc = loc;
                 Some(ast::ImplementationItem::StaticMethod(
-                    ast::FunctionDefinition { docs, definition },
+                    ast::FunctionDefinition {
+                        docs,
+                        public,
+                        definition,
+                    },
                 ))
             }
         }

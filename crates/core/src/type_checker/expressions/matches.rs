@@ -18,7 +18,7 @@ impl TypeChecker {
 
                 let pattern = scrutinee
                     .as_ref()
-                    .and_then(|s| self.visit_pattern(*arm.pattern?, s, true));
+                    .and_then(|s| self.visit_pattern(*arm.pattern?, s, true, false));
 
                 Some((pattern?, expression))
             })

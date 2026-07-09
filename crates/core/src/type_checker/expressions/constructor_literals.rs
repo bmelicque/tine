@@ -260,6 +260,10 @@ impl TypeChecker {
             self.error(error, key.loc);
             return None;
         };
+        if !self.is_visible(symbol.into()) {
+            let error = DiagnosticKind::FieldIsPrivate(key.text.clone());
+            self.error(error, field.loc);
+        }
         encountered_field_names.insert(key.as_str().to_string());
 
         let value = field.value.and_then(|v| {

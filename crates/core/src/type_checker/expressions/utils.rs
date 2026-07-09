@@ -13,12 +13,7 @@ impl TypeChecker {
         got_immutable: bool,
         loc: Location,
     ) {
-        let ok = self.can_be_assigned_to(got, expected)
-            && (!got_immutable
-                || match self.resolve(expected) {
-                    types::Type::Trait(t) => self.immutable_implements_trait(got, &t),
-                    _ => true,
-                });
+        let ok = self.can_be_assigned_to(got, expected, got_immutable);
 
         if !ok {
             let got = self.types.display(got);
@@ -65,7 +60,7 @@ impl TypeChecker {
         let loc = node.loc();
         let got = self.visit_expression(node);
         if let Some(got) = &got {
-            substitutions.unify(&mut self.types, expected, got.ty(), loc);
+            substitutions.unify(self, expected, got.ty(), loc);
         }
         got
     }

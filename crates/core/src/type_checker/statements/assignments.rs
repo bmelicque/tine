@@ -35,7 +35,7 @@ impl TypeChecker {
                     value,
                 }));
 
-                let pattern = self.visit_pattern(pattern, &id, false);
+                let pattern = self.visit_pattern(pattern, &id, false, false);
                 let Some(pattern) = pattern else {
                     return vec![];
                 };
