@@ -102,6 +102,7 @@ mod tests {
                             },
                             args: None,
                         })),
+                        public: false,
                     }],
                 })),
                 ..Default::default()

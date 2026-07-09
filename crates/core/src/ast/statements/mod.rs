@@ -4,7 +4,7 @@ use enum_from_derive::EnumFrom;
 
 pub use crate::ast::statements::implementations::*;
 use crate::{
-    ast::{InvalidExpression, MemberExpression, TupleType},
+    ast::{InvalidExpression, MemberExpression},
     Location,
 };
 
@@ -71,7 +71,7 @@ pub struct StructDefinition {
 #[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
 pub enum TypeBody {
     Struct(StructBody),
-    Tuple(TupleType),
+    Tuple(TupleBody),
 }
 
 impl TypeBody {
@@ -92,8 +92,16 @@ pub struct StructBody {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructDefinitionField {
     pub loc: Location,
+    pub public: bool,
     pub name: Option<Identifier>,
     pub definition: Option<Type>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TupleBody {
+    pub loc: Location,
+    /// (is_public, type)
+    pub elements: Vec<(bool, Type)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -76,7 +76,7 @@ impl Parser<'_> {
     pub(super) fn parse_type_body(&mut self) -> Option<ast::TypeBody> {
         match self.tokens.peek() {
             Some((Ok(Token::LBrace), _)) => Some(self.parse_struct_body().into()),
-            Some((Ok(Token::LParen), _)) => Some(self.parse_tuple_type().into()),
+            Some((Ok(Token::LParen), _)) => Some(self.parse_tuple_body().into()),
             _ => return None,
         }
     }
@@ -96,8 +96,16 @@ impl Parser<'_> {
     }
 
     fn parse_struct_definition_field(&mut self) -> Option<ast::StructDefinitionField> {
+        let pub_loc = match self.tokens.peek() {
+            Some((Ok(Token::Pub), _)) => {
+                let r = self.eat(&[Token::Pub]);
+                Some(self.localize(r))
+            }
+            _ => None,
+        };
+
         let name = match self.tokens.peek() {
-            Some((Ok(Token::Ident(_)), _)) => Some(self.parse_identifier()),
+            Some((Ok(Token::Ident(_)), _)) => self.parse_identifier(),
             _ => return None,
         };
 
@@ -107,9 +115,10 @@ impl Parser<'_> {
         );
         if let Err(_) = colon {
             return Some(ast::StructDefinitionField {
-                loc: name.as_ref().unwrap().loc,
-                name,
+                loc: pub_loc.map_or(name.loc, |l| Location::merge(l, name.loc)),
+                name: Some(name),
                 definition: None,
+                public: pub_loc.is_some(),
             });
         }
 
@@ -119,17 +128,44 @@ impl Parser<'_> {
             self.error(DiagnosticKind::MissingType, loc);
         }
 
-        let loc = match (&name, &definition) {
-            (Some(name), Some(def)) => Location::merge(name.loc, def.loc()),
-            (Some(name), None) => name.loc,
-            (None, Some(def)) => def.loc(),
+        let loc = match (pub_loc, &definition) {
+            (Some(p), Some(def)) => Location::merge(p, def.loc()),
+            (Some(p), None) => Location::merge(p, name.loc),
+            (None, Some(def)) => Location::merge(name.loc, def.loc()),
             _ => return None,
         };
 
         Some(ast::StructDefinitionField {
             loc,
-            name,
+            name: Some(name),
             definition,
+            public: pub_loc.is_some(),
         })
+    }
+
+    fn parse_tuple_body(&mut self) -> ast::TupleBody {
+        let start_range = self.eat(&[Token::LParen]);
+
+        let elements = self.parse_list(
+            |parser| parser.parse_tuple_body_element(),
+            Token::Comma,
+            Token::RParen,
+        );
+
+        let end_range = match self.tokens.peek() {
+            Some((Ok(Token::RParen), r)) => r.clone(),
+            _ => self.recover_at(&[Token::RParen]),
+        };
+
+        ast::TupleBody {
+            loc: self.localize(start_range.start..end_range.end),
+            elements,
+        }
+    }
+
+    fn parse_tuple_body_element(&mut self) -> Option<(bool, ast::Type)> {
+        let is_public = self.eat_if(&[Token::Pub]).is_some();
+        let ty = self.parse_type()?;
+        Some((is_public, ty))
     }
 }
