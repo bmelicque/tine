@@ -122,6 +122,7 @@ pub enum TypeSymbol {
 #[derive(Debug, Default, Clone)]
 pub struct VariableSymbol {
     pub name: String,
+    pub public: bool,
     pub mutable: bool,
     pub ty: TypeId,
     pub docs: Option<String>,
@@ -135,6 +136,7 @@ pub struct VariableSymbol {
 #[derive(Clone, Debug, Default)]
 pub struct FunctionSymbol {
     pub name: String,
+    pub public: bool,
     // This is expected to have the same length as the function type's params.
     pub param_names: Vec<String>,
     pub ty: TypeId,
@@ -146,6 +148,7 @@ pub struct FunctionSymbol {
 #[derive(Clone, Debug, Default)]
 pub struct PrimitiveTypeSymbol {
     pub name: String,
+    pub public: bool,
     pub methods: Vec<MethodSymbolId>,
     pub ty: TypeId,
     pub docs: Option<String>,
@@ -156,6 +159,7 @@ pub struct PrimitiveTypeSymbol {
 #[derive(Clone, Debug, Default)]
 pub struct TypeAliasSymbol {
     pub name: String,
+    pub public: bool,
     pub ty: TypeId,
     pub docs: Option<String>,
     pub defined_at: Location,
@@ -165,6 +169,7 @@ pub struct TypeAliasSymbol {
 #[derive(Clone, Debug, Default)]
 pub struct StructSymbol {
     pub name: String,
+    pub public: bool,
     pub body: TypeSymbolBody,
     pub methods: Vec<MethodSymbolId>,
     pub ty: TypeId,
@@ -176,6 +181,7 @@ pub struct StructSymbol {
 #[derive(Clone, Debug, Default)]
 pub struct EnumSymbol {
     pub name: String,
+    pub public: bool,
     /// All the variants of the enum.
     /// This should only contain `Constructor` symbols
     pub variants: Vec<VariantSymbolId>,
@@ -202,6 +208,7 @@ pub struct VariantSymbol {
 #[derive(Clone, Debug, Default)]
 pub struct MemberSymbol {
     pub name: String,
+    pub public: bool,
     /// The type definition of the struct owning this member.
     pub owner: TypeSymbolId,
     pub ty: TypeId,
@@ -213,6 +220,7 @@ pub struct MemberSymbol {
 #[derive(Clone, Debug, Default)]
 pub struct MethodSymbol {
     pub name: String,
+    pub public: bool,
     /// The type definition of the type owning this.
     pub owner: TypeSymbolId,
     /// All the type arguments on the receiver.

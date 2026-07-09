@@ -139,6 +139,7 @@ pub enum DiagnosticKind {
         type_name: String,
     },
     ParseError(String),
+    PubMut,
     RefToConstant {
         name: String,
     },
@@ -344,6 +345,7 @@ impl Display for DiagnosticKind {
             Self::RefutablePatternExpected => {
                 write!(f, "expected refutable pattern")
             }
+            Self::PubMut => write!(f, "cannot declare variables that are both public and mutable"),
             Self::RefToConstant { name } => write!(
                 f,
                 "cannot take mutable reference of constant variable `{}`",

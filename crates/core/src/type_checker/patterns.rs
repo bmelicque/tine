@@ -197,6 +197,7 @@ macro_rules! impl_pattern {
 
 #[derive(Debug, Clone)]
 pub struct IdentifierPattern {
+    pub pub_kw: bool,
     pub mut_kw: bool,
     pub name: String,
     pub identifier: ir::Identifier,
@@ -287,6 +288,7 @@ impl_pattern!(TuplePattern, Tuple, as_tuple);
 
 pub(super) struct PatternVisitor<'deps, 'tc> {
     pub(super) is_declaration: bool,
+    pub(super) is_public: bool,
     /// All the dependencies of the expression the pattern is matched against
     pub(super) dependencies: &'deps [ir::Identifier],
     pub(super) tc: &'tc mut TypeChecker,
@@ -467,6 +469,7 @@ fn visit_identifier_pattern(
 
     Some(Identifier(IdentifierPattern {
         mut_kw: mutable,
+        pub_kw: visitor.is_public,
         name,
         identifier,
     }))
@@ -479,6 +482,9 @@ pub fn declare_variable(
     mutable: bool,
 ) -> Option<VariableSymbolId> {
     visitor.tc.check_identifier_sanity(&identifier);
+    if mutable && visitor.is_public {
+        visitor.tc.error(DiagnosticKind::PubMut, identifier.loc);
+    }
 
     let in_current_scope = visitor.tc.current_scope().lookup(identifier.as_str());
     match in_current_scope {
@@ -503,6 +509,7 @@ pub fn declare_variable(
             let symbol: VariableSymbolId = visitor.tc.symbols.insert(VariableSymbol {
                 name: identifier.as_str().to_string(),
                 ty,
+                public: visitor.is_public,
                 mutable,
                 defined_at: identifier.loc,
                 dependencies,
@@ -568,6 +575,7 @@ impl TypeChecker {
         pattern: ast::Pattern,
         against: &ir::Expression,
         is_declaration: bool,
+        is_public: bool,
     ) -> Option<Pattern> {
         let expected_type = against.ty();
         let dependencies = self.dependencies(against).cloned().collect::<Vec<_>>();
@@ -575,6 +583,7 @@ impl TypeChecker {
             tc: self,
             dependencies: &dependencies,
             is_declaration,
+            is_public,
         };
         visit_pattern(pattern, &mut visitor, expected_type)
     }

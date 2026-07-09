@@ -104,6 +104,7 @@ impl TypeChecker {
                     .and_then(|i| {
                         let mut visitor = PatternVisitor {
                             is_declaration: true,
+                            is_public: false,
                             dependencies: &vec![],
                             tc: s,
                         };
