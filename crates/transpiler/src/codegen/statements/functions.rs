@@ -28,7 +28,7 @@ impl CodeGenerator<'_, '_> {
         }))
     }
 
-    fn handle_static_method(
+    pub fn handle_static_method(
         &mut self,
         node: ir::FunctionDefinition,
         name: MethodSymbolId,
@@ -56,7 +56,7 @@ impl CodeGenerator<'_, '_> {
         })
     }
 
-    fn handle_function(
+    pub fn handle_function(
         &mut self,
         params: Vec<(Location, VariableSymbolId)>,
         body: ir::Block,

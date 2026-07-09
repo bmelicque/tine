@@ -182,6 +182,16 @@ impl CodeGenerator<'_, '_> {
     }
 
     fn handle_declaration(&mut self, node: ir::VariableDeclaration) -> Vec<swc::Stmt> {
+        let (mut stmts, decl) = self.declaration_helper(node);
+        stmts.push(swc::Stmt::Decl(decl));
+
+        stmts
+    }
+
+    pub fn declaration_helper(
+        &mut self,
+        node: ir::VariableDeclaration,
+    ) -> (Vec<swc::Stmt>, swc::Decl) {
         let kind = if node.mutable {
             swc::VarDeclKind::Let
         } else {
@@ -189,12 +199,12 @@ impl CodeGenerator<'_, '_> {
         };
 
         let expr_result = self.handle_expression(node.value);
-        let mut stmts = expr_result.prelim_stmts;
+        let stmts = expr_result.prelim_stmts;
 
         let expr = expr_result.expr;
 
         let name = &self.symbols.get(node.symbol).name;
-        stmts.push(swc::Stmt::Decl(swc::Decl::Var(Box::new(swc::VarDecl {
+        let decl = swc::Decl::Var(Box::new(swc::VarDecl {
             span: DUMMY_SP,
             ctxt: SyntaxContext::empty(),
             kind,
@@ -205,8 +215,8 @@ impl CodeGenerator<'_, '_> {
                 init: Some(Box::new(expr)),
                 definite: false,
             }],
-        }))));
+        }));
 
-        stmts
+        (stmts, decl)
     }
 }
