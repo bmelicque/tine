@@ -1,4 +1,5 @@
-use tine_core::{symbols::*, type_store::TypeStore, types};
+use tine_symbols::{symbols::*, table::SymbolTable};
+use tine_types::{store::TypeStore, types};
 
 pub struct SemanticsChecker<'ty, 'sym> {
     types: &'ty TypeStore,

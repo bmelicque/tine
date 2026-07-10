@@ -9,11 +9,9 @@
 
 use std::collections::HashMap;
 
-use tine_core::{
-    ir,
-    symbols::{SymbolId, SymbolTable},
-    Location,
-};
+use tine_common::locations::Location;
+use tine_ir as ir;
+use tine_symbols::{symbols::SymbolId, table::SymbolTable};
 
 /// A single use of a variable, with relevant context information.
 #[derive(Debug, Default, Clone, Copy)]

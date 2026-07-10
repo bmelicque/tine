@@ -1,0 +1,10 @@
+[package]
+name = "tine_ast"
+version = "0.0.2"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+tine_common = { path = "../common" }
+enum_from_derive = { path = "../enum_from_derive" }
+ordered-float = "5.0.0"

@@ -1,5 +1,5 @@
 use swc_common::DUMMY_SP;
-use tine_core::ir;
+use tine_ir as ir;
 
 use crate::codegen::{
     expressions::{

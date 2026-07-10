@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
-use tine_core::{symbols::MethodSymbolId, types::TypeId};
+use tine_symbols::symbols::MethodSymbolId;
+use tine_types::types::TypeId;
 
 use crate::codegen::{utils::args_to_string, CodeGenerator};
 

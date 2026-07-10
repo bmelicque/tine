@@ -1,13 +1,13 @@
 use crate::cli::BuildArgs;
 use std::{fs, path::PathBuf};
-use tine_core::{ModulePath, pretty_print_error};
+use tine_common::{module_path::ModulePath, utils::pretty_print_error};
 use tine_transpiler::{self, SwcLoader};
 
 pub fn run(args: BuildArgs) {
     let path_buf = PathBuf::from(args.input).canonicalize().unwrap();
     let module_path = ModulePath::from(&path_buf);
-    let project_result = tine_core::parse_project(module_path.clone(), None);
-    let check_result = tine_core::check_project(project_result);
+    let project_result = tine_parser::parse_project(module_path.clone(), None);
+    let check_result = tine_checker::check_project(project_result);
     if !check_result.diagnostics.is_empty() {
         for (module_id, diagnostics) in check_result.diagnostics {
             let src = &check_result.sources[&module_id];

@@ -5,7 +5,7 @@ use crate::codegen::{
 };
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
-use tine_core::ir;
+use tine_ir as ir;
 
 impl CodeGenerator<'_, '_> {
     pub fn handle_assignment(&mut self, node: ir::Assignment) -> Vec<swc::Stmt> {

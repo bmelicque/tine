@@ -6,7 +6,7 @@ use swc_ecma_codegen::Node;
 use swc_ecma_minifier::{optimize, option::MinifyOptions};
 use swc_ecma_transforms::resolver;
 use swc_ecma_visit::VisitMutWith;
-use tine_core::ModulePath;
+use tine_common::module_path::ModulePath;
 
 use crate::bundler::{SwcLoader, SwcResolver};
 

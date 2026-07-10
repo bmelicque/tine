@@ -4,7 +4,13 @@ use crate::{
 };
 use std::{collections::HashMap, sync::Arc};
 use swc_common::{FileName, SourceMap};
-use tine_core::{ir, symbols::SymbolTable, type_store::TypeStore, ModuleId, ModulePath, Source};
+use tine_common::{
+    module_path::{ModuleId, ModulePath},
+    sources::Source,
+};
+use tine_ir as ir;
+use tine_symbols::table::SymbolTable;
+use tine_types::store::TypeStore;
 
 pub struct SwcLoader {
     pub sources: HashMap<ModuleId, Source>,

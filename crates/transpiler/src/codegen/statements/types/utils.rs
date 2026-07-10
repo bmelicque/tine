@@ -1,9 +1,7 @@
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
-use tine_core::{
-    symbols::*,
-    types::{self, TypeId},
-};
+use tine_symbols::symbols::*;
+use tine_types::types;
 
 use crate::codegen::{
     statements::{assignments::assignment, utils::declare_const},
@@ -37,7 +35,12 @@ impl CodeGenerator<'_, '_> {
             .collect()
     }
 
-    pub(crate) fn set_field(&mut self, target: swc::Expr, src: swc::Expr, ty: TypeId) -> swc::Stmt {
+    pub(crate) fn set_field(
+        &mut self,
+        target: swc::Expr,
+        src: swc::Expr,
+        ty: types::TypeId,
+    ) -> swc::Stmt {
         match self.resolve(ty).clone() {
             types::Type::Array(a) => self.set_array_field(target, src, a).into(),
             types::Type::Param(_) => assignment(

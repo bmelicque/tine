@@ -1,9 +1,9 @@
 use swc_common::DUMMY_SP;
-use tine_core::{ir, type_store::TypeStore};
+use swc_ecma_ast as swc;
+use tine_ir as ir;
+use tine_types::store::TypeStore;
 
 use crate::codegen::{expressions::ExpressionResult, CodeGenerator};
-
-use swc_ecma_ast as swc;
 
 impl CodeGenerator<'_, '_> {
     pub fn handle_binary_expression(&mut self, node: ir::BinaryExpression) -> ExpressionResult {

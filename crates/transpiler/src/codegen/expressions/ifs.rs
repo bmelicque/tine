@@ -8,7 +8,7 @@ use crate::codegen::{
 };
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
-use tine_core::ir;
+use tine_ir as ir;
 
 impl CodeGenerator<'_, '_> {
     pub fn handle_if_expression(&mut self, node: ir::IfExpression) -> ExpressionResult {
@@ -57,7 +57,9 @@ impl CodeGenerator<'_, '_> {
 mod tests {
     use super::*;
     use swc_ecma_ast as swc;
-    use tine_core::{symbols::SymbolTable, type_store::TypeStore, Location, ModulePath};
+    use tine_common::{locations::Location, module_path::ModulePath};
+    use tine_symbols::table::SymbolTable;
+    use tine_types::store::TypeStore;
 
     fn mock_expr() -> ir::Expression {
         ir::Expression::IntLiteral(ir::IntLiteral {

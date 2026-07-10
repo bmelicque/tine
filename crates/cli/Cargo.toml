@@ -7,5 +7,7 @@ edition = "2024"
 anyhow = "1.0.100"
 clap = { version = "4", features = ["derive"] }
 
-tine_core = { path = "../core" }
+tine_common = { path = "../common" }
+tine_parser = { path = "../parser" }
+tine_checker = { path = "../checker" }
 tine_transpiler = { path = "../transpiler" }

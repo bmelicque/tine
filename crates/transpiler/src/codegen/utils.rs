@@ -2,12 +2,9 @@ use std::collections::{HashMap, HashSet};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-use tine_core::{
-    ir,
-    symbols::SymbolId,
-    type_store::TypeStore,
-    types::{self, TypeId},
-};
+use tine_ir as ir;
+use tine_symbols::symbols::*;
+use tine_types::{store::TypeStore, types};
 
 use super::CodeGenerator;
 
@@ -142,7 +139,7 @@ pub fn can_ifexpr_be_inlined(expr: &ir::IfExpression) -> bool {
     }
 }
 
-pub fn is_primitive(ty: TypeId) -> bool {
+pub fn is_primitive(ty: types::TypeId) -> bool {
     match ty {
         TypeStore::BOOLEAN
         | TypeStore::FLOAT
@@ -218,7 +215,7 @@ impl CodeGenerator<'_, '_> {
 
 /// Convert a `Vec<TypeId>` into a unique `String` that will not collide with
 /// user-defined names
-pub fn args_to_string(args: &[TypeId]) -> String {
+pub fn args_to_string(args: &[types::TypeId]) -> String {
     let str = args
         .into_iter()
         .map(|a| a.to_string())

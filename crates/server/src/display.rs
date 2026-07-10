@@ -1,6 +1,6 @@
-use tine_core::{
-    symbols::*,
-    type_store::{display_raw_type, display_type, TypeStore},
+use tine_symbols::symbols::*;
+use tine_types::{
+    store::{display_raw_type, display_type, TypeStore},
     types::{FunctionType, Type, TypeId},
 };
 

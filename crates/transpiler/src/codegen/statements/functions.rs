@@ -5,7 +5,9 @@ use crate::codegen::{
 };
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
-use tine_core::{ir, symbols::*, Location};
+use tine_common::locations::Location;
+use tine_ir as ir;
+use tine_symbols::symbols::*;
 
 impl CodeGenerator<'_, '_> {
     pub fn handle_function_definition(&mut self, node: ir::FunctionDefinition) -> swc::Stmt {

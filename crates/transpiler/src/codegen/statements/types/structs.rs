@@ -1,6 +1,7 @@
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
-use tine_core::{ir, symbols::*};
+use tine_ir as ir;
+use tine_symbols::symbols::*;
 
 use crate::codegen::{
     statements::types::utils::this_assignment, utils::ident_from_str, CodeGenerator,

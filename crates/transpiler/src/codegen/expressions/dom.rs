@@ -1,13 +1,12 @@
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
+use tine_ir as ir;
 
 use crate::codegen::{
     expressions::ExpressionResult,
     utils::{create_str, ident_from_str, std_method_call},
     CodeGenerator,
 };
-
-use tine_core::ir;
 
 impl CodeGenerator<'_, '_> {
     pub fn handle_element_expression(&mut self, node: ir::ElementExpression) -> ExpressionResult {

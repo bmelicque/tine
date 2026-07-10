@@ -1,0 +1,34 @@
+use tine_ast as ast;
+use tine_common::locations::Location;
+
+use crate::{tokens::Token, Parser};
+
+impl Parser<'_> {
+    pub fn parse_return_statement(&mut self) -> ast::ReturnStatement {
+        let kw_range = self.eat(&[Token::Return]);
+        let mut loc = self.localize(kw_range);
+        let value = self.parse_expression().map(|v| Box::new(v));
+        if let Some(value) = &value {
+            loc = Location::merge(loc, value.loc());
+        }
+
+        ast::ReturnStatement { loc, value }
+    }
+
+    pub fn parse_break_statement(&mut self) -> ast::BreakStatement {
+        let kw_range = self.eat(&[Token::Break]);
+        let mut loc = self.localize(kw_range);
+        let value = self.parse_expression().map(|v| Box::new(v));
+        if let Some(value) = &value {
+            loc = Location::merge(loc, value.loc());
+        }
+
+        ast::BreakStatement { loc, value }
+    }
+
+    pub fn parse_continue_statement(&mut self) -> ast::ContinueStatement {
+        let kw_range = self.eat(&[Token::Continue]);
+        let loc = self.localize(kw_range);
+        ast::ContinueStatement { loc }
+    }
+}

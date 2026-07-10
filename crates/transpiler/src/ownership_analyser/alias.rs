@@ -16,9 +16,11 @@
 use std::collections::HashMap;
 use std::usize;
 
-use tine_core::symbols::{SymbolId, SymbolTable, VariableSymbolId};
-use tine_core::type_store::TypeStore;
-use tine_core::{ir, Location};
+use tine_common::locations::Location;
+use tine_ir as ir;
+use tine_symbols::symbols::*;
+use tine_symbols::table::SymbolTable;
+use tine_types::store::TypeStore;
 
 use super::liveness::UseSites;
 use super::semantics::SemanticsChecker;

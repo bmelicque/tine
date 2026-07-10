@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use swc_common::FileName;
-use tine_core::ModulePath;
+use tine_common::module_path::ModulePath;
 
 /// Compute a relative path from `base` to `path`.
 /// Works even if `path` is outside of `base` (e.g. gives `../../other/file`).

@@ -1,10 +1,8 @@
 use std::collections::HashMap;
 
-use tine_core::{
-    symbols::SymbolId,
-    types::{Type, TypeId},
-    ModuleId, Source,
-};
+use tine_common::{module_path::ModuleId, sources::Source};
+use tine_symbols::symbols::*;
+use tine_types::types::{Type, TypeId};
 use tower_lsp::lsp_types::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
 
 use crate::Backend;

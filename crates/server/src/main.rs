@@ -8,10 +8,14 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use tine_core::symbols::SymbolTable;
-use tine_core::type_store::TypeStore;
-use tine_core::{Diagnostic as ParserDiagnostic, ModulePath};
-use tine_core::{ModuleId, Source, Span};
+use tine_common::{
+    diagnostics::Diagnostic as ParserDiagnostic,
+    locations::Span,
+    module_path::{ModuleId, ModulePath},
+    sources::Source,
+};
+use tine_symbols::table::SymbolTable;
+use tine_types::store::TypeStore;
 use tower_lsp::Client;
 use tower_lsp::{lsp_types::*, LspService, Server};
 use url::Url;
@@ -64,8 +68,8 @@ impl Backend {
 
         let module_path = ModulePath::from(&entry_path);
         let loader = self.loader();
-        let parse_result = tine_core::parse_project(module_path.clone(), Some(Box::new(loader)));
-        let result = tine_core::check_project(parse_result);
+        let parse_result = tine_parser::parse_project(module_path.clone(), Some(Box::new(loader)));
+        let result = tine_checker::check_project(parse_result);
         {
             let mut types = self.types.write().unwrap();
             *types = result.types;

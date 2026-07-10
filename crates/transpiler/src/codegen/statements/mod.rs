@@ -8,7 +8,7 @@ use crate::codegen::expressions::ExpressionResult;
 use super::{utils::ident_from_str, CodeGenerator};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
-use tine_core::ir;
+use tine_ir as ir;
 
 impl CodeGenerator<'_, '_> {
     pub fn stmt_to_swc(&mut self, node: ir::Statement) -> Vec<swc::Stmt> {

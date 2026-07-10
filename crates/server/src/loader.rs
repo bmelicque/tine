@@ -4,7 +4,8 @@ use std::{
     fs,
     sync::{Arc, RwLock},
 };
-use tine_core::{Loader, ModulePath};
+use tine_common::module_path::ModulePath;
+use tine_parser::Loader;
 use url::Url;
 
 pub type OpenFiles = Arc<RwLock<HashMap<Url, String>>>;

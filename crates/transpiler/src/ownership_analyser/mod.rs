@@ -3,12 +3,13 @@ mod liveness;
 mod ownership;
 mod semantics;
 
-use tine_core::{ir, symbols::SymbolTable, type_store::TypeStore};
-
 pub use ownership::{OwnershipAction, OwnershipMap};
+use tine_ir::Program;
+use tine_symbols::table::SymbolTable;
+use tine_types::store::TypeStore;
 
 pub fn analyse_program(
-    program: &ir::Program,
+    program: &Program,
     types: &TypeStore,
     symbols: &SymbolTable,
 ) -> OwnershipMap {

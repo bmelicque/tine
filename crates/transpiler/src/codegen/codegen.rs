@@ -4,12 +4,10 @@ use crate::{
 };
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
-use tine_core::{
-    ir,
-    symbols::{SymbolId, SymbolTable, VariableSymbolId},
-    type_store::TypeStore,
-    types, ModulePath,
-};
+use tine_common::module_path::ModulePath;
+use tine_ir as ir;
+use tine_symbols::{symbols::*, table::SymbolTable};
+use tine_types::{store::TypeStore, types};
 
 pub struct CodeGenerator<'ty, 'sym> {
     _source_map: Lrc<SourceMap>,

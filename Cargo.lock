@@ -1870,23 +1870,69 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
+name = "tine_ast"
+version = "0.0.2"
+dependencies = [
+ "enum_from_derive",
+ "ordered-float",
+ "tine_common",
+]
+
+[[package]]
+name = "tine_checker"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "enum_from_derive",
+ "ordered-float",
+ "tine_ast",
+ "tine_common",
+ "tine_ir",
+ "tine_parser",
+ "tine_symbols",
+ "tine_types",
+]
+
+[[package]]
 name = "tine_cli"
 version = "0.0.1"
 dependencies = [
  "anyhow",
  "clap",
- "tine_core",
+ "tine_checker",
+ "tine_common",
+ "tine_parser",
  "tine_transpiler",
 ]
 
 [[package]]
-name = "tine_core"
+name = "tine_common"
 version = "0.0.2"
 dependencies = [
- "anyhow",
  "enum_from_derive",
+]
+
+[[package]]
+name = "tine_ir"
+version = "0.0.1"
+dependencies = [
+ "enum_from_derive",
+ "ordered-float",
+ "tine_ast",
+ "tine_common",
+ "tine_symbols",
+ "tine_types",
+]
+
+[[package]]
+name = "tine_parser"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
  "logos",
  "ordered-float",
+ "tine_ast",
+ "tine_common",
 ]
 
 [[package]]
@@ -1896,10 +1942,23 @@ dependencies = [
  "anyhow",
  "dashmap 6.1.0",
  "swc_common",
- "tine_core",
+ "tine_checker",
+ "tine_common",
+ "tine_parser",
+ "tine_symbols",
+ "tine_types",
  "tokio",
  "tower-lsp",
  "url",
+]
+
+[[package]]
+name = "tine_symbols"
+version = "0.0.1"
+dependencies = [
+ "enum_from_derive",
+ "tine_common",
+ "tine_types",
 ]
 
 [[package]]
@@ -1918,7 +1977,18 @@ dependencies = [
  "swc_ecma_parser",
  "swc_ecma_transforms",
  "swc_ecma_visit",
- "tine_core",
+ "tine_checker",
+ "tine_common",
+ "tine_ir",
+ "tine_symbols",
+ "tine_types",
+]
+
+[[package]]
+name = "tine_types"
+version = "0.0.1"
+dependencies = [
+ "tine_common",
 ]
 
 [[package]]

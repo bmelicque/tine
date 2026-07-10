@@ -12,7 +12,11 @@ use crate::{
 };
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
-use tine_core::{ir, substitutions::Substitutions, symbols::*, types, Location};
+use tine_checker::substitutions::Substitutions;
+use tine_common::locations::Location;
+use tine_ir as ir;
+use tine_symbols::symbols::*;
+use tine_types::types;
 
 pub struct ExpressionResult {
     /// All the the statements needed to be ran before actually evaluating the expression

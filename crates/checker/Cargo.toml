@@ -1,0 +1,16 @@
+[package]
+name = "tine_checker"
+version = "0.0.1"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+anyhow = "1.0.100"
+enum_from_derive = { path = "../enum_from_derive" }
+ordered-float = "5.0.0"
+tine_ast = { path = "../ast" }
+tine_common = { path = "../common" }
+tine_ir = { path = "../ir" }
+tine_parser = { path = "../parser" }
+tine_symbols = { path = "../symbols" }
+tine_types = { path = "../types" }

@@ -13,9 +13,10 @@
 
 use std::collections::HashMap;
 
-use tine_core::symbols::SymbolTable;
-use tine_core::type_store::TypeStore;
-use tine_core::{ir, Location};
+use tine_common::locations::Location;
+use tine_ir as ir;
+use tine_symbols::table::SymbolTable;
+use tine_types::store::TypeStore;
 
 use super::alias::AliasMap;
 use super::liveness::UseSites;

@@ -3,10 +3,10 @@ use crate::{
     utils::{make_relative, modulepath_to_filename},
 };
 
-use tine_core::{ir, ModulePath};
-
 use swc_common::{FileName, DUMMY_SP};
 use swc_ecma_ast as swc;
+use tine_common::module_path::ModulePath;
+use tine_ir as ir;
 
 impl CodeGenerator<'_, '_> {
     pub fn item_to_swc(&mut self, node: ir::Statement) -> Vec<swc::ModuleItem> {

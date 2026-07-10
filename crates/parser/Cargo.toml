@@ -1,0 +1,12 @@
+[package]
+name = "tine_parser"
+version = "0.0.1"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+tine_ast = { path = "../ast" }
+tine_common = { path = "../common" }
+anyhow = "1.0.100"
+logos = "0.16.1"
+ordered-float = "5.0.0"

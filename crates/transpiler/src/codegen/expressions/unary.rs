@@ -1,7 +1,7 @@
 use crate::codegen::{expressions::ExpressionResult, utils::ident_from_str, CodeGenerator};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
-use tine_core::ir;
+use tine_ir as ir;
 
 impl CodeGenerator<'_, '_> {
     pub fn handle_unary_expression(&mut self, node: ir::UnaryExpression) -> ExpressionResult {
