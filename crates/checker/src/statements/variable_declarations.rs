@@ -104,10 +104,10 @@ mod tests {
             mutable: true,
             pattern: Some(ast::Pattern::MutIdentifier(ast::MutIdentifierPattern {
                 loc: Location::dummy(),
-                identifier: ast::IdentifierPattern::from(ast::Identifier {
+                identifier: ast::Identifier {
                     text: "a".to_string(),
                     loc: Location::dummy(),
-                }),
+                },
             })),
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
@@ -133,12 +133,10 @@ mod tests {
     #[test]
     fn test_constant_declaration() {
         let node = ast::VariableDeclaration {
-            pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
-                ast::Identifier {
-                    loc: Location::dummy(),
-                    text: "a".to_string(),
-                },
-            ))),
+            pattern: Some(ast::Pattern::Identifier(ast::Identifier {
+                loc: Location::dummy(),
+                text: "a".to_string(),
+            })),
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
@@ -163,12 +161,10 @@ mod tests {
     #[test]
     fn test_dollar_declaration() {
         let node = ast::VariableDeclaration {
-            pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
-                ast::Identifier {
-                    loc: Location::dummy(),
-                    text: "computed$".to_string(),
-                },
-            ))),
+            pattern: Some(ast::Pattern::Identifier(ast::Identifier {
+                loc: Location::dummy(),
+                text: "computed$".to_string(),
+            })),
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),

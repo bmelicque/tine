@@ -1,12 +1,10 @@
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
 
-use crate::Item;
+use crate::{nodes::ast_struct, Item};
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Program {
-    pub loc: Location,
-    pub items: Vec<Item>,
-}
+ast_struct!(Program {
+    items: Vec<Item>,
+});
 
 impl Program {
     pub fn dummy() -> Self {

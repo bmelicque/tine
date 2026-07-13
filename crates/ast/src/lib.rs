@@ -3,6 +3,7 @@ pub mod dom;
 pub mod expressions;
 pub mod items;
 pub mod loops;
+mod nodes;
 pub mod patterns;
 pub mod program;
 pub mod statements;

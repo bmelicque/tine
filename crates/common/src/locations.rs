@@ -146,3 +146,7 @@ impl Ord for Location {
         self.partial_cmp(other).unwrap()
     }
 }
+
+pub trait Locatable {
+    fn loc(&self) -> Location;
+}

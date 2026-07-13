@@ -1,15 +1,16 @@
 use std::fmt;
 
-use enum_from_derive::EnumFrom;
 use ordered_float::OrderedFloat;
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
 
-use crate::{ElementExpression, VariantConstructor};
+use crate::{
+    nodes::{ast_enum, ast_struct, operator_enum},
+    ElementExpression, VariantConstructor,
+};
 
 use super::{constructor_literals::ConstructorLiteral, types::Type, Loop, Pattern, Statement};
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum Expression {
+ast_enum!(Expression {
     Array(ArrayExpression),
     Binary(BinaryExpression),
     BooleanLiteral(BooleanLiteral),
@@ -31,101 +32,43 @@ pub enum Expression {
     Tuple(TupleExpression),
     TypeMatch(TypeMatch),
     Unary(UnaryExpression),
-}
+});
 
-impl Expression {
-    pub fn loc(&self) -> Location {
-        match self {
-            Self::Array(e) => e.loc,
-            Self::Binary(e) => e.loc,
-            Self::BooleanLiteral(e) => e.loc,
-            Self::Block(e) => e.loc,
-            Self::Call(e) => e.loc,
-            Self::ConstructorLiteral(e) => e.loc,
-            Self::Element(e) => e.loc(),
-            Self::FloatLiteral(e) => e.loc,
-            Self::Member(e) => e.loc,
-            Self::Function(e) => e.loc,
-            Self::Identifier(e) => e.loc,
-            Self::If(e) => e.loc,
-            Self::IfDecl(e) => e.loc,
-            Self::IntLiteral(e) => e.loc,
-            Self::Invalid(e) => e.loc,
-            Self::Loop(e) => e.loc(),
-            Self::Match(e) => e.loc,
-            Self::StringLiteral(e) => e.loc,
-            Self::Tuple(e) => e.loc,
-            Self::TypeMatch(e) => e.loc,
-            Self::Unary(e) => e.loc,
-        }
-    }
-}
+ast_struct!(ArrayExpression {
+    elements: Vec<Expression>,
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ArrayExpression {
-    pub loc: Location,
-    pub elements: Vec<Expression>,
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-pub struct Identifier {
-    pub loc: Location,
-    pub text: String,
-}
-
+ast_struct!(
+    #[derive(Default)]
+    Identifier { text: String }
+);
 impl Identifier {
     pub fn as_str(&self) -> &str {
         self.text.as_str()
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct IfPatExpression {
-    pub loc: Location,
-    pub pattern: Option<Pattern>,
-    pub scrutinee: Option<Box<Expression>>,
-    pub consequent: Option<BlockExpression>,
-    pub alternate: Option<Box<Alternate>>,
-}
+ast_struct!(IfPatExpression {
+    pattern: Option<Pattern>,
+    scrutinee: Option<Box<Expression>>,
+    consequent: Option<BlockExpression>,
+    alternate: Option<Box<Alternate>>,
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct IfExpression {
-    pub loc: Location,
-    pub condition: Option<Box<Expression>>,
-    pub consequent: Option<BlockExpression>,
-    pub alternate: Option<Box<Alternate>>,
-}
+ast_struct!(IfExpression {
+    condition: Option<Box<Expression>>,
+    consequent: Option<BlockExpression>,
+    alternate: Option<Box<Alternate>>,
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Alternate {
-    Block(BlockExpression),
-    If(IfExpression),
-    IfDecl(IfPatExpression),
-}
-impl Alternate {
-    pub fn loc(&self) -> Location {
-        match self {
-            Alternate::Block(b) => b.loc,
-            Alternate::If(i) => i.loc,
-            Alternate::IfDecl(i) => i.loc,
-        }
+ast_enum!(
+    Alternate {
+        Block(BlockExpression),
+        If(IfExpression),
+        IfDecl(IfPatExpression),
     }
-}
-impl From<BlockExpression> for Alternate {
-    fn from(value: BlockExpression) -> Self {
-        Self::Block(value)
-    }
-}
-impl From<IfExpression> for Alternate {
-    fn from(value: IfExpression) -> Self {
-        Self::If(value)
-    }
-}
-impl From<IfPatExpression> for Alternate {
-    fn from(value: IfPatExpression) -> Self {
-        Self::IfDecl(value)
-    }
-}
+);
+
 impl Into<Expression> for Alternate {
     fn into(self) -> Expression {
         match self {
@@ -136,156 +79,73 @@ impl Into<Expression> for Alternate {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct IntLiteral {
-    pub loc: Location,
-    pub value: i64,
-}
+ast_struct!(IntLiteral { value: i64 });
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct InvalidExpression {
-    pub loc: Location,
-}
+ast_struct!(InvalidExpression {});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MatchExpression {
-    pub loc: Location,
-    pub scrutinee: Option<Box<Expression>>,
-    pub arms: Option<Vec<MatchArm>>,
-}
+ast_struct!(MatchExpression {
+    scrutinee: Option<Box<Expression>>,
+    arms: Option<Vec<MatchArm>>,
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MatchArm {
-    pub loc: Location,
-    pub pattern: Option<Box<Pattern>>,
-    pub expression: Option<Box<Expression>>,
-}
+ast_struct!(MatchArm {
+    pattern: Option<Box<Pattern>>,
+    expression: Option<Box<Expression>>,
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StringLiteral {
-    pub loc: Location,
-    pub text: String,
-}
-
+ast_struct!(StringLiteral { text: String });
 impl StringLiteral {
     pub fn as_str(&self) -> &str {
         self.text.as_str()
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FloatLiteral {
-    pub loc: Location,
-    pub value: OrderedFloat<f64>,
-}
+ast_struct!(FloatLiteral { value: OrderedFloat<f64> });
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct BooleanLiteral {
-    pub loc: Location,
-    pub value: bool,
-}
+ast_struct!(BooleanLiteral { value: bool });
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct BinaryExpression {
-    pub loc: Location,
-    pub left: Option<Box<Expression>>,
-    pub operator: BinaryOperator,
-    pub right: Option<Box<Expression>>,
-}
+ast_struct!(BinaryExpression {
+    left: Option<Box<Expression>>,
+    operator: BinaryOperator,
+    right: Option<Box<Expression>>,
+});
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BinaryOperator {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    Pow,
-    LAnd,
-    LOr,
-    EqEq,
-    Neq,
-    Grt,
-    Geq,
-    Less,
-    Leq,
-}
+operator_enum!(BinaryOperator {
+    Add => "+",
+    Sub => "-",
+    Mul => "*",
+    Div => "/",
+    Mod => "%",
+    Pow => "**",
 
-impl BinaryOperator {
-    fn as_string(&self) -> String {
-        match self {
-            BinaryOperator::Add => "+",
-            BinaryOperator::Sub => "-",
-            BinaryOperator::Mul => "*",
-            BinaryOperator::Div => "/",
-            BinaryOperator::Mod => "%",
-            BinaryOperator::Pow => "**",
+    EqEq => "==",
+    Neq => "!=",
+    Less => "<",
+    Leq => "<=",
+    Grt => ">",
+    Geq => ">=",
 
-            BinaryOperator::EqEq => "==",
-            BinaryOperator::Neq => "!=",
-            BinaryOperator::Less => "<",
-            BinaryOperator::Leq => "<=",
-            BinaryOperator::Grt => ">",
-            BinaryOperator::Geq => ">=",
+    LAnd => "&&",
+    LOr => "||",
+});
 
-            BinaryOperator::LAnd => "&&",
-            BinaryOperator::LOr => "||",
-        }
-        .into()
+ast_struct!(
+    #[derive(Default)]
+    BlockExpression {
+        statements: Vec<Statement>,
     }
-}
+);
 
-impl fmt::Display for BinaryOperator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_string())
-    }
-}
+ast_struct!(CallExpression {
+    callee: Option<Box<Expression>>,
+    type_args: Option<Vec<Type>>,
+    args: Vec<CallArgument>,
+});
 
-impl From<String> for BinaryOperator {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "+" => BinaryOperator::Add,
-            "-" => BinaryOperator::Sub,
-            "*" => BinaryOperator::Mul,
-            "/" => BinaryOperator::Div,
-            "%" => BinaryOperator::Mod,
-            "**" => BinaryOperator::Pow,
-
-            "==" => BinaryOperator::EqEq,
-            "!=" => BinaryOperator::Neq,
-            "<" => BinaryOperator::Less,
-            "<=" => BinaryOperator::Leq,
-            ">" => BinaryOperator::Grt,
-            ">=" => BinaryOperator::Geq,
-
-            "&&" => BinaryOperator::LAnd,
-            "||" => BinaryOperator::LOr,
-
-            _ => panic!("Invalid operator"),
-        }
-    }
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-pub struct BlockExpression {
-    pub loc: Location,
-    pub statements: Vec<Statement>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CallExpression {
-    pub loc: Location,
-    pub callee: Option<Box<Expression>>,
-    pub type_args: Option<Vec<Type>>,
-    pub args: Vec<CallArgument>,
-}
-
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum CallArgument {
+ast_enum!(CallArgument {
     Expression(Expression),
     Callback(Callback),
-}
-
+});
 impl CallArgument {
     pub fn as_expression(&self) -> Option<&Expression> {
         match self {
@@ -295,37 +155,20 @@ impl CallArgument {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Callback {
-    pub loc: Location,
-    pub params: Vec<CallbackParam>,
-    pub body: Option<Box<Expression>>,
-}
+ast_struct!(Callback {
+    params: Vec<CallbackParam>,
+    body: Option<Box<Expression>>,
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum CallbackParam {
+ast_enum!(CallbackParam {
     Identifier(Identifier),
     Param(FunctionParam),
-}
+});
 
-impl From<Identifier> for CallbackParam {
-    fn from(value: Identifier) -> Self {
-        Self::Identifier(value)
-    }
-}
-impl From<FunctionParam> for CallbackParam {
-    fn from(value: FunctionParam) -> Self {
-        Self::Param(value)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MemberExpression {
-    pub loc: Location,
-    pub object: Option<Box<Expression>>,
-    pub prop: Option<MemberProp>,
-}
-
+ast_struct!(MemberExpression {
+    object: Option<Box<Expression>>,
+    prop: Option<MemberProp>,
+});
 impl MemberExpression {
     pub fn root_expression(&self) -> Option<Expression> {
         let Some(object) = self.object.as_ref() else {
@@ -339,81 +182,52 @@ impl MemberExpression {
     }
 }
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum MemberProp {
+ast_enum!(MemberProp {
     FieldName(Identifier),
     Index(IntLiteral),
-}
-impl MemberProp {
-    pub fn loc(&self) -> Location {
-        match self {
-            Self::FieldName(i) => i.loc,
-            Self::Index(n) => n.loc,
-        }
+});
+
+ast_struct!(TupleExpression {
+    elements: Vec<Expression>,
+});
+
+ast_struct!(
+    /// Internals use only.
+    /// Match a value against an enum variant.
+    TypeMatch {
+        expression: Option<Box<Expression>>,
+        constructor: VariantConstructor,
     }
-}
+);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TupleExpression {
-    pub loc: Location,
-    pub elements: Vec<Expression>,
-}
+ast_struct!(UnaryExpression {
+    operator: UnaryOperator,
+    operand: Option<Box<Expression>>,
+});
 
-/// Internals use only.
-/// Match a value against an enum variant.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypeMatch {
-    pub loc: Location,
-    pub expression: Option<Box<Expression>>,
-    pub constructor: VariantConstructor,
-}
+operator_enum!(UnaryOperator {
+    Star => "*",
+    Minus => "-",
+    Bang => "!",
+    Mut => "mut",
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct UnaryExpression {
-    pub loc: Location,
-    pub operator: UnaryOperator,
-    pub operand: Option<Box<Expression>>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum UnaryOperator {
-    Star,  // *
-    Minus, // -
-    Bang,  // !
-    Mut,   // mut
-}
-
-impl From<String> for UnaryOperator {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "*" => Self::Star,
-            "-" => Self::Minus,
-            "!" => Self::Bang,
-            "mut" => Self::Mut,
-            _ => panic!("Unknown unary operator: {}", value),
-        }
+ast_struct!(
+    #[derive(Default)]
+    FunctionExpression {
+        name: Option<Identifier>,
+        type_params: Option<Vec<Identifier>>,
+        params: Option<FunctionParams>,
+        return_type: Option<Type>,
+        body: Option<BlockExpression>,
     }
-}
+);
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-pub struct FunctionExpression {
-    pub loc: Location,
-    pub name: Option<Identifier>,
-    pub type_params: Option<Vec<Identifier>>,
-    pub params: Option<FunctionParams>,
-    pub return_type: Option<Type>,
-    pub body: Option<BlockExpression>,
-}
+ast_struct!(FunctionParams {
+    params: Vec<FunctionParam>,
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FunctionParams {
-    pub loc: Location,
-    pub params: Vec<FunctionParam>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FunctionParam {
-    pub loc: Location,
-    pub name: Option<Identifier>,
-    pub type_annotation: Option<Type>,
-}
+ast_struct!(FunctionParam {
+    name: Option<Identifier>,
+    type_annotation: Option<Type>,
+});

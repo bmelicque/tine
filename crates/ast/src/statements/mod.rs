@@ -1,9 +1,11 @@
 mod implementations;
 
-use enum_from_derive::EnumFrom;
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
 
-use crate::{InvalidExpression, MemberExpression};
+use crate::{
+    nodes::{ast_enum, ast_struct},
+    InvalidExpression, MemberExpression,
+};
 
 use super::{
     expressions::{Expression, FunctionExpression, Identifier},
@@ -12,8 +14,7 @@ use super::{
 };
 pub use implementations::*;
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum Statement {
+ast_enum!(Statement {
     Assignment(Assignment),
     Break(BreakStatement),
     Continue(ContinueStatement),
@@ -26,7 +27,7 @@ pub enum Statement {
     StructDefinition(StructDefinition),
     TypeAlias(TypeAlias),
     VariableDeclaration(VariableDeclaration),
-}
+});
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Docs {
@@ -34,140 +35,107 @@ pub struct Docs {
     pub text: String,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-pub struct VariableDeclaration {
-    pub docs: Option<Docs>,
-    /// This is the span of the actual declaration, and does not include the `docs` (if any)
-    pub loc: Location,
-    pub public: bool,
-    pub mutable: bool,
-    pub pattern: Option<Pattern>,
-    pub annotation: Option<Type>,
-    pub value: Option<Expression>,
-}
+ast_struct!(
+    #[derive(Default)]
+    VariableDeclaration {
+        docs: Option<Docs>,
+        public: bool,
+        mutable: bool,
+        pattern: Option<Pattern>,
+        annotation: Option<Type>,
+        value: Option<Expression>,
+    }
+);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypeAlias {
-    pub docs: Option<Docs>,
-    pub loc: Location,
-    pub public: bool,
-    pub name: Option<Identifier>,
-    pub params: Option<Vec<Identifier>>,
-    pub definition: Option<Type>,
-}
+ast_struct!(TypeAlias {
+    docs: Option<Docs>,
+    public: bool,
+    name: Option<Identifier>,
+    params: Option<Vec<Identifier>>,
+    definition: Option<Type>,
+});
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-pub struct StructDefinition {
-    pub docs: Option<Docs>,
-    pub loc: Location,
-    pub public: bool,
-    pub name: Option<Identifier>,
-    pub params: Option<Vec<Identifier>>,
-    pub body: Option<TypeBody>,
-}
+ast_struct!(
+    #[derive(Default)]
+    StructDefinition {
+        docs: Option<Docs>,
+        public: bool,
+        name: Option<Identifier>,
+        params: Option<Vec<Identifier>>,
+        body: Option<TypeBody>,
+    }
+);
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum TypeBody {
+ast_enum!(TypeBody {
     Struct(StructBody),
     Tuple(TupleBody),
-}
+});
 
-impl TypeBody {
-    pub fn loc(&self) -> Location {
-        match self {
-            Self::Struct(body) => body.loc,
-            Self::Tuple(body) => body.loc,
-        }
-    }
-}
+ast_struct!(StructBody {
+    fields: Vec<StructDefinitionField>,
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StructBody {
-    pub loc: Location,
-    pub fields: Vec<StructDefinitionField>,
-}
+ast_struct!(StructDefinitionField {
+    public: bool,
+    name: Option<Identifier>,
+    definition: Option<Type>,
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StructDefinitionField {
-    pub loc: Location,
-    pub public: bool,
-    pub name: Option<Identifier>,
-    pub definition: Option<Type>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TupleBody {
-    pub loc: Location,
+ast_struct!(
     /// (is_public, type)
-    pub elements: Vec<(bool, Type)>,
-}
+    TupleBody {
+        elements: Vec<(bool, Type)>,
+    }
+);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct EnumDefinition {
-    pub docs: Option<Docs>,
-    pub loc: Location,
-    pub public: bool,
-    pub name: Option<Identifier>,
-    pub params: Option<Vec<Identifier>>,
-    pub variants: Vec<VariantDefinition>,
-}
+ast_struct!(EnumDefinition {
+    docs: Option<Docs>,
+    public: bool,
+    name: Option<Identifier>,
+    params: Option<Vec<Identifier>>,
+    variants: Vec<VariantDefinition>,
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct VariantDefinition {
-    pub loc: Location,
-    pub name: Option<Identifier>,
-    pub body: Option<TypeBody>,
-}
-
+ast_struct!(VariantDefinition {
+    name: Option<Identifier>,
+    body: Option<TypeBody>,
+});
 impl VariantDefinition {
     pub fn is_unit(&self) -> bool {
         self.body.is_none()
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Assignment {
-    pub loc: Location,
-    pub pattern: Option<Assignee>,
-    pub value: Option<Expression>,
-}
+ast_struct!(Assignment {
+    pattern: Option<Assignee>,
+    value: Option<Expression>,
+});
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum Assignee {
+ast_enum!(Assignee {
     Member(MemberExpression),
     Indirection(IndirectionAssignee),
 
     Pattern(Pattern),
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct IndirectionAssignee {
-    pub loc: Location,
-    pub identifier: Identifier,
-}
+ast_struct!(IndirectionAssignee {
+    identifier: Identifier,
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct BreakStatement {
-    pub loc: Location,
-    pub value: Option<Box<Expression>>,
-}
+ast_struct!(BreakStatement {
+    value: Option<Box<Expression>>,
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ContinueStatement {
-    pub loc: Location,
-}
+ast_struct!(ContinueStatement {});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ReturnStatement {
-    pub loc: Location,
-    pub value: Option<Box<Expression>>,
-}
+ast_struct!(ReturnStatement {
+    value: Option<Box<Expression>>,
+});
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExpressionStatement {
     pub expression: Box<Expression>,
 }
-
 impl From<Expression> for ExpressionStatement {
     fn from(expression: Expression) -> Self {
         ExpressionStatement {
@@ -175,18 +143,19 @@ impl From<Expression> for ExpressionStatement {
         }
     }
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FunctionDefinition {
-    pub docs: Option<Docs>,
-    pub public: bool,
-    pub definition: FunctionExpression,
+impl Locatable for ExpressionStatement {
+    fn loc(&self) -> Location {
+        self.expression.loc()
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct InvalidStatement {
-    pub loc: Location,
-}
+ast_struct!(FunctionDefinition {
+    docs: Option<Docs>,
+    public: bool,
+    definition: FunctionExpression,
+});
+
+ast_struct!(InvalidStatement {});
 impl From<InvalidExpression> for InvalidStatement {
     fn from(value: InvalidExpression) -> Self {
         Self { loc: value.loc }

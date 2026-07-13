@@ -110,7 +110,7 @@ impl TypeChecker {
                             dependencies: &vec![],
                             tc: s,
                         };
-                        declare_variable(&mut visitor, &i.0, host_type, false)
+                        declare_variable(&mut visitor, &i, host_type, false)
                     });
                 let params = s.visit_function_params(node.params);
                 let visited_body = s.visit_function_body(node.return_type, node.body);

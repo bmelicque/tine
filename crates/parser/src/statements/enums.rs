@@ -1,5 +1,8 @@
 use tine_ast as ast;
-use tine_common::{diagnostics::DiagnosticKind, locations::Location};
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+};
 
 use crate::{statements::utils::TypeName, tokens::Token, Parser};
 

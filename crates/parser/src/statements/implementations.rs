@@ -105,6 +105,7 @@ impl Parser<'_> {
                 Some(ast::ImplementationItem::StaticMethod(
                     ast::FunctionDefinition {
                         docs,
+                        loc,
                         public,
                         definition,
                     },

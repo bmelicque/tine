@@ -1,5 +1,8 @@
 use tine_ast as ast;
-use tine_common::{diagnostics::DiagnosticKind, locations::Location};
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+};
 
 use crate::{tokens::Token, Parser};
 
@@ -80,10 +83,10 @@ mod tests {
             expected: ast::Statement::Assignment(ast::Assignment {
                 loc: Location::new(0, Span::new(0, 6)),
                 pattern: Some(ast::Assignee::Pattern(ast::Pattern::Identifier(
-                    ast::IdentifierPattern(ast::Identifier {
+                    ast::Identifier {
                         loc: Location::new(0, Span::new(0, 1)),
                         text: "x".into(),
-                    }),
+                    },
                 ))),
                 value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                     loc: Location::new(0, Span::new(4, 6)),
@@ -101,10 +104,10 @@ mod tests {
             expected: ast::Statement::Assignment(ast::Assignment {
                 loc: Location::new(0, Span::new(0, 3)),
                 pattern: Some(ast::Assignee::Pattern(ast::Pattern::Identifier(
-                    ast::IdentifierPattern(ast::Identifier {
+                    ast::Identifier {
                         loc: Location::new(0, Span::new(0, 1)),
                         text: "x".into(),
-                    }),
+                    },
                 ))),
                 value: None,
             }),

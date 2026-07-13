@@ -1,34 +1,23 @@
-use enum_from_derive::EnumFrom;
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
 
-use crate::{Constructor, FloatLiteral, Identifier, IntLiteral};
+use crate::{
+    nodes::{ast_enum, ast_struct},
+    Constructor, FloatLiteral, Identifier, IntLiteral,
+};
 
 use super::{BooleanLiteral, NamedType, StringLiteral};
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum Pattern {
+ast_enum!(Pattern {
     Invalid(InvalidPattern),
 
-    Identifier(IdentifierPattern),
+    Identifier(Identifier),
     MutIdentifier(MutIdentifierPattern),
     Constructor(ConstructorPattern),
     Literal(LiteralPattern),
     Tuple(TuplePattern),
-}
-
+});
 impl Pattern {
-    pub fn loc(&self) -> Location {
-        match self {
-            Pattern::Invalid(p) => p.loc,
-            Pattern::Identifier(p) => p.loc(),
-            Pattern::MutIdentifier(p) => p.loc,
-            Pattern::Constructor(p) => p.loc,
-            Pattern::Literal(l) => l.loc(),
-            Pattern::Tuple(p) => p.loc,
-        }
-    }
-
-    pub fn as_identifier(&self) -> Option<&IdentifierPattern> {
+    pub fn as_identifier(&self) -> Option<&Identifier> {
         match self {
             Pattern::Identifier(i) => Some(i),
             _ => None,
@@ -60,7 +49,7 @@ impl Pattern {
         }
     }
 
-    pub fn list_identifiers(&self) -> Vec<&IdentifierPattern> {
+    pub fn list_identifiers(&self) -> Vec<&Identifier> {
         match self {
             Pattern::Invalid { .. } => vec![],
             Pattern::Identifier(p) => vec![p],
@@ -89,78 +78,29 @@ impl Pattern {
     }
 }
 
-impl From<Identifier> for Pattern {
-    fn from(value: Identifier) -> Self {
-        Self::Identifier(IdentifierPattern(value))
-    }
-}
+ast_struct!(InvalidPattern {});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct InvalidPattern {
-    pub loc: Location,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct IdentifierPattern(pub Identifier);
-
-impl IdentifierPattern {
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-
-    pub fn loc(&self) -> Location {
-        self.0.loc
-    }
-}
-
-impl Into<Identifier> for IdentifierPattern {
-    fn into(self) -> Identifier {
-        self.0
-    }
-}
-impl From<Identifier> for IdentifierPattern {
-    fn from(value: Identifier) -> Self {
-        Self(value)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MutIdentifierPattern {
-    pub loc: Location,
-    pub identifier: IdentifierPattern,
-}
+ast_struct!(MutIdentifierPattern {
+    identifier: Identifier,
+});
 impl Into<Identifier> for MutIdentifierPattern {
     fn into(self) -> Identifier {
-        self.identifier.0
+        self.identifier
     }
 }
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum LiteralPattern {
+ast_enum!(LiteralPattern {
     Boolean(BooleanLiteral),
     Float(FloatLiteral),
     Integer(IntLiteral),
     String(StringLiteral),
-}
+});
 
-impl LiteralPattern {
-    pub fn loc(&self) -> Location {
-        match self {
-            LiteralPattern::Boolean(b) => b.loc,
-            LiteralPattern::Float(f) => f.loc,
-            LiteralPattern::Integer(i) => i.loc,
-            LiteralPattern::String(s) => s.loc,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ConstructorPattern {
-    pub loc: Location,
-    pub qualifiers: Vec<Identifier>,
-    pub constructor: Constructor,
-    pub body: Option<ConstructorPatternBody>,
-}
+ast_struct!(ConstructorPattern {
+    qualifiers: Vec<Identifier>,
+    constructor: Constructor,
+    body: Option<ConstructorPatternBody>,
+});
 
 impl ConstructorPattern {
     pub fn is_refutable(&self) -> bool {
@@ -181,25 +121,14 @@ impl ConstructorPattern {
     }
 }
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum ConstructorPatternBody {
+ast_enum!(ConstructorPatternBody {
     Tuple(TuplePattern),
     Struct(StructPatternBody),
-}
-impl ConstructorPatternBody {
-    pub fn loc(&self) -> Location {
-        match self {
-            Self::Tuple(t) => t.loc,
-            Self::Struct(s) => s.loc,
-        }
-    }
-}
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StructPatternBody {
-    pub loc: Location,
-    pub fields: Vec<StructPatternField>,
-}
+ast_struct!(StructPatternBody {
+   fields: Vec<StructPatternField>
+});
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StructPattern {
@@ -215,11 +144,10 @@ pub struct StructPatternField {
     pub pattern: Option<Pattern>,
 }
 
-#[derive(Debug, Clone, EnumFrom, PartialEq, Eq, Hash)]
-pub enum FieldPatternIdentifier {
-    Const(IdentifierPattern),
+ast_enum!(FieldPatternIdentifier {
+    Const(Identifier),
     Mut(MutIdentifierPattern),
-}
+});
 
 impl FieldPatternIdentifier {
     pub fn is_mutable(&self) -> bool {
@@ -229,32 +157,24 @@ impl FieldPatternIdentifier {
         }
     }
 }
-impl From<Identifier> for FieldPatternIdentifier {
-    fn from(identifier: Identifier) -> Self {
-        FieldPatternIdentifier::Const(identifier.into())
-    }
-}
 impl Into<Identifier> for FieldPatternIdentifier {
     fn into(self) -> Identifier {
         match self {
-            FieldPatternIdentifier::Const(i) => i.0,
-            FieldPatternIdentifier::Mut(i) => i.identifier.0,
+            FieldPatternIdentifier::Const(i) => i,
+            FieldPatternIdentifier::Mut(i) => i.identifier,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TuplePattern {
-    pub loc: Location,
-    pub elements: Vec<Pattern>,
-}
-
+ast_struct!(TuplePattern {
+    elements: Vec<Pattern>,
+});
 impl TuplePattern {
     pub fn is_refutable(&self) -> bool {
         self.elements.iter().any(|e| e.is_refutable())
     }
 
-    pub fn list_identifiers(&self) -> Vec<&IdentifierPattern> {
+    pub fn list_identifiers(&self) -> Vec<&Identifier> {
         self.elements
             .iter()
             .map(|pattern| pattern.list_identifiers())
@@ -262,7 +182,6 @@ impl TuplePattern {
             .collect()
     }
 }
-
 impl From<Vec<Pattern>> for TuplePattern {
     fn from(elements: Vec<Pattern>) -> Self {
         let loc = Location::merge(
@@ -273,27 +192,13 @@ impl From<Vec<Pattern>> for TuplePattern {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct VariantPattern {
-    pub loc: Location,
-    pub ty: Box<NamedType>,
-    pub name: String,
-    pub body: Option<VariantPatternBody>,
-}
+ast_struct!(VariantPattern {
+        ty: Box<NamedType>,
+        name: String,
+        body: Option<VariantPatternBody>,
+});
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum VariantPatternBody {
-    Struct(Vec<StructPatternField>),
+ast_enum!(VariantPatternBody {
+    Struct(StructPatternBody),
     Tuple(TuplePattern),
-}
-
-impl From<Vec<StructPatternField>> for VariantPatternBody {
-    fn from(value: Vec<StructPatternField>) -> Self {
-        VariantPatternBody::Struct(value)
-    }
-}
-impl From<TuplePattern> for VariantPatternBody {
-    fn from(value: TuplePattern) -> Self {
-        VariantPatternBody::Tuple(value)
-    }
-}
+});

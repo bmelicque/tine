@@ -1,4 +1,5 @@
 use tine_ast as ast;
+use tine_common::locations::Locatable;
 
 use crate::{DiagnosticKind, Parser};
 
@@ -9,7 +10,7 @@ impl Parser<'_> {
 
     pub fn expr_to_pattern(&mut self, expr: ast::Expression) -> ast::Pattern {
         match expr {
-            ast::Expression::Identifier(id) => ast::Pattern::Identifier(ast::IdentifierPattern(id)),
+            ast::Expression::Identifier(id) => ast::Pattern::Identifier(id),
             ast::Expression::BooleanLiteral(lit) => {
                 ast::Pattern::Literal(ast::LiteralPattern::Boolean(lit))
             }

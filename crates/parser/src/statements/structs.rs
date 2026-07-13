@@ -1,5 +1,5 @@
 use tine_ast as ast;
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
 
 use crate::{tokens::Token, Parser};
 

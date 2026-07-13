@@ -1,36 +1,32 @@
-use enum_from_derive::EnumFrom;
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
 
 use crate::{
+    nodes::{ast_enum, ast_struct},
     BlockExpression, Docs, FunctionDefinition, FunctionExpression, FunctionParams, Identifier,
     NamedType, Pattern, Type,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Implementation {
-    pub loc: Location,
-    /// The type that will be implemented.
+ast_struct!(
+    /// `implemented_type` is th type being implemented.
     ///
     /// For example:
     /// - `impl MyType { ... }`
     /// - `impl MyGeneric<TypeParam> { ... }`
     /// - `impl MyGeneric<TypeArg> { ... }`
-    pub implemented_type: Option<NamedType>,
-    pub body: Option<ImplementationBody>,
-}
+    Implementation {
+        implemented_type: Option<NamedType>,
+        body: Option<ImplementationBody>,
+    }
+);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ImplementationBody {
-    pub loc: Location,
-    pub items: Vec<ImplementationItem>,
-}
+ast_struct!(ImplementationBody {
+    items: Vec<ImplementationItem>,
+});
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum ImplementationItem {
+ast_enum!(ImplementationItem {
     Method(MethodDefinition),
     StaticMethod(FunctionDefinition),
-}
-
+});
 impl ImplementationItem {
     pub fn docs(&self) -> &Option<Docs> {
         match self {
@@ -47,19 +43,19 @@ impl ImplementationItem {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-pub struct MethodDefinition {
-    pub docs: Option<Docs>,
-    pub loc: Location,
-    pub public: bool,
-    pub receiver: MethodReceiver,
-    pub name: Option<Identifier>,
-    pub type_params: Option<Vec<Identifier>>,
-    pub params: Option<FunctionParams>,
-    pub return_type: Option<Type>,
-    pub body: Option<BlockExpression>,
-}
-
+ast_struct!(
+    #[derive(Default)]
+    MethodDefinition {
+        docs: Option<Docs>,
+        public: bool,
+        receiver: MethodReceiver,
+        name: Option<Identifier>,
+        type_params: Option<Vec<Identifier>>,
+        params: Option<FunctionParams>,
+        return_type: Option<Type>,
+        body: Option<BlockExpression>,
+    }
+);
 impl MethodDefinition {
     pub fn copy_function(&mut self, function: FunctionExpression) {
         self.name = function.name;
@@ -70,9 +66,10 @@ impl MethodDefinition {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-pub struct MethodReceiver {
-    pub loc: Location,
-    pub mutable: bool,
-    pub pattern: Option<Pattern>,
-}
+ast_struct!(
+    #[derive(Default)]
+    MethodReceiver {
+        mutable: bool,
+        pattern: Option<Pattern>,
+    }
+);
