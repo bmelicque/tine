@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::usize;
 
 use tine_common::locations::Location;
-use tine_ir as ir;
+use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_symbols::table::SymbolTable;
 use tine_types::store::TypeStore;

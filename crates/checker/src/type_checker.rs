@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use tine_common::{
     diagnostics::{Diagnostic, DiagnosticKind, DiagnosticLevel},
-    locations::Location,
+    locations::{Locatable, Location},
     module_path::{ModuleId, ModulePath},
     sources::Source,
 };
@@ -313,6 +313,7 @@ impl TypeChecker {
     ) -> Box<dyn Iterator<Item = &'s ir::Identifier> + 's> {
         Box::new(
             expr.walk()
+                .filter_map(|child| child.as_expression())
                 .filter_map(|child| child.as_identifier())
                 .filter(|i| {
                     let symbol = self.symbols.get_symbol(i.symbol);
