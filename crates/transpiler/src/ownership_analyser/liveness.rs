@@ -305,6 +305,9 @@ fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
             }
         }
 
+        ir::Expression::Intrinsic(c) => {
+            c.args.iter().for_each(|a| visit_expr(a, ctx, out));
+        }
         ir::Expression::Call(c) => {
             visit_expr(&c.callee, ctx.enter_callee(), out);
             for arg in &c.args {

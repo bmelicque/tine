@@ -330,7 +330,8 @@ fn visit_expr(
             vec![]
         }
 
-        ir::Expression::BooleanLiteral(_)
+        ir::Expression::Intrinsic(_)
+        | ir::Expression::BooleanLiteral(_)
         | ir::Expression::FloatLiteral(_)
         | ir::Expression::IntLiteral(_)
         | ir::Expression::StringLiteral(_) => vec![],

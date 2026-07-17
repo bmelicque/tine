@@ -7,7 +7,7 @@ mod utils;
 
 use super::{utils::ident_from_str, CodeGenerator};
 use crate::{
-    codegen::utils::{create_block_stmt, create_str},
+    codegen::utils::{create_block_stmt, create_str, std_method_call},
     ownership_analyser::OwnershipAction,
 };
 use swc_common::DUMMY_SP;
@@ -38,39 +38,41 @@ where
 
 impl CodeGenerator<'_, '_> {
     pub fn handle_expression(&mut self, node: ir::Expression) -> ExpressionResult {
+        use ir::Expression::*;
         match node {
-            ir::Expression::Array(a) => self.handle_array(a.elements),
-            ir::Expression::Binary(b) => self.handle_binary_expression(b),
-            ir::Expression::BooleanLiteral(b) => ExpressionResult::from(swc::Bool {
+            Array(a) => self.handle_array(a.elements),
+            Binary(b) => self.handle_binary_expression(b),
+            BooleanLiteral(b) => ExpressionResult::from(swc::Bool {
                 span: DUMMY_SP,
                 value: b.value,
             }),
-            ir::Expression::Block(b) => self.handle_block(b),
-            ir::Expression::Call(c) => self.handle_call(c),
-            ir::Expression::Element(e) => self.handle_element_expression(e),
-            ir::Expression::FloatLiteral(f) => ExpressionResult::from(swc::Number {
+            Block(b) => self.handle_block(b),
+            Call(c) => self.handle_call(c),
+            Element(e) => self.handle_element_expression(e),
+            FloatLiteral(f) => ExpressionResult::from(swc::Number {
                 span: DUMMY_SP,
                 value: f.value,
                 raw: None,
             }),
-            ir::Expression::For(f) => self.handle_for_expression(f),
-            ir::Expression::ForIn(f) => self.handle_for_in_expression(f),
-            ir::Expression::Function(f) => self.handle_function_expression(f).into(),
-            ir::Expression::Identifier(i) => self.handle_identifier(i).into(),
-            ir::Expression::If(i) => self.handle_if_expression(i),
-            ir::Expression::IntLiteral(i) => ExpressionResult::from(swc::Number {
+            For(f) => self.handle_for_expression(f),
+            ForIn(f) => self.handle_for_in_expression(f),
+            Function(f) => self.handle_function_expression(f).into(),
+            Identifier(i) => self.handle_identifier(i).into(),
+            If(i) => self.handle_if_expression(i),
+            IntLiteral(i) => ExpressionResult::from(swc::Number {
                 span: DUMMY_SP,
                 value: i.value as f64,
                 raw: None,
             }),
-            ir::Expression::Map(m) => self.handle_map_expression(m),
-            ir::Expression::Member(m) => self.member_expr_to_swc(m),
-            ir::Expression::Method(m) => self.handle_method(m),
-            ir::Expression::StringLiteral(s) => self.string_literal_to_swc(s).into(),
-            ir::Expression::Struct(s) => self.struct_to_swc(s),
-            ir::Expression::Unary(u) => self.handle_unary_expression(u),
-            ir::Expression::Tuple(t) => self.handle_array(t.elements),
-            ir::Expression::TypeMatch(t) => self.handle_type_match(t),
+            Intrinsic(i) => self.handle_intrinsic_call(i),
+            Map(m) => self.handle_map_expression(m),
+            Member(m) => self.member_expr_to_swc(m),
+            Method(m) => self.handle_method(m),
+            StringLiteral(s) => self.string_literal_to_swc(s).into(),
+            Struct(s) => self.struct_to_swc(s),
+            Unary(u) => self.handle_unary_expression(u),
+            Tuple(t) => self.handle_array(t.elements),
+            TypeMatch(t) => self.handle_type_match(t),
         }
     }
 
@@ -185,6 +187,22 @@ impl CodeGenerator<'_, '_> {
                 }))),
                 ..Default::default()
             }),
+        }
+    }
+
+    fn handle_intrinsic_call(&mut self, node: ir::IntrinsicCall) -> ExpressionResult {
+        let (prelim, args): (Vec<Vec<swc::Stmt>>, _) = node
+            .args
+            .into_iter()
+            .map(|a| self.handle_expression(a))
+            .map(|r| (r.prelim_stmts, r.expr.into()))
+            .unzip();
+        let name = self.symbol_name(node.callee);
+        let prelim = prelim.into_iter().flatten().collect();
+        let call = std_method_call(name, args);
+        ExpressionResult {
+            prelim_stmts: prelim,
+            expr: call.into(),
         }
     }
 

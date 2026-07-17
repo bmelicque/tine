@@ -22,6 +22,7 @@ ast_enum!(Expression {
     Identifier(Identifier),
     If(IfExpression),
     IntLiteral(IntLiteral),
+    Intrinsic(IntrinsicCall),
     IfDecl(IfPatExpression),
     Invalid(InvalidExpression),
     Loop(Loop),
@@ -80,6 +81,11 @@ impl Into<Expression> for Alternate {
 }
 
 ast_struct!(IntLiteral { value: i64 });
+
+ast_struct!(IntrinsicCall {
+    name: Identifier,
+    args: Vec<Expression>
+});
 
 ast_struct!(InvalidExpression {});
 

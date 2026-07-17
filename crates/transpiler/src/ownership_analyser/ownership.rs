@@ -340,7 +340,8 @@ fn visit_expr(
             visit_expr(&m.host, ctx.force_copying(), sites, aliases, semantics, out)
         }
 
-        ir::Expression::BooleanLiteral(_)
+        ir::Expression::Intrinsic(_)
+        | ir::Expression::BooleanLiteral(_)
         | ir::Expression::FloatLiteral(_)
         | ir::Expression::IntLiteral(_)
         | ir::Expression::StringLiteral(_) => {}

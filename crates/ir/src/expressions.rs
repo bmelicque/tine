@@ -22,6 +22,7 @@ ir_enum!(
         Identifier(Identifier),
         If(IfExpression),
         IntLiteral(IntLiteral),
+        Intrinsic(IntrinsicCall),
         Map(MapLiteral),
         Member(MemberExpression),
         Method(MethodExpression),
@@ -196,6 +197,13 @@ impl std::fmt::Display for IntLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value)
     }
+}
+
+#[ir_struct]
+#[derive(Debug, Clone)]
+pub struct IntrinsicCall {
+    pub callee: FunctionSymbolId,
+    pub args: Vec<Expression>,
 }
 
 #[ir_struct]

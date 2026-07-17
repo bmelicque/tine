@@ -299,12 +299,17 @@ pub trait Symbol {
     fn ty(&self) -> TypeId;
     fn defined_at(&self) -> Location;
     fn uses(&self) -> Box<dyn Iterator<Item = Location> + '_>;
+    fn is_public(&self) -> bool;
 }
 pub trait SymbolMut {
     fn access(&mut self) -> &mut SymbolAccessManager;
 }
 macro_rules! impl_symbol {
     ($symbol:ident) => {
+        impl_symbol!($symbol, |_s: &$symbol| true);
+    };
+
+    ($symbol:ident, $public:expr) => {
         impl Symbol for $symbol {
             fn docs(&self) -> Option<&String> {
                 self.docs.as_ref()
@@ -325,6 +330,11 @@ macro_rules! impl_symbol {
             fn uses(&self) -> Box<dyn Iterator<Item = Location> + '_> {
                 Box::new(self.access.uses())
             }
+
+            fn is_public(&self) -> bool {
+                let f: fn(&$symbol) -> bool = $public;
+                f(self)
+            }
         }
 
         impl SymbolMut for $symbol {
@@ -334,12 +344,13 @@ macro_rules! impl_symbol {
         }
     };
 }
-impl_symbol!(VariableSymbol);
-impl_symbol!(FunctionSymbol);
-impl_symbol!(StructSymbol);
-impl_symbol!(EnumSymbol);
-impl_symbol!(VariantSymbol);
-impl_symbol!(PrimitiveTypeSymbol);
-impl_symbol!(TypeAliasSymbol);
-impl_symbol!(MethodSymbol);
-impl_symbol!(MemberSymbol);
+impl_symbol!(VariableSymbol, |s: &VariableSymbol| s.public);
+impl_symbol!(FunctionSymbol, |s: &FunctionSymbol| s.public);
+impl_symbol!(StructSymbol, |s: &StructSymbol| s.public);
+impl_symbol!(EnumSymbol, |s: &EnumSymbol| s.public);
+impl_symbol!(TypeAliasSymbol, |s: &TypeAliasSymbol| s.public);
+impl_symbol!(MemberSymbol, |s: &MemberSymbol| s.public);
+impl_symbol!(MethodSymbol, |s: &MethodSymbol| s.public);
+
+impl_symbol!(VariantSymbol); // uses default: always public
+impl_symbol!(PrimitiveTypeSymbol); // uses default: always public

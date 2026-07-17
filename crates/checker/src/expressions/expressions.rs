@@ -9,32 +9,32 @@ use super::TypeChecker;
 
 impl TypeChecker {
     pub fn visit_expression(&mut self, node: ast::Expression) -> Option<ir::Expression> {
+        use ast::Expression::*;
         match node {
-            ast::Expression::Array(node) => Some(self.visit_array_expression(node).into()),
-            ast::Expression::Binary(node) => self.visit_binary_expression(node).map(|e| e.into()),
-            ast::Expression::BooleanLiteral(node) => Some(visit_boolean_literal(node).into()),
-            ast::Expression::Block(node) => Some(self.visit_block_expression(node).into()),
-            ast::Expression::Call(node) => self.visit_call_expression(node).map(|n| n.into()),
-            ast::Expression::ConstructorLiteral(node) => {
-                self.visit_constructor_literal(node).map(Into::into)
-            }
-            ast::Expression::Element(node) => self.visit_element_expression(node).map(Into::into),
-            ast::Expression::FloatLiteral(node) => Some(visit_float_literal(node).into()),
-            ast::Expression::Member(node) => self.visit_member_expression(node).map(Into::into),
-            ast::Expression::Function(node) => {
+            Array(node) => Some(self.visit_array_expression(node).into()),
+            Binary(node) => self.visit_binary_expression(node).map(|e| e.into()),
+            BooleanLiteral(node) => Some(visit_boolean_literal(node).into()),
+            Block(node) => Some(self.visit_block_expression(node).into()),
+            Call(node) => self.visit_call_expression(node).map(|n| n.into()),
+            ConstructorLiteral(node) => self.visit_constructor_literal(node).map(Into::into),
+            Element(node) => self.visit_element_expression(node).map(Into::into),
+            FloatLiteral(node) => Some(visit_float_literal(node).into()),
+            Member(node) => self.visit_member_expression(node).map(Into::into),
+            Function(node) => {
                 self.with_scope(|self_| self_.visit_function_expression(node, None).map(Into::into))
             }
-            ast::Expression::Identifier(node) => self.visit_identifier(node).map(Into::into),
-            ast::Expression::If(node) => self.visit_if_expression(node).map(Into::into),
-            ast::Expression::IfDecl(node) => self.visit_if_decl_expression(node).map(Into::into),
-            ast::Expression::Invalid(_) => None,
-            ast::Expression::IntLiteral(node) => Some(visit_int_literal(node).into()),
-            ast::Expression::Loop(node) => self.visit_loop(node),
-            ast::Expression::Match(node) => self.visit_match_expression(node).map(Into::into),
-            ast::Expression::StringLiteral(node) => Some(visit_string_literal(node).into()),
-            ast::Expression::Tuple(node) => self.visit_tuple_expression(node),
-            ast::Expression::TypeMatch(node) => self.visit_type_match(node).map(Into::into),
-            ast::Expression::Unary(node) => self.visit_unary_expression(node).map(Into::into),
+            Identifier(node) => self.visit_identifier(node).map(Into::into),
+            If(node) => self.visit_if_expression(node).map(Into::into),
+            IfDecl(node) => self.visit_if_decl_expression(node).map(Into::into),
+            Invalid(_) => None,
+            IntLiteral(node) => Some(visit_int_literal(node).into()),
+            Intrinsic(node) => Some(self.visit_intrinsic_call(node).into()),
+            Loop(node) => self.visit_loop(node),
+            Match(node) => self.visit_match_expression(node).map(Into::into),
+            StringLiteral(node) => Some(visit_string_literal(node).into()),
+            Tuple(node) => self.visit_tuple_expression(node),
+            TypeMatch(node) => self.visit_type_match(node).map(Into::into),
+            Unary(node) => self.visit_unary_expression(node).map(Into::into),
         }
     }
 
@@ -109,6 +109,33 @@ impl TypeChecker {
                 self.error(error, node.loc);
                 None
             }
+        }
+    }
+
+    fn visit_intrinsic_call(&mut self, node: ast::IntrinsicCall) -> ir::IntrinsicCall {
+        let name = node.name.as_str();
+        let (symbol_id, symbol) = self
+            .symbols
+            .all()
+            .filter(|(_, s)| s.defined_at().module() == 0)
+            .find(|(_, s)| s.name() == name)
+            .expect(&format!("intrinsic call to unknown '{}' function", name));
+        let SymbolId::Function(callee) = symbol_id else {
+            panic!("expected function symbol")
+        };
+        let ty = symbol.ty();
+        let args = node
+            .args
+            .into_iter()
+            .map(|e| self.visit_expression(e))
+            .collect::<Option<Vec<_>>>()
+            .expect("got invalid expression(s)");
+
+        ir::IntrinsicCall {
+            loc: node.loc,
+            callee,
+            args,
+            ty,
         }
     }
 
