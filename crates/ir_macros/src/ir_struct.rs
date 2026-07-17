@@ -88,14 +88,12 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
     let pushes = fields
         .named
         .iter()
-        .filter_map(|field| {
-            let is_child = field.attrs.iter().any(|a| a.path().is_ident("child"));
+        .filter(|field| field.attrs.iter().any(|a| a.path().is_ident("child")))
+        .map(|field| {
             let ident = field.ident.as_ref().unwrap();
-            is_child.then(|| {
-                quote! {
-                    ::tine_ir::PushNodes::push_nodes(&self.#ident, stack);
-                }
-            })
+            quote! {
+                ::tine_ir::PushNodes::push_nodes(&self.#ident, stack);
+            }
         })
         .collect::<Vec<_>>();
 

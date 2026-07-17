@@ -92,9 +92,9 @@ mod tests {
 
     use super::*;
 
-    fn visit_variable_declaration(node: &ast::VariableDeclaration) -> TypeChecker {
+    fn visit_variable_declaration(node: ast::VariableDeclaration) -> TypeChecker {
         let mut tc = TypeChecker::new();
-        tc.visit_variable_declaration(node.clone());
+        tc.visit_variable_declaration(node);
         tc
     }
 
@@ -115,7 +115,7 @@ mod tests {
             })),
             ..Default::default()
         };
-        let mut tc = visit_variable_declaration(&node);
+        let mut tc = visit_variable_declaration(node);
         let symbol = tc
             .current_scope()
             .lookup("a")
@@ -143,7 +143,7 @@ mod tests {
             })),
             ..Default::default()
         };
-        let mut tc = visit_variable_declaration(&node);
+        let mut tc = visit_variable_declaration(node);
         let symbol = tc
             .current_scope()
             .lookup("a")
@@ -171,7 +171,7 @@ mod tests {
             })),
             ..Default::default()
         };
-        let tc = visit_variable_declaration(&node);
+        let tc = visit_variable_declaration(node);
         assert_eq!(tc.diagnostics.len(), 1);
         assert_eq!(
             tc.diagnostics[&0][0].kind,

@@ -330,7 +330,7 @@ mod tests {
                     loc: Location::new(0, Span::new(5, 14)),
                     name: "src".to_owned(),
                     value: Some(ast::AttributeValue::String(ast::StringLiteral {
-                        loc: Location::new(0, Span::new(11, 13)),
+                        loc: Location::new(0, Span::new(9, 14)),
                         text: "foo".to_string(),
                     })),
                 }],

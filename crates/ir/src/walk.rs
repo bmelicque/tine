@@ -6,17 +6,19 @@ pub trait PushNodes<'a> {
 
 impl<'a> PushNodes<'a> for Expression {
     fn push_nodes(&'a self, stack: &mut Vec<Node<'a>>) {
-        stack.push(Node::Expr(self));
+        self.push_children(stack);
     }
 }
 impl<'a> PushNodes<'a> for Statement {
     fn push_nodes(&'a self, stack: &mut Vec<Node<'a>>) {
-        stack.push(Node::Stmt(self));
+        self.push_children(stack);
     }
 }
 impl<'a> PushNodes<'a> for Block {
     fn push_nodes(&'a self, stack: &mut Vec<Node<'a>>) {
-        stack.extend(self.statements.iter().map(|s| Node::Stmt(s)))
+        self.statements
+            .iter()
+            .for_each(|stmt| stmt.push_nodes(stack));
     }
 }
 
