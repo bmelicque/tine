@@ -13,6 +13,7 @@ impl TypeChecker {
         let int_symbol: PrimitiveTypeSymbolId = self.symbols.insert(PrimitiveTypeSymbol {
             name: "int".to_string(),
             ty: TypeStore::INTEGER,
+            public: true,
             ..Default::default()
         });
 
@@ -22,6 +23,7 @@ impl TypeChecker {
         });
         let to_string: MethodSymbolId = self.symbols.insert(MethodSymbol {
             name: "toString".into(),
+            public: true,
             owner: int_symbol.into(),
             receiver: MethodReceiverKind::Immutable,
             ty: to_string_type,
@@ -34,6 +36,7 @@ impl TypeChecker {
     fn float_builtin(&mut self) {
         let float_symbol: PrimitiveTypeSymbolId = self.symbols.insert(PrimitiveTypeSymbol {
             name: "float".to_string(),
+            public: true,
             ty: TypeStore::FLOAT,
             ..Default::default()
         });
@@ -44,6 +47,7 @@ impl TypeChecker {
         });
         let to_string: MethodSymbolId = self.symbols.insert(MethodSymbol {
             name: "toString".into(),
+            public: true,
             owner: float_symbol.into(),
             receiver: MethodReceiverKind::Immutable,
             ty: to_string_type,

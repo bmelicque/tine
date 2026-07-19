@@ -89,6 +89,7 @@ impl TypeChecker {
             exports: HashMap::new(),
             diagnostics: HashMap::new(),
         };
+        tc.init_internals();
         tc.init_builtins();
         tc
     }

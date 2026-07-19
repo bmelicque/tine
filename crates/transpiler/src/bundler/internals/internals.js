@@ -87,3 +87,87 @@ export function createElement(tag, attributes, children) {
 
 	return element;
 }
+
+/**
+ * Generic combiner, based on MurmurHash3's block mixing.
+ * Has good entropy on lower bits.
+ * @param {number} h 
+ * @param {number} k 
+ * @returns {number}
+ */
+export function hashCombine(h, k) {
+	k = Math.imul(k, 0xcc9e2d51);
+	k = (k << 15) | (k >>> 17);
+	k = Math.imul(k, 0x1b873593);
+	h ^= k;
+	h = (h << 13) | (h >>> 19);
+	h = (Math.imul(h, 5) + 0xe6546b64) | 0;
+	return h;
+}
+
+export function hashFinalize(h) {
+	h ^= h >>> 16;
+	h = Math.imul(h, 0x85ebca6b);
+	h ^= h >>> 13;
+	h = Math.imul(h, 0xc2b2ae35);
+	h ^= h >>> 16;
+	return h;
+}
+
+export function hashBool(value) {
+	return value ? 1 : 0;
+}
+
+export function hashInt(value) {
+	return value | 0
+}
+
+// Handling floats: use TypedArrays to handle a f64 as two i32.
+const floatBuffer = new Float64Array(1);
+const intView = new Int32Array(floatBuffer.buffer);
+export function hashFloat(n) {
+	floatBuffer[0] = n;
+	return hashCombine(intView[0], intView[1]);
+}
+
+// Strings : FNV-1a
+export function hashString(s) {
+	let h = 0x811c9dc5 | 0;
+	for (let i = 0; i < s.length; i++) {
+		h ^= s.charCodeAt(i);
+		h = Math.imul(h, 0x01000193);
+	}
+	return h;
+}
+
+export function hashAny(v) {
+	if (v === null || v === undefined) return 0x9747b28c;
+	const t = typeof v;
+	if (t === "number") return hashFloat(v);
+	if (t === "string") return hashString(v);
+	if (t === "boolean") return hashBool(v);
+	if (Array.isArray(v)) {
+		let h = arr.length;
+		for (let i = 0; i < arr.length; i++) {
+			h = hashCombine(h, hashAny(arr[i]));
+		}
+		return h;
+	};
+	return v.hash();
+}
+
+export function eqAny(a, b) {
+	if (a === b) return true;
+	let ta = typeof a, tb = typeof b;
+	if (ta !== tb || ta !== "object") return false;
+	if (a.constructor !== b.constructor) return false;
+	if (Array.isArray(a)) {
+		if (a.length !== b.length) return false;
+		for (let i = 0; i < a.length; i++)
+			if (!eqAny(a[i], b[i])) return false;
+		return true;
+	}
+	if ("eq" in a) return a.eq(b);
+	return false;
+}
+
