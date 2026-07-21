@@ -46,6 +46,10 @@ impl Backend {
                 format!("{}.{} {}", owner_name, member_name, displayed_type)
             }
             Method(s) => self.display_method_symbol(s),
+            Trait(s) => {
+                let s = symbols.get(s);
+                format!("trait {} {}", s.name, display_raw_type(&self.types(), s.ty))
+            }
             Variant(s) => {
                 let s = symbols.get(s);
                 let owner_name = symbols.get_symbol(s.owner.into()).name();

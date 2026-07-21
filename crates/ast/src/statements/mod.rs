@@ -8,7 +8,7 @@ use crate::{
 };
 
 use super::{
-    expressions::{Expression, FunctionExpression, Identifier},
+    expressions::{Expression, FunctionExpression, FunctionParams, Identifier},
     types::Type,
     Pattern,
 };
@@ -25,6 +25,7 @@ ast_enum!(Statement {
     Invalid(InvalidStatement),
     Return(ReturnStatement),
     StructDefinition(StructDefinition),
+    Trait(TraitDefinition),
     TypeAlias(TypeAlias),
     VariableDeclaration(VariableDeclaration),
 });
@@ -46,6 +47,20 @@ ast_struct!(
         value: Option<Expression>,
     }
 );
+
+ast_struct!(TraitDefinition {
+    docs: Option<Docs>,
+    public: bool,
+    name: Option<Identifier>,
+    params: Option<Vec<Identifier>>,
+    methods: Option<Vec<TraitMethod>>,
+});
+ast_struct!(TraitMethod {
+    name: Option<Identifier>,
+    type_params: Option<Vec<Identifier>>,
+    params: Option<FunctionParams>,
+    return_annotation: Option<Type>,
+});
 
 ast_struct!(TypeAlias {
     docs: Option<Docs>,
