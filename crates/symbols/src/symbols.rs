@@ -42,6 +42,7 @@ pub enum SymbolId {
     Primitive(PrimitiveTypeSymbolId),
     TypeAlias(TypeAliasSymbolId),
     Method(MethodSymbolId),
+    Trait(TraitSymbolId),
     Member(MemberSymbolId),
 }
 
@@ -111,6 +112,8 @@ pub struct PrimitiveTypeSymbolId(pub(crate) usize);
 pub struct TypeAliasSymbolId(pub(crate) usize);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MethodSymbolId(pub(crate) usize);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TraitSymbolId(pub(crate) usize);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MemberSymbolId(pub(crate) usize);
 impl_as_id!(MemberSymbolId, Member, as_member);
@@ -256,6 +259,18 @@ impl MethodSymbol {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct TraitSymbol {
+    pub name: String,
+    pub public: bool,
+    // This is expected to have the same length as the function type's params.
+    pub param_names: Vec<String>,
+    pub ty: TypeId,
+    pub docs: Option<String>,
+    pub defined_at: Location,
+    pub access: SymbolAccessManager,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SymbolAccessManager {
     reads: Vec<Location>,
@@ -351,6 +366,7 @@ impl_symbol!(EnumSymbol, |s: &EnumSymbol| s.public);
 impl_symbol!(TypeAliasSymbol, |s: &TypeAliasSymbol| s.public);
 impl_symbol!(MemberSymbol, |s: &MemberSymbol| s.public);
 impl_symbol!(MethodSymbol, |s: &MethodSymbol| s.public);
+impl_symbol!(TraitSymbol, |s: &TraitSymbol| s.public);
 
 impl_symbol!(VariantSymbol); // uses default: always public
 impl_symbol!(PrimitiveTypeSymbol); // uses default: always public

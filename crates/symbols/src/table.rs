@@ -130,4 +130,5 @@ define_symbols! {
     TypeAlias: TypeAliasSymbol,      TypeAliasSymbolId,     aliases;
     Member:    MemberSymbol,         MemberSymbolId,        members;
     Method:    MethodSymbol,         MethodSymbolId,        methods;
+    Trait:     TraitSymbol,          TraitSymbolId,         traits;
 }

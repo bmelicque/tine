@@ -5,6 +5,7 @@ mod enums;
 mod functions;
 mod implementations;
 mod structs;
+mod traits;
 mod utils;
 mod variables;
 
