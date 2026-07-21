@@ -86,10 +86,13 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_function_params(&mut self) -> Option<ast::FunctionParams> {
+    pub fn parse_function_params(&mut self) -> Option<ast::FunctionParams> {
         let Some((Ok(Token::LParen), _)) = self.tokens.peek() else {
+            let diag = DiagnosticKind::ExpectedToken {
+                expected: vec!["(".to_string()],
+            };
             let loc = self.next_loc();
-            self.error(DiagnosticKind::MissingName, loc);
+            self.error(diag, loc);
             return None;
         };
         let start_range = self.eat(&[Token::LParen]);

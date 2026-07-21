@@ -181,6 +181,13 @@ fn parse_string(lex: &mut logos::Lexer<Token>) -> String {
 }
 
 impl Token {
+    pub fn identifier(&self) -> Option<&str> {
+        match self {
+            Token::Ident(i) => Some(i),
+            _ => None,
+        }
+    }
+
     pub fn colon(&self) -> Option<Self> {
         match self {
             Token::Colon => Some(self.clone()),

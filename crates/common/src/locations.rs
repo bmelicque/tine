@@ -150,3 +150,15 @@ impl Ord for Location {
 pub trait Locatable {
     fn loc(&self) -> Location;
 }
+
+pub fn vec_loc<L: Locatable>(vec: &Vec<L>) -> Option<Location> {
+    let first = vec.first()?;
+    let last = vec.last()?;
+    Some(Location::merge(first.loc(), last.loc()))
+}
+
+pub fn maybe_vec_loc(vec: &[Option<Location>]) -> Option<Location> {
+    let first = vec.iter().flatten().next()?;
+    let last = vec.iter().flatten().next_back()?;
+    Some(Location::merge(*first, *last))
+}
