@@ -56,6 +56,7 @@ ast_struct!(TraitDefinition {
     methods: Option<Vec<TraitMethod>>,
 });
 ast_struct!(TraitMethod {
+    receiver: Option<Identifier>,
     name: Option<Identifier>,
     type_params: Option<Vec<Identifier>>,
     params: Option<FunctionParams>,

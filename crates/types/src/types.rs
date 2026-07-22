@@ -242,6 +242,7 @@ impl Into<Type> for TraitType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TraitMethod {
+    pub self_type: Option<TypeParam>,
     pub name: String,
     pub def: TypeId,
 }

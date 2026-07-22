@@ -54,14 +54,26 @@ impl TypeChecker {
     fn check_method_signature(&mut self, node: ast::TraitMethod) -> Option<types::TraitMethod> {
         let name = node.name?.text;
 
-        let ((params, return_type), type_params) =
-            self.with_type_params(&node.type_params, |self_| {
-                let params = self_.visit_function_params(node.params);
-                let return_type = node
-                    .return_annotation
-                    .map_or(TypeStore::UNIT, |ann| self_.visit_type(ann));
-                (params, return_type)
-            });
+        let has_receiver = node.receiver.is_some();
+        let type_params = type_params(node.receiver, node.type_params);
+
+        let ((params, return_type), type_params) = self.with_type_params(&type_params, |self_| {
+            let params = self_.visit_function_params(node.params);
+            let return_type = node
+                .return_annotation
+                .map_or(TypeStore::UNIT, |ann| self_.visit_type(ann));
+            (params, return_type)
+        });
+
+        let (self_type, type_params) = match has_receiver {
+            true => {
+                let mut type_params = type_params;
+                let tail = type_params.split_off(1);
+                let head = type_params.pop().unwrap();
+                (Some(head), tail)
+            }
+            false => (None, type_params),
+        };
 
         let params = params?
             .into_iter()
@@ -73,6 +85,25 @@ impl TypeChecker {
             return_type,
         });
 
-        Some(types::TraitMethod { name, def })
+        Some(types::TraitMethod {
+            self_type,
+            name,
+            def,
+        })
+    }
+}
+
+fn type_params(
+    receiver: Option<ast::Identifier>,
+    type_params: Option<Vec<ast::Identifier>>,
+) -> Option<Vec<ast::Identifier>> {
+    match (receiver, type_params) {
+        (None, None) => None,
+        (Some(receiver), None) => Some(vec![receiver]),
+        (None, Some(type_params)) => Some(type_params),
+        (Some(receiver), Some(mut type_params)) => {
+            type_params.insert(0, receiver);
+            Some(type_params)
+        }
     }
 }

@@ -188,6 +188,20 @@ impl Token {
         }
     }
 
+    pub fn lparen(&self) -> Option<()> {
+        match self {
+            Token::LParen => Some(()),
+            _ => None,
+        }
+    }
+
+    pub fn rparen(&self) -> Option<()> {
+        match self {
+            Token::RParen => Some(()),
+            _ => None,
+        }
+    }
+
     pub fn colon(&self) -> Option<Self> {
         match self {
             Token::Colon => Some(self.clone()),

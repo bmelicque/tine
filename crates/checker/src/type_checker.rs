@@ -11,7 +11,10 @@ use tine_parser::ProjectParser;
 use tine_symbols::{symbols::*, table::*};
 use tine_types::{store::TypeStore, types};
 
-use crate::loader::{CheckerLoader, LoadedModule, MockLoader, ModuleLoader};
+use crate::{
+    loader::{CheckerLoader, LoadedModule, MockLoader, ModuleLoader},
+    substitutions::Substitutions,
+};
 
 #[derive(Debug, Default)]
 pub struct CheckResult {
@@ -226,7 +229,7 @@ impl TypeChecker {
     }
 
     pub fn can_be_assigned_to(
-        &self,
+        &mut self,
         got: types::TypeId,
         expected_id: types::TypeId,
         got_immutable: bool,
@@ -236,7 +239,7 @@ impl TypeChecker {
         use types::Type::*;
         match (&expected, &actual) {
             (Unknown, _) | (_, Unknown) => true,
-            (Trait(t), _) => self.implements_trait(got, t, got_immutable),
+            (Trait(t), _) => self.implements_trait(got, &t.clone(), got_immutable),
             (e, Ref(a)) if e.is_generic() => a.inner == expected_id,
             (_, _) => actual == expected,
         }
@@ -327,7 +330,7 @@ impl TypeChecker {
     /// immutable version of the type also implements the trait (since some
     /// methods might be defined with a mutable receiver).
     pub(super) fn implements_trait(
-        &self,
+        &mut self,
         ty: types::TypeId,
         expected_trait: &types::TraitType,
         got_immutable: bool,
@@ -354,6 +357,7 @@ impl TypeChecker {
             .map(|m| {
                 let symbol = self.symbols.get(m);
                 types::TraitMethod {
+                    self_type: None,
                     name: symbol.name.clone(),
                     def: symbol.ty,
                 }
@@ -363,7 +367,16 @@ impl TypeChecker {
         expected_trait
             .methods
             .iter()
-            .find(|expected| !got.contains(*expected))
+            .cloned()
+            .map(|mut m| {
+                if let Some(s) = &m.self_type {
+                    let subs = Substitutions::with_initial(&[s.clone()], &[ty]);
+                    m.self_type = None;
+                    m.def = subs.apply(&mut self.types, m.def);
+                }
+                m
+            })
+            .find(|expected| !got.contains(expected))
             .is_none()
     }
 

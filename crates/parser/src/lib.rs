@@ -128,9 +128,10 @@ impl<'src> Parser<'src> {
         }
     }
 
-    fn try_parse<F, R>(&mut self, parse: F, recover_at: &[Token]) -> Result<Option<R>, Location>
+    fn try_parse<F, R, T>(&mut self, parse: F, recover_at: R) -> Result<Option<T>, Location>
     where
-        F: FnOnce(&mut Self) -> Option<R>,
+        F: FnOnce(&mut Self) -> Option<T>,
+        R: Fn(&Token) -> bool,
     {
         match parse(self) {
             Some(r) => Ok(Some(r)),
@@ -270,11 +271,14 @@ impl<'src> Parser<'src> {
         range
     }
 
-    fn sync2(&mut self, before: &[Token]) -> Option<Location> {
+    fn sync2<F>(&mut self, before: F) -> Option<Location>
+    where
+        F: Fn(&Token) -> bool,
+    {
         let mut range = None;
         while let Some(token) = &self.tokens.peek() {
             match token {
-                (Ok(t), r) if before.contains(t) => {
+                (Ok(t), r) if before(t) => {
                     break;
                 }
                 (_, got) => {

@@ -65,6 +65,7 @@ impl Parser<'_> {
     }
 
     fn maybe_parse_method_signature(&mut self) -> Option<ast::TraitMethod> {
+        let receiver = self.maybe_parse_receiver();
         let name = self.maybe_parse_name();
         let type_params = self.maybe_parse_type_params();
         let params = self.maybe_parse_function_params();
@@ -79,11 +80,32 @@ impl Parser<'_> {
 
         Some(ast::TraitMethod {
             loc,
+            receiver,
             name,
             type_params,
             params,
             return_annotation,
         })
+    }
+
+    fn maybe_parse_receiver(&mut self) -> Option<ast::Identifier> {
+        self.try_parse(Self::parse_receiver_helper, Self::is_receiver_sync)
+            .ok()
+            .flatten()
+    }
+
+    fn parse_receiver_helper(parser: &mut Parser<'_>) -> Option<ast::Identifier> {
+        parser.maybe_eat(|t| t.lparen())?;
+        let (text, loc) = parser.maybe_eat(|t| t.identifier().map(|s| s.to_owned()))?;
+        parser.maybe_eat(|t| t.rparen())?;
+        Some(ast::Identifier { text, loc })
+    }
+
+    fn is_receiver_sync(token: &Token) -> bool {
+        matches!(
+            token,
+            Token::Ident(_) | Token::Lt | Token::LParen | Token::Newline | Token::RBrace
+        )
     }
 
     fn maybe_parse_name(&mut self) -> Option<ast::Identifier> {
@@ -92,7 +114,12 @@ impl Parser<'_> {
                 let (text, loc) = self_.maybe_eat(|t| t.identifier().map(|s| s.to_owned()))?;
                 Some(ast::Identifier { text, loc })
             },
-            &[Token::Lt, Token::LParen, Token::Newline, Token::RBrace],
+            |t| {
+                matches!(
+                    t,
+                    Token::Lt | Token::LParen | Token::Newline | Token::RBrace
+                )
+            },
         );
 
         match name_result {
@@ -115,7 +142,7 @@ impl Parser<'_> {
                 self_.maybe_is(|t| matches!(t, Token::Lt)).then_some(())?;
                 Some(self_.parse_type_params())
             },
-            &[Token::LParen, Token::Newline, Token::RBrace],
+            |t| matches!(t, Token::LParen | Token::Newline | Token::RBrace),
         )
         .ok()?
     }
@@ -128,7 +155,7 @@ impl Parser<'_> {
                     .then_some(())?;
                 self_.parse_function_params()
             },
-            &[Token::RBrace],
+            |t| matches!(t, Token::RBrace),
         );
 
         match result {
@@ -151,7 +178,7 @@ impl Parser<'_> {
                 self_.eat_if(&[Token::Colon])?;
                 self_.parse_type()
             },
-            &[Token::Newline, Token::RBrace],
+            |t| matches!(t, Token::Newline | Token::RBrace),
         )
         .ok()?
     }
