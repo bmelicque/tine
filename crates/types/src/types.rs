@@ -114,7 +114,7 @@ impl Into<Type> for FunctionType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct TypeParam {
     pub name: String,
     pub id: TypeId,
