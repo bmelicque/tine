@@ -66,7 +66,12 @@ impl Parser<'_> {
 
     fn maybe_parse_method_signature(&mut self) -> Option<ast::TraitMethod> {
         let receiver = self.maybe_parse_receiver();
-        let name = self.maybe_parse_name();
+        let name = self.maybe_parse_name(|t| {
+            matches!(
+                t,
+                Token::Lt | Token::LParen | Token::Newline | Token::RBrace
+            )
+        });
         let type_params = self.maybe_parse_type_params();
         let params = self.maybe_parse_function_params();
         let return_annotation = self.maybe_parse_return_type();
@@ -106,34 +111,6 @@ impl Parser<'_> {
             token,
             Token::Ident(_) | Token::Lt | Token::LParen | Token::Newline | Token::RBrace
         )
-    }
-
-    fn maybe_parse_name(&mut self) -> Option<ast::Identifier> {
-        let name_result = self.try_parse(
-            |self_| {
-                let (text, loc) = self_.maybe_eat(|t| t.identifier().map(|s| s.to_owned()))?;
-                Some(ast::Identifier { text, loc })
-            },
-            |t| {
-                matches!(
-                    t,
-                    Token::Lt | Token::LParen | Token::Newline | Token::RBrace
-                )
-            },
-        );
-
-        match name_result {
-            Ok(Some(name)) => Some(name),
-            Ok(None) => {
-                let loc = self.next_loc();
-                self.error(DiagnosticKind::MissingName, loc);
-                None
-            }
-            Err(loc) => {
-                self.error(DiagnosticKind::MissingName, loc);
-                None
-            }
-        }
     }
 
     fn maybe_parse_type_params(&mut self) -> Option<Vec<ast::Identifier>> {

@@ -75,6 +75,7 @@ ast_struct!(
     #[derive(Default)]
     StructDefinition {
         docs: Option<Docs>,
+        meta: Option<Vec<MetaAttribute>>,
         public: bool,
         name: Option<Identifier>,
         params: Option<Vec<Identifier>>,
@@ -106,6 +107,7 @@ ast_struct!(
 
 ast_struct!(EnumDefinition {
     docs: Option<Docs>,
+    meta: Option<Vec<MetaAttribute>>,
     public: bool,
     name: Option<Identifier>,
     params: Option<Vec<Identifier>>,
@@ -177,3 +179,8 @@ impl From<InvalidExpression> for InvalidStatement {
         Self { loc: value.loc }
     }
 }
+
+ast_struct!(MetaAttribute {
+    name: Option<Identifier>,
+    args: Option<Vec<Identifier>>
+});
