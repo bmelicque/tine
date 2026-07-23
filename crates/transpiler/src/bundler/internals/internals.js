@@ -171,3 +171,124 @@ export function eqAny(a, b) {
 	return false;
 }
 
+const EMPTY = 0;
+const OCCUPIED = 1;
+const DELETED = 2; // tombstone
+
+export class Map {
+	constructor(capacity = 16) {
+		this._resize(capacity);
+	}
+
+	/**
+	 * Resize the whole map (also clears it)
+	 * @param {number} capacity should be a power of two
+	 */
+	_resize(capacity) {
+		this.capacity = capacity; // should always be a power of 2
+		this.mask = capacity - 1;
+		this.state = new Uint8Array(capacity);
+		this.keys = new Array(capacity);
+		this.values = new Array(capacity);
+		this.count = 0; // truly occupied slots
+		this.tombstones = 0; // deleted slots
+	}
+
+	/**
+	 * Probe the map to find if the key was already inserted
+	 * @param {unknown} key
+	 * @returns {number} positive if found, else negative = `-(insertPoint + 1)`
+	 */
+	_probe(key) {
+		const h = hashAny(key) >>> 0;
+		let idx = h & this.mask;
+		let firstTombstone = -1;
+
+		for (let i = 0; i < this.capacity; i++) {
+			const s = this.state[idx];
+
+			switch (s) {
+				case EMPTY:
+					// Not found, returning either this or the first found tombstone
+					const i = firstTombstone !== -1 ? firstTombstone : idx;
+					return -(i + 1);
+				case DELETED:
+					if (firstTombstone === -1) firstTombstone = idx;
+					break;
+				case OCCUPIED:
+					if (eqAny(this.keys[idx], key)) return idx;
+					break;
+			}
+
+			idx = (idx + 1) & this.mask; // linear probing; `& mask` = wraparound
+		}
+
+		throw new Error("hash table full");
+	}
+
+	get(key) {
+		const r = this._probe(key);
+		return r >= 0 ? this.values[r] : undefined;
+	}
+
+	insert(key, value) {
+		this._maybeGrow();
+		let r = this._probe(key);
+		if (r < 0) {
+			r = -(r + 1);
+			if (this.state[r] === DELETED) this.tombstones--;
+			this.state[r] = OCCUPIED;
+			this.keys[r] = key;
+			this.count++;
+		}
+		this.values[r.idx] = value;
+	}
+
+	delete(key) {
+		const r = this._probe(key);
+		if (r < 0) return false;
+		this.state[r] = DELETED;
+		// release the key and value
+		this.keys[r] = undefined;
+		this.values[r] = undefined;
+		this.count--;
+		this.tombstones++;
+		return true;
+	}
+
+	// Grow if occupied+tombstones is more than ~70% of capacity.
+	// Tombstones are counted, or else table with lots of deletes/sets would
+	// never rehash and probe chains would grow indefinitely.
+	_maybeGrow() {
+		if ((this.count + this.tombstones + 1) / this.capacity <= 0.7) return;
+
+		const oldKeys = this.keys,
+			oldValues = this.values,
+			oldState = this.state,
+			oldCapacity = this.capacity;
+		// double only if more occupied than tombstones (else a compaction will
+		// be better)
+		const shouldDouble = this.count / oldCapacity > 0.35;
+		this._resize(shouldDouble ? oldCapacity * 2 : oldCapacity);
+
+		for (let i = 0; i < oldCapacity; i++) {
+			if (oldState[i] === OCCUPIED) {
+				this._insertRehashed(oldKeys[i], oldValues[i]);
+			}
+		}
+	}
+
+	_insertRehashed(key, value) {
+		const h = hashAny(key) >>> 0;
+		let idx = h & this.mask;
+
+		while (this.state[idx] === OCCUPIED) {
+			idx = (idx + 1) & this.mask;
+		}
+
+		this.state[idx] = OCCUPIED;
+		this.keys[idx] = key;
+		this.values[idx] = value;
+		this.count++;
+	}
+}

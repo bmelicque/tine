@@ -6,6 +6,7 @@ mod dom;
 pub mod expressions;
 mod functions;
 mod loops;
+mod map_literals;
 mod matches;
 mod member;
 mod unary;

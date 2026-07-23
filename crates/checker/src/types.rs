@@ -49,7 +49,11 @@ impl TypeChecker {
         let value = node
             .value
             .map_or(TypeStore::DYNAMIC, |v| self.visit_type(*v));
-        self.intern(types::MapType { key, value })
+        let symbol = self.builtin_symbol("Map").unwrap();
+        self.intern(types::TypeRef {
+            inner: symbol.ty(),
+            args: vec![key, value],
+        })
     }
 
     pub fn visit_named_type(&mut self, node: ast::NamedType) -> types::TypeId {
@@ -224,11 +228,12 @@ mod tests {
 
         let result = checker.visit_map_type(map_type);
         let result = checker.resolve(result);
+        let symbol = checker.builtin_symbol("Map").unwrap();
         assert_eq!(
             result,
-            Type::Map(types::MapType {
-                key: TypeStore::STRING,
-                value: TypeStore::INTEGER,
+            Type::Ref(types::TypeRef {
+                inner: symbol.ty(),
+                args: vec![TypeStore::STRING, TypeStore::INTEGER,]
             })
         );
     }

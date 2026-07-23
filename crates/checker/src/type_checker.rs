@@ -228,6 +228,21 @@ impl TypeChecker {
         }
     }
 
+    pub fn builtin_id<I>(&self, name: &str) -> Option<I>
+    where
+        I: SymbolIndex,
+    {
+        self.symbols
+            .find_id::<I, _>(|s| s.name() == name && s.defined_at().module() == 0)
+    }
+    pub fn builtin_symbol(&self, name: &str) -> Option<&dyn Symbol> {
+        self.symbols
+            .all()
+            .map(|s| s.1)
+            .filter(|s| s.defined_at().module() == 0)
+            .find(|s| s.name() == name)
+    }
+
     pub fn can_be_assigned_to(
         &mut self,
         got: types::TypeId,
@@ -297,6 +312,11 @@ impl TypeChecker {
             .or_else(|| {
                 self.symbols
                     .find_id::<EnumSymbolId, _>(|s| s.ty == ty)
+                    .map(Into::into)
+            })
+            .or_else(|| {
+                self.symbols
+                    .find_id::<PrimitiveTypeSymbolId, _>(|s| s.ty == ty)
                     .map(Into::into)
             })
     }

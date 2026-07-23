@@ -7,7 +7,7 @@ mod utils;
 
 use super::{utils::ident_from_str, CodeGenerator};
 use crate::{
-    codegen::utils::{create_block_stmt, create_str, std_method_call},
+    codegen::utils::{create_block_stmt, create_str, internal_construct, internal_method_call},
     ownership_analyser::OwnershipAction,
 };
 use swc_common::DUMMY_SP;
@@ -64,8 +64,8 @@ impl CodeGenerator<'_, '_> {
                 value: i.value as f64,
                 raw: None,
             }),
-            Intrinsic(i) => self.handle_intrinsic_call(i),
-            Map(m) => self.handle_map_expression(m),
+            IntrinsicCall(i) => self.handle_intrinsic_call(i),
+            IntrinsicConstruct(i) => self.handle_intrinsic_construct(i),
             Member(m) => self.member_expr_to_swc(m),
             Method(m) => self.handle_method(m),
             StringLiteral(s) => self.string_literal_to_swc(s).into(),
@@ -199,43 +199,21 @@ impl CodeGenerator<'_, '_> {
             .unzip();
         let name = self.symbol_name(node.callee);
         let prelim = prelim.into_iter().flatten().collect();
-        let call = std_method_call(name, args);
+        let call = internal_method_call(name, args);
         ExpressionResult {
             prelim_stmts: prelim,
             expr: call.into(),
         }
     }
 
-    fn handle_map_expression(&mut self, node: ir::MapLiteral) -> ExpressionResult {
-        let count = node.entries.len();
-        let mut results = Vec::with_capacity(count * 2);
-        for entry in node.entries {
-            results.push(self.handle_expression(entry.key));
-            results.push(self.handle_expression(entry.value));
+    fn handle_intrinsic_construct(&mut self, node: ir::IntrinsicConstruct) -> ExpressionResult {
+        // FIXME: handle arguments
+        let name = self.symbol_name(node.constructor);
+        let call = internal_construct(name);
+        ExpressionResult {
+            prelim_stmts: vec![],
+            expr: call.into(),
         }
-        let (prelim_stmts, exprs) = self.extract_necessary(results);
-
-        let mut props = Vec::with_capacity(count);
-        let mut iter = exprs.into_iter();
-        while let (Some(key), Some(value)) = (iter.next(), iter.next()) {
-            props.push(self.make_prop(key, value));
-        }
-
-        let expr = swc::Expr::Object(swc::ObjectLit {
-            span: DUMMY_SP,
-            props,
-        });
-
-        ExpressionResult { prelim_stmts, expr }
-    }
-    fn make_prop(&self, key: swc::Expr, value: swc::Expr) -> swc::PropOrSpread {
-        swc::PropOrSpread::Prop(Box::new(swc::Prop::KeyValue(swc::KeyValueProp {
-            key: swc::PropName::Computed(swc::ComputedPropName {
-                span: DUMMY_SP,
-                expr: Box::new(key),
-            }),
-            value: Box::new(value),
-        })))
     }
 
     pub fn member_expr_to_swc(&mut self, node: ir::MemberExpression) -> ExpressionResult {

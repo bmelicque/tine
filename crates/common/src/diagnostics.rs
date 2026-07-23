@@ -156,6 +156,10 @@ pub enum DiagnosticKind {
         expected: usize,
         got: usize,
     },
+    TypeDoesNotImplementTrait {
+        type_name: String,
+        trait_name: String,
+    },
     UnexpectedCallback {
         expected: String,
     },
@@ -363,6 +367,9 @@ impl Display for DiagnosticKind {
             }
             Self::TupleElementCountMismatch { expected, got } => {
                 write!(f, "expected {} element(s) but got {}", expected, got)
+            }
+            Self::TypeDoesNotImplementTrait { type_name, trait_name} => {
+                write!(f, "type `{}` is expected to implement trait `{}` but does not", type_name, trait_name)
             }
             Self::UnexpectedCallback { expected } => {
                 write!(f, "expected type `{}` but got a callback", expected)

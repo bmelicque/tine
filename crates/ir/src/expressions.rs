@@ -22,8 +22,8 @@ ir_enum!(
         Identifier(Identifier),
         If(IfExpression),
         IntLiteral(IntLiteral),
-        Intrinsic(IntrinsicCall),
-        Map(MapLiteral),
+        IntrinsicCall(IntrinsicCall),
+        IntrinsicConstruct(IntrinsicConstruct),
         Member(MemberExpression),
         Method(MethodExpression),
         StringLiteral(StringLiteral),
@@ -208,23 +208,9 @@ pub struct IntrinsicCall {
 
 #[ir_struct]
 #[derive(Debug, Clone)]
-/// Its type should refer to a Map type
-pub struct MapLiteral {
-    #[child]
-    pub entries: Vec<MapEntry>,
-}
-#[ir_struct(untyped)]
-#[derive(Debug, Clone)]
-pub struct MapEntry {
-    #[child]
-    pub key: Expression,
-    #[child]
-    pub value: Expression,
-}
-impl<'a> PushNodes<'a> for MapEntry {
-    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
-        self.push_children(stack);
-    }
+pub struct IntrinsicConstruct {
+    pub constructor: StructSymbolId,
+    pub fields: Vec<StructLiteralField>,
 }
 
 #[ir_struct]

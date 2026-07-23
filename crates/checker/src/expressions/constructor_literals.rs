@@ -1,11 +1,10 @@
-use core::panic;
 use std::collections::HashSet;
 use tine_ast as ast;
 use tine_common::{
     diagnostics::DiagnosticKind,
     locations::{Locatable, Location},
 };
-use tine_ir::{self as ir, Typed};
+use tine_ir as ir;
 use tine_symbols::symbols::*;
 use tine_types::{store::TypeStore, types};
 
@@ -26,7 +25,7 @@ impl TypeChecker {
     ) -> Option<ir::Expression> {
         match &node.constructor {
             ast::Constructor::Map(_) => {
-                return self.visit_map_literal(node).map(Into::into);
+                return self.visit_map_literal(node);
             }
             ast::Constructor::Invalid(_) => {
                 self.fallback_check_literal_body(node.body);
@@ -358,104 +357,7 @@ impl TypeChecker {
         })
     }
 
-    fn visit_map_literal(&mut self, node: ast::ConstructorLiteral) -> Option<ir::MapLiteral> {
-        let ast::Constructor::Map(constructor) = node.constructor else {
-            panic!()
-        };
-        let ty = self.visit_map_type(constructor);
-
-        let entries = match node.body {
-            Some(ast::ConstructorBody::Struct(body)) => body
-                .fields
-                .into_iter()
-                .filter_map(|entry| self.visit_map_entry(entry))
-                .collect::<Vec<_>>(),
-            Some(ast::ConstructorBody::Tuple(body)) => {
-                self.handle_unexpected_tuple_body(body, true);
-                return None;
-            }
-            None => {
-                self.error(DiagnosticKind::ExpectedStructLikeBody, node.loc);
-                return None;
-            }
-        };
-
-        let (key, value) = self.validate_map_type(ty, &entries);
-        match key {
-            TypeStore::DYNAMIC => self.error(DiagnosticKind::CannotInferType, node.loc),
-            TypeStore::UNKNOWN
-            | TypeStore::BOOLEAN
-            | TypeStore::FLOAT
-            | TypeStore::INTEGER
-            | TypeStore::STRING => {}
-            _ => self.error(DiagnosticKind::NotImplementedMapType, node.loc),
-        }
-        let ty = self.intern(types::MapType { key, value });
-        Some(ir::MapLiteral {
-            loc: node.loc,
-            entries,
-            ty,
-        })
-    }
-
-    fn visit_map_entry(&mut self, entry: ast::ConstructorField) -> Option<ir::MapEntry> {
-        let key = match entry.key {
-            Some(ast::ConstructorKey::MapKey(e)) => self.visit_expression(e),
-            Some(ast::ConstructorKey::Name(n)) => {
-                self.error(DiagnosticKind::ExpectedMapKey, n.loc);
-                None
-            }
-            None => None,
-        };
-        let value = entry.value.and_then(|v| self.visit_expression(v));
-        Some(ir::MapEntry {
-            loc: entry.loc,
-            key: key?,
-            value: value?,
-        })
-    }
-
-    fn validate_map_type(
-        &mut self,
-        expected: types::TypeId,
-        entries: &[ir::MapEntry],
-    ) -> (types::TypeId, types::TypeId) {
-        let types::Type::Map(map_type) = self.resolve(expected) else {
-            panic!()
-        };
-        let mut expected_key_type = map_type.key;
-        let mut expected_value_type = map_type.value;
-        for entry in entries {
-            expected_key_type =
-                self.check_entry_part_type(expected_key_type, entry.key.ty(), entry.key.loc());
-            expected_value_type = self.check_entry_part_type(
-                expected_value_type,
-                entry.value.ty(),
-                entry.value.loc(),
-            );
-        }
-
-        (expected_key_type, expected_value_type)
-    }
-
-    // Return new expected type
-    fn check_entry_part_type(
-        &mut self,
-        expected: types::TypeId,
-        got: types::TypeId,
-        at: Location,
-    ) -> types::TypeId {
-        if expected == TypeStore::DYNAMIC {
-            if got != TypeStore::UNKNOWN {
-                return got;
-            }
-        } else {
-            self.check_assigned_type(expected, got, true, at);
-        }
-        return expected;
-    }
-
-    fn handle_unexpected_tuple_body(&mut self, t: ast::TupleExpression, report: bool) {
+    pub(super) fn handle_unexpected_tuple_body(&mut self, t: ast::TupleExpression, report: bool) {
         if report {
             self.error(DiagnosticKind::ExpectedStructLikeBody, t.loc);
         }
@@ -479,63 +381,5 @@ impl TypeChecker {
             Some(ast::ConstructorBody::Tuple(t)) => self.handle_unexpected_tuple_body(t, false),
             None => {}
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_visit_map_literal() {
-        let mut checker = TypeChecker::new();
-        let map_literal = ast::ConstructorLiteral {
-            loc: Location::dummy(),
-            qualifiers: vec![],
-            constructor: ast::Constructor::Map(ast::MapType {
-                key: Some(Box::new(ast::Type::Named(ast::NamedType {
-                    name: ast::Identifier {
-                        text: "str".to_string(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                }))),
-                value: Some(Box::new(ast::Type::Named(ast::NamedType {
-                    name: ast::Identifier {
-                        text: "int".to_string(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                }))),
-                loc: Location::dummy(),
-            }),
-            body: Some(ast::ConstructorBody::Struct(ast::StructLiteralBody {
-                loc: Location::dummy(),
-                fields: vec![ast::ConstructorField {
-                    loc: Location::dummy(),
-                    key: Some(ast::ConstructorKey::MapKey(ast::Expression::StringLiteral(
-                        ast::StringLiteral {
-                            loc: Location::dummy(),
-                            text: "key".into(),
-                        },
-                    ))),
-                    value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
-                        value: 42,
-                        loc: Location::dummy(),
-                    })),
-                }],
-            })),
-        };
-
-        let result = checker.visit_constructor_literal(map_literal);
-        let result = checker.resolve(result.unwrap().ty());
-        assert!(matches!(
-            result,
-            types::Type::Map(types::MapType {
-                key: TypeStore::STRING,
-                value: TypeStore::INTEGER
-            })
-        ));
-        assert!(checker.diagnostics.is_empty());
     }
 }

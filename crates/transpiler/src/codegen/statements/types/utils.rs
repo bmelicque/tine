@@ -5,7 +5,7 @@ use tine_types::types;
 
 use crate::codegen::{
     statements::{assignments::assignment, utils::declare_const},
-    utils::{ident_from_str, member, std_method_call},
+    utils::{ident_from_str, internal_method_call, member},
     CodeGenerator,
 };
 
@@ -14,10 +14,10 @@ impl CodeGenerator<'_, '_> {
         let ty = self.symbol_type_id(field);
         match self.resolve(ty) {
             types::Type::Array(_) | types::Type::Tuple(_) => {
-                std_method_call("cloneArray", vec![self.this_field(field).into()]).into()
+                internal_method_call("cloneArray", vec![self.this_field(field).into()]).into()
             }
             types::Type::Param(_) => {
-                std_method_call("clone", vec![self.this_field(field).into()]).into()
+                internal_method_call("clone", vec![self.this_field(field).into()]).into()
             }
             ty if is_primitive(&ty) => self.this_field(field),
             _ => self.get_this_field(field).into(),
@@ -45,7 +45,7 @@ impl CodeGenerator<'_, '_> {
             types::Type::Array(a) => self.set_array_field(target, src, a).into(),
             types::Type::Param(_) => assignment(
                 target.clone(),
-                std_method_call("set", vec![target.into(), src.into()]).into(),
+                internal_method_call("set", vec![target.into(), src.into()]).into(),
             ),
             types::Type::Tuple(t) => self.set_tuple_field(target, src, t).into(),
             ty if is_primitive(&ty) => assignment(target, src),

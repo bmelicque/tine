@@ -4,7 +4,7 @@ use tine_ir as ir;
 
 use crate::codegen::{
     expressions::ExpressionResult,
-    utils::{create_str, ident_from_str, std_method_call},
+    utils::{create_str, ident_from_str, internal_method_call},
     CodeGenerator,
 };
 
@@ -51,7 +51,7 @@ impl CodeGenerator<'_, '_> {
             })
             .into(),
         ];
-        let expr = std_method_call("createElement", args);
+        let expr = internal_method_call("createElement", args);
 
         ExpressionResult {
             prelim_stmts: vec![attributes_prelim, children_prelim].concat(),

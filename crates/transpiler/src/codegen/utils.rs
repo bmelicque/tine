@@ -163,7 +163,7 @@ pub fn undefined() -> swc::Expr {
     })
 }
 
-pub fn std_method_call(name: &str, args: Vec<swc::ExprOrSpread>) -> swc::CallExpr {
+pub fn internal_method_call(name: &str, args: Vec<swc::ExprOrSpread>) -> swc::CallExpr {
     swc::CallExpr {
         callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
             span: DUMMY_SP,
@@ -173,6 +173,17 @@ pub fn std_method_call(name: &str, args: Vec<swc::ExprOrSpread>) -> swc::CallExp
         args,
         ..Default::default()
     }
+}
+// TODO: fields
+pub fn internal_construct(name: &str) -> swc::Expr {
+    swc::Expr::New(swc::NewExpr {
+        callee: Box::new(swc::Expr::Member(swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(swc::Expr::Ident(ident_from_str("$"))),
+            prop: swc::MemberProp::Ident(ident_from_str(name).into()),
+        })),
+        ..Default::default()
+    })
 }
 
 impl CodeGenerator<'_, '_> {

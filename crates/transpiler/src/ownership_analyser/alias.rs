@@ -330,7 +330,8 @@ fn visit_expr(
             vec![]
         }
 
-        ir::Expression::Intrinsic(_)
+        ir::Expression::IntrinsicCall(_)
+        | ir::Expression::IntrinsicConstruct(_)
         | ir::Expression::BooleanLiteral(_)
         | ir::Expression::FloatLiteral(_)
         | ir::Expression::IntLiteral(_)
@@ -382,12 +383,6 @@ fn visit_expr(
             .elements
             .iter()
             .flat_map(|e| visit_expr(e, checker, map))
-            .collect(),
-        ir::Expression::Map(m) => m
-            .entries
-            .iter()
-            // keys should be hashed so they can be ignored
-            .flat_map(|e| visit_expr(&e.value, checker, map))
             .collect(),
         ir::Expression::Struct(s) => s
             .fields
