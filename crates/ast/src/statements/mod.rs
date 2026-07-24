@@ -1,11 +1,9 @@
 mod implementations;
 
 use tine_common::locations::{Locatable, Location};
+use tine_macros::tree_struct;
 
-use crate::{
-    nodes::{ast_enum, ast_struct},
-    InvalidExpression, MemberExpression,
-};
+use crate::{nodes::ast_enum, walk::PushNodes, InvalidExpression, MemberExpression};
 
 use super::{
     expressions::{Expression, FunctionExpression, FunctionParams, Identifier},
@@ -30,104 +28,121 @@ ast_enum!(Statement {
     VariableDeclaration(VariableDeclaration),
 });
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Docs {
     pub loc: Location,
     pub text: String,
 }
 
-ast_struct!(
-    #[derive(Default)]
-    VariableDeclaration {
-        docs: Option<Docs>,
-        public: bool,
-        mutable: bool,
-        pattern: Option<Pattern>,
-        annotation: Option<Type>,
-        value: Option<Expression>,
-    }
-);
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct VariableDeclaration {
+    pub docs: Option<Docs>,
+    pub public: bool,
+    pub mutable: bool,
+    pub pattern: Option<Pattern>,
+    pub annotation: Option<Type>,
+    #[child]
+    pub value: Option<Expression>,
+}
 
-ast_struct!(TraitDefinition {
-    docs: Option<Docs>,
-    public: bool,
-    name: Option<Identifier>,
-    params: Option<Vec<Identifier>>,
-    methods: Option<Vec<TraitMethod>>,
-});
-ast_struct!(TraitMethod {
-    receiver: Option<Identifier>,
-    name: Option<Identifier>,
-    type_params: Option<Vec<Identifier>>,
-    params: Option<FunctionParams>,
-    return_annotation: Option<Type>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct TraitDefinition {
+    pub docs: Option<Docs>,
+    pub public: bool,
+    pub name: Option<Identifier>,
+    pub params: Option<Vec<Identifier>>,
+    pub methods: Option<Vec<TraitMethod>>,
+}
 
-ast_struct!(TypeAlias {
-    docs: Option<Docs>,
-    public: bool,
-    name: Option<Identifier>,
-    params: Option<Vec<Identifier>>,
-    definition: Option<Type>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct TraitMethod {
+    pub receiver: Option<Identifier>,
+    pub name: Option<Identifier>,
+    pub type_params: Option<Vec<Identifier>>,
+    pub params: Option<FunctionParams>,
+    pub return_annotation: Option<Type>,
+}
 
-ast_struct!(
-    #[derive(Default)]
-    StructDefinition {
-        docs: Option<Docs>,
-        meta: Option<Vec<MetaAttribute>>,
-        public: bool,
-        name: Option<Identifier>,
-        params: Option<Vec<Identifier>>,
-        body: Option<TypeBody>,
-    }
-);
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct TypeAlias {
+    pub docs: Option<Docs>,
+    pub public: bool,
+    pub name: Option<Identifier>,
+    pub params: Option<Vec<Identifier>>,
+    pub definition: Option<Type>,
+}
+
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct StructDefinition {
+    pub docs: Option<Docs>,
+    pub meta: Option<Vec<MetaAttribute>>,
+    pub public: bool,
+    pub name: Option<Identifier>,
+    pub params: Option<Vec<Identifier>>,
+    pub body: Option<TypeBody>,
+}
 
 ast_enum!(TypeBody {
     Struct(StructBody),
     Tuple(TupleBody),
 });
 
-ast_struct!(StructBody {
-    fields: Vec<StructDefinitionField>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct StructBody {
+    pub fields: Vec<StructDefinitionField>,
+}
 
-ast_struct!(StructDefinitionField {
-    public: bool,
-    name: Option<Identifier>,
-    definition: Option<Type>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct StructDefinitionField {
+    pub public: bool,
+    pub name: Option<Identifier>,
+    pub definition: Option<Type>,
+}
 
-ast_struct!(
-    /// (is_public, type)
-    TupleBody {
-        elements: Vec<(bool, Type)>,
-    }
-);
+/// (is_public, type)
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct TupleBody {
+    pub elements: Vec<(bool, Type)>,
+}
 
-ast_struct!(EnumDefinition {
-    docs: Option<Docs>,
-    meta: Option<Vec<MetaAttribute>>,
-    public: bool,
-    name: Option<Identifier>,
-    params: Option<Vec<Identifier>>,
-    variants: Vec<VariantDefinition>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct EnumDefinition {
+    pub docs: Option<Docs>,
+    pub meta: Option<Vec<MetaAttribute>>,
+    pub public: bool,
+    pub name: Option<Identifier>,
+    pub params: Option<Vec<Identifier>>,
+    pub variants: Vec<VariantDefinition>,
+}
 
-ast_struct!(VariantDefinition {
-    name: Option<Identifier>,
-    body: Option<TypeBody>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct VariantDefinition {
+    pub name: Option<Identifier>,
+    pub body: Option<TypeBody>,
+}
 impl VariantDefinition {
     pub fn is_unit(&self) -> bool {
         self.body.is_none()
     }
 }
 
-ast_struct!(Assignment {
-    pattern: Option<Assignee>,
-    value: Option<Expression>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Assignment {
+    pub pattern: Option<Assignee>,
+    #[child]
+    pub value: Option<Expression>,
+}
 
 ast_enum!(Assignee {
     Member(MemberExpression),
@@ -136,21 +151,31 @@ ast_enum!(Assignee {
     Pattern(Pattern),
 });
 
-ast_struct!(IndirectionAssignee {
-    identifier: Identifier,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct IndirectionAssignee {
+    pub identifier: Identifier,
+}
 
-ast_struct!(BreakStatement {
-    value: Option<Box<Expression>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct BreakStatement {
+    #[child]
+    pub value: Option<Box<Expression>>,
+}
 
-ast_struct!(ContinueStatement {});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ContinueStatement {}
 
-ast_struct!(ReturnStatement {
-    value: Option<Box<Expression>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ReturnStatement {
+    #[child]
+    pub value: Option<Box<Expression>>,
+}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExpressionStatement {
     pub expression: Box<Expression>,
 }
@@ -166,21 +191,32 @@ impl Locatable for ExpressionStatement {
         self.expression.loc()
     }
 }
+impl ExpressionStatement {
+    fn push_children<'a>(&'a self, stack: &mut Vec<crate::Node<'a>>) {
+        self.expression.push_nodes(stack);
+    }
+}
 
-ast_struct!(FunctionDefinition {
-    docs: Option<Docs>,
-    public: bool,
-    definition: FunctionExpression,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct FunctionDefinition {
+    pub docs: Option<Docs>,
+    pub public: bool,
+    pub definition: FunctionExpression,
+}
 
-ast_struct!(InvalidStatement {});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct InvalidStatement {}
 impl From<InvalidExpression> for InvalidStatement {
     fn from(value: InvalidExpression) -> Self {
         Self { loc: value.loc }
     }
 }
 
-ast_struct!(MetaAttribute {
-    name: Option<Identifier>,
-    args: Option<Vec<Identifier>>
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct MetaAttribute {
+    pub name: Option<Identifier>,
+    pub args: Option<Vec<Identifier>>,
+}

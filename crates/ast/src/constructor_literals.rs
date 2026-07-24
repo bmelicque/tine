@@ -1,17 +1,17 @@
 use tine_common::locations::{Locatable, Location};
+use tine_macros::tree_struct;
 
-use crate::{
-    nodes::{ast_enum, ast_struct},
-    Identifier, MapType, TupleExpression, Type,
-};
+use crate::{nodes::ast_enum, Identifier, MapType, TupleExpression, Type};
 
 use super::{expressions::Expression, types::NamedType};
 
-ast_struct!(ConstructorLiteral {
-    qualifiers: Vec<Identifier>,
-    constructor: Constructor,
-    body: Option<ConstructorBody>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ConstructorLiteral {
+    pub qualifiers: Vec<Identifier>,
+    pub constructor: Constructor,
+    pub body: Option<ConstructorBody>,
+}
 
 ast_enum!(Constructor {
     Invalid(Type),
@@ -19,27 +19,37 @@ ast_enum!(Constructor {
     Named(NamedType),
     Variant(VariantConstructor),
     Map(MapType),
-
 });
+impl Default for Constructor {
+    fn default() -> Self {
+        Self::Invalid(Type::Tuple(crate::TupleType::default()))
+    }
+}
 
-ast_struct!(VariantConstructor {
-    enum_name: Box<NamedType>,
-    variant_name: Option<Identifier>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct VariantConstructor {
+    pub enum_name: Box<NamedType>,
+    pub variant_name: Option<Identifier>,
+}
 
 ast_enum!(ConstructorBody {
     Struct(StructLiteralBody),
     Tuple(TupleExpression),
 });
 
-ast_struct!(StructLiteralBody {
-    fields: Vec<ConstructorField>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct StructLiteralBody {
+    pub fields: Vec<ConstructorField>,
+}
 
-ast_struct!(ConstructorField {
-    key: Option<ConstructorKey>,
-    value: Option<Expression>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ConstructorField {
+    pub key: Option<ConstructorKey>,
+    pub value: Option<Expression>,
+}
 
 ast_enum!(ConstructorKey {
     Name(Identifier),

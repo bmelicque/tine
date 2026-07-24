@@ -2,9 +2,11 @@ use std::fmt;
 
 use ordered_float::OrderedFloat;
 use tine_common::locations::{Locatable, Location};
+use tine_macros::tree_struct;
 
 use crate::{
-    nodes::{ast_enum, ast_struct, operator_enum},
+    nodes::{ast_enum, operator_enum},
+    walk::PushNodes,
     ElementExpression, VariantConstructor,
 };
 
@@ -35,32 +37,45 @@ ast_enum!(Expression {
     Unary(UnaryExpression),
 });
 
-ast_struct!(ArrayExpression {
-    elements: Vec<Expression>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ArrayExpression {
+    pub elements: Vec<Expression>,
+}
 
-ast_struct!(
-    #[derive(Default)]
-    Identifier { text: String }
-);
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+pub struct Identifier {
+    pub text: String,
+}
 impl Identifier {
     pub fn as_str(&self) -> &str {
         self.text.as_str()
     }
 }
 
-ast_struct!(IfPatExpression {
-    pattern: Option<Pattern>,
-    scrutinee: Option<Box<Expression>>,
-    consequent: Option<BlockExpression>,
-    alternate: Option<Box<Alternate>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct IfPatExpression {
+    pub pattern: Option<Pattern>,
+    #[child]
+    pub scrutinee: Option<Box<Expression>>,
+    #[child]
+    pub consequent: Option<BlockExpression>,
+    #[child]
+    pub alternate: Option<Box<Alternate>>,
+}
 
-ast_struct!(IfExpression {
-    condition: Option<Box<Expression>>,
-    consequent: Option<BlockExpression>,
-    alternate: Option<Box<Alternate>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct IfExpression {
+    #[child]
+    pub condition: Option<Box<Expression>>,
+    #[child]
+    pub consequent: Option<BlockExpression>,
+    #[child]
+    pub alternate: Option<Box<Alternate>>,
+}
 
 ast_enum!(
     Alternate {
@@ -69,7 +84,6 @@ ast_enum!(
         IfDecl(IfPatExpression),
     }
 );
-
 impl Into<Expression> for Alternate {
     fn into(self) -> Expression {
         match self {
@@ -79,42 +93,86 @@ impl Into<Expression> for Alternate {
         }
     }
 }
+impl<'a> PushNodes<'a> for Alternate {
+    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
+        match self {
+            Alternate::Block(b) => b.push_children(stack),
+            Alternate::If(i) => i.push_children(stack),
+            Alternate::IfDecl(i) => i.push_children(stack),
+        };
+    }
+}
 
-ast_struct!(IntLiteral { value: i64 });
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct IntLiteral {
+    pub value: i64,
+}
 
-ast_struct!(IntrinsicCall {
-    name: Identifier,
-    args: Vec<Expression>
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct IntrinsicCall {
+    pub name: Identifier,
+    pub args: Vec<Expression>,
+}
 
-ast_struct!(InvalidExpression {});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct InvalidExpression {}
 
-ast_struct!(MatchExpression {
-    scrutinee: Option<Box<Expression>>,
-    arms: Option<Vec<MatchArm>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct MatchExpression {
+    #[child]
+    pub scrutinee: Option<Box<Expression>>,
+    #[child]
+    pub arms: Option<Vec<MatchArm>>,
+}
 
-ast_struct!(MatchArm {
-    pattern: Option<Box<Pattern>>,
-    expression: Option<Box<Expression>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct MatchArm {
+    pub pattern: Option<Box<Pattern>>,
+    pub expression: Option<Box<Expression>>,
+}
+impl<'a> PushNodes<'a> for MatchArm {
+    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
+        self.expression.push_nodes(stack);
+    }
+}
 
-ast_struct!(StringLiteral { text: String });
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct StringLiteral {
+    pub text: String,
+}
 impl StringLiteral {
     pub fn as_str(&self) -> &str {
         self.text.as_str()
     }
 }
 
-ast_struct!(FloatLiteral { value: OrderedFloat<f64> });
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct FloatLiteral {
+    pub value: OrderedFloat<f64>,
+}
 
-ast_struct!(BooleanLiteral { value: bool });
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct BooleanLiteral {
+    pub value: bool,
+}
 
-ast_struct!(BinaryExpression {
-    left: Option<Box<Expression>>,
-    operator: BinaryOperator,
-    right: Option<Box<Expression>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct BinaryExpression {
+    #[child]
+    pub left: Option<Box<Expression>>,
+    pub operator: BinaryOperator,
+    #[child]
+    pub right: Option<Box<Expression>>,
+}
 
 operator_enum!(BinaryOperator {
     Add => "+",
@@ -135,46 +193,61 @@ operator_enum!(BinaryOperator {
     LOr => "||",
 });
 
-ast_struct!(
-    #[derive(Default)]
-    BlockExpression {
-        statements: Vec<Statement>,
-    }
-);
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct BlockExpression {
+    #[child]
+    pub statements: Vec<Statement>,
+}
 
-ast_struct!(CallExpression {
-    callee: Option<Box<Expression>>,
-    type_args: Option<Vec<Type>>,
-    args: Vec<CallArgument>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct CallExpression {
+    #[child]
+    pub callee: Option<Box<Expression>>,
+    pub type_args: Option<Vec<Type>>,
+    #[child]
+    pub args: Vec<CallArgument>,
+}
 
 ast_enum!(CallArgument {
     Expression(Expression),
     Callback(Callback),
 });
-impl CallArgument {
-    pub fn as_expression(&self) -> Option<&Expression> {
+impl<'a> PushNodes<'a> for CallArgument {
+    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
         match self {
-            CallArgument::Expression(expr) => Some(expr),
-            _ => None,
+            CallArgument::Expression(expr) => expr.push_nodes(stack),
+            CallArgument::Callback(c) => c.push_children(stack),
         }
     }
 }
 
-ast_struct!(Callback {
-    params: Vec<CallbackParam>,
-    body: Option<Box<Expression>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Callback {
+    pub params: Vec<CallbackParam>,
+    #[child]
+    pub body: Option<Box<Expression>>,
+}
+impl<'a> PushNodes<'a> for Callback {
+    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
+        self.body.push_nodes(stack);
+    }
+}
 
 ast_enum!(CallbackParam {
     Identifier(Identifier),
     Param(FunctionParam),
 });
 
-ast_struct!(MemberExpression {
-    object: Option<Box<Expression>>,
-    prop: Option<MemberProp>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct MemberExpression {
+    #[child]
+    pub object: Option<Box<Expression>>,
+    pub prop: Option<MemberProp>,
+}
 impl MemberExpression {
     pub fn root_expression(&self) -> Option<Expression> {
         let Some(object) = self.object.as_ref() else {
@@ -193,23 +266,30 @@ ast_enum!(MemberProp {
     Index(IntLiteral),
 });
 
-ast_struct!(TupleExpression {
-    elements: Vec<Expression>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct TupleExpression {
+    #[child]
+    pub elements: Vec<Expression>,
+}
 
-ast_struct!(
-    /// Internals use only.
-    /// Match a value against an enum variant.
-    TypeMatch {
-        expression: Option<Box<Expression>>,
-        constructor: VariantConstructor,
-    }
-);
+/// Internals use only.
+/// Match a value against an enum variant.
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct TypeMatch {
+    #[child]
+    pub expression: Option<Box<Expression>>,
+    pub constructor: VariantConstructor,
+}
 
-ast_struct!(UnaryExpression {
-    operator: UnaryOperator,
-    operand: Option<Box<Expression>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct UnaryExpression {
+    pub operator: UnaryOperator,
+    #[child]
+    pub operand: Option<Box<Expression>>,
+}
 
 operator_enum!(UnaryOperator {
     Star => "*",
@@ -218,22 +298,26 @@ operator_enum!(UnaryOperator {
     Mut => "mut",
 });
 
-ast_struct!(
-    #[derive(Default)]
-    FunctionExpression {
-        name: Option<Identifier>,
-        type_params: Option<Vec<Identifier>>,
-        params: Option<FunctionParams>,
-        return_type: Option<Type>,
-        body: Option<BlockExpression>,
-    }
-);
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct FunctionExpression {
+    pub name: Option<Identifier>,
+    pub type_params: Option<Vec<Identifier>>,
+    pub params: Option<FunctionParams>,
+    pub return_type: Option<Type>,
+    #[child]
+    pub body: Option<BlockExpression>,
+}
 
-ast_struct!(FunctionParams {
-    params: Vec<FunctionParam>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct FunctionParams {
+    pub params: Vec<FunctionParam>,
+}
 
-ast_struct!(FunctionParam {
-    name: Option<Identifier>,
-    type_annotation: Option<Type>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct FunctionParam {
+    pub name: Option<Identifier>,
+    pub type_annotation: Option<Type>,
+}

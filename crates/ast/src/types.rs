@@ -1,9 +1,7 @@
 use tine_common::locations::{Locatable, Location};
+use tine_macros::tree_struct;
 
-use crate::{
-    nodes::{ast_enum, ast_struct},
-    Identifier,
-};
+use crate::{nodes::ast_enum, Identifier};
 
 ast_enum!(Type {
     Tuple(TupleType),
@@ -15,37 +13,48 @@ ast_enum!(Type {
     Result(ResultType),
 });
 
-ast_struct!(
-    #[derive(Default)]
-    NamedType {
-        name: Identifier,
-        args: Option<Vec<Type>>,
-    }
-);
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct NamedType {
+    pub name: Identifier,
+    pub args: Option<Vec<Type>>,
+}
 
-ast_struct!(OptionType {
-    base: Option<Box<Type>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct OptionType {
+    pub base: Option<Box<Type>>,
+}
 
-ast_struct!(ArrayType {
-    element: Option<Box<Type>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ArrayType {
+    pub element: Option<Box<Type>>,
+}
 
-ast_struct!(TupleType {
-    elements: Vec<Type>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct TupleType {
+    pub elements: Vec<Type>,
+}
 
-ast_struct!(MapType {
-    key: Option<Box<Type>>,
-    value: Option<Box<Type>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct MapType {
+    pub key: Option<Box<Type>>,
+    pub value: Option<Box<Type>>,
+}
 
-ast_struct!(ResultType {
-    error: Option<Box<Type>>,
-    ok: Option<Box<Type>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ResultType {
+    pub error: Option<Box<Type>>,
+    pub ok: Option<Box<Type>>,
+}
 
-ast_struct!(FunctionType {
-    params: Vec<Type>,
-    returned: Option<Box<Type>>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct FunctionType {
+    pub params: Vec<Type>,
+    pub returned: Option<Box<Type>>,
+}

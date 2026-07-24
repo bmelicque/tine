@@ -1,9 +1,7 @@
 use tine_common::locations::{Locatable, Location};
+use tine_macros::tree_struct;
 
-use crate::{
-    nodes::{ast_enum, ast_struct},
-    Constructor, FloatLiteral, Identifier, IntLiteral,
-};
+use crate::{nodes::ast_enum, Constructor, FloatLiteral, Identifier, IntLiteral};
 
 use super::{BooleanLiteral, NamedType, StringLiteral};
 
@@ -17,13 +15,6 @@ ast_enum!(Pattern {
     Tuple(TuplePattern),
 });
 impl Pattern {
-    pub fn as_identifier(&self) -> Option<&Identifier> {
-        match self {
-            Pattern::Identifier(i) => Some(i),
-            _ => None,
-        }
-    }
-
     pub fn is_identifier(&self) -> bool {
         match self {
             Pattern::Identifier(_) => true,
@@ -78,11 +69,15 @@ impl Pattern {
     }
 }
 
-ast_struct!(InvalidPattern {});
+#[tree_struct(untyped)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvalidPattern {}
 
-ast_struct!(MutIdentifierPattern {
-    identifier: Identifier,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MutIdentifierPattern {
+    pub identifier: Identifier,
+}
 impl Into<Identifier> for MutIdentifierPattern {
     fn into(self) -> Identifier {
         self.identifier
@@ -96,12 +91,13 @@ ast_enum!(LiteralPattern {
     String(StringLiteral),
 });
 
-ast_struct!(ConstructorPattern {
-    qualifiers: Vec<Identifier>,
-    constructor: Constructor,
-    body: Option<ConstructorPatternBody>,
-});
-
+#[tree_struct(untyped)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConstructorPattern {
+    pub qualifiers: Vec<Identifier>,
+    pub constructor: Constructor,
+    pub body: Option<ConstructorPatternBody>,
+}
 impl ConstructorPattern {
     pub fn is_refutable(&self) -> bool {
         if let Constructor::Variant(_) = &self.constructor {
@@ -126,18 +122,19 @@ ast_enum!(ConstructorPatternBody {
     Struct(StructPatternBody),
 });
 
-ast_struct!(StructPatternBody {
-   fields: Vec<StructPatternField>
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructPatternBody {
+    pub fields: Vec<StructPatternField>,
+}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructPattern {
-    pub loc: Location,
     pub ty: Box<NamedType>,
     pub fields: Vec<StructPatternField>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructPatternField {
     pub loc: Location,
     pub identifier: Option<FieldPatternIdentifier>,
@@ -166,9 +163,11 @@ impl Into<Identifier> for FieldPatternIdentifier {
     }
 }
 
-ast_struct!(TuplePattern {
-    elements: Vec<Pattern>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TuplePattern {
+    pub elements: Vec<Pattern>,
+}
 impl TuplePattern {
     pub fn is_refutable(&self) -> bool {
         self.elements.iter().any(|e| e.is_refutable())
@@ -192,11 +191,13 @@ impl From<Vec<Pattern>> for TuplePattern {
     }
 }
 
-ast_struct!(VariantPattern {
-        ty: Box<NamedType>,
-        name: String,
-        body: Option<VariantPatternBody>,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariantPattern {
+    pub ty: Box<NamedType>,
+    pub name: String,
+    pub body: Option<VariantPatternBody>,
+}
 
 ast_enum!(VariantPatternBody {
     Struct(StructPatternBody),

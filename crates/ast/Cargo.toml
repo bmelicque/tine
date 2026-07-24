@@ -5,5 +5,7 @@ edition = "2021"
 build = "build.rs"
 
 [dependencies]
-tine_common = { path = "../common" }
+paste = "1.0.15"
 ordered-float = "5.0.0"
+tine_common = { path = "../common" }
+tine_macros = { path = "../macros" }

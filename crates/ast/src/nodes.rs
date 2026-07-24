@@ -1,23 +1,29 @@
-macro_rules! ast_struct {
-    (
-        $(#[$meta:meta])*
-        $name:ident {
-            $($field:ident : $ty:ty),* $(,)?
-        }
-    ) => {
-        $(#[$meta])*
-        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-        pub struct $name {
-            pub loc: Location,
-            $(pub $field: $ty),*
-        }
+use crate::walk::*;
 
-        impl Locatable for $name {
-            fn loc(&self) -> Location {
-                self.loc
-            }
+pub enum Node<'a> {
+    Expr(&'a crate::Expression),
+    Stmt(&'a crate::Statement),
+}
+impl<'a> Node<'a> {
+    pub fn as_expression(&self) -> Option<&'a crate::Expression> {
+        match self {
+            Node::Expr(e) => Some(e),
+            _ => None,
         }
-    };
+    }
+    pub fn as_statement(&self) -> Option<&'a crate::Statement> {
+        match self {
+            Node::Stmt(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn push_children(&self, stack: &mut Vec<Node<'a>>) {
+        match self {
+            Node::Expr(e) => e.push_nodes(stack),
+            Node::Stmt(s) => s.push_nodes(stack),
+        }
+    }
 }
 
 macro_rules! ast_enum {
@@ -26,7 +32,7 @@ macro_rules! ast_enum {
             $($variant:ident($inner:ty)),* $(,)?
         }
     ) => {
-        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, PartialEq, Eq)]
         pub enum $name {
             $($variant($inner)),*
         }
@@ -44,6 +50,23 @@ macro_rules! ast_enum {
                 match self {
                     $(Self::$variant(x) => x.loc(),)*
                 }
+            }
+        }
+
+        impl<'a> $name {
+            pub fn push_children(&'a self, stack: &mut Vec<$crate::Node<'a>>) {
+                match self {
+                    $(Self::$variant(inner) => inner.push_children(stack),)*
+                }
+            }
+
+            paste::paste! {
+                $(pub fn [<as_ $variant:snake>](&self) -> Option<&$inner> {
+                    match self {
+                        Self::$variant(inner) => Some(inner),
+                        _ => None,
+                    }
+                })*
             }
         }
     };
@@ -92,5 +115,4 @@ macro_rules! operator_enum {
 }
 
 pub(crate) use ast_enum;
-pub(crate) use ast_struct;
 pub(crate) use operator_enum;

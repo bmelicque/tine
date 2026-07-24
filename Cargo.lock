@@ -1889,7 +1889,9 @@ name = "tine_ast"
 version = "0.0.2"
 dependencies = [
  "ordered-float",
+ "paste",
  "tine_common",
+ "tine_macros",
 ]
 
 [[package]]
@@ -1935,13 +1937,13 @@ dependencies = [
  "paste",
  "tine_ast",
  "tine_common",
- "tine_ir_macros",
+ "tine_macros",
  "tine_symbols",
  "tine_types",
 ]
 
 [[package]]
-name = "tine_ir_macros"
+name = "tine_macros"
 version = "0.0.1"
 dependencies = [
  "convert_case",

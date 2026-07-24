@@ -1,10 +1,12 @@
 use tine_common::locations::{Locatable, Location};
+use tine_macros::tree_struct;
 
-use crate::{nodes::ast_struct, Item};
+use crate::Item;
 
-ast_struct!(Program {
-    items: Vec<Item>,
-});
+#[tree_struct(untyped)]
+pub struct Program {
+    pub items: Vec<Item>,
+}
 
 impl Program {
     pub fn dummy() -> Self {

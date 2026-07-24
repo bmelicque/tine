@@ -1,4 +1,3 @@
-// tine_ir_macros/src/ir_node.rs
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
@@ -6,12 +5,12 @@ use syn::{
     parse_quote, Data, DeriveInput, Expr, Fields, FieldsNamed, Ident, Result, Token,
 };
 
-struct IrNodeArgs {
+struct TreeStructArgs {
     ty: Option<Expr>,
     untyped: bool,
 }
 
-impl Parse for IrNodeArgs {
+impl Parse for TreeStructArgs {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut ty = None;
         let mut untyped = false;
@@ -41,7 +40,7 @@ impl Parse for IrNodeArgs {
 }
 
 pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
-    let args: IrNodeArgs = syn::parse2(attr)?;
+    let args: TreeStructArgs = syn::parse2(attr)?;
     let mut input: DeriveInput = syn::parse2(item)?;
     let name = input.ident.clone();
 
@@ -92,7 +91,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         .map(|field| {
             let ident = field.ident.as_ref().unwrap();
             quote! {
-                ::tine_ir::PushNodes::push_nodes(&self.#ident, stack);
+                crate::PushNodes::push_nodes(&self.#ident, stack);
             }
         })
         .collect::<Vec<_>>();
@@ -111,7 +110,7 @@ pub fn expand(attr: TokenStream, item: TokenStream) -> Result<TokenStream> {
         }
 
         impl #name {
-            pub fn push_children<'a>(&'a self, stack: &mut Vec<::tine_ir::Node<'a>>) {
+            pub fn push_children<'a>(&'a self, stack: &mut Vec<crate::Node<'a>>) {
                 #(#pushes)*
             }
         }

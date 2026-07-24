@@ -1,9 +1,7 @@
 use tine_common::locations::{Locatable, Location};
+use tine_macros::tree_struct;
 
-use crate::{
-    nodes::{ast_enum, ast_struct},
-    Identifier, InvalidStatement, Statement,
-};
+use crate::{nodes::ast_enum, Identifier, InvalidStatement, Statement};
 
 ast_enum!(Item {
     Invalid(InvalidItem),
@@ -19,19 +17,23 @@ impl Item {
     }
 }
 
-ast_struct!(InvalidItem {});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct InvalidItem {}
 impl From<InvalidStatement> for InvalidItem {
     fn from(value: InvalidStatement) -> Self {
         InvalidItem { loc: value.loc }
     }
 }
 
-ast_struct!(UseDeclaration {
-    relative_count: usize,
-    tree: UseTree,
-});
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct UseDeclaration {
+    pub relative_count: usize,
+    pub tree: UseTree,
+}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct UseTree {
     pub path: Vec<PathElement>,
     pub sub_trees: Vec<UseTree>,

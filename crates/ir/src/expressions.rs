@@ -1,6 +1,6 @@
 use tine_ast as ast;
 use tine_common::locations::{Locatable, Location};
-use tine_ir_macros::ir_struct;
+use tine_macros::tree_struct;
 use tine_symbols::symbols::*;
 use tine_types::store::TypeStore;
 
@@ -34,7 +34,7 @@ ir_enum!(
     }
 );
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct ArrayExpression {
     #[child]
@@ -43,7 +43,7 @@ pub struct ArrayExpression {
 
 pub type BinaryOperator = ast::BinaryOperator;
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct BinaryExpression {
     #[child]
@@ -53,7 +53,7 @@ pub struct BinaryExpression {
     pub op: BinaryOperator,
 }
 
-#[ir_struct(ty = TypeStore::BOOLEAN)]
+#[tree_struct(ty = TypeStore::BOOLEAN)]
 #[derive(Debug, Default, Clone)]
 pub struct BooleanLiteral {
     pub value: bool,
@@ -64,7 +64,7 @@ impl std::fmt::Display for BooleanLiteral {
     }
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct Block {
     #[child]
@@ -93,7 +93,7 @@ impl From<Statement> for Block {
     }
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct CallExpression {
     #[child]
@@ -102,7 +102,7 @@ pub struct CallExpression {
     pub args: Vec<Expression>,
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct ElementExpression {
     pub tag_name: String,
@@ -117,7 +117,7 @@ pub struct Attribute {
     pub value: Expression,
 }
 
-#[ir_struct(ty = TypeStore::FLOAT)]
+#[tree_struct(ty = TypeStore::FLOAT)]
 #[derive(Debug, Clone)]
 pub struct FloatLiteral {
     pub value: f64,
@@ -128,7 +128,7 @@ impl std::fmt::Display for FloatLiteral {
     }
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct ForExpression {
     #[child]
@@ -137,7 +137,7 @@ pub struct ForExpression {
     pub body: Block,
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct ForInExpression {
     pub element: (Location, VariableSymbolId),
@@ -147,7 +147,7 @@ pub struct ForInExpression {
     pub body: Block,
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct FunctionExpression {
     pub name: Option<(Location, FunctionSymbolId)>,
@@ -156,7 +156,7 @@ pub struct FunctionExpression {
     pub body: Block,
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier {
     pub symbol: SymbolId,
@@ -172,7 +172,7 @@ impl From<&Identifier> for SymbolId {
     }
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 /// An `if ... else` expression
 ///
@@ -188,7 +188,7 @@ pub struct IfExpression {
     pub alternate: Option<Block>,
 }
 
-#[ir_struct(ty = TypeStore::INTEGER)]
+#[tree_struct(ty = TypeStore::INTEGER)]
 #[derive(Debug, Clone)]
 pub struct IntLiteral {
     pub value: i64,
@@ -199,21 +199,21 @@ impl std::fmt::Display for IntLiteral {
     }
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct IntrinsicCall {
     pub callee: FunctionSymbolId,
     pub args: Vec<Expression>,
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct IntrinsicConstruct {
     pub constructor: StructSymbolId,
     pub fields: Vec<StructLiteralField>,
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct MemberExpression {
     #[child]
@@ -221,7 +221,7 @@ pub struct MemberExpression {
     pub member: (Location, MemberSymbolId),
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct MethodExpression {
     #[child]
@@ -229,7 +229,7 @@ pub struct MethodExpression {
     pub method: (Location, MethodSymbolId),
 }
 
-#[ir_struct(ty = TypeStore::STRING)]
+#[tree_struct(ty = TypeStore::STRING)]
 #[derive(Debug, Clone)]
 pub struct StringLiteral {
     pub value: String,
@@ -240,7 +240,7 @@ impl std::fmt::Display for StringLiteral {
     }
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct StructLiteral {
     pub constructor: StructConstructor,
@@ -254,7 +254,7 @@ pub enum StructConstructor {
     Enum(Location, EnumSymbolId, VariantSymbolId),
 }
 
-#[ir_struct(untyped)]
+#[tree_struct(untyped)]
 #[derive(Debug, Clone)]
 pub struct StructLiteralField {
     pub name: (Location, MemberSymbolId),
@@ -267,13 +267,13 @@ impl<'a> PushNodes<'a> for StructLiteralField {
     }
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct TupleExpression {
     pub elements: Vec<Expression>,
 }
 
-#[ir_struct(ty = TypeStore::BOOLEAN)]
+#[tree_struct(ty = TypeStore::BOOLEAN)]
 #[derive(Debug, Clone)]
 pub struct TypeMatch {
     pub expr: Box<Expression>,
@@ -282,7 +282,7 @@ pub struct TypeMatch {
 
 pub type UnaryOperator = ast::UnaryOperator;
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct UnaryExpression {
     pub operator: UnaryOperator,

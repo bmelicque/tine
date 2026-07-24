@@ -5,6 +5,7 @@ members = [
     "crates/cli",
     "crates/common",
     "crates/ir",
+    "crates/macros",
     "crates/parser",
     "crates/server",
     "crates/symbols",

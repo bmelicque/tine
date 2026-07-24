@@ -1,5 +1,5 @@
 [package]
-name = "tine_ir_macros"
+name = "tine_macros"
 version = "0.0.1"
 edition = "2021"
 build = "build.rs"

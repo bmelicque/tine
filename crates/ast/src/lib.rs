@@ -10,13 +10,16 @@ pub mod statements;
 pub mod types;
 pub mod use_tree;
 pub mod utils;
+pub mod walk;
 
 pub use self::constructor_literals::*;
 pub use self::dom::*;
 pub use self::expressions::*;
 pub use self::items::*;
 pub use self::loops::*;
+pub use self::nodes::Node;
 pub use self::patterns::*;
 pub use self::program::*;
 pub use self::statements::*;
 pub use self::types::*;
+use self::walk::*;

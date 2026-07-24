@@ -3,7 +3,7 @@ use tine_common::{
     locations::{Locatable, Location},
     module_path::{ModuleId, ModulePath},
 };
-use tine_ir_macros::ir_struct;
+use tine_macros::tree_struct;
 use tine_symbols::symbols::*;
 
 use crate::{ir_enum, Block, Expression, FunctionExpression, Typed};
@@ -22,7 +22,7 @@ ir_enum!(Statement {
     Variable(VariableDeclaration),
 });
 
-#[ir_struct(untyped)]
+#[tree_struct(untyped)]
 #[derive(Debug, Clone)]
 pub struct Assignment {
     #[child]
@@ -35,24 +35,24 @@ pub struct Assignment {
     pub value: Expression,
 }
 
-#[ir_struct(untyped)]
+#[tree_struct(untyped)]
 #[derive(Debug, Clone)]
 pub struct BreakStatement {
     #[child]
     pub expression: Option<Box<Expression>>,
 }
 
-#[ir_struct(untyped)]
+#[tree_struct(untyped)]
 #[derive(Debug, Clone)]
 pub struct ContinueStatement {}
 
-#[ir_struct(untyped)]
+#[tree_struct(untyped)]
 #[derive(Debug, Clone)]
 pub struct EnumDefinition {
     pub symbol: EnumSymbolId,
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct FunctionDefinition {
     pub name: (Location, FunctionName),
@@ -81,7 +81,7 @@ impl Into<FunctionExpression> for FunctionDefinition {
     }
 }
 
-#[ir_struct]
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct MethodDefinition {
     pub receiver_name: (Location, VariableSymbolId),
@@ -93,20 +93,20 @@ pub struct MethodDefinition {
     pub body: Block,
 }
 
-#[ir_struct(untyped)]
+#[tree_struct(untyped)]
 #[derive(Debug, Clone)]
 pub struct ReturnStatement {
     #[child]
     pub expression: Option<Box<Expression>>,
 }
 
-#[ir_struct(untyped)]
+#[tree_struct(untyped)]
 #[derive(Debug, Clone)]
 pub struct StructDefinition {
     pub symbol: StructSymbolId,
 }
 
-#[ir_struct(untyped)]
+#[tree_struct(untyped)]
 #[derive(Debug, Clone)]
 pub struct UseDeclaration {
     pub module: ModuleId,
@@ -114,7 +114,7 @@ pub struct UseDeclaration {
     pub symbols: Vec<SymbolId>,
 }
 
-#[ir_struct(untyped)]
+#[tree_struct(untyped)]
 #[derive(Debug, Clone)]
 pub struct VariableDeclaration {
     pub mutable: bool,
