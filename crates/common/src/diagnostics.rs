@@ -8,6 +8,15 @@ pub struct Diagnostic {
     pub loc: Location,
     pub kind: DiagnosticKind,
 }
+impl Diagnostic {
+    pub fn error(at: Location, kind: DiagnosticKind) -> Self {
+        Self {
+            level: DiagnosticLevel::Error,
+            loc: at,
+            kind,
+        }
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum DiagnosticLevel {
@@ -110,6 +119,7 @@ pub enum DiagnosticKind {
         left_name: String,
         right_name: String,
     },
+    MissingArguments,
     MissingBody,
     MissingColon,
     MissingConsequent,
@@ -171,6 +181,8 @@ pub enum DiagnosticKind {
         token: String,
     },
     UnexpectedTypeParams,
+    UnknownDeriveArgument,
+    UnknownMacro,
     UnknownMember {
         member: String,
     },
@@ -303,6 +315,7 @@ impl Display for DiagnosticKind {
                     left_name, right_name
                 )
             }
+            Self::MissingArguments => write!(f, "expected call arguments"),
             Self::MissingBody => write!(f, "expected function body"),
             Self::MissingColon => write!(f, "':' expected"),
             Self::MissingConsequent => write!(f, "expected consequent"),
@@ -381,6 +394,8 @@ impl Display for DiagnosticKind {
                 write!(f, "unexpected token: {}", token)
             }
             Self::UnexpectedTypeParams => write!(f, "unexpected type parameters"),
+            Self::UnknownMacro => write!(f, "unknown macro"),
+            Self::UnknownDeriveArgument => write!(f, "unknown derive argument"),
             Self::UnknownMember { member } => {
                 write!(f, "unknown member `{}`", member)
             }

@@ -27,6 +27,13 @@ ast_enum!(Statement {
     TypeAlias(TypeAlias),
     VariableDeclaration(VariableDeclaration),
 });
+impl<I: Into<Expression>> From<I> for Statement {
+    fn from(value: I) -> Self {
+        Self::Expression(ExpressionStatement {
+            expression: Box::new(value.into()),
+        })
+    }
+}
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Docs {

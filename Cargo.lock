@@ -1929,6 +1929,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tine_expander"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "ordered-float",
+ "tine_ast",
+ "tine_common",
+]
+
+[[package]]
 name = "tine_ir"
 version = "0.0.1"
 dependencies = [

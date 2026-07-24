@@ -19,6 +19,15 @@ pub struct NamedType {
     pub name: Identifier,
     pub args: Option<Vec<Type>>,
 }
+impl From<Identifier> for NamedType {
+    fn from(name: Identifier) -> Self {
+        Self {
+            loc: name.loc,
+            name,
+            args: None,
+        }
+    }
+}
 
 #[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

@@ -4,6 +4,7 @@ members = [
     "crates/checker",
     "crates/cli",
     "crates/common",
+    "crates/expander",
     "crates/ir",
     "crates/macros",
     "crates/parser",

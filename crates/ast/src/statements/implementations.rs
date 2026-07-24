@@ -73,4 +73,5 @@ impl MethodDefinition {
 pub struct MethodReceiver {
     pub mutable: bool,
     pub pattern: Option<Pattern>,
+    pub self_type: Option<Identifier>,
 }

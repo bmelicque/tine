@@ -130,6 +130,8 @@ impl Parser<'_> {
             loc,
             mutable,
             pattern,
+            // FIXME:
+            self_type: None,
         }
     }
 }

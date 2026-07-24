@@ -36,6 +36,11 @@ ast_enum!(Expression {
     TypeMatch(TypeMatch),
     Unary(UnaryExpression),
 });
+impl From<Expression> for Option<Box<Expression>> {
+    fn from(value: Expression) -> Self {
+        Some(Box::new(value.into()))
+    }
+}
 
 #[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -51,6 +56,10 @@ pub struct Identifier {
 impl Identifier {
     pub fn as_str(&self) -> &str {
         self.text.as_str()
+    }
+
+    pub fn new(text: String, loc: Location) -> Self {
+        Self { loc, text }
     }
 }
 
@@ -163,6 +172,11 @@ pub struct FloatLiteral {
 pub struct BooleanLiteral {
     pub value: bool,
 }
+impl BooleanLiteral {
+    pub fn new(value: bool, loc: Location) -> Self {
+        Self { value, loc }
+    }
+}
 
 #[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -172,6 +186,16 @@ pub struct BinaryExpression {
     pub operator: BinaryOperator,
     #[child]
     pub right: Option<Box<Expression>>,
+}
+impl BinaryExpression {
+    pub fn and(left: Expression, right: Expression, loc: Location) -> Self {
+        Self {
+            left: left.into(),
+            operator: BinaryOperator::LAnd,
+            right: right.into(),
+            loc,
+        }
+    }
 }
 
 operator_enum!(BinaryOperator {
@@ -257,6 +281,18 @@ impl MemberExpression {
         match object.as_ref() {
             Expression::Member(expr) => expr.root_expression(),
             expr => Some(expr.clone()),
+        }
+    }
+
+    pub fn valid<O, M>(object: O, member: M, loc: Location) -> Self
+    where
+        O: Into<Expression>,
+        M: Into<MemberProp>,
+    {
+        Self {
+            object: Some(Box::new(object.into())),
+            prop: Some(member.into()),
+            loc,
         }
     }
 }
