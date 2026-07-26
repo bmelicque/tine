@@ -15,9 +15,7 @@ impl Expander {
                 b.value = b.value.map(|v| Box::new(self.expand_expression(*v)));
                 vec![Break(b)]
             }
-            Continue(c) => vec![Continue(c)],
-            // TODO:
-            Enum(e) => vec![Enum(e)],
+            Enum(e) => self.expand_enum_def(e),
             Expression(mut e) => {
                 e.expression = self.expand_expression(*e.expression).into();
                 vec![Expression(e)]
@@ -27,18 +25,16 @@ impl Expander {
                 vec![Function(f)]
             }
             Implementation(i) => vec![self.expand_implementation(i).into()],
-            Invalid(i) => vec![Invalid(i)],
             Return(mut r) => {
                 r.value = r.value.map(|v| Box::new(self.expand_expression(*v)));
                 vec![Return(r)]
             }
             StructDefinition(s) => self.expand_struct_def(s),
-            Trait(t) => vec![Trait(t)],
-            TypeAlias(t) => vec![TypeAlias(t)],
             VariableDeclaration(mut v) => {
                 v.value = v.value.map(|v| self.expand_expression(v));
                 vec![VariableDeclaration(v)]
             }
+            no_expand => vec![no_expand],
         }
     }
 
@@ -80,6 +76,39 @@ impl Expander {
             .filter_map(|m| Some((m.name.clone()?, m.args.clone())))
             .flat_map(|(n, args)| match n.as_str() {
                 "derive" => self.derive_struct(n, args, &node.body),
+                _ => {
+                    self.error(n.loc, DiagnosticKind::UnknownMacro);
+                    vec![]
+                }
+            })
+            .collect();
+        let body = ImplementationBody {
+            loc: node.loc,
+            items,
+        };
+
+        let implementation = Statement::Implementation(Implementation {
+            loc: node.loc,
+            implemented_type: Some(Identifier::new(name.text.clone(), node.loc).into()),
+            body: Some(body),
+        });
+
+        vec![node.into(), implementation]
+    }
+
+    fn expand_enum_def(&mut self, node: EnumDefinition) -> Vec<Statement> {
+        let Some(meta) = &node.meta else {
+            return vec![node.into()];
+        };
+        let Some(name) = &node.name else {
+            return vec![node.into()];
+        };
+
+        let items = meta
+            .into_iter()
+            .filter_map(|m| Some((m.name.clone()?, m.args.clone())))
+            .flat_map(|(n, args)| match n.as_str() {
+                "derive" => self.derive_enum(n, args, &node),
                 _ => {
                     self.error(n.loc, DiagnosticKind::UnknownMacro);
                     vec![]
