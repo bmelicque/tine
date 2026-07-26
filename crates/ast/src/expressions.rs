@@ -117,6 +117,11 @@ impl<'a> PushNodes<'a> for Alternate {
 pub struct IntLiteral {
     pub value: i64,
 }
+impl IntLiteral {
+    pub fn new(value: i64, loc: Location) -> Self {
+        Self { loc, value }
+    }
+}
 
 #[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

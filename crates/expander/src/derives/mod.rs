@@ -1,4 +1,5 @@
 pub mod eq;
+pub mod hash;
 
 use tine_ast as ast;
 use tine_common::diagnostics::DiagnosticKind;
@@ -20,6 +21,7 @@ impl Expander {
         args.into_iter()
             .filter_map(|arg| match arg.as_str() {
                 "Eq" => Some(eq::derive_struct(node, arg.loc)),
+                "Hash" => Some(hash::derive_struct(node, arg.loc)),
                 _ => {
                     self.error(arg.loc, DiagnosticKind::UnknownDeriveArgument);
                     None

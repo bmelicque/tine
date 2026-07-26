@@ -53,8 +53,12 @@ fn field_eq(name: String, loc: Location) -> Expression {
     Expression::Call(CallExpression {
         loc,
         callee: Some(Box::new(Expression::Member(MemberExpression::valid(
-            Identifier::new("self".to_string(), loc),
-            Identifier::new(name.clone(), loc),
+            Expression::Member(MemberExpression::valid(
+                Identifier::new("self".to_string(), loc),
+                Identifier::new(name.clone(), loc),
+                loc,
+            )),
+            Identifier::new("eq".to_string(), loc),
             loc,
         )))),
         args: vec![CallArgument::Expression(Expression::Member(
