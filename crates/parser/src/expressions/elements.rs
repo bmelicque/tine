@@ -138,8 +138,12 @@ impl Parser<'_> {
         };
         let attribute = match token {
             Token::String(value) => {
-                loc = Location::merge(loc, self.localize(value_range));
-                ast::AttributeValue::String(value)
+                let value_loc = self.localize(value_range);
+                loc = Location::merge(loc, value_loc);
+                ast::AttributeValue::String(ast::StringLiteral {
+                    loc: value_loc,
+                    text: value,
+                })
             }
             Token::LBrace => {
                 let expression = self.parse_expression();
@@ -325,7 +329,10 @@ mod tests {
                 attributes: vec![ast::Attribute {
                     loc: Location::new(0, Span::new(5, 14)),
                     name: "src".to_owned(),
-                    value: Some(ast::AttributeValue::String("foo".to_string())),
+                    value: Some(ast::AttributeValue::String(ast::StringLiteral {
+                        loc: Location::new(0, Span::new(9, 14)),
+                        text: "foo".to_string(),
+                    })),
                 }],
             })),
             diagnostics: vec![],

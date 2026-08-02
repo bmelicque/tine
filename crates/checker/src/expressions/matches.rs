@@ -1,6 +1,9 @@
 use tine_ast as ast;
-use tine_common::{diagnostics::DiagnosticKind, locations::Location};
-use tine_ir as ir;
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+};
+use tine_ir::{self as ir, Typed};
 use tine_types::types;
 
 use crate::{

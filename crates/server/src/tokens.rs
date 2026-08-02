@@ -80,6 +80,7 @@ impl Backend {
                 }
                 SymbolId::Function(_) => SemanticTokenType::FUNCTION,
                 SymbolId::Method(_) => SemanticTokenType::METHOD,
+                SymbolId::Trait(_) => SemanticTokenType::INTERFACE,
                 SymbolId::Variant(_) => SemanticTokenType::ENUM_MEMBER,
             };
             let token_type_index = self

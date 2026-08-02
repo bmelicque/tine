@@ -1,7 +1,13 @@
+use tine_types::types;
+
 use crate::{
     Block, BreakStatement, Expression, ForExpression, ForInExpression, Identifier, IfExpression,
     ReturnStatement, Statement,
 };
+
+pub trait Typed {
+    fn ty(&self) -> types::TypeId;
+}
 
 fn find_breaks(expr: &Expression) -> Vec<&BreakStatement> {
     match expr {

@@ -1,5 +1,8 @@
 use tine_ast as ast;
-use tine_common::{diagnostics::DiagnosticKind, locations::Location};
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+};
 
 use crate::{statements::utils::TypeName, tokens::Token, Parser};
 
@@ -7,6 +10,7 @@ impl Parser<'_> {
     pub fn parse_enum(
         &mut self,
         docs: Option<ast::Docs>,
+        meta: Option<Vec<ast::MetaAttribute>>,
         pub_loc: Option<Location>,
     ) -> ast::EnumDefinition {
         let kw_range = self.eat(&[Token::Enum]);
@@ -20,6 +24,7 @@ impl Parser<'_> {
 
         ast::EnumDefinition {
             docs,
+            meta,
             loc: Location::merge(start, end),
             public: pub_loc.is_some(),
             name,

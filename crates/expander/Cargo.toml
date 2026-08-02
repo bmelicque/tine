@@ -1,0 +1,10 @@
+[package]
+name = "tine_expander"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.100"
+ordered-float = "5.0.0"
+tine_ast = { path = "../ast" }
+tine_common = { path = "../common" }

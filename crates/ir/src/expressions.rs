@@ -1,194 +1,61 @@
-use enum_from_derive::EnumFrom;
 use tine_ast as ast;
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
+use tine_macros::tree_struct;
 use tine_symbols::symbols::*;
-use tine_types::{store::TypeStore, types::TypeId};
+use tine_types::store::TypeStore;
 
-use crate::Statement;
+use crate::{ir_enum, PushNodes, Statement, Typed};
 
-#[derive(Debug, Clone, EnumFrom)]
-pub enum Expression {
-    Array(ArrayExpression),
-    Binary(BinaryExpression),
-    BooleanLiteral(BooleanLiteral),
-    Block(Block),
-    Call(CallExpression),
-    Element(ElementExpression),
-    FloatLiteral(FloatLiteral),
-    For(ForExpression),
-    ForIn(ForInExpression),
-    Function(FunctionExpression),
-    Identifier(Identifier),
-    If(IfExpression),
-    IntLiteral(IntLiteral),
-    Map(MapLiteral),
-    Member(MemberExpression),
-    Method(MethodExpression),
-    StringLiteral(StringLiteral),
-    Struct(StructLiteral),
-    Tuple(TupleExpression),
-    TypeMatch(TypeMatch),
-    Unary(UnaryExpression),
-}
-
-impl Expression {
-    pub fn loc(&self) -> Location {
-        match self {
-            Expression::Array(a) => a.loc,
-            Expression::Binary(b) => b.loc,
-            Expression::BooleanLiteral(boolean) => boolean.loc,
-            Expression::Block(block) => block.loc,
-            Expression::Call(call) => call.loc,
-            Expression::Element(e) => e.loc,
-            Expression::FloatLiteral(f) => f.loc,
-            Expression::For(f) => f.loc,
-            Expression::ForIn(f) => f.loc,
-            Expression::Function(function) => function.loc,
-            Expression::Identifier(identifier) => identifier.loc,
-            Expression::If(if_expression) => if_expression.loc,
-            Expression::IntLiteral(i) => i.loc,
-            Expression::Map(m) => m.loc,
-            Expression::Member(m) => m.loc,
-            Expression::Method(m) => m.loc,
-            Expression::StringLiteral(s) => s.loc,
-            Expression::Struct(s) => s.loc,
-            Expression::Tuple(tuple) => tuple.loc,
-            Expression::TypeMatch(t) => t.loc,
-            Expression::Unary(u) => u.loc,
-        }
+ir_enum!(
+    @typed
+    Expression {
+        Array(ArrayExpression),
+        Binary(BinaryExpression),
+        BooleanLiteral(BooleanLiteral),
+        Block(Block),
+        Call(CallExpression),
+        Element(ElementExpression),
+        FloatLiteral(FloatLiteral),
+        For(ForExpression),
+        ForIn(ForInExpression),
+        Function(FunctionExpression),
+        Identifier(Identifier),
+        If(IfExpression),
+        IntLiteral(IntLiteral),
+        IntrinsicCall(IntrinsicCall),
+        IntrinsicConstruct(IntrinsicConstruct),
+        Member(MemberExpression),
+        Method(MethodExpression),
+        StringLiteral(StringLiteral),
+        Struct(StructLiteral),
+        Tuple(TupleExpression),
+        TypeMatch(TypeMatch),
+        Unary(UnaryExpression),
     }
+);
 
-    pub fn ty(&self) -> TypeId {
-        match self {
-            Expression::Array(array) => array.ty,
-            Expression::Binary(binary) => binary.ty,
-            Expression::BooleanLiteral(_) => TypeStore::BOOLEAN,
-            Expression::Block(block) => block.ty,
-            Expression::Call(call) => call.ty,
-            Expression::Element(e) => e.ty,
-            Expression::FloatLiteral(_) => TypeStore::FLOAT,
-            Expression::For(f) => f.ty,
-            Expression::ForIn(f) => f.ty,
-            Expression::Function(function) => function.ty,
-            Expression::Identifier(identifier) => identifier.ty,
-            Expression::If(if_expression) => if_expression.ty,
-            Expression::IntLiteral(_) => TypeStore::INTEGER,
-            Expression::Map(m) => m.ty,
-            Expression::Member(m) => m.ty,
-            Expression::Method(m) => m.ty,
-            Expression::StringLiteral(_) => TypeStore::STRING,
-            Expression::Struct(s) => s.ty,
-            Expression::Tuple(tuple) => tuple.ty,
-            Expression::TypeMatch(_) => TypeStore::BOOLEAN,
-            Expression::Unary(u) => u.ty,
-        }
-    }
-
-    pub fn as_identifier<'a>(&'a self) -> Option<&'a Identifier> {
-        match self {
-            Self::Identifier(i) => Some(i),
-            _ => None,
-        }
-    }
-
-    pub fn walk<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Expression> + 'a> {
-        match self {
-            Self::BooleanLiteral(_)
-            | Self::FloatLiteral(_)
-            | Self::IntLiteral(_)
-            | Self::StringLiteral(_) => Box::new(std::iter::empty()),
-
-            Self::Array(a) => iterate(&a.elements),
-            Self::Binary(b) => Box::new(b.left.walk().chain(b.right.walk())),
-            Self::Block(b) => b.walk(),
-            Self::Call(c) => {
-                let callee = c.callee.walk();
-                let args: Box<dyn Iterator<Item = &Expression>> = c
-                    .args
-                    .iter()
-                    .fold(Box::new(std::iter::empty()), |acc, arg| {
-                        Box::new(acc.chain(arg.walk()))
-                    });
-
-                Box::new(callee.chain(args))
-            }
-            Self::Element(e) => {
-                let attributes: Box<dyn Iterator<Item = &Expression>> = e
-                    .attributes
-                    .iter()
-                    .fold(Box::new(std::iter::empty()), |acc, arg| {
-                        Box::new(acc.chain(arg.value.walk()))
-                    });
-                Box::new(attributes.chain(iterate(&e.children)))
-            }
-            Self::For(f) => match &f.condition {
-                Some(c) => Box::new(c.walk().chain(f.body.walk())),
-                None => f.body.walk(),
-            },
-            Self::ForIn(f) => Box::new(f.iterable.walk().chain(f.body.walk())),
-            Self::Function(f) => f.body.walk(),
-            Self::Identifier(_) => Box::new(vec![self].into_iter()),
-            Self::If(i) => match &i.alternate {
-                Some(alt) => Box::new(
-                    i.condition
-                        .walk()
-                        .chain(i.consequent.walk())
-                        .chain(alt.walk()),
-                ),
-                None => Box::new(i.condition.walk().chain(i.consequent.walk())),
-            },
-            Self::Map(m) => m
-                .entries
-                .iter()
-                .fold(Box::new(std::iter::empty()), |acc, entry| {
-                    Box::new(acc.chain(entry.key.walk()).chain(entry.value.walk()))
-                }),
-            Self::Member(m) => m.object.walk(),
-            Self::Method(m) => m.host.walk(),
-            Self::Struct(s) => s
-                .fields
-                .iter()
-                .fold(Box::new(std::iter::empty()), |acc, field| {
-                    Box::new(acc.chain(field.value.walk()))
-                }),
-            Self::Tuple(t) => iterate(&t.elements),
-            Self::TypeMatch(t) => t.expr.walk(),
-            Self::Unary(u) => u.operand.walk(),
-        }
-    }
-}
-
-fn iterate<'i: 's, 's>(
-    expressions: &'i [Expression],
-) -> Box<dyn Iterator<Item = &'i Expression> + 'i> {
-    expressions
-        .iter()
-        .fold(Box::new(std::iter::empty()), |acc, arg| {
-            Box::new(acc.chain(arg.walk()))
-        })
-}
-
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct ArrayExpression {
-    pub loc: Location,
+    #[child]
     pub elements: Vec<Expression>,
-    pub ty: TypeId,
 }
 
 pub type BinaryOperator = ast::BinaryOperator;
 
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct BinaryExpression {
-    pub loc: Location,
+    #[child]
     pub left: Box<Expression>,
+    #[child]
     pub right: Box<Expression>,
     pub op: BinaryOperator,
-    pub ty: TypeId,
 }
 
+#[tree_struct(ty = TypeStore::BOOLEAN)]
 #[derive(Debug, Default, Clone)]
 pub struct BooleanLiteral {
-    pub loc: Location,
     pub value: bool,
 }
 impl std::fmt::Display for BooleanLiteral {
@@ -197,21 +64,11 @@ impl std::fmt::Display for BooleanLiteral {
     }
 }
 
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct Block {
-    pub loc: Location,
+    #[child]
     pub statements: Vec<Statement>,
-    pub ty: TypeId,
-}
-
-impl Block {
-    pub fn walk<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Expression> + 'a> {
-        self.statements
-            .iter()
-            .fold(Box::new(std::iter::empty()), |acc, el| {
-                Box::new(acc.chain(el.walk()))
-            })
-    }
 }
 
 impl From<Expression> for Block {
@@ -236,21 +93,22 @@ impl From<Statement> for Block {
     }
 }
 
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct CallExpression {
-    pub loc: Location,
+    #[child]
     pub callee: Box<Expression>,
+    #[child]
     pub args: Vec<Expression>,
-    pub ty: TypeId,
 }
 
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct ElementExpression {
-    pub loc: Location,
     pub tag_name: String,
     pub attributes: Vec<Attribute>,
+    #[child]
     pub children: Vec<Expression>,
-    pub ty: TypeId,
 }
 #[derive(Debug, Clone)]
 pub struct Attribute {
@@ -259,9 +117,9 @@ pub struct Attribute {
     pub value: Expression,
 }
 
+#[tree_struct(ty = TypeStore::FLOAT)]
 #[derive(Debug, Clone)]
 pub struct FloatLiteral {
-    pub loc: Location,
     pub value: f64,
 }
 impl std::fmt::Display for FloatLiteral {
@@ -270,39 +128,39 @@ impl std::fmt::Display for FloatLiteral {
     }
 }
 
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct ForExpression {
-    pub loc: Location,
+    #[child]
     pub condition: Option<Box<Expression>>,
+    #[child]
     pub body: Block,
-    pub ty: TypeId,
 }
 
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct ForInExpression {
-    pub loc: Location,
     pub element: (Location, VariableSymbolId),
+    #[child]
     pub iterable: Box<Expression>,
+    #[child]
     pub body: Block,
-    pub ty: TypeId,
 }
 
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct FunctionExpression {
-    pub loc: Location,
     pub name: Option<(Location, FunctionSymbolId)>,
     pub params: Vec<(Location, VariableSymbolId)>,
+    #[child]
     pub body: Block,
-    pub ty: TypeId,
 }
 
+#[tree_struct]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier {
-    pub loc: Location,
     pub symbol: SymbolId,
-    pub ty: TypeId,
 }
-
 impl From<Identifier> for SymbolId {
     fn from(value: Identifier) -> Self {
         value.symbol
@@ -314,6 +172,7 @@ impl From<&Identifier> for SymbolId {
     }
 }
 
+#[tree_struct]
 #[derive(Debug, Clone)]
 /// An `if ... else` expression
 ///
@@ -321,16 +180,17 @@ impl From<&Identifier> for SymbolId {
 ///
 /// `if const ...` and `if var ...` are not handle here because they are desugared as `match` expressions.
 pub struct IfExpression {
-    pub loc: Location,
+    #[child]
     pub condition: Box<Expression>,
+    #[child]
     pub consequent: Block,
+    #[child]
     pub alternate: Option<Block>,
-    pub ty: TypeId,
 }
 
+#[tree_struct(ty = TypeStore::INTEGER)]
 #[derive(Debug, Clone)]
 pub struct IntLiteral {
-    pub loc: Location,
     pub value: i64,
 }
 impl std::fmt::Display for IntLiteral {
@@ -339,39 +199,41 @@ impl std::fmt::Display for IntLiteral {
     }
 }
 
+#[tree_struct]
 #[derive(Debug, Clone)]
-pub struct MapLiteral {
-    pub loc: Location,
-    pub entries: Vec<MapEntry>,
-    /// Should refer to a Map type
-    pub ty: TypeId,
-}
-#[derive(Debug, Clone)]
-pub struct MapEntry {
-    pub loc: Location,
-    pub key: Expression,
-    pub value: Expression,
+pub struct IntrinsicCall {
+    pub callee: FunctionSymbolId,
+    pub args: Vec<Expression>,
 }
 
+#[tree_struct]
+#[derive(Debug, Clone)]
+pub struct IntrinsicConstruct {
+    pub constructor: StructSymbolId,
+    pub fields: Vec<StructLiteralField>,
+}
+
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct MemberExpression {
-    pub loc: Location,
+    #[child]
     pub object: Box<Expression>,
     pub member: (Location, MemberSymbolId),
-    pub ty: TypeId,
 }
 
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct MethodExpression {
-    pub loc: Location,
+    #[child]
     pub host: Box<Expression>,
     pub method: (Location, MethodSymbolId),
-    pub ty: TypeId,
+    #[child]
+    pub args: Vec<Expression>,
 }
 
+#[tree_struct(ty = TypeStore::STRING)]
 #[derive(Debug, Clone)]
 pub struct StringLiteral {
-    pub loc: Location,
     pub value: String,
 }
 impl std::fmt::Display for StringLiteral {
@@ -380,12 +242,12 @@ impl std::fmt::Display for StringLiteral {
     }
 }
 
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct StructLiteral {
-    pub loc: Location,
     pub constructor: StructConstructor,
+    #[child]
     pub fields: Vec<StructLiteralField>,
-    pub ty: TypeId,
 }
 
 #[derive(Debug, Clone)]
@@ -394,33 +256,37 @@ pub enum StructConstructor {
     Enum(Location, EnumSymbolId, VariantSymbolId),
 }
 
+#[tree_struct(untyped)]
 #[derive(Debug, Clone)]
 pub struct StructLiteralField {
-    pub loc: Location,
     pub name: (Location, MemberSymbolId),
+    #[child]
     pub value: Expression,
 }
-
-#[derive(Debug, Clone)]
-pub struct TupleExpression {
-    pub loc: Location,
-    pub elements: Vec<Expression>,
-    pub ty: TypeId,
+impl<'a> PushNodes<'a> for StructLiteralField {
+    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
+        self.push_children(stack);
+    }
 }
 
+#[tree_struct]
+#[derive(Debug, Clone)]
+pub struct TupleExpression {
+    pub elements: Vec<Expression>,
+}
+
+#[tree_struct(ty = TypeStore::BOOLEAN)]
 #[derive(Debug, Clone)]
 pub struct TypeMatch {
-    pub loc: Location,
     pub expr: Box<Expression>,
     pub variant: VariantSymbolId,
 }
 
 pub type UnaryOperator = ast::UnaryOperator;
 
+#[tree_struct]
 #[derive(Debug, Clone)]
 pub struct UnaryExpression {
-    pub loc: Location,
     pub operator: UnaryOperator,
     pub operand: Box<Expression>,
-    pub ty: TypeId,
 }

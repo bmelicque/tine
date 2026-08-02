@@ -293,18 +293,18 @@ fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
                 visit_expr(e, ctx, out);
             }
         }
-        ir::Expression::Map(m) => {
-            for entry in &m.entries {
-                visit_expr(&entry.key, ctx, out);
-                visit_expr(&entry.value, ctx, out);
-            }
-        }
         ir::Expression::Struct(s) => {
             for field in &s.fields {
                 visit_expr(&field.value, ctx, out);
             }
         }
 
+        ir::Expression::IntrinsicCall(c) => {
+            c.args.iter().for_each(|a| visit_expr(a, ctx, out));
+        }
+        ir::Expression::IntrinsicConstruct(c) => {
+            c.fields.iter().for_each(|f| visit_expr(&f.value, ctx, out));
+        }
         ir::Expression::Call(c) => {
             visit_expr(&c.callee, ctx.enter_callee(), out);
             for arg in &c.args {

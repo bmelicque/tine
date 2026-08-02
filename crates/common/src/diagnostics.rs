@@ -8,6 +8,15 @@ pub struct Diagnostic {
     pub loc: Location,
     pub kind: DiagnosticKind,
 }
+impl Diagnostic {
+    pub fn error(at: Location, kind: DiagnosticKind) -> Self {
+        Self {
+            level: DiagnosticLevel::Error,
+            loc: at,
+            kind,
+        }
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum DiagnosticLevel {
@@ -51,14 +60,8 @@ pub enum DiagnosticKind {
     ExpectedBool {
         got: String,
     },
-    ExpectedEnum {
-        got: String,
-    },
     ExpectedMapKey,
     ExpectedNumber {
-        got: String,
-    },
-    ExpectedStruct {
         got: String,
     },
     ExpectedStructGotEnum,
@@ -70,32 +73,20 @@ pub enum DiagnosticKind {
         got: String,
     },
     ExpectedTupleLikeBody,
-    ExpectedTuplePattern,
     ExpectedTypeGotValue,
-    ExpectedVariantStruct,
-    ExpectedVariantTuple,
     ExpectedVariantUnit,
-    ExpectedValueGotType,
     FieldIsPrivate(String),
     InvalidCondition {
         type_name: String,
     },
-    InvalidExpression,
     InvalidIdentifierDollar,
     InvalidMember,
     InvalidPattern,
-    InvalidPatternMatch {
-        expected: String,
-        got: String,
-    },
-    InvalidRootAssignee,
     InvalidTypeForOperator {
         operator: String,
         type_name: String,
     },
     InvalidTypeConstructor,
-    InvalidTypeName,
-    InvalidVariantKind,
     IrrefutablePatternExpected,
     MethodIsPrivate(String),
     MismatchedBranchTypes {
@@ -110,21 +101,17 @@ pub enum DiagnosticKind {
         left_name: String,
         right_name: String,
     },
+    MissingArguments,
     MissingBody,
-    MissingColon,
     MissingConsequent,
-    MissingConstructorName,
     MissingExpression,
-    MissingField {
-        name: String,
-    },
-    MissingFunctionName,
     MissingName,
     MissingParams,
     MissingPattern,
     MissingType,
     MutatingMethodOnImmutable,
     NegativeTupleIndex,
+    NonCalledMethod,
     NonExhaustiveMatch {
         missing: Vec<String>,
     },
@@ -135,38 +122,29 @@ pub enum DiagnosticKind {
     NotDereferenceable {
         type_name: String,
     },
-    NotImplementedMapType,
     NotIterable {
         type_name: String,
     },
-    ParseError(String),
     PubMut,
-    RefToConstant {
-        name: String,
-    },
     RefutablePatternExpected,
-    ReservedName {
-        name: String,
-    },
     TooManyParams {
         expected: usize,
         got: usize,
     },
-    TupleElementCountMismatch {
-        expected: usize,
-        got: usize,
+    TypeDoesNotImplementTrait {
+        type_name: String,
+        trait_name: String,
     },
     UnexpectedCallback {
         expected: String,
     },
     UnexpectedModuleTree,
-    UnexpectedStruct {
-        expected: String,
-    },
     UnexpectedToken {
         token: String,
     },
     UnexpectedTypeParams,
+    UnknownDeriveArgument,
+    UnknownMacro,
     UnknownMember {
         member: String,
     },
@@ -212,10 +190,8 @@ impl Display for DiagnosticKind {
                 write!(f, "duplicate method: `{}`", name)
             }
             Self::ExpectedBool { got } => write!(f, "expected bool but got `{}`", got),
-            Self::ExpectedEnum { got } => write!(f, "expected enum but got type `{}`", got),
             Self::ExpectedMapKey => write!(f, "expected map key but got an identifier"),
             Self::ExpectedNumber { got } => write!(f, "expected number but got `{}`", got),
-            Self::ExpectedStruct { got } => write!(f, "expected struct but got type `{}`", got),
             Self::ExpectedStructGotEnum => write!(f, "expected a struct but found an enum"),
             Self::ExpectedStructLikeBody => {
                 write!(f, "expected struct-like body, got tuple-like body")
@@ -229,12 +205,8 @@ impl Display for DiagnosticKind {
             Self::ExpectedTupleLikeBody => {
                 write!(f, "expected tuple-like body but got a struct-like body")
             }
-            Self::ExpectedTuplePattern => write!(f, "expected tuple pattern"),
             Self::ExpectedTypeGotValue => write!(f, "expected a type but got a value"),
-            Self::ExpectedVariantStruct => write!(f, "expected struct variant"),
-            Self::ExpectedVariantTuple => write!(f, "expected tuple variant"),
             Self::ExpectedVariantUnit => write!(f, "expected unit variant"),
-            Self::ExpectedValueGotType => write!(f, "expected a value but got a type"),
             Self::FieldIsPrivate(s) => write!(f, "field `{}` is private", s),
             Self::InvalidCondition { type_name } => {
                 write!(
@@ -243,20 +215,11 @@ impl Display for DiagnosticKind {
                     type_name
                 )
             }
-            Self::InvalidExpression => write!(f, "cannot parse expression"),
             Self::InvalidIdentifierDollar => {
                 write!(f, "identifiers containing '$' are reserved for builtins")
             }
             Self::InvalidMember => write!(f, "invalid member, expected field name or integer"),
             Self::InvalidPattern => write!(f, "pattern does not match expected type"),
-            Self::InvalidPatternMatch { expected, got } => {
-                write!(
-                    f,
-                    "cannot match pattern with type `{}` against type `{}`",
-                    got, expected
-                )
-            }
-            Self::InvalidRootAssignee => write!(f, "expected identifier"),
             Self::InvalidTypeForOperator {
                 operator,
                 type_name,
@@ -271,8 +234,6 @@ impl Display for DiagnosticKind {
                 f,
                 "invalid type constructor, expected a name, a map or a variant"
             ),
-            Self::InvalidTypeName => write!(f, "invalid type name: name should be in PascalCase"),
-            Self::InvalidVariantKind => write!(f, "invalid variant kind (unit, tuple or struct)"),
             Self::IrrefutablePatternExpected => write!(f, "irrefutable pattern expected"),
             Self::MethodIsPrivate(s) => write!(f, "method `{}` is private", s),
             Self::MismatchedBranchTypes { expected, got } => {
@@ -299,19 +260,17 @@ impl Display for DiagnosticKind {
                     left_name, right_name
                 )
             }
+            Self::MissingArguments => write!(f, "expected call arguments"),
             Self::MissingBody => write!(f, "expected function body"),
-            Self::MissingColon => write!(f, "':' expected"),
             Self::MissingConsequent => write!(f, "expected consequent"),
-            Self::MissingConstructorName => write!(f, "expected constructor name"),
             Self::MissingExpression => write!(f, "expected expression"),
-            Self::MissingField { name } => write!(f, "missing field `{}`", name),
-            Self::MissingFunctionName => write!(f, "expected function name"),
             Self::MissingName => write!(f, "expected a name"),
             Self::MissingParams => write!(f, "expected function parameters"),
             Self::MissingPattern => write!(f, "expected pattern"),
             Self::MissingType => write!(f, "expected type"),
             Self::MutatingMethodOnImmutable => write!(f, "invalid method call: this method is mutating but the object it was called from is immutable"),
             Self::NegativeTupleIndex => write!(f, "tuple index cannot be negative"),
+            Self::NonCalledMethod => write!(f, "method is not called"),
             Self::NonExhaustiveMatch { missing } => {
                 let missing = if missing.len() > 2 {
                     format!(
@@ -336,44 +295,28 @@ impl Display for DiagnosticKind {
             Self::NotDereferenceable { type_name } => {
                 write!(f, "type `{}` cannot be dereferenced", type_name)
             }
-            Self::NotImplementedMapType => write!(
-                f,
-                "map key type not implemented yet; expecting a primitive type"
-            ),
             Self::NotIterable { type_name } => {
                 write!(f, "type `{}` cannot be iterated over", type_name)
-            }
-            Self::ParseError(msg) => {
-                write!(f, "parse error: {}", msg)
             }
             Self::RefutablePatternExpected => {
                 write!(f, "expected refutable pattern")
             }
             Self::PubMut => write!(f, "cannot declare variables that are both public and mutable"),
-            Self::RefToConstant { name } => write!(
-                f,
-                "cannot take mutable reference of constant variable `{}`",
-                name
-            ),
-            Self::ReservedName { name } => {
-                write!(f, "invalid identifier: `{}` is a reserved keyword", name)
-            }
             Self::TooManyParams { expected, got } => {
                 write!(f, "expected {} parameter(s) but got {}", expected, got)
             }
-            Self::TupleElementCountMismatch { expected, got } => {
-                write!(f, "expected {} element(s) but got {}", expected, got)
+            Self::TypeDoesNotImplementTrait { type_name, trait_name} => {
+                write!(f, "type `{}` is expected to implement trait `{}` but does not", type_name, trait_name)
             }
             Self::UnexpectedCallback { expected } => {
                 write!(f, "expected type `{}` but got a callback", expected)
-            }
-            Self::UnexpectedStruct { expected } => {
-                write!(f, "expected type `{}` but got a struct", expected)
             }
             Self::UnexpectedToken { token } => {
                 write!(f, "unexpected token: {}", token)
             }
             Self::UnexpectedTypeParams => write!(f, "unexpected type parameters"),
+            Self::UnknownMacro => write!(f, "unknown macro"),
+            Self::UnknownDeriveArgument => write!(f, "unknown derive argument"),
             Self::UnknownMember { member } => {
                 write!(f, "unknown member `{}`", member)
             }

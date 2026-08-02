@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use tine_common::{
     diagnostics::{Diagnostic, DiagnosticKind, DiagnosticLevel},
-    locations::Location,
+    locations::{Locatable, Location},
     module_path::{ModuleId, ModulePath},
     sources::Source,
 };
@@ -11,7 +11,10 @@ use tine_parser::ProjectParser;
 use tine_symbols::{symbols::*, table::*};
 use tine_types::{store::TypeStore, types};
 
-use crate::loader::{CheckerLoader, LoadedModule, MockLoader, ModuleLoader};
+use crate::{
+    loader::{CheckerLoader, LoadedModule, MockLoader, ModuleLoader},
+    substitutions::Substitutions,
+};
 
 #[derive(Debug, Default)]
 pub struct CheckResult {
@@ -89,6 +92,7 @@ impl TypeChecker {
             exports: HashMap::new(),
             diagnostics: HashMap::new(),
         };
+        tc.init_internals();
         tc.init_builtins();
         tc
     }
@@ -224,8 +228,23 @@ impl TypeChecker {
         }
     }
 
+    pub fn builtin_id<I>(&self, name: &str) -> Option<I>
+    where
+        I: SymbolIndex,
+    {
+        self.symbols
+            .find_id::<I, _>(|s| s.name() == name && s.defined_at().module() == 0)
+    }
+    pub fn builtin_symbol(&self, name: &str) -> Option<&dyn Symbol> {
+        self.symbols
+            .all()
+            .map(|s| s.1)
+            .filter(|s| s.defined_at().module() == 0)
+            .find(|s| s.name() == name)
+    }
+
     pub fn can_be_assigned_to(
-        &self,
+        &mut self,
         got: types::TypeId,
         expected_id: types::TypeId,
         got_immutable: bool,
@@ -235,7 +254,7 @@ impl TypeChecker {
         use types::Type::*;
         match (&expected, &actual) {
             (Unknown, _) | (_, Unknown) => true,
-            (Trait(t), _) => self.implements_trait(got, t, got_immutable),
+            (Trait(t), _) => self.implements_trait(got, &t.clone(), got_immutable),
             (e, Ref(a)) if e.is_generic() => a.inner == expected_id,
             (_, _) => actual == expected,
         }
@@ -264,6 +283,14 @@ impl TypeChecker {
                 loc,
                 kind,
             });
+    }
+
+    pub(crate) fn cancel_diag<F>(&mut self, predicate: F)
+    where
+        F: Fn(&Diagnostic) -> bool,
+    {
+        let diagnostics = self.diagnostics.entry(self.current_module).or_default();
+        diagnostics.retain(|diag| !predicate(diag));
     }
 
     pub fn get_symbol_id(&self, name: &str) -> Option<SymbolId> {
@@ -295,6 +322,11 @@ impl TypeChecker {
                     .find_id::<EnumSymbolId, _>(|s| s.ty == ty)
                     .map(Into::into)
             })
+            .or_else(|| {
+                self.symbols
+                    .find_id::<PrimitiveTypeSymbolId, _>(|s| s.ty == ty)
+                    .map(Into::into)
+            })
     }
 
     pub fn is_mutable(&self, expr: &ir::Expression) -> Option<bool> {
@@ -313,6 +345,7 @@ impl TypeChecker {
     ) -> Box<dyn Iterator<Item = &'s ir::Identifier> + 's> {
         Box::new(
             expr.walk()
+                .filter_map(|child| child.as_expression())
                 .filter_map(|child| child.as_identifier())
                 .filter(|i| {
                     let symbol = self.symbols.get_symbol(i.symbol);
@@ -325,7 +358,7 @@ impl TypeChecker {
     /// immutable version of the type also implements the trait (since some
     /// methods might be defined with a mutable receiver).
     pub(super) fn implements_trait(
-        &self,
+        &mut self,
         ty: types::TypeId,
         expected_trait: &types::TraitType,
         got_immutable: bool,
@@ -352,6 +385,7 @@ impl TypeChecker {
             .map(|m| {
                 let symbol = self.symbols.get(m);
                 types::TraitMethod {
+                    self_type: None,
                     name: symbol.name.clone(),
                     def: symbol.ty,
                 }
@@ -361,7 +395,16 @@ impl TypeChecker {
         expected_trait
             .methods
             .iter()
-            .find(|expected| !got.contains(*expected))
+            .cloned()
+            .map(|mut m| {
+                if let Some(s) = &m.self_type {
+                    let subs = Substitutions::with_initial(&[s.clone()], &[ty]);
+                    m.self_type = None;
+                    m.def = subs.apply(&mut self.types, m.def);
+                }
+                m
+            })
+            .find(|expected| !got.contains(expected))
             .is_none()
     }
 

@@ -66,7 +66,7 @@ impl ProjectParser {
     }
 
     fn add_module(&mut self, path: ModulePath) -> ModuleId {
-        let id: ModuleId = self.names.len();
+        let id: ModuleId = self.names.len() + 1;
         self.names.push(path.clone());
         self.ids.insert(path, id);
         id
@@ -84,7 +84,7 @@ impl ProjectParser {
     }
 
     pub fn name(&self, id: ModuleId) -> &ModulePath {
-        &self.names[id]
+        &self.names[id - 1]
     }
 
     pub fn consume_ast(&mut self, id: ModuleId) -> ast::Program {

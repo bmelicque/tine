@@ -1,5 +1,3 @@
-use std::fmt;
-
 pub type TypeId = u32;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -14,7 +12,6 @@ pub enum Type {
     Integer,
     Param(TypeParam), // Represents a generic type parameter
     Listener(ListenerType),
-    Map(MapType),
     Option(OptionType),
     Ref(TypeRef),
     Result(ResultType),
@@ -29,6 +26,27 @@ pub enum Type {
 }
 
 impl Type {
+    pub fn as_struct(&self) -> Option<&StructType> {
+        match self {
+            Self::Struct(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    pub fn as_trait(&self) -> Option<&TraitType> {
+        match self {
+            Self::Trait(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    pub fn as_ref(&self) -> Option<&TypeRef> {
+        match self {
+            Self::Ref(t) => Some(t),
+            _ => None,
+        }
+    }
+
     pub fn is_reactive(&self) -> bool {
         match self {
             Self::Listener(_) | Self::Signal(_) => true,
@@ -114,7 +132,7 @@ impl Into<Type> for FunctionType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct TypeParam {
     pub name: String,
     pub id: TypeId,
@@ -134,18 +152,6 @@ pub struct GenericDef {
 impl Into<Type> for GenericDef {
     fn into(self) -> Type {
         Type::Generic(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MapType {
-    pub key: TypeId,
-    pub value: TypeId,
-}
-
-impl Into<Type> for MapType {
-    fn into(self) -> Type {
-        Type::Map(self)
     }
 }
 
@@ -242,6 +248,7 @@ impl Into<Type> for TraitType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TraitMethod {
+    pub self_type: Option<TypeParam>,
     pub name: String,
     pub def: TypeId,
 }
@@ -255,80 +262,5 @@ pub struct TupleType {
 impl Into<Type> for TupleType {
     fn into(self) -> Type {
         Type::Tuple(self)
-    }
-}
-
-impl fmt::Display for Type {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Type::Array(ty) => write!(f, "[]{}", ty.element),
-            Type::Boolean => write!(f, "bool"),
-            Type::Dynamic => write!(f, "any"),
-            Type::Enum(ty) => {
-                let variants_str = ty
-                    .variants
-                    .iter()
-                    .map(|variant| format!("{} {{{}}}", variant.name, variant.def))
-                    .collect::<Vec<_>>()
-                    .join(" | ");
-                write!(f, "{}", variants_str)
-            }
-            Type::Float => write!(f, "float"),
-            Type::Function(ty) => {
-                let params_str = ty
-                    .params
-                    .iter()
-                    .map(|p| p.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                write!(f, "({}) => {}", params_str, ty.return_type)
-            }
-            Type::Generic(_) => todo!(),
-            Type::Integer => write!(f, "int"),
-            Type::Param(ty) => write!(f, "{}", ty.name),
-            Type::Listener(ty) => write!(f, "@{}", ty.inner),
-            Type::Map(ty) => write!(f, "{}#{}", ty.key, ty.value),
-            Type::Option(ty) => write!(f, "?{}", ty.some),
-            Type::Ref(_) => todo!(),
-            Type::Result(ty) => {
-                if let Some(error) = &ty.error {
-                    write!(f, "{}!{}", error, ty.ok)
-                } else {
-                    write!(f, "!{}", ty.ok)
-                }
-            }
-            Type::SelfType => write!(f, "Self"),
-            Type::Signal(ty) => write!(f, "${}", ty.inner),
-            Type::String => write!(f, "str"),
-            Type::Struct(ty) => {
-                let fields_str = ty
-                    .fields
-                    .iter()
-                    .map(|field| format!("{}: {}", field.name, field.def))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                write!(f, "{{ {} }}", fields_str)
-            }
-            Type::Trait(ty) => {
-                let methods_str = ty
-                    .methods
-                    .iter()
-                    .map(|method| format!("{}: {}", method.name, method.def))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                write!(f, ".{{ {} }}", methods_str)
-            }
-            Type::Tuple(ty) => {
-                let types_str = ty
-                    .elements
-                    .iter()
-                    .map(|t| t.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                write!(f, "({})", types_str)
-            }
-            Type::Unknown => write!(f, "unknown"),
-            Type::Unit => write!(f, "()"),
-        }
     }
 }

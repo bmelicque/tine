@@ -105,6 +105,7 @@ impl Parser<'_> {
                 Some(ast::ImplementationItem::StaticMethod(
                     ast::FunctionDefinition {
                         docs,
+                        loc,
                         public,
                         definition,
                     },
@@ -129,6 +130,8 @@ impl Parser<'_> {
             loc,
             mutable,
             pattern,
+            // FIXME:
+            self_type: None,
         }
     }
 }

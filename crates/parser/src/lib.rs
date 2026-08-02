@@ -100,6 +100,48 @@ impl<'src> Parser<'src> {
         }
     }
 
+    fn maybe_eat<F, R>(&mut self, test: F) -> Option<(R, Location)>
+    where
+        F: Fn(&Token) -> Option<R>,
+    {
+        let (Ok(token), range) = self.tokens.peek()? else {
+            return None;
+        };
+        match test(token) {
+            Some(data) => {
+                let range = range.clone();
+                let loc = self.localize(range);
+                self.tokens.next();
+                Some((data, loc))
+            }
+            None => None,
+        }
+    }
+
+    fn maybe_is<F>(&mut self, predicate: F) -> bool
+    where
+        F: Fn(&Token) -> bool,
+    {
+        match self.tokens.peek() {
+            Some((Ok(token), _)) if predicate(token) => true,
+            _ => false,
+        }
+    }
+
+    fn try_parse<F, R, T>(&mut self, parse: F, recover_at: R) -> Result<Option<T>, Location>
+    where
+        F: FnOnce(&mut Self) -> Option<T>,
+        R: Fn(&Token) -> bool,
+    {
+        match parse(self) {
+            Some(r) => Ok(Some(r)),
+            None => match self.sync2(recover_at) {
+                Some(loc) => Err(loc),
+                None => Ok(None),
+            },
+        }
+    }
+
     fn eat_if(&mut self, tokens: &[Token]) -> Option<Range<usize>> {
         match self.tokens.next() {
             Some((Ok(tok), range)) if tokens.contains(&tok) => Some(range),
@@ -222,6 +264,29 @@ impl<'src> Parser<'src> {
                 }
                 (_, r) => {
                     range.end = r.end;
+                    self.tokens.next();
+                }
+            }
+        }
+        range
+    }
+
+    fn sync2<F>(&mut self, before: F) -> Option<Location>
+    where
+        F: Fn(&Token) -> bool,
+    {
+        let mut range = None;
+        while let Some(token) = &self.tokens.peek() {
+            match token {
+                (Ok(t), r) if before(t) => {
+                    break;
+                }
+                (_, got) => {
+                    let got = got.clone();
+                    match range {
+                        Some(r) => range = Some(Location::merge(r, self.localize(got))),
+                        None => range = Some(self.localize(got)),
+                    }
                     self.tokens.next();
                 }
             }

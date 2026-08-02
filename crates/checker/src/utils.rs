@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tine_ast as ast;
 use tine_common::locations::Location;
-use tine_ir as ir;
+use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_types::types;
 

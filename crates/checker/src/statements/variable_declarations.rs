@@ -1,6 +1,6 @@
 use tine_ast as ast;
-use tine_common::diagnostics::DiagnosticKind;
-use tine_ir as ir;
+use tine_common::{diagnostics::DiagnosticKind, locations::Locatable};
+use tine_ir::{self as ir, Typed};
 
 use crate::{patterns::lower_pattern, TypeChecker};
 
@@ -92,9 +92,9 @@ mod tests {
 
     use super::*;
 
-    fn visit_variable_declaration(node: &ast::VariableDeclaration) -> TypeChecker {
+    fn visit_variable_declaration(node: ast::VariableDeclaration) -> TypeChecker {
         let mut tc = TypeChecker::new();
-        tc.visit_variable_declaration(node.clone());
+        tc.visit_variable_declaration(node);
         tc
     }
 
@@ -104,10 +104,10 @@ mod tests {
             mutable: true,
             pattern: Some(ast::Pattern::MutIdentifier(ast::MutIdentifierPattern {
                 loc: Location::dummy(),
-                identifier: ast::IdentifierPattern::from(ast::Identifier {
+                identifier: ast::Identifier {
                     text: "a".to_string(),
                     loc: Location::dummy(),
-                }),
+                },
             })),
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
@@ -115,7 +115,7 @@ mod tests {
             })),
             ..Default::default()
         };
-        let mut tc = visit_variable_declaration(&node);
+        let mut tc = visit_variable_declaration(node);
         let symbol = tc
             .current_scope()
             .lookup("a")
@@ -133,19 +133,17 @@ mod tests {
     #[test]
     fn test_constant_declaration() {
         let node = ast::VariableDeclaration {
-            pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
-                ast::Identifier {
-                    loc: Location::dummy(),
-                    text: "a".to_string(),
-                },
-            ))),
+            pattern: Some(ast::Pattern::Identifier(ast::Identifier {
+                loc: Location::dummy(),
+                text: "a".to_string(),
+            })),
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
             })),
             ..Default::default()
         };
-        let mut tc = visit_variable_declaration(&node);
+        let mut tc = visit_variable_declaration(node);
         let symbol = tc
             .current_scope()
             .lookup("a")
@@ -163,19 +161,17 @@ mod tests {
     #[test]
     fn test_dollar_declaration() {
         let node = ast::VariableDeclaration {
-            pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern(
-                ast::Identifier {
-                    loc: Location::dummy(),
-                    text: "computed$".to_string(),
-                },
-            ))),
+            pattern: Some(ast::Pattern::Identifier(ast::Identifier {
+                loc: Location::dummy(),
+                text: "computed$".to_string(),
+            })),
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),
             })),
             ..Default::default()
         };
-        let tc = visit_variable_declaration(&node);
+        let tc = visit_variable_declaration(node);
         assert_eq!(tc.diagnostics.len(), 1);
         assert_eq!(
             tc.diagnostics[&0][0].kind,

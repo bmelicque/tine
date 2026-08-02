@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::usize;
 
 use tine_common::locations::Location;
-use tine_ir as ir;
+use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_symbols::table::SymbolTable;
 use tine_types::store::TypeStore;
@@ -330,7 +330,9 @@ fn visit_expr(
             vec![]
         }
 
-        ir::Expression::BooleanLiteral(_)
+        ir::Expression::IntrinsicCall(_)
+        | ir::Expression::IntrinsicConstruct(_)
+        | ir::Expression::BooleanLiteral(_)
         | ir::Expression::FloatLiteral(_)
         | ir::Expression::IntLiteral(_)
         | ir::Expression::StringLiteral(_) => vec![],
@@ -381,12 +383,6 @@ fn visit_expr(
             .elements
             .iter()
             .flat_map(|e| visit_expr(e, checker, map))
-            .collect(),
-        ir::Expression::Map(m) => m
-            .entries
-            .iter()
-            // keys should be hashed so they can be ignored
-            .flat_map(|e| visit_expr(&e.value, checker, map))
             .collect(),
         ir::Expression::Struct(s) => s
             .fields

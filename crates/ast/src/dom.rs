@@ -1,34 +1,23 @@
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
+use tine_macros::tree_struct;
+
+use crate::{nodes::ast_enum, walk::PushNodes, StringLiteral};
 
 use super::Expression;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ElementExpression {
+ast_enum!(ElementExpression {
     Element(Element),
     Void(VoidElement),
-}
+});
 
-impl ElementExpression {
-    pub fn loc(&self) -> Location {
-        match self {
-            ElementExpression::Element(e) => e.loc,
-            ElementExpression::Void(v) => v.loc,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Element {
-    pub loc: Location,
     pub tag_name: String,
+    #[child]
     pub attributes: Vec<Attribute>,
+    #[child]
     pub children: Vec<ElementChild>,
-}
-
-impl Into<ElementExpression> for Element {
-    fn into(self) -> ElementExpression {
-        ElementExpression::Element(self)
-    }
 }
 impl Into<Expression> for Element {
     fn into(self) -> Expression {
@@ -36,17 +25,11 @@ impl Into<Expression> for Element {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct VoidElement {
-    pub loc: Location,
     pub tag_name: String,
     pub attributes: Vec<Attribute>,
-}
-
-impl Into<ElementExpression> for VoidElement {
-    fn into(self) -> ElementExpression {
-        ElementExpression::Void(self)
-    }
 }
 impl Into<Expression> for VoidElement {
     fn into(self) -> Expression {
@@ -54,52 +37,44 @@ impl Into<Expression> for VoidElement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct TextNode {
-    pub loc: Location,
     pub text: String,
 }
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Attribute {
-    pub loc: Location,
     pub name: String,
+    #[child]
     pub value: Option<AttributeValue>,
 }
+impl<'a> PushNodes<'a> for Attribute {
+    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
+        self.push_children(stack);
+    }
+}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum AttributeValue {
+ast_enum!(AttributeValue {
     Expression(Expression),
-    String(String),
-}
-
-impl From<String> for AttributeValue {
-    fn from(s: String) -> Self {
-        AttributeValue::String(s)
-    }
-}
-impl From<Expression> for AttributeValue {
-    fn from(e: Expression) -> Self {
-        AttributeValue::Expression(e)
+    String(StringLiteral),
+});
+impl<'a> PushNodes<'a> for AttributeValue {
+    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
+        match self {
+            AttributeValue::String(_) => {}
+            AttributeValue::Expression(e) => e.push_nodes(stack),
+        }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ElementChild {
+ast_enum!(ElementChild {
+    Text(TextNode),
     Element(Element),
     VoidElement(VoidElement),
-    Text(TextNode),
     Expression(Expression),
-}
-impl From<Element> for ElementChild {
-    fn from(e: Element) -> Self {
-        ElementChild::Element(e)
-    }
-}
-impl From<VoidElement> for ElementChild {
-    fn from(v: VoidElement) -> Self {
-        ElementChild::VoidElement(v)
-    }
-}
+});
 impl From<ElementExpression> for ElementChild {
     fn from(value: ElementExpression) -> Self {
         match value {
@@ -108,13 +83,13 @@ impl From<ElementExpression> for ElementChild {
         }
     }
 }
-impl From<TextNode> for ElementChild {
-    fn from(t: TextNode) -> Self {
-        ElementChild::Text(t)
-    }
-}
-impl From<Expression> for ElementChild {
-    fn from(e: Expression) -> Self {
-        ElementChild::Expression(e)
+impl<'a> PushNodes<'a> for ElementChild {
+    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
+        match self {
+            ElementChild::Text(_) => {}
+            ElementChild::Element(e) => e.push_children(stack),
+            ElementChild::VoidElement(v) => v.push_children(stack),
+            ElementChild::Expression(e) => e.push_nodes(stack),
+        }
     }
 }

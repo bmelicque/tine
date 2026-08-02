@@ -1,7 +1,10 @@
 use enum_from_derive::EnumFrom;
 use tine_ast as ast;
-use tine_common::{diagnostics::DiagnosticKind, locations::Location};
-use tine_ir as ir;
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+};
+use tine_ir::{self as ir, Typed};
 use tine_symbols::{symbols::*, table::*};
 use tine_types::{store::TypeStore, types};
 
@@ -418,8 +421,8 @@ fn visit_pattern_field(
     expected: &[(String, MemberSymbolId)],
 ) -> Option<PatternField> {
     let identifier = match field.identifier {
-        Some(ast::FieldPatternIdentifier::Const(i)) => i.0,
-        Some(ast::FieldPatternIdentifier::Mut(i)) => i.identifier.0,
+        Some(ast::FieldPatternIdentifier::Const(i)) => i,
+        Some(ast::FieldPatternIdentifier::Mut(i)) => i.identifier,
         None => panic!(),
     };
     let expected = expected.iter().find(|&(n, _)| n == identifier.as_str());
@@ -448,7 +451,7 @@ fn visit_literal_pattern(pattern: ast::LiteralPattern) -> LiteralPattern {
 }
 
 fn visit_identifier_pattern(
-    pattern: ast::IdentifierPattern,
+    pattern: ast::Identifier,
     visitor: &mut PatternVisitor,
     expected: types::TypeId,
     mutable: bool,
@@ -456,14 +459,14 @@ fn visit_identifier_pattern(
     use Pattern::*;
     let name = pattern.as_str().to_string();
     let identifier: ir::Identifier = if visitor.is_declaration {
-        let symbol = declare_variable(visitor, &pattern.0, expected, mutable)?;
+        let symbol = declare_variable(visitor, &pattern, expected, mutable)?;
         ir::Identifier {
             loc: pattern.loc(),
             symbol: symbol.into(),
             ty: expected,
         }
     } else {
-        visitor.tc.visit_identifier(pattern.0)?
+        visitor.tc.visit_identifier(pattern)?
     };
 
     Some(Identifier(IdentifierPattern {

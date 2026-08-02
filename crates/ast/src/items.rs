@@ -1,15 +1,13 @@
-use enum_from_derive::EnumFrom;
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
+use tine_macros::tree_struct;
 
-use crate::{Identifier, InvalidStatement, Statement};
+use crate::{nodes::ast_enum, Identifier, InvalidStatement, Statement};
 
-#[derive(Debug, EnumFrom, Clone, PartialEq)]
-pub enum Item {
+ast_enum!(Item {
     Invalid(InvalidItem),
     UseDeclaration(UseDeclaration),
     Statement(Statement),
-}
-
+});
 impl Item {
     pub fn as_use_declaration_ref(&self) -> Option<&UseDeclaration> {
         match self {
@@ -19,36 +17,36 @@ impl Item {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct InvalidItem {
-    pub loc: Location,
-}
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct InvalidItem {}
 impl From<InvalidStatement> for InvalidItem {
     fn from(value: InvalidStatement) -> Self {
         InvalidItem { loc: value.loc }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct UseDeclaration {
-    pub loc: Location,
     pub relative_count: usize,
     pub tree: UseTree,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct UseTree {
     pub path: Vec<PathElement>,
     pub sub_trees: Vec<UseTree>,
 }
-
-impl UseTree {
-    pub fn loc(&self) -> Location {
+impl Locatable for UseTree {
+    fn loc(&self) -> Location {
         let start = self.span_start();
         let end = self.end();
         Location::merge(start, end)
     }
+}
 
+impl UseTree {
     /// Find the span of the first element of the tree
     fn span_start(&self) -> Location {
         if let Some(element) = self.path.get(0) {
@@ -71,7 +69,7 @@ impl UseTree {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PathElement(pub Identifier);
 
 impl PathElement {

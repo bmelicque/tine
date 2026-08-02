@@ -1,34 +1,36 @@
-use enum_from_derive::EnumFrom;
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
+use tine_macros::tree_struct;
+
+use crate::nodes::ast_enum;
 
 use super::{BlockExpression, Expression, Pattern};
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum Loop {
+ast_enum!(Loop {
     For(ForExpression),
     ForIn(ForInExpression),
-}
+});
 
-impl Loop {
-    pub fn loc(&self) -> Location {
-        match self {
-            Loop::For(expr) => expr.loc,
-            Loop::ForIn(expr) => expr.loc,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ForExpression {
-    pub loc: Location,
     pub condition: Option<Box<Expression>>,
     pub body: Option<BlockExpression>,
 }
+impl From<ForExpression> for Expression {
+    fn from(node: ForExpression) -> Self {
+        Expression::Loop(Loop::For(node))
+    }
+}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ForInExpression {
-    pub loc: Location,
     pub pattern: Option<Pattern>,
     pub iterable: Option<Box<Expression>>,
     pub body: Option<BlockExpression>,
+}
+impl From<ForInExpression> for Expression {
+    fn from(node: ForInExpression) -> Self {
+        Expression::Loop(Loop::ForIn(node))
+    }
 }

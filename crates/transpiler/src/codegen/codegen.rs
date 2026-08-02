@@ -1,5 +1,5 @@
 use crate::{
-    codegen::utils::ident_from_str,
+    codegen::{utils::ident_from_str, wellknown::WellknownSymbols},
     ownership_analyser::{analyse_program, OwnershipAction, OwnershipMap},
 };
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
@@ -14,6 +14,7 @@ pub struct CodeGenerator<'ty, 'sym> {
 
     pub types: &'ty TypeStore,
     pub symbols: &'sym SymbolTable,
+    pub(super) wellknown: WellknownSymbols,
     ownership: OwnershipMap,
     pub(super) name: ModulePath,
     /// Should the `break` statements be converted to `return` statements.
@@ -32,11 +33,14 @@ impl CodeGenerator<'_, '_> {
         types: &'ty TypeStore,
         symbols: &'sym SymbolTable,
     ) -> CodeGenerator<'ty, 'sym> {
+        let mut wellknown = WellknownSymbols::default();
+        wellknown.init(symbols);
         CodeGenerator {
             _source_map: Lrc::new(SourceMap::new(Default::default())),
 
             types,
             symbols,
+            wellknown,
             ownership: OwnershipMap::default(),
             name,
             next_temp_id: 0,
@@ -140,6 +144,9 @@ impl CodeGenerator<'_, '_> {
         self.ownership.action_for(id.loc, OwnershipAction::Clone)
     }
     pub(crate) fn call_ownership(&self, call: &ir::CallExpression) -> OwnershipAction {
+        self.ownership.action_for(call.loc, OwnershipAction::Move)
+    }
+    pub(crate) fn method_ownership(&self, call: &ir::MethodExpression) -> OwnershipAction {
         self.ownership.action_for(call.loc, OwnershipAction::Move)
     }
 }

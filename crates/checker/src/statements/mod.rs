@@ -1,5 +1,6 @@
 mod assignments;
 mod implementations;
+mod trait_definitions;
 mod type_definitions;
 mod variable_declarations;
 
@@ -39,6 +40,10 @@ impl TypeChecker {
                 .map_or(vec![], |s| vec![s.into()]),
             ast::Statement::StructDefinition(node) => {
                 self.visit_struct_definition(node);
+                vec![]
+            }
+            ast::Statement::Trait(node) => {
+                self.visit_trait_definition(node);
                 vec![]
             }
             ast::Statement::TypeAlias(node) => {

@@ -42,6 +42,7 @@ pub enum SymbolId {
     Primitive(PrimitiveTypeSymbolId),
     TypeAlias(TypeAliasSymbolId),
     Method(MethodSymbolId),
+    Trait(TraitSymbolId),
     Member(MemberSymbolId),
 }
 
@@ -111,6 +112,8 @@ pub struct PrimitiveTypeSymbolId(pub(crate) usize);
 pub struct TypeAliasSymbolId(pub(crate) usize);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MethodSymbolId(pub(crate) usize);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TraitSymbolId(pub(crate) usize);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MemberSymbolId(pub(crate) usize);
 impl_as_id!(MemberSymbolId, Member, as_member);
@@ -256,6 +259,18 @@ impl MethodSymbol {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct TraitSymbol {
+    pub name: String,
+    pub public: bool,
+    // This is expected to have the same length as the function type's params.
+    pub param_names: Vec<String>,
+    pub ty: TypeId,
+    pub docs: Option<String>,
+    pub defined_at: Location,
+    pub access: SymbolAccessManager,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SymbolAccessManager {
     reads: Vec<Location>,
@@ -299,12 +314,17 @@ pub trait Symbol {
     fn ty(&self) -> TypeId;
     fn defined_at(&self) -> Location;
     fn uses(&self) -> Box<dyn Iterator<Item = Location> + '_>;
+    fn is_public(&self) -> bool;
 }
 pub trait SymbolMut {
     fn access(&mut self) -> &mut SymbolAccessManager;
 }
 macro_rules! impl_symbol {
     ($symbol:ident) => {
+        impl_symbol!($symbol, |_s: &$symbol| true);
+    };
+
+    ($symbol:ident, $public:expr) => {
         impl Symbol for $symbol {
             fn docs(&self) -> Option<&String> {
                 self.docs.as_ref()
@@ -325,6 +345,11 @@ macro_rules! impl_symbol {
             fn uses(&self) -> Box<dyn Iterator<Item = Location> + '_> {
                 Box::new(self.access.uses())
             }
+
+            fn is_public(&self) -> bool {
+                let f: fn(&$symbol) -> bool = $public;
+                f(self)
+            }
         }
 
         impl SymbolMut for $symbol {
@@ -334,12 +359,14 @@ macro_rules! impl_symbol {
         }
     };
 }
-impl_symbol!(VariableSymbol);
-impl_symbol!(FunctionSymbol);
-impl_symbol!(StructSymbol);
-impl_symbol!(EnumSymbol);
-impl_symbol!(VariantSymbol);
-impl_symbol!(PrimitiveTypeSymbol);
-impl_symbol!(TypeAliasSymbol);
-impl_symbol!(MethodSymbol);
-impl_symbol!(MemberSymbol);
+impl_symbol!(VariableSymbol, |s: &VariableSymbol| s.public);
+impl_symbol!(FunctionSymbol, |s: &FunctionSymbol| s.public);
+impl_symbol!(StructSymbol, |s: &StructSymbol| s.public);
+impl_symbol!(EnumSymbol, |s: &EnumSymbol| s.public);
+impl_symbol!(TypeAliasSymbol, |s: &TypeAliasSymbol| s.public);
+impl_symbol!(MemberSymbol, |s: &MemberSymbol| s.public);
+impl_symbol!(MethodSymbol, |s: &MethodSymbol| s.public);
+impl_symbol!(TraitSymbol, |s: &TraitSymbol| s.public);
+
+impl_symbol!(VariantSymbol); // uses default: always public
+impl_symbol!(PrimitiveTypeSymbol); // uses default: always public

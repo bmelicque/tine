@@ -1,5 +1,8 @@
 use tine_ast as ast;
-use tine_common::{diagnostics::DiagnosticKind, locations::Location};
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+};
 
 use crate::{tokens::Token, Parser};
 
@@ -10,6 +13,32 @@ pub(super) struct TypeName {
 }
 
 impl Parser<'_> {
+    pub(crate) fn maybe_parse_name<R>(&mut self, recover_at: R) -> Option<ast::Identifier>
+    where
+        R: Fn(&Token) -> bool,
+    {
+        let name_result = self.try_parse(
+            |self_| {
+                let (text, loc) = self_.maybe_eat(|t| t.identifier().map(|s| s.to_owned()))?;
+                Some(ast::Identifier { text, loc })
+            },
+            recover_at,
+        );
+
+        match name_result {
+            Ok(Some(name)) => Some(name),
+            Ok(None) => {
+                let loc = self.next_loc();
+                self.error(DiagnosticKind::MissingName, loc);
+                None
+            }
+            Err(loc) => {
+                self.error(DiagnosticKind::MissingName, loc);
+                None
+            }
+        }
+    }
+
     pub(super) fn try_parse_type_name(
         &mut self,
     ) -> (Option<ast::Identifier>, Option<Vec<ast::Identifier>>) {

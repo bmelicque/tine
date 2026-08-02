@@ -7,7 +7,7 @@ mod utils;
 
 use super::{utils::ident_from_str, CodeGenerator};
 use crate::{
-    codegen::utils::{create_block_stmt, create_str},
+    codegen::utils::{create_block_stmt, create_str, internal_construct, internal_method_call},
     ownership_analyser::OwnershipAction,
 };
 use swc_common::DUMMY_SP;
@@ -38,39 +38,41 @@ where
 
 impl CodeGenerator<'_, '_> {
     pub fn handle_expression(&mut self, node: ir::Expression) -> ExpressionResult {
+        use ir::Expression::*;
         match node {
-            ir::Expression::Array(a) => self.handle_array(a.elements),
-            ir::Expression::Binary(b) => self.handle_binary_expression(b),
-            ir::Expression::BooleanLiteral(b) => ExpressionResult::from(swc::Bool {
+            Array(a) => self.handle_array(a.elements),
+            Binary(b) => self.handle_binary_expression(b),
+            BooleanLiteral(b) => ExpressionResult::from(swc::Bool {
                 span: DUMMY_SP,
                 value: b.value,
             }),
-            ir::Expression::Block(b) => self.handle_block(b),
-            ir::Expression::Call(c) => self.handle_call(c),
-            ir::Expression::Element(e) => self.handle_element_expression(e),
-            ir::Expression::FloatLiteral(f) => ExpressionResult::from(swc::Number {
+            Block(b) => self.handle_block(b),
+            Call(c) => self.handle_call(c),
+            Element(e) => self.handle_element_expression(e),
+            FloatLiteral(f) => ExpressionResult::from(swc::Number {
                 span: DUMMY_SP,
                 value: f.value,
                 raw: None,
             }),
-            ir::Expression::For(f) => self.handle_for_expression(f),
-            ir::Expression::ForIn(f) => self.handle_for_in_expression(f),
-            ir::Expression::Function(f) => self.handle_function_expression(f).into(),
-            ir::Expression::Identifier(i) => self.handle_identifier(i).into(),
-            ir::Expression::If(i) => self.handle_if_expression(i),
-            ir::Expression::IntLiteral(i) => ExpressionResult::from(swc::Number {
+            For(f) => self.handle_for_expression(f),
+            ForIn(f) => self.handle_for_in_expression(f),
+            Function(f) => self.handle_function_expression(f).into(),
+            Identifier(i) => self.handle_identifier(i).into(),
+            If(i) => self.handle_if_expression(i),
+            IntLiteral(i) => ExpressionResult::from(swc::Number {
                 span: DUMMY_SP,
                 value: i.value as f64,
                 raw: None,
             }),
-            ir::Expression::Map(m) => self.handle_map_expression(m),
-            ir::Expression::Member(m) => self.member_expr_to_swc(m),
-            ir::Expression::Method(m) => self.handle_method(m),
-            ir::Expression::StringLiteral(s) => self.string_literal_to_swc(s).into(),
-            ir::Expression::Struct(s) => self.struct_to_swc(s),
-            ir::Expression::Unary(u) => self.handle_unary_expression(u),
-            ir::Expression::Tuple(t) => self.handle_array(t.elements),
-            ir::Expression::TypeMatch(t) => self.handle_type_match(t),
+            IntrinsicCall(i) => self.handle_intrinsic_call(i),
+            IntrinsicConstruct(i) => self.handle_intrinsic_construct(i),
+            Member(m) => self.member_expr_to_swc(m),
+            Method(m) => self.handle_method(m),
+            StringLiteral(s) => self.string_literal_to_swc(s).into(),
+            Struct(s) => self.struct_to_swc(s),
+            Unary(u) => self.handle_unary_expression(u),
+            Tuple(t) => self.handle_array(t.elements),
+            TypeMatch(t) => self.handle_type_match(t),
         }
     }
 
@@ -188,36 +190,30 @@ impl CodeGenerator<'_, '_> {
         }
     }
 
-    fn handle_map_expression(&mut self, node: ir::MapLiteral) -> ExpressionResult {
-        let count = node.entries.len();
-        let mut results = Vec::with_capacity(count * 2);
-        for entry in node.entries {
-            results.push(self.handle_expression(entry.key));
-            results.push(self.handle_expression(entry.value));
+    fn handle_intrinsic_call(&mut self, node: ir::IntrinsicCall) -> ExpressionResult {
+        let (prelim, args): (Vec<Vec<swc::Stmt>>, _) = node
+            .args
+            .into_iter()
+            .map(|a| self.handle_expression(a))
+            .map(|r| (r.prelim_stmts, r.expr.into()))
+            .unzip();
+        let name = self.symbol_name(node.callee);
+        let prelim = prelim.into_iter().flatten().collect();
+        let call = internal_method_call(name, args);
+        ExpressionResult {
+            prelim_stmts: prelim,
+            expr: call.into(),
         }
-        let (prelim_stmts, exprs) = self.extract_necessary(results);
-
-        let mut props = Vec::with_capacity(count);
-        let mut iter = exprs.into_iter();
-        while let (Some(key), Some(value)) = (iter.next(), iter.next()) {
-            props.push(self.make_prop(key, value));
-        }
-
-        let expr = swc::Expr::Object(swc::ObjectLit {
-            span: DUMMY_SP,
-            props,
-        });
-
-        ExpressionResult { prelim_stmts, expr }
     }
-    fn make_prop(&self, key: swc::Expr, value: swc::Expr) -> swc::PropOrSpread {
-        swc::PropOrSpread::Prop(Box::new(swc::Prop::KeyValue(swc::KeyValueProp {
-            key: swc::PropName::Computed(swc::ComputedPropName {
-                span: DUMMY_SP,
-                expr: Box::new(key),
-            }),
-            value: Box::new(value),
-        })))
+
+    fn handle_intrinsic_construct(&mut self, node: ir::IntrinsicConstruct) -> ExpressionResult {
+        // FIXME: handle arguments
+        let name = self.symbol_name(node.constructor);
+        let call = internal_construct(name);
+        ExpressionResult {
+            prelim_stmts: vec![],
+            expr: call.into(),
+        }
     }
 
     pub fn member_expr_to_swc(&mut self, node: ir::MemberExpression) -> ExpressionResult {
@@ -249,21 +245,42 @@ impl CodeGenerator<'_, '_> {
     }
 
     pub fn handle_method(&mut self, node: ir::MethodExpression) -> ExpressionResult {
-        let obj_result = self.handle_expression(*node.host);
+        if let Some(known) = self.wellknown.methods.get(&node.method.1) {
+            return known(self, node);
+        }
 
+        let should_clone = self.method_ownership(&node) == OwnershipAction::Clone;
+
+        let obj_result = self.handle_expression(*node.host);
         let method_name = &self.symbols.get(node.method.1).name;
         let prop = swc::MemberProp::Ident(ident_from_str(&method_name).into());
-
-        let expr = swc::MemberExpr {
+        let callee = swc::MemberExpr {
             span: DUMMY_SP,
             obj: Box::new(obj_result.expr),
             prop,
         };
 
-        ExpressionResult {
-            prelim_stmts: obj_result.prelim_stmts,
-            expr: expr.into(),
+        let args_results = node
+            .args
+            .into_iter()
+            .map(|a| self.handle_expression(a))
+            .collect::<Vec<_>>();
+        let (prelim_stmts, args) = self.extract_necessary(args_results);
+
+        let mut expr = swc::Expr::Call(swc::CallExpr {
+            callee: swc::Callee::Expr(Box::new(callee.into())),
+            args: args.into_iter().map(Into::into).collect(),
+            ..Default::default()
+        });
+        if should_clone {
+            expr = swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(expr),
+                prop: swc::MemberProp::Ident(ident_from_str("$clone").into()),
+            });
         }
+
+        ExpressionResult { prelim_stmts, expr }
     }
 
     fn string_literal_to_swc(&mut self, node: ir::StringLiteral) -> swc::Str {

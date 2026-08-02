@@ -1,6 +1,6 @@
 use tine_ast as ast;
-use tine_common::diagnostics::DiagnosticKind;
-use tine_ir::{self as ir, root_identifier};
+use tine_common::{diagnostics::DiagnosticKind, locations::Locatable};
+use tine_ir::{self as ir, root_identifier, Typed};
 use tine_types::{store::TypeStore, types};
 
 use crate::{patterns::lower_pattern, TypeChecker};
@@ -72,10 +72,9 @@ impl TypeChecker {
     /// Visit an assignee which is a pattern
     fn visit_identifier_assignee(
         &mut self,
-        pattern: ast::IdentifierPattern,
+        identifier: ast::Identifier,
         against: types::TypeId,
     ) -> Option<ir::Expression> {
-        let ast::IdentifierPattern(identifier) = pattern;
         let identifier = self.visit_identifier(identifier)?;
         let ty = self.symbol_type_id(identifier.symbol);
         self.check_mutability(&identifier);
@@ -171,10 +170,10 @@ mod tests {
         ast::Assignment {
             loc: Location::dummy(),
             pattern: Some(ast::Assignee::Pattern(ast::Pattern::Identifier(
-                ast::IdentifierPattern(ast::Identifier {
+                ast::Identifier {
                     loc: Location::dummy(),
                     text: "a".to_string(),
-                }),
+                },
             ))),
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 loc: Location::dummy(),

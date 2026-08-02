@@ -1,10 +1,10 @@
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
+use tine_macros::tree_struct;
 
 use crate::Item;
 
-#[derive(Debug, Clone, PartialEq)]
+#[tree_struct(untyped)]
 pub struct Program {
-    pub loc: Location,
     pub items: Vec<Item>,
 }
 

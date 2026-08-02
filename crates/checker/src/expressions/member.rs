@@ -1,6 +1,9 @@
 use tine_ast as ast;
-use tine_common::{diagnostics::DiagnosticKind, locations::Location};
-use tine_ir as ir;
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+};
+use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_types::{store::TypeStore, types};
 
@@ -118,11 +121,14 @@ impl TypeChecker {
         let ty = self.symbol_type_id(most_concrete_id);
         let ty = substitutions.apply(&mut self.types, ty);
 
+        self.error(DiagnosticKind::NonCalledMethod, field.loc);
+
         Some(ir::MethodExpression {
             loc: Location::merge(object.loc(), field.loc),
             host: Box::new(object),
             ty,
             method: (field.loc, most_concrete_id),
+            args: vec![],
         })
     }
 

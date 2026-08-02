@@ -7,7 +7,9 @@ build = "build.rs"
 [dependencies]
 enum_from_derive = { path = "../enum_from_derive" }
 ordered-float = "5.0.0"
+paste = "1.0.15"
 tine_ast = { path = "../ast" }
 tine_common = { path = "../common" }
+tine_macros = { path = "../macros" }
 tine_symbols = { path = "../symbols" }
 tine_types = { path = "../types" }

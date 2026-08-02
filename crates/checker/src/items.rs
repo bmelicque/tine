@@ -3,7 +3,11 @@ use tine_ast::{
     use_tree::{use_decl_to_paths, ModuleImports},
     UseTree,
 };
-use tine_common::{diagnostics::DiagnosticKind, locations::Location, module_path::ModuleId};
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+    module_path::ModuleId,
+};
 use tine_ir as ir;
 use tine_symbols::symbols::SymbolId;
 

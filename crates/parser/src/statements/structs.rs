@@ -1,5 +1,5 @@
 use tine_ast as ast;
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
 
 use crate::{tokens::Token, Parser};
 
@@ -7,6 +7,7 @@ impl Parser<'_> {
     pub fn parse_struct_definition(
         &mut self,
         docs: Option<ast::Docs>,
+        meta: Option<Vec<ast::MetaAttribute>>,
         pub_loc: Option<Location>,
     ) -> ast::StructDefinition {
         let kw_range = self.eat(&[Token::Struct]);
@@ -17,6 +18,7 @@ impl Parser<'_> {
         let Ok(type_name) = self.parse_type_name(&[Token::LBrace, Token::LParen]) else {
             return ast::StructDefinition {
                 docs,
+                meta,
                 loc,
                 public,
                 name: None,
@@ -35,6 +37,7 @@ impl Parser<'_> {
 
         ast::StructDefinition {
             docs,
+            meta,
             loc,
             public,
             name: type_name.as_ref().map(|t| t.name.clone()),
@@ -58,6 +61,7 @@ mod tests {
             input: "struct Foo {}",
             expected: ast::Statement::StructDefinition(ast::StructDefinition {
                 docs: None,
+                meta: None,
                 loc: Location::new(0, Span::new(0, 13)),
                 public: false,
                 name: Some(ast::Identifier {

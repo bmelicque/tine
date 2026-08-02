@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use tine_ast as ast;
-use tine_common::{diagnostics::DiagnosticKind, locations::Location};
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+};
 use tine_ir as ir;
 use tine_types::store::TypeStore;
 
@@ -64,7 +67,7 @@ impl TypeChecker {
                 ast::AttributeValue::String(s) => {
                     ir::Expression::StringLiteral(ir::StringLiteral {
                         loc: attribute.loc,
-                        value: s,
+                        value: s.text,
                     })
                 }
             },

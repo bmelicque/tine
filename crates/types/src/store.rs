@@ -138,13 +138,6 @@ pub fn display_raw_type(store: &TypeStore, ty: TypeId) -> String {
         Type::Listener(t) => {
             format!("@{}", display_type(store, t.inner))
         }
-        Type::Map(t) => {
-            format!(
-                "{}#{}",
-                display_type(store, t.key),
-                display_type(store, t.value)
-            )
-        }
         Type::Integer => "int".into(),
         Type::Option(t) => {
             format!("?{}", display_type(store, t.some))

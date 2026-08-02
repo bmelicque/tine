@@ -39,6 +39,7 @@ impl Backend {
             token_types: vec![
                 SemanticTokenType::KEYWORD,
                 SemanticTokenType::TYPE,
+                SemanticTokenType::INTERFACE,
                 SemanticTokenType::VARIABLE,
                 SemanticTokenType::FUNCTION,
                 SemanticTokenType::METHOD,

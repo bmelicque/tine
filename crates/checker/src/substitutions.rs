@@ -98,10 +98,6 @@ impl Substitutions {
             (Listener(e), Listener(a)) => {
                 self.unify(tc, e.inner, a.inner, loc);
             }
-            (Map(e), Map(a)) => {
-                self.unify(tc, e.key, a.key, loc);
-                self.unify(tc, e.value, a.value, loc);
-            }
             (Option(e), Option(a)) => {
                 self.unify(tc, e.some, a.some, loc);
             }
@@ -164,11 +160,6 @@ impl Substitutions {
             Listener(mut l) => {
                 l.inner = self.apply(store, l.inner);
                 store.add(l)
-            }
-            Map(mut m) => {
-                m.key = self.apply(store, m.key);
-                m.value = self.apply(store, m.value);
-                store.add(m)
             }
             Option(mut o) => {
                 o.some = self.apply(store, o.some);

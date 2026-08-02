@@ -17,9 +17,11 @@ impl Parser<'_> {
             let loc = definition.loc.nth_char(2);
             self.error(DiagnosticKind::MissingName, loc);
         }
+        let loc = pub_loc.map_or(definition.loc, |l| Location::merge(l, definition.loc));
 
         ast::FunctionDefinition {
             docs,
+            loc,
             public: pub_loc.is_some(),
             definition,
         }

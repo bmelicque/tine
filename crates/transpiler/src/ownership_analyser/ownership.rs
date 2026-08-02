@@ -13,7 +13,7 @@
 
 use std::collections::HashMap;
 
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
 use tine_ir as ir;
 use tine_symbols::table::SymbolTable;
 use tine_types::store::TypeStore;
@@ -340,7 +340,9 @@ fn visit_expr(
             visit_expr(&m.host, ctx.force_copying(), sites, aliases, semantics, out)
         }
 
-        ir::Expression::BooleanLiteral(_)
+        ir::Expression::IntrinsicCall(_)
+        | ir::Expression::IntrinsicConstruct(_)
+        | ir::Expression::BooleanLiteral(_)
         | ir::Expression::FloatLiteral(_)
         | ir::Expression::IntLiteral(_)
         | ir::Expression::StringLiteral(_) => {}
@@ -412,12 +414,6 @@ fn visit_expr(
         ir::Expression::Tuple(t) => {
             for e in &t.elements {
                 visit_expr(e, ctx, sites, aliases, semantics, out);
-            }
-        }
-        ir::Expression::Map(m) => {
-            for entry in &m.entries {
-                visit_expr(&entry.key, ctx, sites, aliases, semantics, out);
-                visit_expr(&entry.value, ctx, sites, aliases, semantics, out);
             }
         }
         ir::Expression::Struct(s) => {

@@ -1,15 +1,18 @@
 use std::fmt;
 
-use enum_from_derive::EnumFrom;
 use ordered_float::OrderedFloat;
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
+use tine_macros::tree_struct;
 
-use crate::{ElementExpression, VariantConstructor};
+use crate::{
+    nodes::{ast_enum, operator_enum},
+    walk::PushNodes,
+    ElementExpression, VariantConstructor,
+};
 
 use super::{constructor_literals::ConstructorLiteral, types::Type, Loop, Pattern, Statement};
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum Expression {
+ast_enum!(Expression {
     Array(ArrayExpression),
     Binary(BinaryExpression),
     BooleanLiteral(BooleanLiteral),
@@ -21,6 +24,7 @@ pub enum Expression {
     Identifier(Identifier),
     If(IfExpression),
     IntLiteral(IntLiteral),
+    Intrinsic(IntrinsicCall),
     IfDecl(IfPatExpression),
     Invalid(InvalidExpression),
     Loop(Loop),
@@ -31,101 +35,64 @@ pub enum Expression {
     Tuple(TupleExpression),
     TypeMatch(TypeMatch),
     Unary(UnaryExpression),
-}
-
-impl Expression {
-    pub fn loc(&self) -> Location {
-        match self {
-            Self::Array(e) => e.loc,
-            Self::Binary(e) => e.loc,
-            Self::BooleanLiteral(e) => e.loc,
-            Self::Block(e) => e.loc,
-            Self::Call(e) => e.loc,
-            Self::ConstructorLiteral(e) => e.loc,
-            Self::Element(e) => e.loc(),
-            Self::FloatLiteral(e) => e.loc,
-            Self::Member(e) => e.loc,
-            Self::Function(e) => e.loc,
-            Self::Identifier(e) => e.loc,
-            Self::If(e) => e.loc,
-            Self::IfDecl(e) => e.loc,
-            Self::IntLiteral(e) => e.loc,
-            Self::Invalid(e) => e.loc,
-            Self::Loop(e) => e.loc(),
-            Self::Match(e) => e.loc,
-            Self::StringLiteral(e) => e.loc,
-            Self::Tuple(e) => e.loc,
-            Self::TypeMatch(e) => e.loc,
-            Self::Unary(e) => e.loc,
-        }
+});
+impl From<Expression> for Option<Box<Expression>> {
+    fn from(value: Expression) -> Self {
+        Some(Box::new(value.into()))
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ArrayExpression {
-    pub loc: Location,
     pub elements: Vec<Expression>,
 }
 
+#[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier {
-    pub loc: Location,
     pub text: String,
 }
-
 impl Identifier {
     pub fn as_str(&self) -> &str {
         self.text.as_str()
     }
+
+    pub fn new(text: String, loc: Location) -> Self {
+        Self { loc, text }
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct IfPatExpression {
-    pub loc: Location,
     pub pattern: Option<Pattern>,
+    #[child]
     pub scrutinee: Option<Box<Expression>>,
+    #[child]
     pub consequent: Option<BlockExpression>,
+    #[child]
     pub alternate: Option<Box<Alternate>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct IfExpression {
-    pub loc: Location,
+    #[child]
     pub condition: Option<Box<Expression>>,
+    #[child]
     pub consequent: Option<BlockExpression>,
+    #[child]
     pub alternate: Option<Box<Alternate>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Alternate {
-    Block(BlockExpression),
-    If(IfExpression),
-    IfDecl(IfPatExpression),
-}
-impl Alternate {
-    pub fn loc(&self) -> Location {
-        match self {
-            Alternate::Block(b) => b.loc,
-            Alternate::If(i) => i.loc,
-            Alternate::IfDecl(i) => i.loc,
-        }
+ast_enum!(
+    Alternate {
+        Block(BlockExpression),
+        If(IfExpression),
+        IfDecl(IfPatExpression),
     }
-}
-impl From<BlockExpression> for Alternate {
-    fn from(value: BlockExpression) -> Self {
-        Self::Block(value)
-    }
-}
-impl From<IfExpression> for Alternate {
-    fn from(value: IfExpression) -> Self {
-        Self::If(value)
-    }
-}
-impl From<IfPatExpression> for Alternate {
-    fn from(value: IfPatExpression) -> Self {
-        Self::IfDecl(value)
-    }
-}
+);
 impl Into<Expression> for Alternate {
     fn into(self) -> Expression {
         match self {
@@ -135,197 +102,181 @@ impl Into<Expression> for Alternate {
         }
     }
 }
+impl<'a> PushNodes<'a> for Alternate {
+    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
+        match self {
+            Alternate::Block(b) => b.push_children(stack),
+            Alternate::If(i) => i.push_children(stack),
+            Alternate::IfDecl(i) => i.push_children(stack),
+        };
+    }
+}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct IntLiteral {
-    pub loc: Location,
     pub value: i64,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct InvalidExpression {
-    pub loc: Location,
+impl IntLiteral {
+    pub fn new(value: i64, loc: Location) -> Self {
+        Self { loc, value }
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct IntrinsicCall {
+    pub name: Identifier,
+    pub args: Vec<Expression>,
+}
+
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct InvalidExpression {}
+
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MatchExpression {
-    pub loc: Location,
+    #[child]
     pub scrutinee: Option<Box<Expression>>,
+    #[child]
     pub arms: Option<Vec<MatchArm>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MatchArm {
-    pub loc: Location,
     pub pattern: Option<Box<Pattern>>,
     pub expression: Option<Box<Expression>>,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StringLiteral {
-    pub loc: Location,
-    pub text: String,
+impl<'a> PushNodes<'a> for MatchArm {
+    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
+        self.expression.push_nodes(stack);
+    }
 }
 
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct StringLiteral {
+    pub text: String,
+}
 impl StringLiteral {
     pub fn as_str(&self) -> &str {
         self.text.as_str()
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct FloatLiteral {
-    pub loc: Location,
     pub value: OrderedFloat<f64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct BooleanLiteral {
-    pub loc: Location,
     pub value: bool,
 }
+impl BooleanLiteral {
+    pub fn new(value: bool, loc: Location) -> Self {
+        Self { value, loc }
+    }
+}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct BinaryExpression {
-    pub loc: Location,
+    #[child]
     pub left: Option<Box<Expression>>,
     pub operator: BinaryOperator,
+    #[child]
     pub right: Option<Box<Expression>>,
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BinaryOperator {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    Pow,
-    LAnd,
-    LOr,
-    EqEq,
-    Neq,
-    Grt,
-    Geq,
-    Less,
-    Leq,
-}
-
-impl BinaryOperator {
-    fn as_string(&self) -> String {
-        match self {
-            BinaryOperator::Add => "+",
-            BinaryOperator::Sub => "-",
-            BinaryOperator::Mul => "*",
-            BinaryOperator::Div => "/",
-            BinaryOperator::Mod => "%",
-            BinaryOperator::Pow => "**",
-
-            BinaryOperator::EqEq => "==",
-            BinaryOperator::Neq => "!=",
-            BinaryOperator::Less => "<",
-            BinaryOperator::Leq => "<=",
-            BinaryOperator::Grt => ">",
-            BinaryOperator::Geq => ">=",
-
-            BinaryOperator::LAnd => "&&",
-            BinaryOperator::LOr => "||",
-        }
-        .into()
-    }
-}
-
-impl fmt::Display for BinaryOperator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_string())
-    }
-}
-
-impl From<String> for BinaryOperator {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "+" => BinaryOperator::Add,
-            "-" => BinaryOperator::Sub,
-            "*" => BinaryOperator::Mul,
-            "/" => BinaryOperator::Div,
-            "%" => BinaryOperator::Mod,
-            "**" => BinaryOperator::Pow,
-
-            "==" => BinaryOperator::EqEq,
-            "!=" => BinaryOperator::Neq,
-            "<" => BinaryOperator::Less,
-            "<=" => BinaryOperator::Leq,
-            ">" => BinaryOperator::Grt,
-            ">=" => BinaryOperator::Geq,
-
-            "&&" => BinaryOperator::LAnd,
-            "||" => BinaryOperator::LOr,
-
-            _ => panic!("Invalid operator"),
+impl BinaryExpression {
+    pub fn and(left: Expression, right: Expression, loc: Location) -> Self {
+        Self {
+            left: left.into(),
+            operator: BinaryOperator::LAnd,
+            right: right.into(),
+            loc,
         }
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+operator_enum!(BinaryOperator {
+    Add => "+",
+    Sub => "-",
+    Mul => "*",
+    Div => "/",
+    Mod => "%",
+    Pow => "**",
+
+    EqEq => "==",
+    Neq => "!=",
+    Less => "<",
+    Leq => "<=",
+    Grt => ">",
+    Geq => ">=",
+
+    LAnd => "&&",
+    LOr => "||",
+});
+
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct BlockExpression {
-    pub loc: Location,
+    #[child]
     pub statements: Vec<Statement>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct CallExpression {
-    pub loc: Location,
+    #[child]
     pub callee: Option<Box<Expression>>,
     pub type_args: Option<Vec<Type>>,
+    #[child]
     pub args: Vec<CallArgument>,
 }
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum CallArgument {
+ast_enum!(CallArgument {
     Expression(Expression),
     Callback(Callback),
-}
-
-impl CallArgument {
-    pub fn as_expression(&self) -> Option<&Expression> {
+});
+impl<'a> PushNodes<'a> for CallArgument {
+    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
         match self {
-            CallArgument::Expression(expr) => Some(expr),
-            _ => None,
+            CallArgument::Expression(expr) => expr.push_nodes(stack),
+            CallArgument::Callback(c) => c.push_children(stack),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Callback {
-    pub loc: Location,
     pub params: Vec<CallbackParam>,
+    #[child]
     pub body: Option<Box<Expression>>,
 }
+impl<'a> PushNodes<'a> for Callback {
+    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
+        self.body.push_nodes(stack);
+    }
+}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum CallbackParam {
+ast_enum!(CallbackParam {
     Identifier(Identifier),
     Param(FunctionParam),
-}
+});
 
-impl From<Identifier> for CallbackParam {
-    fn from(value: Identifier) -> Self {
-        Self::Identifier(value)
-    }
-}
-impl From<FunctionParam> for CallbackParam {
-    fn from(value: FunctionParam) -> Self {
-        Self::Param(value)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct MemberExpression {
-    pub loc: Location,
+    #[child]
     pub object: Option<Box<Expression>>,
     pub prop: Option<MemberProp>,
 }
-
 impl MemberExpression {
     pub fn root_expression(&self) -> Option<Expression> {
         let Some(object) = self.object.as_ref() else {
@@ -337,83 +288,77 @@ impl MemberExpression {
             expr => Some(expr.clone()),
         }
     }
-}
 
-#[derive(Debug, EnumFrom, Clone, PartialEq, Eq, Hash)]
-pub enum MemberProp {
-    FieldName(Identifier),
-    Index(IntLiteral),
-}
-impl MemberProp {
-    pub fn loc(&self) -> Location {
-        match self {
-            Self::FieldName(i) => i.loc,
-            Self::Index(n) => n.loc,
+    pub fn valid<O, M>(object: O, member: M, loc: Location) -> Self
+    where
+        O: Into<Expression>,
+        M: Into<MemberProp>,
+    {
+        Self {
+            object: Some(Box::new(object.into())),
+            prop: Some(member.into()),
+            loc,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+ast_enum!(MemberProp {
+    FieldName(Identifier),
+    Index(IntLiteral),
+});
+
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct TupleExpression {
-    pub loc: Location,
+    #[child]
     pub elements: Vec<Expression>,
 }
 
 /// Internals use only.
 /// Match a value against an enum variant.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct TypeMatch {
-    pub loc: Location,
+    #[child]
     pub expression: Option<Box<Expression>>,
     pub constructor: VariantConstructor,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct UnaryExpression {
-    pub loc: Location,
     pub operator: UnaryOperator,
+    #[child]
     pub operand: Option<Box<Expression>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum UnaryOperator {
-    Star,  // *
-    Minus, // -
-    Bang,  // !
-    Mut,   // mut
-}
+operator_enum!(UnaryOperator {
+    Star => "*",
+    Minus => "-",
+    Bang => "!",
+    Mut => "mut",
+});
 
-impl From<String> for UnaryOperator {
-    fn from(value: String) -> Self {
-        match value.as_str() {
-            "*" => Self::Star,
-            "-" => Self::Minus,
-            "!" => Self::Bang,
-            "mut" => Self::Mut,
-            _ => panic!("Unknown unary operator: {}", value),
-        }
-    }
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct FunctionExpression {
-    pub loc: Location,
     pub name: Option<Identifier>,
     pub type_params: Option<Vec<Identifier>>,
     pub params: Option<FunctionParams>,
     pub return_type: Option<Type>,
+    #[child]
     pub body: Option<BlockExpression>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct FunctionParams {
-    pub loc: Location,
     pub params: Vec<FunctionParam>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct FunctionParam {
-    pub loc: Location,
     pub name: Option<Identifier>,
     pub type_annotation: Option<Type>,
 }

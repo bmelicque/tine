@@ -1,24 +1,22 @@
 use anyhow::{anyhow, bail, Result};
 use tine_ast as ast;
-use tine_common::{diagnostics::DiagnosticKind, locations::Location};
-use tine_ir as ir;
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+};
+use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_types::{store::TypeStore, types};
 
 use crate::{substitutions::Substitutions, TypeChecker};
 
 impl TypeChecker {
-    pub fn visit_call_expression(
-        &mut self,
-        node: ast::CallExpression,
-    ) -> Option<ir::CallExpression> {
-        if let Some(callee) = &node.callee {
-            if let ast::Expression::Identifier(id) = callee.as_ref() {
-                match id.as_str() {
-                    "computed$" => return self.visit_derived_call(node),
-                    _ => {}
-                }
+    pub fn visit_call_expression(&mut self, node: ast::CallExpression) -> Option<ir::Expression> {
+        match node.callee.as_deref() {
+            Some(ast::Expression::Identifier(id)) if id.as_str() == "computed$" => {
+                return self.visit_derived_call(node).map(Into::into);
             }
+            _ => {}
         }
 
         let Ok((callee, callee_type)) = self.resolve_callee(node.callee) else {
@@ -33,12 +31,22 @@ impl TypeChecker {
 
         let ty = substitutions.apply(&mut self.types, callee_type.return_type);
 
-        Some(ir::CallExpression {
-            loc: node.loc,
-            callee: Box::new(callee),
-            args,
-            ty,
-        })
+        match callee {
+            ir::Expression::Method(mut m) => {
+                m.args = args;
+                m.ty = ty;
+                self.cancel_diag(|d| {
+                    d.loc == m.method.0 && d.kind == DiagnosticKind::NonCalledMethod
+                });
+                Some(m.into())
+            }
+            callee => Some(ir::Expression::Call(ir::CallExpression {
+                loc: node.loc,
+                callee: Box::new(callee),
+                args,
+                ty,
+            })),
+        }
     }
 
     /// Tries to resolve the type of the function being called.
