@@ -121,11 +121,14 @@ impl TypeChecker {
         let ty = self.symbol_type_id(most_concrete_id);
         let ty = substitutions.apply(&mut self.types, ty);
 
+        self.error(DiagnosticKind::NonCalledMethod, field.loc);
+
         Some(ir::MethodExpression {
             loc: Location::merge(object.loc(), field.loc),
             host: Box::new(object),
             ty,
             method: (field.loc, most_concrete_id),
+            args: vec![],
         })
     }
 

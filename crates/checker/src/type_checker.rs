@@ -285,6 +285,14 @@ impl TypeChecker {
             });
     }
 
+    pub(crate) fn cancel_diag<F>(&mut self, predicate: F)
+    where
+        F: Fn(&Diagnostic) -> bool,
+    {
+        let diagnostics = self.diagnostics.entry(self.current_module).or_default();
+        diagnostics.retain(|diag| !predicate(diag));
+    }
+
     pub fn get_symbol_id(&self, name: &str) -> Option<SymbolId> {
         self.scopes
             .iter()

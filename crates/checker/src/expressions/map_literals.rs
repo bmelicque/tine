@@ -47,23 +47,17 @@ impl TypeChecker {
             value: empty,
         })];
 
-        let (insert, concrete_insert_ty) = self.get_insert_method(map_symbol_id, key, value);
+        let (insert, _) = self.get_insert_method(map_symbol_id, key, value);
 
-        // TODO: substitutions for key and value
-        let callee = Box::new(ir::Expression::Method(ir::MethodExpression {
-            ty: concrete_insert_ty,
-            host: Box::new(tmp.clone().into()),
-            method: (node.loc, insert),
-            loc: node.loc,
-        }));
         for entry in entries {
-            let call = ir::CallExpression {
-                ty: TypeStore::BOOLEAN,
+            let method = ir::Expression::Method(ir::MethodExpression {
                 loc: node.loc,
-                callee: callee.clone(),
+                ty: TypeStore::BOOLEAN,
+                host: Box::new(tmp.clone().into()),
+                method: (node.loc, insert),
                 args: entry.into(),
-            };
-            stmts.push(ir::Statement::Expression(ir::Expression::Call(call)))
+            });
+            stmts.push(method.into())
         }
 
         let ty = tmp.ty;

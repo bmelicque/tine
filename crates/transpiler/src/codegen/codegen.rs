@@ -142,4 +142,7 @@ impl CodeGenerator<'_, '_> {
     pub(crate) fn call_ownership(&self, call: &ir::CallExpression) -> OwnershipAction {
         self.ownership.action_for(call.loc, OwnershipAction::Move)
     }
+    pub(crate) fn method_ownership(&self, call: &ir::MethodExpression) -> OwnershipAction {
+        self.ownership.action_for(call.loc, OwnershipAction::Move)
+    }
 }

@@ -245,21 +245,38 @@ impl CodeGenerator<'_, '_> {
     }
 
     pub fn handle_method(&mut self, node: ir::MethodExpression) -> ExpressionResult {
-        let obj_result = self.handle_expression(*node.host);
+        let should_clone = self.method_ownership(&node) == OwnershipAction::Clone;
 
+        let obj_result = self.handle_expression(*node.host);
         let method_name = &self.symbols.get(node.method.1).name;
         let prop = swc::MemberProp::Ident(ident_from_str(&method_name).into());
-
-        let expr = swc::MemberExpr {
+        let callee = swc::MemberExpr {
             span: DUMMY_SP,
             obj: Box::new(obj_result.expr),
             prop,
         };
 
-        ExpressionResult {
-            prelim_stmts: obj_result.prelim_stmts,
-            expr: expr.into(),
+        let args_results = node
+            .args
+            .into_iter()
+            .map(|a| self.handle_expression(a))
+            .collect::<Vec<_>>();
+        let (prelim_stmts, args) = self.extract_necessary(args_results);
+
+        let mut expr = swc::Expr::Call(swc::CallExpr {
+            callee: swc::Callee::Expr(Box::new(callee.into())),
+            args: args.into_iter().map(Into::into).collect(),
+            ..Default::default()
+        });
+        if should_clone {
+            expr = swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(expr),
+                prop: swc::MemberProp::Ident(ident_from_str("$clone").into()),
+            });
         }
+
+        ExpressionResult { prelim_stmts, expr }
     }
 
     fn string_literal_to_swc(&mut self, node: ir::StringLiteral) -> swc::Str {

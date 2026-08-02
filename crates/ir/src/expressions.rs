@@ -227,6 +227,8 @@ pub struct MethodExpression {
     #[child]
     pub host: Box<Expression>,
     pub method: (Location, MethodSymbolId),
+    #[child]
+    pub args: Vec<Expression>,
 }
 
 #[tree_struct(ty = TypeStore::STRING)]
