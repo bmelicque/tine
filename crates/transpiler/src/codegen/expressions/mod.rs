@@ -245,6 +245,10 @@ impl CodeGenerator<'_, '_> {
     }
 
     pub fn handle_method(&mut self, node: ir::MethodExpression) -> ExpressionResult {
+        if let Some(known) = self.wellknown.methods.get(&node.method.1) {
+            return known(self, node);
+        }
+
         let should_clone = self.method_ownership(&node) == OwnershipAction::Clone;
 
         let obj_result = self.handle_expression(*node.host);
