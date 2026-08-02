@@ -2,7 +2,6 @@ pub type TypeId = u32;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
-    Array(ArrayType),
     Boolean,
     Dynamic, // Represents a type that will have to be inferred later
     Enum(EnumType),
@@ -82,17 +81,6 @@ impl Type {
             Self::Trait(t) => Some(&t.params),
             _ => None,
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ArrayType {
-    pub element: TypeId,
-}
-
-impl Into<Type> for ArrayType {
-    fn into(self) -> Type {
-        Type::Array(self)
     }
 }
 

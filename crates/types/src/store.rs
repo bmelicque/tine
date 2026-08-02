@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::types::{StructType, Type, TypeId};
+use crate::types::{StructType, Type, TypeId, TypeParam};
 
 #[derive(Debug, Default, Clone)]
 pub struct TypeStore {
@@ -18,6 +18,8 @@ impl TypeStore {
     pub const INTEGER: TypeId = 5;
     pub const FLOAT: TypeId = 6;
     pub const ELEMENT: TypeId = 7;
+    pub const ARRAY_PARAM: TypeId = 8;
+    pub const ARRAY: TypeId = 9;
 
     pub fn new() -> Self {
         let mut store = Self::default();
@@ -28,6 +30,7 @@ impl TypeStore {
         store.add(Type::String);
         store.add(Type::Integer);
         store.add(Type::Float);
+        store.add_array();
         // TODO: should be a trait
         let element = store.add(StructType {
             id: TypeStore::ELEMENT,
@@ -37,6 +40,21 @@ impl TypeStore {
         });
         store.add_alias(element, "Element".into());
         store
+    }
+
+    fn add_array(&mut self) {
+        let param = TypeParam {
+            name: "T".into(),
+            id: Self::ARRAY_PARAM,
+        };
+        let param_id = self.add(param.clone());
+        debug_assert_eq!(param_id, Self::ARRAY_PARAM);
+        let array_id = self.add(StructType {
+            id: Self::ARRAY,
+            params: vec![param],
+            fields: vec![],
+        });
+        debug_assert_eq!(array_id, Self::ARRAY);
     }
 
     pub fn get_next_id(&self) -> TypeId {
@@ -113,9 +131,6 @@ pub fn display_type(store: &TypeStore, ty: TypeId) -> String {
 
 pub fn display_raw_type(store: &TypeStore, ty: TypeId) -> String {
     match &store.get(ty) {
-        Type::Array(t) => {
-            format!("{}[]", display_type(store, t.element))
-        }
         Type::Boolean => "bool".into(),
         Type::Dynamic => "dynamic".into(),
         Type::Enum(t) => t
@@ -144,6 +159,10 @@ pub fn display_raw_type(store: &TypeStore, ty: TypeId) -> String {
         }
         Type::Param(t) => t.name.clone(),
         Type::Ref(t) => {
+            if t.inner == TypeStore::ARRAY {
+                return format!("{}[]", display_type(store, t.args[0]));
+            }
+
             let args = t
                 .args
                 .iter()
@@ -220,32 +239,32 @@ mod tests {
     #[test]
     fn test_add_type() {
         let mut store = TypeStore::new();
-        let array_type = Type::Array(ArrayType {
-            element: TypeStore::FLOAT,
+        let t = Type::Option(OptionType {
+            some: TypeStore::FLOAT,
         });
-        let id = store.add(array_type.clone());
-        assert_eq!(store.get(id), &array_type);
+        let id = store.add(t.clone());
+        assert_eq!(store.get(id), &t);
     }
 
     #[test]
     fn test_add_duplicate_type() {
         let mut store = TypeStore::new();
-        let array_type = Type::Array(ArrayType {
-            element: TypeStore::FLOAT,
+        let t = Type::Option(OptionType {
+            some: TypeStore::FLOAT,
         });
-        let id1 = store.add(array_type.clone());
-        let id2 = store.add(array_type);
+        let id1 = store.add(t.clone());
+        let id2 = store.add(t);
         assert_eq!(id1, id2);
     }
 
     #[test]
     fn test_find_id() {
         let mut store = TypeStore::new();
-        let array_type = Type::Array(ArrayType {
-            element: TypeStore::INTEGER,
+        let t = Type::Option(OptionType {
+            some: TypeStore::FLOAT,
         });
-        let id = store.add(array_type.clone());
-        assert_eq!(store.find_id(&array_type), Some(id));
+        let id = store.add(t.clone());
+        assert_eq!(store.find_id(&t), Some(id));
     }
 
     #[test]
@@ -272,16 +291,6 @@ mod tests {
         assert_eq!(display_type(&store, TypeStore::STRING), "str");
         assert_eq!(display_type(&store, TypeStore::BOOLEAN), "bool");
         assert_eq!(display_type(&store, TypeStore::UNIT), "()");
-    }
-
-    #[test]
-    fn test_display_type_array() {
-        let mut store = TypeStore::new();
-        let array_type = Type::Array(ArrayType {
-            element: TypeStore::INTEGER,
-        });
-        let array_id = store.add(array_type);
-        assert_eq!(display_type(&store, array_id), "int[]");
     }
 
     #[test]

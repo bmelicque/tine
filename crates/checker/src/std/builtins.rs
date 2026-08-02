@@ -10,6 +10,7 @@ impl TypeChecker {
         self.primitive_builtin("bool", TypeStore::BOOLEAN);
         self.primitive_builtin("str", TypeStore::STRING);
         self.to_string_builtin(&["int", "float"]);
+        self.array_builtin();
         self.map_builtin();
         self.eq_trait();
         self.hash_trait();
@@ -34,6 +35,34 @@ impl TypeChecker {
         }
     }
 
+    fn array_builtin(&mut self) {
+        let array_symbol = self.symbols.insert::<StructSymbolId>(StructSymbol {
+            name: "Array".into(),
+            public: true,
+            ty: TypeStore::ARRAY,
+            ..Default::default()
+        });
+
+        let return_type = self.intern(types::OptionType {
+            some: TypeStore::ARRAY_PARAM,
+        });
+        self.add_method(
+            array_symbol,
+            "get",
+            vec![TypeStore::INTEGER],
+            &["index"],
+            return_type,
+        );
+
+        self.add_method(
+            array_symbol,
+            "set",
+            vec![TypeStore::INTEGER, TypeStore::ARRAY_PARAM],
+            &["index", "value"],
+            TypeStore::BOOLEAN,
+        );
+    }
+
     fn map_builtin(&mut self) {
         let key_param = self.make_type_param("K");
         let key_id = key_param.id;
@@ -53,13 +82,7 @@ impl TypeChecker {
         });
 
         let return_type = self.intern(types::OptionType { some: value_id });
-        self.add_method(
-            map_symbol,
-            "get",
-            vec![TypeStore::STRING],
-            &["key"],
-            return_type,
-        );
+        self.add_method(map_symbol, "get", vec![key_id], &["key"], return_type);
 
         self.add_method(
             map_symbol,

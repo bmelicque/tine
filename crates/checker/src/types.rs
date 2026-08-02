@@ -23,7 +23,10 @@ impl TypeChecker {
         let element = node
             .element
             .map_or(TypeStore::UNKNOWN, |e| self.visit_type(*e));
-        self.intern(types::ArrayType { element })
+        self.intern(types::TypeRef {
+            inner: TypeStore::ARRAY,
+            args: vec![element],
+        })
     }
 
     pub(super) fn visit_function_type(&mut self, node: ast::FunctionType) -> types::TypeId {
@@ -157,8 +160,9 @@ mod tests {
         let result = checker.resolve(result);
         assert_eq!(
             result,
-            Type::Array(types::ArrayType {
-                element: TypeStore::INTEGER
+            Type::Ref(types::TypeRef {
+                inner: TypeStore::ARRAY,
+                args: vec![TypeStore::INTEGER]
             })
         );
     }

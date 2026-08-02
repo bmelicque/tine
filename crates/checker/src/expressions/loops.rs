@@ -110,7 +110,7 @@ impl TypeChecker {
             return (None, TypeStore::UNKNOWN);
         };
         let ty = match self.resolve(iterable.ty()) {
-            types::Type::Array(a) => a.element,
+            types::Type::Ref(r) if r.inner == TypeStore::ARRAY => r.args[0],
             _ => {
                 let error = DiagnosticKind::NotIterable {
                     type_name: self.types.display(iterable.ty()),

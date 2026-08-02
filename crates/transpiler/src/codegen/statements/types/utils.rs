@@ -1,7 +1,7 @@
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 use tine_symbols::symbols::*;
-use tine_types::types;
+use tine_types::{store::TypeStore, types};
 
 use crate::codegen::{
     statements::{assignments::assignment, utils::declare_const},
@@ -12,13 +12,15 @@ use crate::codegen::{
 impl CodeGenerator<'_, '_> {
     pub(crate) fn get_field(&mut self, field: MemberSymbolId) -> swc::Expr {
         let ty = self.symbol_type_id(field);
+        use types::Type::*;
         match self.resolve(ty) {
-            types::Type::Array(_) | types::Type::Tuple(_) => {
+            Tuple(_) => {
                 internal_method_call("cloneArray", vec![self.this_field(field).into()]).into()
             }
-            types::Type::Param(_) => {
-                internal_method_call("clone", vec![self.this_field(field).into()]).into()
+            Ref(t) if t.inner == TypeStore::ARRAY => {
+                internal_method_call("cloneArray", vec![self.this_field(field).into()]).into()
             }
+            Param(_) => internal_method_call("clone", vec![self.this_field(field).into()]).into(),
             ty if is_primitive(&ty) => self.this_field(field),
             _ => self.get_this_field(field).into(),
         }
@@ -41,13 +43,16 @@ impl CodeGenerator<'_, '_> {
         src: swc::Expr,
         ty: types::TypeId,
     ) -> swc::Stmt {
+        use types::Type::*;
         match self.resolve(ty).clone() {
-            types::Type::Array(a) => self.set_array_field(target, src, a).into(),
-            types::Type::Param(_) => assignment(
+            Param(_) => assignment(
                 target.clone(),
                 internal_method_call("set", vec![target.into(), src.into()]).into(),
             ),
-            types::Type::Tuple(t) => self.set_tuple_field(target, src, t).into(),
+            Ref(t) if t.inner == TypeStore::ARRAY => {
+                self.set_array_field(target, src, t.args[0]).into()
+            }
+            Tuple(t) => self.set_tuple_field(target, src, t).into(),
             ty if is_primitive(&ty) => assignment(target, src),
             _ => swc::Stmt::Expr(swc::ExprStmt {
                 span: DUMMY_SP,
@@ -76,7 +81,7 @@ impl CodeGenerator<'_, '_> {
         &mut self,
         target: swc::Expr,
         src: swc::Expr,
-        ty: types::ArrayType,
+        element: types::TypeId,
     ) -> swc::BlockStmt {
         let target_declaration = declare_const("t", target).into();
         let src_declaration = declare_const("s", src).into();
@@ -91,7 +96,7 @@ impl CodeGenerator<'_, '_> {
         let loop_body = self.set_field(
             computed(t.into(), i.clone().into()).into(),
             computed(s.into(), i.into()).into(),
-            ty.element,
+            element,
         );
         let for_loop = make_loop(loop_range, loop_body).into();
 

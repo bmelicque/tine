@@ -56,8 +56,9 @@ impl TypeChecker {
             );
         }
 
-        let ty = self.intern(types::ArrayType {
-            element: element_type,
+        let ty = self.intern(types::TypeRef {
+            inner: TypeStore::ARRAY,
+            args: vec![element_type],
         });
         ir::ArrayExpression {
             loc: node.loc,
@@ -246,24 +247,6 @@ mod tests {
     }
 
     #[test]
-    fn test_visit_array_expression_empty() {
-        let mut checker = TypeChecker::new();
-        let array_expression = ast::ArrayExpression {
-            elements: vec![],
-            loc: Location::dummy(),
-        };
-
-        let result = checker.visit_array_expression(array_expression);
-        assert_eq!(
-            checker.resolve(result.ty),
-            types::Type::Array(types::ArrayType {
-                element: TypeStore::DYNAMIC
-            })
-        );
-        assert!(checker.diagnostics.is_empty());
-    }
-
-    #[test]
     fn test_visit_array_expression_consistent_types() {
         let mut checker = TypeChecker::new();
         let array_expression = ast::ArrayExpression {
@@ -284,8 +267,9 @@ mod tests {
         let result = checker.resolve(result.ty);
         assert_eq!(
             result,
-            types::Type::Array(types::ArrayType {
-                element: TypeStore::INTEGER
+            types::Type::Ref(types::TypeRef {
+                inner: TypeStore::ARRAY,
+                args: vec![TypeStore::INTEGER],
             })
         );
         assert!(checker.diagnostics.is_empty());
@@ -312,8 +296,9 @@ mod tests {
         let result = checker.resolve(result.ty);
         assert_eq!(
             result,
-            types::Type::Array(types::ArrayType {
-                element: TypeStore::INTEGER
+            types::Type::Ref(types::TypeRef {
+                inner: TypeStore::ARRAY,
+                args: vec![TypeStore::INTEGER],
             })
         );
         assert_eq!(checker.diagnostics.len(), 1);

@@ -82,9 +82,6 @@ impl Substitutions {
                     },
                 };
             }
-            (Array(e), Array(a)) => {
-                self.unify(tc, e.element, a.element, loc);
-            }
             (Function(e), Function(a)) => {
                 if e.params.len() != a.params.len() {
                     self.mismatched_pairs.push((generic, concrete));
@@ -136,10 +133,6 @@ impl Substitutions {
     pub fn apply(&self, store: &mut TypeStore, to: types::TypeId) -> types::TypeId {
         use types::Type::*;
         match store.get(to).clone() {
-            Array(mut a) => {
-                a.element = self.apply(store, a.element);
-                store.add(a)
-            }
             Boolean => to,
             Dynamic => todo!(),
             Enum(e) => {
