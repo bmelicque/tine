@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use enum_from_derive::EnumFrom;
 use tine_ast as ast;
 use tine_common::module_path::{ModuleId, ModulePath};
+use tine_macros::EnumFrom;
 
 use crate::{
     std::{dom::check_dom_module, signals::check_signals_module},

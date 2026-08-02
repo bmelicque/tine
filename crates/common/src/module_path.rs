@@ -1,4 +1,4 @@
-use enum_from_derive::EnumFrom;
+use tine_macros::EnumFrom;
 
 pub type ModuleId = usize;
 

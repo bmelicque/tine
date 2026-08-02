@@ -1,10 +1,10 @@
-use enum_from_derive::EnumFrom;
 use tine_ast as ast;
 use tine_common::{
     diagnostics::DiagnosticKind,
     locations::{Locatable, Location},
 };
 use tine_ir::{self as ir, Typed};
+use tine_macros::EnumFrom;
 use tine_symbols::{symbols::*, table::*};
 use tine_types::{store::TypeStore, types};
 

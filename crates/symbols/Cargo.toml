@@ -5,6 +5,6 @@ edition = "2021"
 build = "build.rs"
 
 [dependencies]
-enum_from_derive = { path = "../enum_from_derive" }
 tine_common = { path = "../common" }
+tine_macros = { path = "../macros" }
 tine_types = { path = "../types" }

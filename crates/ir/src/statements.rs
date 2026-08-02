@@ -1,9 +1,8 @@
-use enum_from_derive::EnumFrom;
 use tine_common::{
     locations::{Locatable, Location},
     module_path::{ModuleId, ModulePath},
 };
-use tine_macros::tree_struct;
+use tine_macros::{tree_struct, EnumFrom};
 use tine_symbols::symbols::*;
 
 use crate::{ir_enum, Block, Expression, FunctionExpression, Typed};

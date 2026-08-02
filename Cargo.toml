@@ -12,6 +12,5 @@ members = [
     "crates/symbols",
     "crates/transpiler",
     "crates/types",
-    "crates/enum_from_derive",
 ]
 resolver = "2"

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use enum_from_derive::EnumFrom;
 use tine_common::locations::Location;
+use tine_macros::EnumFrom;
 use tine_types::types::{TypeId, TypeParam};
 
 #[derive(Clone, Debug)]

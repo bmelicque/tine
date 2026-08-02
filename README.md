@@ -101,10 +101,17 @@ Build the extension and install the generated `.vsix` file in VSCode.
 This repository is a monorepo containing all the core components of Tine:
 
 - `/crates`
-  - `/cli` - Command-line interface for the transpiler
-  - `/core` - Language parser, types and core semantics
-  - `/enum_from_derive` - A utility macro for all the `enum`s in `core`
-  - `/server` - Language server (LSP)
+  - `/parser` - Parses source files into an AST
+  - `/ast` - AST types
+  - `/expander` - Expands language macros within the AST
+  - `/checker` - Type checker; lowers the AST into IR
+  - `/ir` - Lowered representation with resolved types and symbols
+  - `/symbols` - Symbols and associated tables
+  - `/types` - Resolved type tables
   - `/transpiler` - Transpiles Tine code to JavaScript
-- `/examples` - Contains example codebases
-- `/vscode-extension` - The language extension for VSCode
+  - `/cli` - Command-line interface for the transpiler
+  - `/server` - Language server (LSP)
+  - `/common` - Data structures and utilities shared across crates, notably `locations` and `diagnostics`
+  - `/macros` - Utility macros for the other crates
+- `/examples` - Example codebases
+- `/vscode-extension` - VSCode language extension
