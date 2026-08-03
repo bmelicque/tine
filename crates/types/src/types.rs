@@ -159,6 +159,11 @@ pub struct TypeRef {
     pub inner: TypeId,
     pub args: Vec<TypeId>,
 }
+impl TypeRef {
+    pub fn new(inner: TypeId, args: Vec<TypeId>) -> Self {
+        Self { inner, args }
+    }
+}
 impl Into<Type> for TypeRef {
     fn into(self) -> Type {
         Type::Ref(self)

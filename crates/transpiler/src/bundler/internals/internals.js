@@ -1,17 +1,27 @@
 import { Reactive } from "signals";
 
 export class Option {
-	None() {
+	static None() {
 		const $ = new this;
 		$.$tag = 0;
 		return $;
 	}
 
-	Some(_0) {
+	static Some(_0) {
 		const $ = new this;
 		$.$tag = 1;
 		$._0 = _0;
 		return $;
+	}
+
+	/**
+	 * 
+	 * @template T
+	 * @param {T | undefined} value 
+	 * @returns {Option<T>}
+	 */
+	static $from(value) {
+		return t == null ? Option.None() : Option.Some(t)
 	}
 
 	$clone() {
@@ -59,6 +69,24 @@ export function cloneArray(a) {
 		out[i] = typeof v === "object" && v ? get(v) : v;
 	}
 	return out;
+}
+
+/**
+ * Replace the value at given index by given value.
+ * negative indexes are counted from the end.
+ * Return `true` if the new value can be inserted (even if it stays the same).
+ * return `false` if the index is out of bounds.
+ * @template T
+ * @param {T[]} array 
+ * @param {number} index 
+ * @param {T} value 
+ * @returns {boolean}
+ */
+function setArrayAt(array, index, value) {
+	if (index < 0) index += array.length;
+	if (index < 0 || index >= array.length) return false;
+	array[index] = value;
+	return true;
 }
 
 /**

@@ -242,3 +242,15 @@ pub fn member(object: swc::Expr, prop: &str) -> swc::MemberExpr {
         prop: swc::MemberProp::Ident(ident_from_str(prop).into()),
     }
 }
+
+pub fn option(value: swc::Expr) -> swc::Expr {
+    let callee = swc::Callee::Expr(Box::new(
+        member(member(ident_from_str("$").into(), "Option").into(), "$from").into(),
+    ));
+
+    swc::Expr::Call(swc::CallExpr {
+        callee,
+        args: vec![value.into()],
+        ..Default::default()
+    })
+}

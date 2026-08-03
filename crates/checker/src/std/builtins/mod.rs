@@ -1,3 +1,5 @@
+mod array;
+
 use tine_symbols::symbols::*;
 use tine_types::{store::TypeStore, types};
 
@@ -33,34 +35,6 @@ impl TypeChecker {
             let symbol = self.builtin_id::<PrimitiveTypeSymbolId>(name).unwrap();
             self.add_method(symbol, "toString", vec![], &[], TypeStore::STRING);
         }
-    }
-
-    fn array_builtin(&mut self) {
-        let array_symbol = self.symbols.insert::<StructSymbolId>(StructSymbol {
-            name: "Array".into(),
-            public: true,
-            ty: TypeStore::ARRAY,
-            ..Default::default()
-        });
-
-        let return_type = self.intern(types::OptionType {
-            some: TypeStore::ARRAY_PARAM,
-        });
-        self.add_method(
-            array_symbol,
-            "get",
-            vec![TypeStore::INTEGER],
-            &["index"],
-            return_type,
-        );
-
-        self.add_method(
-            array_symbol,
-            "set",
-            vec![TypeStore::INTEGER, TypeStore::ARRAY_PARAM],
-            &["index", "value"],
-            TypeStore::BOOLEAN,
-        );
     }
 
     fn map_builtin(&mut self) {
@@ -171,17 +145,49 @@ impl TypeChecker {
     ) where
         I: Into<TypeSymbolId> + Copy,
     {
+        self.add_method_helper(owner, name, params, param_names, return_type, false);
+    }
+
+    fn add_mutating_method<I>(
+        &mut self,
+        owner: I,
+        name: &str,
+        params: Vec<types::TypeId>,
+        param_names: &[&str],
+        return_type: types::TypeId,
+    ) where
+        I: Into<TypeSymbolId> + Copy,
+    {
+        self.add_method_helper(owner, name, params, param_names, return_type, true);
+    }
+
+    fn add_method_helper<I>(
+        &mut self,
+        owner: I,
+        name: &str,
+        params: Vec<types::TypeId>,
+        param_names: &[&str],
+        return_type: types::TypeId,
+        mutating: bool,
+    ) where
+        I: Into<TypeSymbolId> + Copy,
+    {
         let fn_type = self.intern(types::FunctionType {
             params,
             return_type,
             ..Default::default()
         });
+        let receiver = if mutating {
+            MethodReceiverKind::Mutable
+        } else {
+            MethodReceiverKind::Immutable
+        };
         let fn_symbol: MethodSymbolId = self.symbols.insert(MethodSymbol {
             name: name.into(),
             public: true,
             owner: owner.into(),
             param_names: param_names.iter().map(|&s| s.into()).collect(),
-            receiver: MethodReceiverKind::Immutable,
+            receiver,
             ty: fn_type,
             ..Default::default()
         });

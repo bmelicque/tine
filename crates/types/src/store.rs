@@ -30,7 +30,6 @@ impl TypeStore {
         store.add(Type::String);
         store.add(Type::Integer);
         store.add(Type::Float);
-        store.add_array();
         // TODO: should be a trait
         let element = store.add(StructType {
             id: TypeStore::ELEMENT,
@@ -39,6 +38,7 @@ impl TypeStore {
             fields: vec![],
         });
         store.add_alias(element, "Element".into());
+        store.add_array();
         store
     }
 
