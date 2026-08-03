@@ -31,7 +31,7 @@ impl ModuleLoader for CheckerLoader {
         self.ids.get(name).copied()
     }
     fn get_name(&self, module: ModuleId) -> &ModulePath {
-        &self.names[module]
+        &self.names[module - 1]
     }
     fn module(&mut self, id: ModuleId) -> LoadedModule {
         let name = self.get_name(id);

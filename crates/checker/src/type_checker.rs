@@ -108,6 +108,7 @@ impl TypeChecker {
     }
 
     pub fn check_module(&mut self, module_id: ModuleId) {
+        self.current_module = module_id;
         let module = match self.loader.module(module_id) {
             LoadedModule::Real(m) => m,
             LoadedModule::Virtual(m) => {

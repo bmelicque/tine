@@ -99,7 +99,7 @@ impl ProjectParser {
 
         let mut queue = VecDeque::<ModuleId>::new();
         // List all nodes without dependencies
-        for id in 0..self.names.len() {
+        for id in 1..self.names.len() + 1 {
             if self.edges.iter().find(|e| e.dependent == id).is_none() {
                 queue.push_back(id);
             }

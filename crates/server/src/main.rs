@@ -79,15 +79,16 @@ impl Backend {
         }
 
         let diagnostics = result.diagnostics;
-        let diagnostics = diagnostics.into_iter().filter_map(|(id, diags)| {
-            let ModulePath::Real(name) = result.names[id].clone() else {
+        let diagnostics = diagnostics.into_iter().filter_map(|(id, src_diags)| {
+            let ModulePath::Real(name) = result.names[id - 1].clone() else {
                 return None;
             };
             let uri = Url::from_file_path(name).unwrap();
-            let len = diags.len();
-            let diags = diags
+            let len = src_diags.len();
+            let source = &result.sources[&id];
+            let diags = src_diags
                 .iter()
-                .map(|diag| error_to_lsp(&result.sources[&id], diag))
+                .map(|diag| error_to_lsp(source, diag))
                 .collect::<Vec<_>>();
             Some((uri, diags, len))
         });
