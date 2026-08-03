@@ -5,7 +5,6 @@ mod tokens;
 mod utils;
 
 use std::collections::HashMap;
-use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use tine_common::{
@@ -21,6 +20,7 @@ use tower_lsp::{lsp_types::*, LspService, Server};
 use url::Url;
 
 use crate::loader::LspLoader;
+use crate::utils::normalize_file_url;
 
 #[derive(Clone)]
 struct Backend {
@@ -76,6 +76,10 @@ impl Backend {
             *types = result.types;
             let mut symbols = self.symbols.write().unwrap();
             *symbols = result.symbols;
+            let mut ids = self.ids.write().unwrap();
+            *ids = result.ids;
+            let mut src = self.sources.write().unwrap();
+            *src = result.sources;
         }
 
         let diagnostics = result.diagnostics;
@@ -85,7 +89,7 @@ impl Backend {
             };
             let uri = Url::from_file_path(name).unwrap();
             let len = src_diags.len();
-            let source = &result.sources[&id];
+            let source = &self.sources.read().unwrap()[&id];
             let diags = src_diags
                 .iter()
                 .map(|diag| error_to_lsp(source, diag))
@@ -110,9 +114,7 @@ impl Backend {
     }
 
     fn find_module(&self, uri: &Url) -> Option<ModuleId> {
-        let path = PathBuf::from(OsString::from(uri.path()))
-            .canonicalize()
-            .ok()?;
+        let path = normalize_file_url(uri)?.to_file_path().ok()?;
         let ids = self.ids.read().unwrap();
         ids.get(&ModulePath::Real(path)).copied()
     }
