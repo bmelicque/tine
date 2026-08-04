@@ -36,7 +36,8 @@ impl Backend {
             Variable(s) => {
                 let s = symbols.get(s);
                 let operator = if s.mutable { "let mut" } else { "let" };
-                format!("{} {} {}", operator, s.name, s.ty)
+                let ty = display_type(&self.types(), s.ty);
+                format!("{} {}: {}", operator, s.name, ty)
             }
             Member(s) => {
                 let s = symbols.get(s);
@@ -66,17 +67,16 @@ impl Backend {
         let name = &symbol.name;
         let ty = symbol.ty;
 
+        let type_params = self.display_function_type_params(ty);
         let params = self.display_function_params(ty, &symbol.param_names);
-        let return_type = self.get_return_type(ty);
-        match return_type {
-            TypeStore::UNIT => format!("fn {}({})", name, params),
-            _ => format!(
-                "fn {}({}): {}",
-                name,
-                params,
-                display_type(&self.types.read().unwrap(), return_type)
-            ),
-        }
+        let return_type = match self.get_return_type(ty) {
+            TypeStore::UNIT => String::new(),
+            ty => {
+                let displayed = display_type(&self.types.read().unwrap(), ty);
+                format!(": {}", displayed)
+            }
+        };
+        format!("fn {}{}({}){}", name, type_params, params, return_type)
     }
 
     fn display_method_symbol(&self, symbol: MethodSymbolId) -> String {
@@ -119,10 +119,28 @@ impl Backend {
             .zip(names)
             .map(|(ty, name)| {
                 let ty = display_type(&store, *ty);
-                format!("{} {}", name, ty)
+                format!("{}: {}", name, ty)
             })
             .collect::<Vec<_>>()
             .join(", ")
+    }
+
+    fn display_function_type_params(&self, ty: TypeId) -> String {
+        let store = self.types();
+        let Type::Function(f) = store.get(ty) else {
+            panic!("expected function type")
+        };
+        if f.params.is_empty() {
+            return String::new();
+        }
+        format!(
+            "<{}>",
+            f.type_params
+                .iter()
+                .map(|ty| ty.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 
     /// Get the return type of a function or generic function

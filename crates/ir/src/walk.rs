@@ -6,7 +6,7 @@ pub trait PushNodes<'a> {
 
 impl<'a> PushNodes<'a> for Expression {
     fn push_nodes(&'a self, stack: &mut Vec<Node<'a>>) {
-        self.push_children(stack);
+        stack.push(self.into());
     }
 }
 impl<'a> PushNodes<'a> for Statement {
@@ -18,7 +18,7 @@ impl<'a> PushNodes<'a> for Block {
     fn push_nodes(&'a self, stack: &mut Vec<Node<'a>>) {
         self.statements
             .iter()
-            .for_each(|stmt| stmt.push_nodes(stack));
+            .for_each(|stmt| stmt.push_children(stack));
     }
 }
 
@@ -40,10 +40,6 @@ impl<'a, T: PushNodes<'a>> PushNodes<'a> for Option<T> {
             x.push_nodes(stack);
         }
     }
-}
-
-pub trait Walkable<'a>: Sized + 'a {
-    fn push_children(&'a self, stack: &mut Vec<&'a Self>);
 }
 
 pub struct Walk<'a> {

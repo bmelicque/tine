@@ -39,8 +39,8 @@ The underlying value can be accessed and modified using the dereference operator
 
 # Example
 ```tine
-const counter = state(0)
-const counterValue = *counter
+let counter = state(0)
+let counterValue = *counter
 
 fn reset() {
     *counter = 0

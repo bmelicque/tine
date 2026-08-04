@@ -16,6 +16,7 @@ pub struct Program {
     pub statements: Vec<Statement>,
 }
 
+#[derive(Debug)]
 pub enum Node<'a> {
     Expr(&'a Expression),
     Stmt(&'a Statement),
@@ -48,8 +49,8 @@ impl<'a> Node<'a> {
 
     pub(crate) fn push_children(&self, stack: &mut Vec<Node<'a>>) {
         match self {
-            Node::Expr(e) => e.push_nodes(stack),
-            Node::Stmt(s) => s.push_nodes(stack),
+            Node::Expr(e) => e.push_children(stack),
+            Node::Stmt(s) => s.push_children(stack),
         }
     }
 }

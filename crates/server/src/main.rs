@@ -13,6 +13,7 @@ use tine_common::{
     module_path::{ModuleId, ModulePath},
     sources::Source,
 };
+use tine_symbols::symbols::SymbolId;
 use tine_symbols::table::SymbolTable;
 use tine_types::store::TypeStore;
 use tower_lsp::Client;
@@ -123,6 +124,28 @@ impl Backend {
         self.symbols.read().unwrap()
     }
 
+    fn find_symbol(
+        &self,
+        pos: Position,
+        module: ModuleId,
+    ) -> Option<(SymbolId, tine_common::locations::Location)> {
+        let src = &self.sources.read().unwrap()[&module];
+        let symbols = self.symbols();
+        for symbol_id in symbols.all_ids() {
+            let symbol = symbols.get_symbol(symbol_id);
+            let defined_at = symbol.defined_at();
+            if defined_at.module() == module && position_in_span(src, defined_at.span(), pos) {
+                return Some((symbol_id, defined_at));
+            }
+            for loc in symbol.uses().filter(|l| l.module() == module) {
+                if position_in_span(src, loc.span(), pos) {
+                    return Some((symbol_id, loc));
+                }
+            }
+        }
+        return None;
+    }
+
     fn types(&self) -> std::sync::RwLockReadGuard<'_, TypeStore> {
         self.types.read().unwrap()
     }
@@ -140,7 +163,7 @@ fn position_in_span(src: &Source, span: Span, pos: Position) -> bool {
         return false;
     }
     if start_line == pos.line {
-        return pos.character >= start_col;
+        return pos.character >= start_col && pos.character < end_col;
     } else {
         return pos.character < end_col;
     }

@@ -288,5 +288,6 @@ pub type UnaryOperator = ast::UnaryOperator;
 #[derive(Debug, Clone)]
 pub struct UnaryExpression {
     pub operator: UnaryOperator,
+    #[child]
     pub operand: Box<Expression>,
 }

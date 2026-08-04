@@ -2,7 +2,7 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 
 use crate::utils::normalize_file_url;
-use crate::{position_in_span, span_to_range, Backend};
+use crate::{span_to_range, Backend};
 
 #[tower_lsp::async_trait]
 impl tower_lsp::LanguageServer for Backend {
@@ -102,34 +102,30 @@ impl tower_lsp::LanguageServer for Backend {
         let src = &self.sources.read().unwrap()[&module_id];
 
         let position = params.text_document_position_params.position;
+        let Some((symbol_id, loc)) = self.find_symbol(position, module_id) else {
+            return Ok(None);
+        };
         let symbols = self.symbols();
-        for symbol_id in symbols.all_ids() {
-            let symbol = symbols.get_symbol(symbol_id);
-            for loc in symbol.uses().filter(|l| l.module() == module_id) {
-                if position_in_span(src, loc.span(), position) {
-                    let type_display = self.display_signature(symbol_id);
+        let symbol = symbols.get_symbol(symbol_id);
+        let type_display = self.display_signature(symbol_id);
 
-                    let docs: &str = symbol.docs().map_or("", |d| &d);
+        let docs: &str = symbol.docs().map_or("", |d| &d);
 
-                    let contents = HoverContents::Scalar(MarkedString::String(format!(
-                        r#"```tine
+        let contents = HoverContents::Scalar(MarkedString::String(format!(
+            r#"```tine
 {}
 ```
 ---
 
 {}
 "#,
-                        type_display, docs
-                    )));
+            type_display, docs
+        )));
 
-                    return Ok(Some(Hover {
-                        contents,
-                        range: Some(span_to_range(src, loc.span())),
-                    }));
-                }
-            }
-        }
-        return Ok(None);
+        Ok(Some(Hover {
+            contents,
+            range: Some(span_to_range(src, loc.span())),
+        }))
     }
 
     async fn shutdown(&self) -> Result<()> {
