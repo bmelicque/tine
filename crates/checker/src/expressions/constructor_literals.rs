@@ -216,6 +216,15 @@ impl TypeChecker {
             .collect::<Vec<Option<_>>>()
             .into_iter()
             .collect::<Option<Vec<_>>>()?;
+        let missing = members
+            .into_iter()
+            .map(|m| &self.symbols.get(m).name)
+            .filter(|n| !encountered.contains(*n))
+            .cloned()
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            self.error(DiagnosticKind::MissingMembers(missing), constructor.loc());
+        }
         let ty = self.resolve_constructor_type(
             self.constructor_type(&constructor),
             body.loc,

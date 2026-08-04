@@ -124,24 +124,25 @@ impl Parser<'_> {
     }
 
     fn parse_struct_definition_field(&mut self) -> Option<ast::StructDefinitionField> {
-        let pub_loc = match self.tokens.peek() {
-            Some((Ok(Token::Pub), _)) => {
-                let r = self.eat(&[Token::Pub]);
-                Some(self.localize(r))
-            }
-            _ => None,
-        };
+        let (_, pub_loc) = self.maybe_eat(|t| t.pub_()).unzip();
 
-        let name = match self.tokens.peek() {
-            Some((Ok(Token::Ident(_)), _)) => self.parse_identifier(),
-            _ => return None,
-        };
+        let name = self.maybe_parse_name(|t| {
+            matches!(
+                t,
+                Token::Comma | Token::Colon | Token::Newline | Token::RBrace
+            )
+        })?;
 
         let colon = self.better_expect(
             |t| t.colon(),
             &[Token::Newline, Token::Comma, Token::RBrace],
         );
-        if let Err(_) = colon {
+        if let Err(skipped) = colon {
+            let error = DiagnosticKind::ExpectedToken {
+                expected: vec![":".into()],
+            };
+            let loc = self.localize(skipped);
+            self.error(error, loc);
             return Some(ast::StructDefinitionField {
                 loc: pub_loc.map_or(name.loc, |l| Location::merge(l, name.loc)),
                 name: Some(name),

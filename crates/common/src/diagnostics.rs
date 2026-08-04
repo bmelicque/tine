@@ -105,6 +105,7 @@ pub enum DiagnosticKind {
     MissingBody,
     MissingConsequent,
     MissingExpression,
+    MissingMembers(Vec<String>),
     MissingName,
     MissingParams,
     MissingPattern,
@@ -264,6 +265,7 @@ impl Display for DiagnosticKind {
             Self::MissingBody => write!(f, "expected function body"),
             Self::MissingConsequent => write!(f, "expected consequent"),
             Self::MissingExpression => write!(f, "expected expression"),
+            Self::MissingMembers(m) => write!(f, "missing members {}", list(&m.into_iter().map(|s| format!("`{}`", s)).collect::<Vec<_>>())),
             Self::MissingName => write!(f, "expected a name"),
             Self::MissingParams => write!(f, "expected function parameters"),
             Self::MissingPattern => write!(f, "expected pattern"),
@@ -272,21 +274,7 @@ impl Display for DiagnosticKind {
             Self::NegativeTupleIndex => write!(f, "tuple index cannot be negative"),
             Self::NonCalledMethod => write!(f, "method is not called"),
             Self::NonExhaustiveMatch { missing } => {
-                let missing = if missing.len() > 2 {
-                    format!(
-                        "{}, {}, and {} more...",
-                        missing[0],
-                        missing[1],
-                        missing.len() - 2
-                    )
-                } else if missing.len() == 2 {
-                    format!("{} and {}", missing[0], missing[1])
-                } else if missing.len() == 1 {
-                    format!("{}", missing[0])
-                } else {
-                    unreachable!()
-                };
-                write!(f, "missing match arms {}", missing)
+                write!(f, "missing match arms {}", list(missing))
             }
             Self::NonReactiveExpression => write!(f, "expected a reactive expression"),
             Self::NotCallable { type_name } => {
@@ -328,5 +316,22 @@ impl Display for DiagnosticKind {
                 write!(f, "wrong type: expected `{}`, got `{}`", expected, got)
             }
         }
+    }
+}
+
+fn list(items: &[String]) -> String {
+    if items.len() > 2 {
+        format!(
+            "{}, {}, and {} more...",
+            items[0],
+            items[1],
+            items.len() - 2
+        )
+    } else if items.len() == 2 {
+        format!("{} and {}", items[0], items[1])
+    } else if items.len() == 1 {
+        format!("{}", items[0])
+    } else {
+        unreachable!()
     }
 }

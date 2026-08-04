@@ -160,6 +160,10 @@
                 {
                     "name": "keyword.declaration.function.tine",
                     "match": "\\b(fn|impl)\\b"
+                },
+                {
+                    "name": "keyword.modifier.visibility.tine",
+                    "match": "\\b(pub)\\b"
                 }
             ]
         },

@@ -45,11 +45,15 @@ pub fn check_project(project: ProjectParser) -> CheckProjectResult {
         ids: project.ids,
         ast: project.ast,
     };
+    let mut diagnostics = project.diagnostics;
     let mut tc = TypeChecker::with_loader(Box::new(loader));
     for module in sorted_modules {
         tc.check_module(module);
     }
     let r = tc.results();
+    r.diagnostics.into_iter().for_each(|(id, d)| {
+        diagnostics.entry(id).or_default().extend(d);
+    });
     CheckProjectResult {
         names,
         ids,
@@ -57,7 +61,7 @@ pub fn check_project(project: ProjectParser) -> CheckProjectResult {
         ir: r.ir,
         types: r.types,
         symbols: r.symbols,
-        diagnostics: r.diagnostics,
+        diagnostics,
     }
 }
 

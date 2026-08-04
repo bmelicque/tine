@@ -41,10 +41,10 @@ impl Backend {
             }
             Member(s) => {
                 let s = symbols.get(s);
-                let owner_name = symbols.get_symbol(s.owner.into()).name();
+                let pub_ = if s.public { "pub " } else { "" };
                 let member_name = &s.name;
                 let displayed_type = display_type(&self.types(), s.ty);
-                format!("{}.{} {}", owner_name, member_name, displayed_type)
+                format!("{}{}: {}", pub_, member_name, displayed_type)
             }
             Method(s) => self.display_method_symbol(s),
             Trait(s) => {

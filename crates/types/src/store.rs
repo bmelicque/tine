@@ -191,7 +191,7 @@ pub fn display_raw_type(store: &TypeStore, ty: TypeId) -> String {
             let fields = t
                 .fields
                 .iter()
-                .map(|field| format!("{} {}", field.name, display_type(store, field.def)))
+                .map(|field| format!("{}: {}", field.name, display_type(store, field.def)))
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("{{ {} }}", fields)

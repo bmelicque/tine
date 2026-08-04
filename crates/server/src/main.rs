@@ -83,32 +83,26 @@ impl Backend {
             *src = result.sources;
         }
 
-        let diagnostics = result.diagnostics;
-        let diagnostics = diagnostics.into_iter().filter_map(|(id, src_diags)| {
-            let ModulePath::Real(name) = result.names[id - 1].clone() else {
-                return None;
+        for (id, module) in result.names.iter().enumerate() {
+            let ModulePath::Real(path) = module else {
+                continue;
             };
-            let uri = Url::from_file_path(name).unwrap();
-            let len = src_diags.len();
-            let source = &self.sources.read().unwrap()[&id];
-            let diags = src_diags
-                .iter()
-                .map(|diag| error_to_lsp(source, diag))
-                .collect::<Vec<_>>();
-            Some((uri, diags, len))
-        });
 
-        for (uri, diags, len) in diagnostics {
-            client.publish_diagnostics(uri.clone(), diags, None).await;
-            client
-                .log_message(
-                    MessageType::INFO,
-                    format!(
-                        "Analysis complete for entry {}, found {} error(s)",
-                        uri, len
-                    ),
-                )
-                .await;
+            let uri = Url::from_file_path(path).unwrap();
+
+            let diags = result
+                .diagnostics
+                .get(&(id + 1))
+                .map(|src_diags| {
+                    let source = &self.sources.read().unwrap()[&(id + 1)];
+                    src_diags
+                        .iter()
+                        .map(|d| error_to_lsp(source, d))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+
+            client.publish_diagnostics(uri, diags, None).await;
         }
 
         let _ = client.semantic_tokens_refresh().await;

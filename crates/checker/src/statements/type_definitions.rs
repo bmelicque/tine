@@ -70,7 +70,7 @@ impl TypeChecker {
         }
         let owner_id: StructSymbolId = self.insert(StructSymbol {
             name: name.text.clone(),
-            defined_at: node.loc,
+            defined_at: name.loc,
             ..Default::default()
         });
 
@@ -215,12 +215,13 @@ impl TypeChecker {
         is_enum: bool,
     ) -> Option<MemberSymbolId> {
         let ty = self.visit_type(field.definition?);
+        let name = field.name?;
         Some(self.symbols.insert(MemberSymbol {
-            name: field.name?.text,
+            name: name.text,
             public: field.public || is_enum,
             ty,
             owner,
-            defined_at: field.loc,
+            defined_at: name.loc,
             ..Default::default()
         }))
     }

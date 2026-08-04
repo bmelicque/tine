@@ -202,6 +202,13 @@ impl Token {
         }
     }
 
+    pub fn pub_(&self) -> Option<()> {
+        match self {
+            Token::Pub => Some(()),
+            _ => None,
+        }
+    }
+
     pub fn colon(&self) -> Option<Self> {
         match self {
             Token::Colon => Some(self.clone()),

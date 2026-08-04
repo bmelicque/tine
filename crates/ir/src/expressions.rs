@@ -255,6 +255,14 @@ pub enum StructConstructor {
     Struct(Location, StructSymbolId),
     Enum(Location, EnumSymbolId, VariantSymbolId),
 }
+impl Locatable for StructConstructor {
+    fn loc(&self) -> Location {
+        match self {
+            Self::Struct(loc, _) => *loc,
+            Self::Enum(loc, _, _) => *loc,
+        }
+    }
+}
 
 #[tree_struct(untyped)]
 #[derive(Debug, Clone)]

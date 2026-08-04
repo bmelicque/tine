@@ -84,7 +84,11 @@ impl Parser<'_> {
         let start_range = self.eat(&[Token::LBrace]);
         let fields = self.parse_list(|p| p.parse_constructor_field(), Token::Comma, Token::RBrace);
         let end_range = match self.tokens.peek() {
-            Some((Ok(Token::RBrace), r)) => r.clone(),
+            Some((Ok(Token::RBrace), r)) => {
+                let r = r.clone();
+                self.tokens.next();
+                r
+            }
             _ => self.recover_at(&[Token::RBrace]),
         };
         let loc = self.localize(start_range.start..end_range.end);
@@ -92,7 +96,7 @@ impl Parser<'_> {
     }
 
     fn parse_constructor_field(&mut self) -> Option<ast::ConstructorField> {
-        let key = match self.tokens.peek() {
+        let key: Option<ast::ConstructorKey> = match self.tokens.peek() {
             Some((Ok(Token::Ident(_)), _)) => Some(self.parse_identifier().into()),
             Some((Ok(Token::String(_) | Token::Int(_) | Token::Float(_) | Token::Bool(_)), _)) => {
                 self.parse_atom().map(|a| a.into())
@@ -105,11 +109,10 @@ impl Parser<'_> {
                     self.error(DiagnosticKind::MissingExpression, loc);
                 }
                 self.expect(Token::RBracket);
-                expr
+                expr.map(Into::into)
             }
             _ => None,
         };
-        let key: Option<ast::ConstructorKey> = key.map(|k| k.into());
 
         let Some((Ok(Token::Colon), _)) = self.tokens.peek() else {
             let error = DiagnosticKind::ExpectedToken {
