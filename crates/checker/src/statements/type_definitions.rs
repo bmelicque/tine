@@ -83,6 +83,7 @@ impl TypeChecker {
         let owner = self.symbols.get_mut(owner_id);
         owner.ty = ty;
         owner.body = body;
+        self.types.add_alias(ty, name.text);
 
         Some(ir::StructDefinition {
             loc: node.loc,

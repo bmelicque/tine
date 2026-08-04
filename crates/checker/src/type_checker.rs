@@ -210,6 +210,15 @@ impl TypeChecker {
         self.symbols.get_symbol(symbol).name()
     }
 
+    pub fn read_symbol<'s, S>(&'s mut self, symbol: S, at: Location)
+    where
+        S: Into<SymbolId>,
+    {
+        let symbol = symbol.into();
+        let access = self.symbols.get_symbol_mut(symbol).access();
+        access.read(at);
+    }
+
     pub fn symbol_methods<'s, S>(&'s self, symbol: S) -> &'s [MethodSymbolId]
     where
         S: Into<TypeSymbolId>,

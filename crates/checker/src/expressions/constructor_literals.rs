@@ -6,7 +6,7 @@ use tine_common::{
 };
 use tine_ir as ir;
 use tine_symbols::symbols::*;
-use tine_types::{store::TypeStore, types};
+use tine_types::types;
 
 use crate::substitutions::{SubstitutionTable, Substitutions};
 
@@ -108,6 +108,7 @@ impl TypeChecker {
                 return None;
             }
         };
+        self.read_symbol(symbol_id, named.name.loc);
         let body = self.symbols.get(symbol_id).body.clone();
         Some(ConstructorVisit {
             constructor: ir::StructConstructor::Struct(named.loc, symbol_id.clone()),
@@ -337,28 +338,18 @@ impl TypeChecker {
         at: Location,
         substitutions: &Substitutions,
     ) -> types::TypeId {
-        let generic = match self.resolve(unresolved_type) {
-            types::Type::Generic(g) => g,
-            _ => return unresolved_type,
-        };
-
+        let params = self
+            .resolve(unresolved_type)
+            .as_params()
+            .map_or(vec![], |p| p.to_vec());
         let table: SubstitutionTable = substitutions.into();
-        let mut unresolved = false;
-        let args = generic
-            .params
-            .iter()
-            .map(|p| match table.get(p) {
-                Some(id) => *id,
-                None => {
-                    unresolved = true;
-                    TypeStore::UNKNOWN
-                }
-            })
-            .collect::<Vec<_>>();
-
-        if unresolved {
+        if params.iter().find(|p| table.get(p).is_none()).is_some() {
             self.error(DiagnosticKind::CannotInferType, at);
         }
+        let args = params
+            .into_iter()
+            .map(|p| table.get(&p).copied().unwrap_or(p.id))
+            .collect::<Vec<_>>();
 
         self.intern(types::TypeRef {
             inner: unresolved_type,

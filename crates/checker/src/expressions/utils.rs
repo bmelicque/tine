@@ -75,10 +75,8 @@ impl TypeChecker {
         type_symbol: &StructSymbol,
         concrete_id: types::TypeId,
     ) -> Substitutions {
-        let params = match self.resolve(type_symbol.ty) {
-            types::Type::Generic(g) => g.params,
-            _ => vec![],
-        };
+        let expected = self.resolve(type_symbol.ty);
+        let params = expected.as_params().unwrap_or(&[]);
         let args = match self.resolve(concrete_id) {
             types::Type::Ref(r) => r.args,
             _ => vec![],

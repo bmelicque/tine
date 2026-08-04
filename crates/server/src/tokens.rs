@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use tine_common::{module_path::ModuleId, sources::Source};
 use tine_symbols::symbols::*;
 use tine_types::types::{Type, TypeId};
-use tower_lsp::lsp_types::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
+use tower_lsp::lsp_types::{SemanticToken, SemanticTokenType};
 
 use crate::Backend;
 
@@ -28,13 +28,6 @@ impl Backend {
         }
         let mut tokens = map.into_iter().collect::<Vec<_>>();
         tokens.sort_by_key(|(span, _)| *span);
-
-        let readonly_index = self
-            .semantic_legend
-            .token_modifiers
-            .iter()
-            .position(|m| *m == SemanticTokenModifier::READONLY)
-            .unwrap();
 
         let mut prev_line = 0;
         let mut prev_col = 0;
@@ -90,18 +83,12 @@ impl Backend {
                 .position(|s| *s == type_name)
                 .unwrap_or(0); // fallback
 
-            let modifier_mask = if !symbols.is_mutable(symbol) {
-                1 << readonly_index
-            } else {
-                0
-            };
-
             data.push(SemanticToken {
                 delta_line: delta_line as u32,
                 delta_start: delta_start as u32,
                 length: length as u32,
                 token_type: token_type_index as u32,
-                token_modifiers_bitset: modifier_mask,
+                token_modifiers_bitset: 0,
             });
 
             prev_line = start_line;

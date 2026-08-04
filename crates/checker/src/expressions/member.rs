@@ -68,6 +68,7 @@ impl TypeChecker {
         let Some((_, symbol_id)) = fields.iter().find(|(name, _)| *name == field.text) else {
             return Err((root, field));
         };
+        self.read_symbol(*symbol_id, field.loc);
         if !self.is_visible((*symbol_id).into()) {
             let error = DiagnosticKind::FieldIsPrivate(field.text.clone());
             self.error(error, field.loc);
