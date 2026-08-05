@@ -1,0 +1,7 @@
+[book]
+title = "Tine"
+authors = ["bmelicque"]
+language = "en"
+
+[output.html]
+git-repository-url = "https://github.com/bmelicque/tine"
