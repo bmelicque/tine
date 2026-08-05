@@ -36,6 +36,12 @@ let price = 19.99
 let greeting = "Hello, Tine!"
 ```
 
+## Value semantics by default
+
+By default, assigning one variable to another copies the value. There's no implicit references.
+
+This applies to almost all data types, including more complex variable types like tuple, structs and arrays.
+
 ## Basic operations
 
 ### Numbers (`int`, `float`)

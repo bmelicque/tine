@@ -14,7 +14,7 @@ impl Parser<'_> {
                 Token::Dot => {
                     expression = Some(self.parse_dot_expression(expression).into());
                 }
-                Token::Float(float) if *float.value < 1. => {
+                Token::Float(float) if *float.value >= 0. && *float.value < 1. => {
                     expression = Some(self.parse_member_from_float(expression).into());
                 }
                 Token::LParen => {
