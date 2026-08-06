@@ -1,16 +1,16 @@
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 use tine_ir as ir;
-use tine_types::store::TypeStore;
+use tine_types::{store::TypeStore, types};
 
-use crate::codegen::{expressions::ExpressionResult, CodeGenerator};
+use crate::codegen::{expressions::ExpressionResult, utils::internal_method_call, CodeGenerator};
 
 impl CodeGenerator<'_, '_> {
     pub fn handle_binary_expression(&mut self, node: ir::BinaryExpression) -> ExpressionResult {
         let op = match node.op {
             ir::BinaryOperator::Add => swc::BinaryOp::Add,
             ir::BinaryOperator::Div => swc::BinaryOp::Div,
-            ir::BinaryOperator::EqEq => swc::BinaryOp::EqEqEq,
+            ir::BinaryOperator::EqEq => return self.handle_eq(node),
             ir::BinaryOperator::Geq => swc::BinaryOp::GtEq,
             ir::BinaryOperator::Grt => swc::BinaryOp::Gt,
             ir::BinaryOperator::LAnd => swc::BinaryOp::LogicalAnd,
@@ -45,6 +45,40 @@ impl CodeGenerator<'_, '_> {
                 }))),
             };
         }
+
+        ExpressionResult {
+            prelim_stmts: vec![left.prelim_stmts, right.prelim_stmts].concat(),
+            expr: expr.into(),
+        }
+    }
+
+    fn handle_eq(&mut self, node: ir::BinaryExpression) -> ExpressionResult {
+        use types::Type::*;
+        match self.types.get(node.ty) {
+            Ref(r) if r.inner == TypeStore::ARRAY => self.handle_array_eq(node),
+            Tuple(_) => self.handle_array_eq(node),
+            _ => self.handle_simple_eq(node),
+        }
+    }
+
+    fn handle_array_eq(&mut self, node: ir::BinaryExpression) -> ExpressionResult {
+        let (left_result, right_result) = self.handle_binary_operands(node);
+        let mut prelim_stmts = left_result.prelim_stmts;
+        prelim_stmts.extend(right_result.prelim_stmts);
+        let (left, right) = (left_result.expr.into(), right_result.expr.into());
+        let expr = internal_method_call("eqArray", vec![left, right]).into();
+        ExpressionResult { prelim_stmts, expr }
+    }
+
+    fn handle_simple_eq(&mut self, node: ir::BinaryExpression) -> ExpressionResult {
+        let (left, right) = self.handle_binary_operands(node);
+
+        let expr = swc::Expr::Bin(swc::BinExpr {
+            span: DUMMY_SP,
+            op: swc::BinaryOp::EqEqEq,
+            left: Box::new(left.expr),
+            right: Box::new(right.expr),
+        });
 
         ExpressionResult {
             prelim_stmts: vec![left.prelim_stmts, right.prelim_stmts].concat(),

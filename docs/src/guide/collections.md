@@ -87,3 +87,13 @@ t.2 = false    // t is now (2, "Barbara", false)
 ```
 
 Since tuple have a fixed length, the compiler can safely infer the type of each element.
+
+## Equality
+
+Since Tine uses value-based semantics, collections are equal if they contain the same values, even if they are represented by different objects in-memory.
+
+```tine
+let a = [1, 2, 3]
+let b = [1, 2, 3]
+let areEqual = a == b // true
+```

@@ -4,7 +4,10 @@ use tine_common::{
     locations::{Locatable, Location},
 };
 use tine_ir::{self as ir, Typed};
-use tine_types::{store::TypeStore, types::TypeId};
+use tine_types::{
+    store::TypeStore,
+    types::{self, TypeId},
+};
 
 use crate::TypeChecker;
 
@@ -23,71 +26,7 @@ impl TypeChecker {
         let left_type = left.ty();
         let right_type = right.ty();
 
-        match node.operator {
-            ast::BinaryOperator::Add => {
-                let left_is_ok = VALID_ADD_TYPES.contains(&left_type);
-                let right_is_ok = VALID_ADD_TYPES.contains(&right_type);
-                if !left_is_ok && left_type != TypeStore::UNKNOWN {
-                    self.push_binary_error(node.operator, left_type, left.loc());
-                };
-                if !right_is_ok && right_type != TypeStore::UNKNOWN {
-                    self.push_binary_error(node.operator, right_type, right.loc());
-                };
-                if left_is_ok && right_is_ok && left_type != right_type {
-                    let error = DiagnosticKind::MismatchedTypes {
-                        left_name: self.types.display(left_type),
-                        right_name: self.types.display(right_type),
-                    };
-                    self.error(error, node.loc);
-                };
-            }
-            ast::BinaryOperator::Sub
-            | ast::BinaryOperator::Mul
-            | ast::BinaryOperator::Div
-            | ast::BinaryOperator::Mod
-            | ast::BinaryOperator::Pow
-            | ast::BinaryOperator::Geq
-            | ast::BinaryOperator::Grt
-            | ast::BinaryOperator::Leq
-            | ast::BinaryOperator::Less => {
-                let left_is_num = left_type == TypeStore::INTEGER || left_type == TypeStore::FLOAT;
-                let right_is_num =
-                    right_type == TypeStore::INTEGER || right_type == TypeStore::FLOAT;
-                if left_type != TypeStore::UNKNOWN && !left_is_num {
-                    self.push_binary_error(node.operator, left_type, left.loc());
-                };
-                if right_type != TypeStore::UNKNOWN && !right_is_num {
-                    self.push_binary_error(node.operator, right_type, right.loc());
-                };
-                if left_is_num && right_is_num && left_type != right_type {
-                    let error = DiagnosticKind::MismatchedTypes {
-                        left_name: self.types.display(left_type),
-                        right_name: self.types.display(right_type),
-                    };
-                    self.error(error, node.loc);
-                };
-            }
-            ast::BinaryOperator::EqEq | ast::BinaryOperator::Neq => {
-                let allow_comparison = left_type == right_type
-                    || left_type == TypeStore::UNKNOWN
-                    || right_type == TypeStore::UNKNOWN;
-                if !allow_comparison {
-                    let error = DiagnosticKind::MismatchedTypes {
-                        left_name: self.types.display(left_type),
-                        right_name: self.types.display(right_type),
-                    };
-                    self.error(error, node.loc);
-                }
-            }
-            ast::BinaryOperator::LAnd | ast::BinaryOperator::LOr => {
-                if left_type != TypeStore::UNKNOWN && left_type != TypeStore::BOOLEAN {
-                    self.push_binary_error(node.operator, left_type, left.loc());
-                };
-                if right_type != TypeStore::UNKNOWN && right_type != TypeStore::BOOLEAN {
-                    self.push_binary_error(node.operator, right_type, right.loc());
-                };
-            }
-        };
+        self.validate_binary_operands(node.operator, &left, &right, node.loc);
 
         let ty = get_binary_expression_type(node.operator, left_type, right_type);
 
@@ -98,6 +37,92 @@ impl TypeChecker {
             op: node.operator,
             ty,
         })
+    }
+
+    fn validate_binary_operands(
+        &mut self,
+        operator: ast::BinaryOperator,
+        left: &ir::Expression,
+        right: &ir::Expression,
+        node_loc: Location,
+    ) {
+        use ast::BinaryOperator::*;
+        match operator {
+            Add => {
+                let left_is_ok = VALID_ADD_TYPES.contains(&left.ty());
+                let right_is_ok = VALID_ADD_TYPES.contains(&right.ty());
+                if !left_is_ok && left.ty() != TypeStore::UNKNOWN {
+                    self.push_binary_error(operator, left.ty(), left.loc());
+                };
+                if !right_is_ok && right.ty() != TypeStore::UNKNOWN {
+                    self.push_binary_error(operator, right.ty(), right.loc());
+                };
+                if left_is_ok && right_is_ok && left.ty() != right.ty() {
+                    let error = DiagnosticKind::MismatchedTypes {
+                        left_name: self.types.display(left.ty()),
+                        right_name: self.types.display(right.ty()),
+                    };
+                    self.error(error, node_loc);
+                };
+            }
+            Sub | Mul | Div | Mod | Pow | Geq | Grt | Leq | Less => {
+                let left_is_num = left.ty() == TypeStore::INTEGER || left.ty() == TypeStore::FLOAT;
+                let right_is_num =
+                    right.ty() == TypeStore::INTEGER || right.ty() == TypeStore::FLOAT;
+                if left.ty() != TypeStore::UNKNOWN && !left_is_num {
+                    self.push_binary_error(operator, left.ty(), left.loc());
+                };
+                if right.ty() != TypeStore::UNKNOWN && !right_is_num {
+                    self.push_binary_error(operator, right.ty(), right.loc());
+                };
+                if left_is_num && right_is_num && left.ty() != right.ty() {
+                    let error = DiagnosticKind::MismatchedTypes {
+                        left_name: self.types.display(left.ty()),
+                        right_name: self.types.display(right.ty()),
+                    };
+                    self.error(error, node_loc);
+                };
+            }
+            EqEq | Neq => self.validate_eq_operands(left, right, node_loc),
+            LAnd | LOr => {
+                if left.ty() != TypeStore::UNKNOWN && left.ty() != TypeStore::BOOLEAN {
+                    self.push_binary_error(operator, left.ty(), left.loc());
+                };
+                if right.ty() != TypeStore::UNKNOWN && right.ty() != TypeStore::BOOLEAN {
+                    self.push_binary_error(operator, right.ty(), right.loc());
+                };
+            }
+        };
+    }
+
+    fn validate_eq_operands(
+        &mut self,
+        left: &ir::Expression,
+        right: &ir::Expression,
+        node_loc: Location,
+    ) {
+        if left.ty() == TypeStore::UNKNOWN || right.ty() == TypeStore::UNKNOWN {
+            return;
+        }
+        let allow_comparison = left.ty() == right.ty() && self.is_equatable(left.ty());
+        if !allow_comparison {
+            let error = DiagnosticKind::MismatchedTypes {
+                left_name: self.types.display(left.ty()),
+                right_name: self.types.display(right.ty()),
+            };
+            self.error(error, node_loc);
+        }
+    }
+
+    /// Return `true` if given type can be used with the `==` operator
+    fn is_equatable(&self, ty: types::TypeId) -> bool {
+        use types::Type::*;
+        match self.resolve(ty) {
+            Boolean | Integer | Float | String => true,
+            Ref(r) if r.inner == TypeStore::ARRAY => self.is_equatable(r.args[0]),
+            Tuple(t) => t.elements.into_iter().all(|e| self.is_equatable(e)),
+            _ => false,
+        }
     }
 
     fn push_binary_error(&mut self, op: ast::BinaryOperator, ty: TypeId, loc: Location) {

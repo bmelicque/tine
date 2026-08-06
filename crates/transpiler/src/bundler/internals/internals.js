@@ -184,6 +184,20 @@ export function hashAny(v) {
 	return v.hash();
 }
 
+/**
+ * Handle equality checks for equatable arrays and tuples.
+ * Equatable arrays are arrays of primitives and other equatable arrays.
+ * @param {*} a 
+ * @param {*} b 
+ */
+export function eqArray(a, b) {
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++)
+		if (!Array.isArray(a[i]) && a[i] !== b[i] || !eqArray(a[i], b[i]))
+			return false;
+	return true;
+}
+
 export function eqAny(a, b) {
 	if (a === b) return true;
 	let ta = typeof a, tb = typeof b;
