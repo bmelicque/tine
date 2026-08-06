@@ -151,3 +151,11 @@ fn assign_helper(mut stmt: &mut swc::Stmt, target: swc::Ident) {
         _ => {}
     }
 }
+
+pub fn logical_not(expr: swc::Expr) -> swc::Expr {
+    swc::Expr::Unary(swc::UnaryExpr {
+        span: DUMMY_SP,
+        op: swc::UnaryOp::Bang,
+        arg: Box::new(expr),
+    })
+}

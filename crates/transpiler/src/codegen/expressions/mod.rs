@@ -24,6 +24,15 @@ pub struct ExpressionResult {
     /// The actual expression
     pub expr: swc::Expr,
 }
+impl ExpressionResult {
+    pub fn map<F>(mut self, f: F) -> Self
+    where
+        F: FnOnce(swc::Expr) -> swc::Expr,
+    {
+        self.expr = f(self.expr);
+        self
+    }
+}
 impl<T> From<T> for ExpressionResult
 where
     T: Into<swc::Expr>,

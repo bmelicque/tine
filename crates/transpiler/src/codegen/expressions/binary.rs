@@ -3,7 +3,11 @@ use swc_ecma_ast as swc;
 use tine_ir as ir;
 use tine_types::{store::TypeStore, types};
 
-use crate::codegen::{expressions::ExpressionResult, utils::internal_method_call, CodeGenerator};
+use crate::codegen::{
+    expressions::{utils::logical_not, ExpressionResult},
+    utils::internal_method_call,
+    CodeGenerator,
+};
 
 impl CodeGenerator<'_, '_> {
     pub fn handle_binary_expression(&mut self, node: ir::BinaryExpression) -> ExpressionResult {
@@ -11,6 +15,7 @@ impl CodeGenerator<'_, '_> {
             ir::BinaryOperator::Add => swc::BinaryOp::Add,
             ir::BinaryOperator::Div => swc::BinaryOp::Div,
             ir::BinaryOperator::EqEq => return self.handle_eq(node),
+            ir::BinaryOperator::Neq => return self.handle_neq(node),
             ir::BinaryOperator::Geq => swc::BinaryOp::GtEq,
             ir::BinaryOperator::Grt => swc::BinaryOp::Gt,
             ir::BinaryOperator::LAnd => swc::BinaryOp::LogicalAnd,
@@ -19,7 +24,6 @@ impl CodeGenerator<'_, '_> {
             ir::BinaryOperator::Less => swc::BinaryOp::Lt,
             ir::BinaryOperator::Mod => swc::BinaryOp::Mod,
             ir::BinaryOperator::Mul => swc::BinaryOp::Mul,
-            ir::BinaryOperator::Neq => swc::BinaryOp::NotEqEq,
             ir::BinaryOperator::Pow => swc::BinaryOp::Exp,
             ir::BinaryOperator::Sub => swc::BinaryOp::Sub,
         };
@@ -57,7 +61,7 @@ impl CodeGenerator<'_, '_> {
         match self.types.get(node.ty) {
             Ref(r) if r.inner == TypeStore::ARRAY => self.handle_array_eq(node),
             Tuple(_) => self.handle_array_eq(node),
-            _ => self.handle_simple_eq(node),
+            _ => self.handle_simple_bin(node, swc::BinaryOp::EqEqEq),
         }
     }
 
@@ -70,19 +74,12 @@ impl CodeGenerator<'_, '_> {
         ExpressionResult { prelim_stmts, expr }
     }
 
-    fn handle_simple_eq(&mut self, node: ir::BinaryExpression) -> ExpressionResult {
-        let (left, right) = self.handle_binary_operands(node);
-
-        let expr = swc::Expr::Bin(swc::BinExpr {
-            span: DUMMY_SP,
-            op: swc::BinaryOp::EqEqEq,
-            left: Box::new(left.expr),
-            right: Box::new(right.expr),
-        });
-
-        ExpressionResult {
-            prelim_stmts: vec![left.prelim_stmts, right.prelim_stmts].concat(),
-            expr: expr.into(),
+    fn handle_neq(&mut self, node: ir::BinaryExpression) -> ExpressionResult {
+        use types::Type::*;
+        match self.types.get(node.ty) {
+            Ref(r) if r.inner == TypeStore::ARRAY => self.handle_array_eq(node).map(logical_not),
+            Tuple(_) => self.handle_array_eq(node).map(logical_not),
+            _ => self.handle_simple_bin(node, swc::BinaryOp::NotEqEq),
         }
     }
 
@@ -103,6 +100,26 @@ impl CodeGenerator<'_, '_> {
                 let left = self.extract_expression(left.expr);
                 (left, right)
             }
+        }
+    }
+
+    fn handle_simple_bin(
+        &mut self,
+        node: ir::BinaryExpression,
+        op: swc::BinaryOp,
+    ) -> ExpressionResult {
+        let (left, right) = self.handle_binary_operands(node);
+
+        let expr = swc::Expr::Bin(swc::BinExpr {
+            span: DUMMY_SP,
+            op,
+            left: Box::new(left.expr),
+            right: Box::new(right.expr),
+        });
+
+        ExpressionResult {
+            prelim_stmts: vec![left.prelim_stmts, right.prelim_stmts].concat(),
+            expr: expr.into(),
         }
     }
 }
