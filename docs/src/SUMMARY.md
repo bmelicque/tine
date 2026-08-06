@@ -6,3 +6,4 @@
 
 - [Variables & primitive types](./guide/variables.md)
 - [Common collections](./guide/collections.md)
+- [Control flow](./guide/control-flow.md)
