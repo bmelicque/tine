@@ -8,3 +8,4 @@
 - [Common collections](./guide/collections.md)
 - [Control flow](./guide/control-flow.md)
 - [Functions](./guide/functions.md)
+- [Using structs to group related data](./guide/structs.md)
