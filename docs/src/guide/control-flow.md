@@ -7,9 +7,9 @@ You can group statements together into _blocks_.
 Blocks themselves are **expressions**, not statements. A block evaluates to its last statement if it is an expression.
 
 ```tine
-const sum = {
-    const x = 1
-    const y = 2
+let sum = {
+    let x = 1
+    let y = 2
     x + y
 }
 ```
