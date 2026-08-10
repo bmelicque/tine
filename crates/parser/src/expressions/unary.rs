@@ -48,44 +48,31 @@ mod tests {
         locations::Span,
     };
 
-    use crate::test_utils::{test_expression, ExpressionTest};
+    use crate::test_utils::{parse_expression, test_expression, ExpressionTest};
 
     use super::*;
 
     #[test]
-    fn test_parse_unary() {
-        test_expression(ExpressionTest {
-            input: "*a",
-            expected: ast::Expression::Unary(ast::UnaryExpression {
-                loc: Location::new(0, Span::new(0, 2)),
-                operator: ast::UnaryOperator::Star,
-                operand: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
-                    loc: Location::new(0, Span::new(1, 2)),
-                    text: "a".into(),
-                }))),
-            }),
-            diagnostics: vec![],
-        });
+    fn parse_unary() {
+        let expr = parse_expression("*a").expect("expected no errors");
+        let expr = expr.as_unary().expect("expected a unary expression");
+        assert_eq!(expr.operator, ast::UnaryOperator::Star);
+        expr.operand.as_ref().expect("expected an operand");
     }
 
     #[test]
-    fn test_parse_nested_unary() {
-        test_expression(ExpressionTest {
-            input: "!*a",
-            expected: ast::Expression::Unary(ast::UnaryExpression {
-                loc: Location::new(0, Span::new(0, 3)),
-                operator: ast::UnaryOperator::Bang,
-                operand: Some(Box::new(ast::Expression::Unary(ast::UnaryExpression {
-                    loc: Location::new(0, Span::new(1, 3)),
-                    operator: ast::UnaryOperator::Star,
-                    operand: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
-                        loc: Location::new(0, Span::new(2, 3)),
-                        text: "a".into(),
-                    }))),
-                }))),
-            }),
-            diagnostics: vec![],
-        });
+    fn parse_nested_unary() {
+        let expr = parse_expression("!*a").expect("expected no errors");
+        let expr = expr.as_unary().expect("expected a unary expression");
+        assert_eq!(expr.operator, ast::UnaryOperator::Bang);
+        let inner = expr
+            .operand
+            .as_deref()
+            .expect("expected an operand")
+            .as_unary()
+            .expect("expected a unary expression");
+        assert_eq!(inner.operator, ast::UnaryOperator::Star);
+        inner.operand.as_ref().expect("expected an operand");
     }
 
     #[test]

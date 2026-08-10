@@ -216,6 +216,20 @@ impl Token {
         }
     }
 
+    pub fn dot(&self) -> Option<Self> {
+        match self {
+            Token::Dot => Some(self.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn lcaret(&self) -> Option<Self> {
+        match self {
+            Token::Lt => Some(self.clone()),
+            _ => None,
+        }
+    }
+
     pub fn to_string(&self) -> String {
         match self {
             Token::LineComment(_) => "comment".to_string(),

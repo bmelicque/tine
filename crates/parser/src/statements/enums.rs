@@ -1,4 +1,4 @@
-use tine_ast as ast;
+use tine_ast::*;
 use tine_common::{
     diagnostics::DiagnosticKind,
     locations::{Locatable, Location},
@@ -9,10 +9,10 @@ use crate::{statements::utils::TypeName, tokens::Token, Parser};
 impl Parser<'_> {
     pub fn parse_enum(
         &mut self,
-        docs: Option<ast::Docs>,
-        meta: Option<Vec<ast::MetaAttribute>>,
+        docs: Option<Docs>,
+        meta: Option<Vec<MetaAttribute>>,
         pub_loc: Option<Location>,
-    ) -> ast::EnumDefinition {
+    ) -> EnumDefinition {
         let kw_range = self.eat(&[Token::Enum]);
         let start = pub_loc.unwrap_or(self.localize(kw_range));
 
@@ -22,7 +22,7 @@ impl Parser<'_> {
         let end_range = self.expect(Token::RBrace);
         let end = self.localize(end_range);
 
-        ast::EnumDefinition {
+        EnumDefinition {
             docs,
             meta,
             loc: Location::merge(start, end),
@@ -33,7 +33,7 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_enum_variants(&mut self) -> Vec<ast::VariantDefinition> {
+    fn parse_enum_variants(&mut self) -> Vec<VariantDefinition> {
         let variants = self.parse_list(
             |p| p.parse_variant_definition(),
             Token::Comma,
@@ -42,7 +42,7 @@ impl Parser<'_> {
         variants
     }
 
-    fn parse_variant_definition(&mut self) -> Option<ast::VariantDefinition> {
+    fn parse_variant_definition(&mut self) -> Option<VariantDefinition> {
         let Ok(type_name) = self.parse_type_name(&[Token::LBrace, Token::LParen, Token::Newline])
         else {
             return None;
@@ -55,17 +55,41 @@ impl Parser<'_> {
         {
             self.error(DiagnosticKind::UnexpectedTypeParams, loc);
         }
-        let body = self.parse_type_body();
+        let body = self.parse_variant_body();
         let loc = match (&type_name, &body) {
             (Some(type_name), Some(body)) => Location::merge(type_name.loc, body.loc()),
             (Some(type_name), None) => type_name.loc,
             (None, Some(body)) => body.loc(),
             (None, None) => return None,
         };
-        Some(ast::VariantDefinition {
+        Some(VariantDefinition {
             loc,
             body,
             name: type_name.map(|t| t.name),
         })
+    }
+
+    fn parse_variant_body(&mut self) -> Option<VariantBody> {
+        let (_, start_loc) = self.maybe_eat(|t| t.lparen())?;
+
+        let elements = self.parse_list(
+            |parser| parser.parse_variant_body_element(),
+            Token::Comma,
+            Token::RParen,
+        );
+
+        let end_range = self.expect(Token::RParen);
+        let end_loc = self.localize(end_range);
+
+        Some(VariantBody {
+            loc: Location::merge(start_loc, end_loc),
+            elements,
+        })
+    }
+
+    fn parse_variant_body_element(&mut self) -> Option<(bool, Type)> {
+        let is_public = self.eat_if(&[Token::Pub]).is_some();
+        let ty = self.parse_type()?;
+        Some((is_public, ty))
     }
 }

@@ -3,7 +3,7 @@ use tine_common::{diagnostics::DiagnosticKind, locations::Locatable};
 use tine_ir::{self as ir, root_identifier, Typed};
 use tine_types::{store::TypeStore, types};
 
-use crate::{patterns::lower_pattern, TypeChecker};
+use crate::{patterns::lower_pattern, PathContext, TypeChecker};
 
 impl TypeChecker {
     pub fn visit_assignment(&mut self, node: ast::Assignment) -> Vec<ir::Statement> {
@@ -85,10 +85,10 @@ impl TypeChecker {
 
     fn visit_expr_assignee(
         &mut self,
-        expr: ast::MemberExpression,
+        expr: ast::PathExpression,
         against: types::TypeId,
     ) -> Option<ir::Expression> {
-        let expression = self.visit_member_expression(expr)?.into();
+        let expression = self.visit_path_expression(expr, PathContext::Expr)?.into();
         if let Some(root) = root_identifier(&expression) {
             // visit expression adds a read that need to be converted to write
             self.symbols

@@ -11,7 +11,7 @@ impl Expander {
         &mut self,
         callee: Identifier,
         args: Option<Vec<Identifier>>,
-        node: &Option<TypeBody>,
+        node: &Option<StructBody>,
     ) -> Vec<ImplementationItem> {
         let Some(args) = args else {
             self.error(callee.loc, DiagnosticKind::MissingArguments);
@@ -34,7 +34,7 @@ impl Expander {
         &mut self,
         callee: Identifier,
         args: Option<Vec<Identifier>>,
-        node: &EnumDefinition,
+        _node: &EnumDefinition,
     ) -> Vec<ImplementationItem> {
         let Some(args) = args else {
             self.error(callee.loc, DiagnosticKind::MissingArguments);
@@ -43,7 +43,6 @@ impl Expander {
 
         args.into_iter()
             .filter_map(|arg| match arg.as_str() {
-                "Eq" => Some(eq::derive_enum(node, arg.loc)),
                 _ => {
                     self.error(arg.loc, DiagnosticKind::UnknownDeriveArgument);
                     None

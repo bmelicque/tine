@@ -173,13 +173,15 @@ impl TypeChecker {
         if self.has_method(symbol, field) {
             return true;
         }
-        match symbol {
-            TypeSymbolId::Struct(s) => match &self.symbols.get(s).body {
-                TypeSymbolBody::Struct(s) => s.iter().find(|(n, _)| n == field).is_some(),
-                _ => false,
-            },
-            _ => false,
-        }
+        let TypeSymbolId::Struct(s) = symbol else {
+            return false;
+        };
+        self.symbols
+            .get(s)
+            .members
+            .iter()
+            .find(|m| self.symbol_name(**m) == field)
+            .is_some()
     }
 
     fn has_method(&self, symbol: TypeSymbolId, field: &str) -> bool {

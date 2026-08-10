@@ -4,12 +4,80 @@ use tine_common::{
     locations::{Locatable, Location},
 };
 use tine_ir::{self as ir, Typed};
-use tine_symbols::symbols::StructSymbol;
+use tine_symbols::symbols::*;
 use tine_types::types;
 
-use crate::{substitutions::Substitutions, TypeChecker};
+use crate::{
+    substitutions::{SubstitutionTable, Substitutions},
+    TypeChecker,
+};
 
 impl TypeChecker {
+    pub fn find_method<F>(
+        &mut self,
+        host: types::TypeId,
+        name: &str,
+        mut extra: F,
+    ) -> Option<(MethodSymbolId, types::TypeId)>
+    where
+        F: FnMut(&MethodSymbol) -> bool,
+    {
+        let (host, sub) = self.unwrap_type(host);
+        let type_symbol = self.get_type_symbol_id(host)?;
+        let methods = self.symbol_methods(type_symbol);
+        let table = sub.clone().into();
+        let method = methods.into_iter().fold(None, |candidate, m| {
+            self.method_folder(name, candidate, *m, &table, &mut extra)
+        })?;
+
+        let ty = self.symbols.get(method).ty;
+        let ty = sub.apply(&mut self.types, ty);
+
+        Some((method, ty))
+    }
+
+    pub fn unwrap_type(&self, ty: types::TypeId) -> (types::TypeId, Substitutions) {
+        let (host, generic_args) = match self.resolve(ty) {
+            types::Type::Ref(r) => (r.inner, r.args),
+            _ => (ty, vec![]),
+        };
+        let host_ty = self.resolve(host);
+        let type_params = host_ty.as_params().unwrap_or(&[]);
+        let sub = Substitutions::with_initial(type_params, &generic_args);
+        (host, sub)
+    }
+    fn method_folder<F>(
+        &self,
+        name: &str,
+        best: Option<MethodSymbolId>,
+        current: MethodSymbolId,
+        sub: &SubstitutionTable,
+        extra: &mut F,
+    ) -> Option<MethodSymbolId>
+    where
+        F: FnMut(&MethodSymbol) -> bool,
+    {
+        let symbol = self.symbols.get(current);
+        if symbol.name() != name {
+            return best;
+        }
+        let matches_generic = symbol.concreteness() == 0 || symbol.matches_substitutions(sub);
+        if !matches_generic {
+            return best;
+        }
+        if !extra(symbol) {
+            return best;
+        }
+        match best {
+            Some(c)
+                if self.symbols.get::<MethodSymbolId>(c).concreteness() > symbol.concreteness() =>
+            {
+                Some(c)
+            }
+            _ => Some(current),
+        }
+    }
+
     pub fn check_assigned_type(
         &mut self,
         expected: types::TypeId,

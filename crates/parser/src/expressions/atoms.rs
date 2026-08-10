@@ -1,9 +1,9 @@
-use tine_ast as ast;
+use tine_ast::*;
 
-use crate::{expressions::utils::is_type_identifier, Parser, Token};
+use crate::{Parser, Token};
 
 impl Parser<'_> {
-    pub fn parse_atom(&mut self) -> Option<ast::Expression> {
+    pub fn parse_atom(&mut self) -> Option<Expression> {
         let Some(ranged_token) = self.tokens.peek() else {
             return None;
         };
@@ -16,65 +16,62 @@ impl Parser<'_> {
             Token::Int(_) => Some(self.parse_int().into()),
             Token::Float(_) => Some(self.parse_float().into()),
             Token::String(_) => Some(self.parse_string().into()),
-            Token::Ident(text) if is_type_identifier(&text) => {
-                Some(self.parse_constructor_literal(vec![]).into())
-            }
-            Token::Ident(_) => Some(self.parse_identifier().into()),
+            Token::Ident(_) => Some(self.parse_path_expression().into()),
             Token::LParen => Some(self.parse_tuple().into()),
             _ => None,
         }
     }
 
-    pub(super) fn parse_int(&mut self) -> ast::IntLiteral {
+    pub(super) fn parse_int(&mut self) -> IntLiteral {
         let Some((Ok(Token::Int(value)), span)) = self.tokens.next() else {
             panic!()
         };
 
-        ast::IntLiteral {
+        IntLiteral {
             loc: self.localize(span),
             value,
         }
     }
 
-    fn parse_float(&mut self) -> ast::FloatLiteral {
+    fn parse_float(&mut self) -> FloatLiteral {
         let Some((Ok(Token::Float(value)), span)) = self.tokens.next() else {
             panic!()
         };
 
-        ast::FloatLiteral {
+        FloatLiteral {
             loc: self.localize(span),
             value: value.value,
         }
     }
 
-    fn parse_bool(&mut self) -> ast::BooleanLiteral {
+    fn parse_bool(&mut self) -> BooleanLiteral {
         let Some((Ok(Token::Bool(value)), span)) = self.tokens.next() else {
             panic!()
         };
 
-        ast::BooleanLiteral {
+        BooleanLiteral {
             loc: self.localize(span),
             value,
         }
     }
 
-    fn parse_string(&mut self) -> ast::StringLiteral {
+    fn parse_string(&mut self) -> StringLiteral {
         let Some((Ok(Token::String(text)), span)) = self.tokens.next() else {
             panic!()
         };
 
-        ast::StringLiteral {
+        StringLiteral {
             loc: self.localize(span),
             text,
         }
     }
 
-    pub fn parse_identifier(&mut self) -> ast::Identifier {
+    pub fn parse_identifier(&mut self) -> Identifier {
         let Some((Ok(Token::Ident(text)), span)) = self.tokens.next() else {
             panic!()
         };
 
-        ast::Identifier {
+        Identifier {
             loc: self.localize(span),
             text,
         }
@@ -93,7 +90,7 @@ mod tests {
     fn test_parse_int() {
         test_expression(ExpressionTest {
             input: "42",
-            expected: ast::Expression::IntLiteral(ast::IntLiteral {
+            expected: Expression::IntLiteral(IntLiteral {
                 loc: Location::new(0, Span::new(0, 2)),
                 value: 42,
             }),
@@ -105,7 +102,7 @@ mod tests {
     fn parse_int_with_underscore() {
         test_expression(ExpressionTest {
             input: "42_000",
-            expected: ast::Expression::IntLiteral(ast::IntLiteral {
+            expected: Expression::IntLiteral(IntLiteral {
                 loc: Location::new(0, Span::new(0, 6)),
                 value: 42000,
             }),
@@ -117,7 +114,7 @@ mod tests {
     fn test_parse_float() {
         test_expression(ExpressionTest {
             input: "3.14",
-            expected: ast::Expression::FloatLiteral(ast::FloatLiteral {
+            expected: Expression::FloatLiteral(FloatLiteral {
                 loc: Location::new(0, Span::new(0, 4)),
                 value: ordered_float::OrderedFloat(3.14),
             }),
@@ -129,7 +126,7 @@ mod tests {
     fn test_parse_float_no_decimals() {
         test_expression(ExpressionTest {
             input: "3.",
-            expected: ast::Expression::FloatLiteral(ast::FloatLiteral {
+            expected: Expression::FloatLiteral(FloatLiteral {
                 loc: Location::new(0, Span::new(0, 2)),
                 value: ordered_float::OrderedFloat(3.),
             }),
@@ -141,7 +138,7 @@ mod tests {
     fn test_parse_float_with_underscore() {
         test_expression(ExpressionTest {
             input: "3.14_000",
-            expected: ast::Expression::FloatLiteral(ast::FloatLiteral {
+            expected: Expression::FloatLiteral(FloatLiteral {
                 loc: Location::new(0, Span::new(0, 8)),
                 value: ordered_float::OrderedFloat(3.14),
             }),
@@ -153,7 +150,7 @@ mod tests {
     fn test_parse_float_only_decimals() {
         test_expression(ExpressionTest {
             input: ".14",
-            expected: ast::Expression::FloatLiteral(ast::FloatLiteral {
+            expected: Expression::FloatLiteral(FloatLiteral {
                 loc: Location::new(0, Span::new(0, 3)),
                 value: ordered_float::OrderedFloat(0.14),
             }),
@@ -165,7 +162,7 @@ mod tests {
     fn parse_bool_true() {
         test_expression(ExpressionTest {
             input: "true",
-            expected: ast::Expression::BooleanLiteral(ast::BooleanLiteral {
+            expected: Expression::BooleanLiteral(BooleanLiteral {
                 loc: Location::new(0, Span::new(0, 4)),
                 value: true,
             }),
@@ -177,7 +174,7 @@ mod tests {
     fn parse_bool_false() {
         test_expression(ExpressionTest {
             input: "false",
-            expected: ast::Expression::BooleanLiteral(ast::BooleanLiteral {
+            expected: Expression::BooleanLiteral(BooleanLiteral {
                 loc: Location::new(0, Span::new(0, 5)),
                 value: false,
             }),
@@ -189,7 +186,7 @@ mod tests {
     fn parse_string() {
         test_expression(ExpressionTest {
             input: "\"hello world\"",
-            expected: ast::Expression::StringLiteral(ast::StringLiteral {
+            expected: Expression::StringLiteral(StringLiteral {
                 loc: Location::new(0, Span::new(0, 13)),
                 text: "hello world".to_string(),
             }),
@@ -201,7 +198,7 @@ mod tests {
     fn parse_string_with_escaped_quote() {
         test_expression(ExpressionTest {
             input: "\"hello \\\"world\\\"\"",
-            expected: ast::Expression::StringLiteral(ast::StringLiteral {
+            expected: Expression::StringLiteral(StringLiteral {
                 loc: Location::new(0, Span::new(0, 17)),
                 text: "hello \"world\"".to_string(),
             }),
@@ -213,10 +210,10 @@ mod tests {
     fn test_parse_identifier() {
         test_expression(ExpressionTest {
             input: "x",
-            expected: ast::Expression::Identifier(ast::Identifier {
+            expected: Expression::Path(PathExpression::from(Identifier {
                 loc: Location::new(0, Span::new(0, 1)),
                 text: "x".to_string(),
-            }),
+            })),
             diagnostics: vec![],
         })
     }
@@ -225,10 +222,10 @@ mod tests {
     fn test_parse_complex_identifier() {
         test_expression(ExpressionTest {
             input: "x_92$",
-            expected: ast::Expression::Identifier(ast::Identifier {
+            expected: Expression::Path(PathExpression::from(Identifier {
                 loc: Location::new(0, Span::new(0, 5)),
                 text: "x_92$".to_string(),
-            }),
+            })),
             diagnostics: vec![],
         })
     }

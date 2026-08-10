@@ -3,7 +3,7 @@ mod implementations;
 use tine_common::locations::{Locatable, Location};
 use tine_macros::tree_struct;
 
-use crate::{nodes::ast_enum, walk::PushNodes, InvalidExpression, MemberExpression};
+use crate::{nodes::ast_enum, walk::PushNodes, InvalidExpression, PathExpression};
 
 use super::{
     expressions::{Expression, FunctionExpression, FunctionParams, Identifier},
@@ -91,13 +91,8 @@ pub struct StructDefinition {
     pub public: bool,
     pub name: Option<Identifier>,
     pub params: Option<Vec<Identifier>>,
-    pub body: Option<TypeBody>,
+    pub body: Option<StructBody>,
 }
-
-ast_enum!(TypeBody {
-    Struct(StructBody),
-    Tuple(TupleBody),
-});
 
 #[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -111,13 +106,6 @@ pub struct StructDefinitionField {
     pub public: bool,
     pub name: Option<Identifier>,
     pub definition: Option<Type>,
-}
-
-/// (is_public, type)
-#[tree_struct(untyped)]
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct TupleBody {
-    pub elements: Vec<(bool, Type)>,
 }
 
 #[tree_struct(untyped)]
@@ -135,12 +123,19 @@ pub struct EnumDefinition {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct VariantDefinition {
     pub name: Option<Identifier>,
-    pub body: Option<TypeBody>,
+    pub body: Option<VariantBody>,
 }
 impl VariantDefinition {
     pub fn is_unit(&self) -> bool {
         self.body.is_none()
     }
+}
+
+/// (is_public, type)
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct VariantBody {
+    pub elements: Vec<(bool, Type)>,
 }
 
 #[tree_struct(untyped)]
@@ -152,7 +147,7 @@ pub struct Assignment {
 }
 
 ast_enum!(Assignee {
-    Member(MemberExpression),
+    Member(PathExpression),
     Indirection(IndirectionAssignee),
 
     Pattern(Pattern),

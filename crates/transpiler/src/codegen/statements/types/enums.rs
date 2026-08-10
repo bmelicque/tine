@@ -52,8 +52,8 @@ impl CodeGenerator<'_, '_> {
                     constructor_symbol.name.clone(),
                     constructor_symbol.body.clone(),
                 )
-                .into()
             })
+            .map(Into::into)
             .collect();
 
         body.push(self.make_enum_getter(variants).into());
@@ -88,11 +88,9 @@ impl CodeGenerator<'_, '_> {
         &mut self,
         id: usize,
         name: String,
-        body: Option<TypeSymbolBody>,
+        body: Vec<MemberSymbolId>,
     ) -> swc::ClassMethod {
-        let body_symbols = get_body_symbols(body);
-
-        let function = self.make_variant_constructor(id, body_symbols);
+        let function = self.make_variant_constructor(id, body);
 
         swc::ClassMethod {
             span: DUMMY_SP,
@@ -106,21 +104,17 @@ impl CodeGenerator<'_, '_> {
     fn make_variant_constructor(
         &mut self,
         id: usize,
-        symbols: Vec<MemberSymbolId>,
+        members: Vec<MemberSymbolId>,
     ) -> swc::Function {
-        let params = symbols
+        let params = members
             .iter()
             .map(|s| {
                 let name = self.symbol_name(*s);
-                swc::Param {
-                    span: DUMMY_SP,
-                    decorators: vec![],
-                    pat: swc::Pat::Ident(ident_from_str(name).into()),
-                }
+                swc::Param::from(swc::Pat::Ident(ident_from_str(name).into()))
             })
             .collect();
 
-        let mut stmts = Vec::with_capacity(symbols.len() + 3);
+        let mut stmts = Vec::with_capacity(members.len() + 3);
         // `const $ = new this`
         stmts.push(swc::Stmt::Decl(swc::Decl::Var(Box::new(swc::VarDecl {
             span: DUMMY_SP,
@@ -143,8 +137,8 @@ impl CodeGenerator<'_, '_> {
             ident_from_str("$tag"),
             ident_from_str(&id.to_string()).into(),
         ));
-        for symbol in symbols {
-            let name = self.symbol_name(symbol);
+        for member in members {
+            let name = self.symbol_name(member);
             // `$.KEY = VALUE`
             stmts.push(member_assignment(
                 ident_from_str("$").into(),
@@ -225,8 +219,7 @@ impl CodeGenerator<'_, '_> {
             raw: None,
         }))));
 
-        let body_symbols = get_body_symbols(body.clone());
-        let args = body_symbols
+        let args = body
             .iter()
             .map(|s| Some(self.get_field(*s).into()))
             .collect();
@@ -303,8 +296,7 @@ impl CodeGenerator<'_, '_> {
     fn make_variant_setter(&mut self, id: usize, variant: VariantSymbolId) -> swc::SwitchCase {
         let test = test_variant(id);
 
-        let body = self.symbols.get(variant).body.clone();
-        let symbols = get_body_symbols(body);
+        let symbols = self.symbols.get(variant).body.clone();
         let mut cons = self.set_fields(&symbols);
         cons.push(swc::Stmt::Return(swc::ReturnStmt::default()));
 
@@ -343,8 +335,7 @@ impl CodeGenerator<'_, '_> {
     fn make_variant_cleaner(&mut self, id: usize, variant: VariantSymbolId) -> swc::SwitchCase {
         let test = test_variant(id);
 
-        let body = self.symbols.get(variant).body.clone();
-        let symbols = get_body_symbols(body);
+        let symbols = self.symbols.get(variant).body.clone();
         let mut cons = symbols
             .into_iter()
             .map(|s| self.delete_field(s))
@@ -388,14 +379,6 @@ impl CodeGenerator<'_, '_> {
                 arg: Box::new(self.this_field(symbol)),
             })),
         })
-    }
-}
-
-fn get_body_symbols(body: Option<TypeSymbolBody>) -> Vec<MemberSymbolId> {
-    match body {
-        Some(TypeSymbolBody::Struct(st)) => st.into_iter().map(|(_, s)| s).collect(),
-        Some(TypeSymbolBody::Tuple(t)) => t,
-        None => vec![],
     }
 }
 

@@ -32,6 +32,20 @@ impl Type {
         }
     }
 
+    pub fn as_enum(&self) -> Option<&EnumType> {
+        match self {
+            Self::Enum(e) => Some(e),
+            _ => None,
+        }
+    }
+
+    pub fn as_function(&self) -> Option<&FunctionType> {
+        match self {
+            Self::Function(f) => Some(f),
+            _ => None,
+        }
+    }
+
     pub fn as_trait(&self) -> Option<&TraitType> {
         match self {
             Self::Trait(t) => Some(t),

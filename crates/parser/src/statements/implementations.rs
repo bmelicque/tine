@@ -1,10 +1,10 @@
-use tine_ast as ast;
+use tine_ast::*;
 use tine_common::{diagnostics::DiagnosticKind, locations::Location};
 
 use crate::{tokens::Token, Parser};
 
 impl Parser<'_> {
-    pub fn parse_implementations(&mut self) -> ast::Implementation {
+    pub fn parse_implementations(&mut self) -> Implementation {
         let start_range = self.eat(&[Token::Impl]);
         let start_loc = self.localize(start_range);
 
@@ -24,14 +24,14 @@ impl Parser<'_> {
             _ => start_loc,
         };
 
-        ast::Implementation {
+        Implementation {
             loc,
             implemented_type,
             body,
         }
     }
 
-    fn parse_implementation_body(&mut self) -> Option<ast::ImplementationBody> {
+    fn parse_implementation_body(&mut self) -> Option<ImplementationBody> {
         let Some((Ok(Token::LBrace), _)) = self.tokens.peek() else {
             let loc = self.next_loc();
             self.error(DiagnosticKind::MissingBody, loc);
@@ -48,13 +48,13 @@ impl Parser<'_> {
 
         let end_loc = self.close(Token::RBrace);
 
-        Some(ast::ImplementationBody {
+        Some(ImplementationBody {
             loc: Location::merge(start_loc, end_loc),
             items,
         })
     }
 
-    fn parse_implementation_item(&mut self) -> Option<ast::ImplementationItem> {
+    fn parse_implementation_item(&mut self) -> Option<ImplementationItem> {
         let docs = match self.tokens.peek() {
             Some((Ok(Token::LineComment(_)), range)) => {
                 let start = range.start.clone();
@@ -85,36 +85,34 @@ impl Parser<'_> {
                     Some(f) => Location::merge(start_loc, f.loc),
                     None => Location::merge(start_loc, receiver.loc),
                 };
-                let mut method = ast::MethodDefinition {
+                let mut method = MethodDefinition {
                     docs,
                     loc,
                     public,
                     ..Default::default()
                 };
-                method.copy_function(function.unwrap_or(ast::FunctionExpression {
+                method.copy_function(function.unwrap_or(FunctionExpression {
                     ..Default::default()
                 }));
-                Some(ast::ImplementationItem::Method(method))
+                Some(ImplementationItem::Method(method))
             }
             None => {
                 let loc = function
                     .as_ref()
                     .map_or(start_loc, |f| Location::merge(start_loc, f.loc));
-                let mut definition = function.unwrap_or(ast::FunctionExpression::default());
+                let mut definition = function.unwrap_or(FunctionExpression::default());
                 definition.loc = loc;
-                Some(ast::ImplementationItem::StaticMethod(
-                    ast::FunctionDefinition {
-                        docs,
-                        loc,
-                        public,
-                        definition,
-                    },
-                ))
+                Some(ImplementationItem::StaticMethod(FunctionDefinition {
+                    docs,
+                    loc,
+                    public,
+                    definition,
+                }))
             }
         }
     }
 
-    fn parse_method_receiver(&mut self) -> ast::MethodReceiver {
+    fn parse_method_receiver(&mut self) -> MethodReceiver {
         let start_range = self.eat(&[Token::LParen]);
         let start_loc = self.localize(start_range);
 
@@ -126,7 +124,7 @@ impl Parser<'_> {
             _ => self.recover_at(&[Token::RParen]),
         };
         let loc = Location::merge(start_loc, self.localize(end_range));
-        ast::MethodReceiver {
+        MethodReceiver {
             loc,
             mutable,
             pattern,
@@ -148,17 +146,17 @@ mod tests {
     fn parse_empty_impl() {
         test_statement(StatementTest {
             input: "impl Type {}",
-            expected: ast::Statement::Implementation(ast::Implementation {
+            expected: Statement::Implementation(Implementation {
                 loc: Location::new(0, Span::new(0, 12)),
-                implemented_type: Some(ast::NamedType {
+                implemented_type: Some(NamedType {
                     loc: Location::new(0, Span::new(5, 9)),
-                    name: ast::Identifier {
+                    name: Identifier {
                         loc: Location::new(0, Span::new(5, 9)),
                         text: "Type".to_string(),
                     },
                     args: None,
                 }),
-                body: Some(ast::ImplementationBody {
+                body: Some(ImplementationBody {
                     loc: Location::new(0, Span::new(10, 12)),
                     items: vec![],
                 }),

@@ -1,10 +1,10 @@
-use tine_ast as ast;
+use tine_ast::*;
 use tine_common::{diagnostics::DiagnosticKind, locations::Location};
 
 use crate::{tokens::Token, Parser};
 
 impl Parser<'_> {
-    pub fn parse_element_expression(&mut self) -> ast::ElementExpression {
+    pub fn parse_element_expression(&mut self) -> ElementExpression {
         let start_range = self.eat(&[Token::Lt]);
         let start_loc = self.localize(start_range);
 
@@ -17,7 +17,7 @@ impl Parser<'_> {
             }
             Some((Ok(Token::TagClose), close_range)) => {
                 self.tokens.next();
-                return ast::ElementExpression::Void(ast::VoidElement {
+                return ElementExpression::Void(VoidElement {
                     loc: Location::merge(start_loc, self.localize(close_range)),
                     tag_name,
                     attributes,
@@ -40,7 +40,7 @@ impl Parser<'_> {
             )
         }
         let loc = Location::merge(start_loc, end_loc);
-        ast::ElementExpression::Element(ast::Element {
+        ElementExpression::Element(Element {
             loc,
             tag_name,
             attributes,
@@ -66,7 +66,7 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_attributes(&mut self) -> Vec<ast::Attribute> {
+    fn parse_attributes(&mut self) -> Vec<Attribute> {
         let mut attributes = Vec::new();
 
         while let Some((Ok(token), _)) = self.tokens.peek().cloned() {
@@ -86,7 +86,7 @@ impl Parser<'_> {
         attributes
     }
 
-    fn parse_attribute(&mut self) -> Option<ast::Attribute> {
+    fn parse_attribute(&mut self) -> Option<Attribute> {
         let result = self.better_expect(
             |t| match t {
                 Token::Ident(ident) => Some(ident.to_owned()),
@@ -108,7 +108,7 @@ impl Parser<'_> {
         };
 
         let Some((Ok(Token::Eq), _)) = self.tokens.peek() else {
-            return Some(ast::Attribute {
+            return Some(Attribute {
                 loc: self.localize(name_range),
                 name,
                 value: None,
@@ -140,7 +140,7 @@ impl Parser<'_> {
             Token::String(value) => {
                 let value_loc = self.localize(value_range);
                 loc = Location::merge(loc, value_loc);
-                ast::AttributeValue::String(ast::StringLiteral {
+                AttributeValue::String(StringLiteral {
                     loc: value_loc,
                     text: value,
                 })
@@ -172,14 +172,14 @@ impl Parser<'_> {
             _ => unreachable!(),
         };
 
-        Some(ast::Attribute {
+        Some(Attribute {
             loc,
             name,
             value: Some(attribute),
         })
     }
 
-    fn parse_children(&mut self) -> Vec<ast::ElementChild> {
+    fn parse_children(&mut self) -> Vec<ElementChild> {
         let mut children = Vec::new();
 
         while let Some((Ok(token), _)) = self.tokens.peek().cloned() {
@@ -208,7 +208,7 @@ impl Parser<'_> {
                     );
 
                     if let Some(expression) = expression {
-                        children.push(ast::ElementChild::Expression(expression));
+                        children.push(ElementChild::Expression(expression));
                     }
                 }
 
@@ -225,7 +225,7 @@ impl Parser<'_> {
         children
     }
 
-    fn parse_raw_text(&mut self) -> ast::TextNode {
+    fn parse_raw_text(&mut self) -> TextNode {
         let mut range = self.next_range();
         if range.start >= 1 && &self.src[range.start - 1..range.start] == " " {
             range.start -= 1;
@@ -242,7 +242,7 @@ impl Parser<'_> {
         }
         let loc = self.localize(range.clone());
         let text = self.src[range].to_string();
-        ast::TextNode { loc, text }
+        TextNode { loc, text }
     }
 
     fn parse_end_tag(&mut self) -> (String, Location) {
@@ -293,7 +293,7 @@ mod tests {
     fn test_parse_void_element() {
         test_expression(ExpressionTest {
             input: "<img />",
-            expected: ast::Expression::Element(ast::ElementExpression::Void(ast::VoidElement {
+            expected: Expression::Element(ElementExpression::Void(VoidElement {
                 loc: Location::new(0, Span::new(0, 7)),
                 tag_name: "img".to_owned(),
                 attributes: vec![],
@@ -306,10 +306,10 @@ mod tests {
     fn test_parse_void_element_with_bool_attribute() {
         test_expression(ExpressionTest {
             input: "<img foo />",
-            expected: ast::Expression::Element(ast::ElementExpression::Void(ast::VoidElement {
+            expected: Expression::Element(ElementExpression::Void(VoidElement {
                 loc: Location::new(0, Span::new(0, 11)),
                 tag_name: "img".to_owned(),
-                attributes: vec![ast::Attribute {
+                attributes: vec![Attribute {
                     loc: Location::new(0, Span::new(5, 8)),
                     name: "foo".to_owned(),
                     value: None,
@@ -323,13 +323,13 @@ mod tests {
     fn test_parse_void_element_with_string_attribute() {
         test_expression(ExpressionTest {
             input: "<img src=\"foo\" />",
-            expected: ast::Expression::Element(ast::ElementExpression::Void(ast::VoidElement {
+            expected: Expression::Element(ElementExpression::Void(VoidElement {
                 loc: Location::new(0, Span::new(0, 17)),
                 tag_name: "img".to_owned(),
-                attributes: vec![ast::Attribute {
+                attributes: vec![Attribute {
                     loc: Location::new(0, Span::new(5, 14)),
                     name: "src".to_owned(),
-                    value: Some(ast::AttributeValue::String(ast::StringLiteral {
+                    value: Some(AttributeValue::String(StringLiteral {
                         loc: Location::new(0, Span::new(9, 14)),
                         text: "foo".to_string(),
                     })),
@@ -343,18 +343,18 @@ mod tests {
     fn test_parse_void_element_with_expr_attribute() {
         test_expression(ExpressionTest {
             input: "<img src={foo} />",
-            expected: ast::Expression::Element(ast::ElementExpression::Void(ast::VoidElement {
+            expected: Expression::Element(ElementExpression::Void(VoidElement {
                 loc: Location::new(0, Span::new(0, 17)),
                 tag_name: "img".to_owned(),
-                attributes: vec![ast::Attribute {
+                attributes: vec![Attribute {
                     loc: Location::new(0, Span::new(5, 14)),
                     name: "src".to_owned(),
-                    value: Some(ast::AttributeValue::Expression(
-                        ast::Expression::Identifier(ast::Identifier {
+                    value: Some(AttributeValue::Expression(Expression::Path(
+                        PathExpression::from(Identifier {
                             loc: Location::new(0, Span::new(10, 13)),
                             text: "foo".to_owned(),
                         }),
-                    )),
+                    ))),
                 }],
             })),
             diagnostics: vec![],
@@ -365,7 +365,7 @@ mod tests {
     fn test_parse_element() {
         test_expression(ExpressionTest {
             input: "<tag></tag>",
-            expected: ast::Expression::Element(ast::ElementExpression::Element(ast::Element {
+            expected: Expression::Element(ElementExpression::Element(Element {
                 loc: Location::new(0, Span::new(0, 11)),
                 tag_name: "tag".to_owned(),
                 attributes: vec![],
@@ -379,11 +379,11 @@ mod tests {
     fn test_parse_element_with_text_child() {
         test_expression(ExpressionTest {
             input: "<tag>foo</tag>",
-            expected: ast::Expression::Element(ast::ElementExpression::Element(ast::Element {
+            expected: Expression::Element(ElementExpression::Element(Element {
                 loc: Location::new(0, Span::new(0, 14)),
                 tag_name: "tag".to_owned(),
                 attributes: vec![],
-                children: vec![ast::ElementChild::Text(ast::TextNode {
+                children: vec![ElementChild::Text(TextNode {
                     loc: Location::new(0, Span::new(5, 8)),
                     text: "foo".to_string(),
                 })],

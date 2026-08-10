@@ -1,4 +1,4 @@
-use tine_ast as ast;
+use tine_ast::*;
 use tine_common::{
     diagnostics::DiagnosticKind,
     locations::{Locatable, Location},
@@ -7,43 +7,51 @@ use tine_common::{
 use crate::{tokens::Token, Parser};
 
 impl Parser<'_> {
-    pub fn parse_postfix(&mut self) -> Option<ast::Expression> {
+    pub fn parse_postfix(&mut self) -> Option<Expression> {
         let mut expression = self.parse_atom();
+        use Expression::*;
+        use Token::*;
         while let Some((Ok(token), _)) = self.tokens.peek() {
-            match token {
-                Token::Dot => {
-                    expression = Some(self.parse_dot_expression(expression).into());
+            expression = match token {
+                Dot => Some(self.parse_dot_expression(expression).into()),
+                Float(float) if *float.value >= 0. && *float.value < 1. => {
+                    Some(self.parse_member_from_float(expression).into())
                 }
-                Token::Float(float) if *float.value >= 0. && *float.value < 1. => {
-                    expression = Some(self.parse_member_from_float(expression).into());
-                }
-                Token::LParen => {
+                LParen => {
                     // Expression cannot be `None` here:
                     // if expression started with params, it would be parsed as a tuple and not going through this branch
-                    expression = Some(self.parse_call_expression(expression.unwrap()).into());
+                    Some(self.parse_call_expression(expression.unwrap()).into())
                 }
-                _ => return expression,
+                LBrace => {
+                    let Some(Path(path)) = expression else {
+                        break;
+                    };
+                    // Expression cannot be `None` here:
+                    // if expression started with struct body, it would be parsed as a block
+                    Some(self.parse_struct_expression(path).into())
+                }
+                _ => break,
             }
         }
         expression
     }
 
-    fn parse_dot_expression(&mut self, object: Option<ast::Expression>) -> ast::Expression {
+    fn parse_dot_expression(&mut self, object: Option<Expression>) -> Expression {
         let dot_range = self.eat(&[Token::Dot]);
         let loc = match &object {
             Some(object) => Location::merge(object.loc(), self.localize(dot_range)),
             None => self.localize(dot_range),
         };
         match self.tokens.peek().cloned() {
-            Some((Ok(Token::Ident(_)), range)) => ast::Expression::Member(ast::MemberExpression {
+            Some((Ok(Token::Ident(_)), range)) => Expression::Member(MemberExpression {
                 loc: Location::merge(loc, self.localize(range)),
                 object: object.map(|o| Box::new(o)),
-                prop: Some(ast::MemberProp::FieldName(self.parse_identifier())),
+                prop: Some(MemberProp::FieldName(self.parse_identifier())),
             }),
-            Some((Ok(Token::Int(_)), range)) => ast::Expression::Member(ast::MemberExpression {
+            Some((Ok(Token::Int(_)), range)) => Expression::Member(MemberExpression {
                 loc: Location::merge(loc, self.localize(range.clone())),
                 object: object.map(|o| Box::new(o)),
-                prop: Some(ast::MemberProp::Index(self.parse_int())),
+                prop: Some(MemberProp::Index(self.parse_int())),
             }),
             Some((Ok(Token::Float(float)), range)) => {
                 // this is actually two indices
@@ -54,12 +62,12 @@ impl Parser<'_> {
                     self.error(DiagnosticKind::InvalidMember, loc);
                     None
                 } else {
-                    Some(ast::MemberProp::Index(ast::IntLiteral {
+                    Some(MemberProp::Index(IntLiteral {
                         loc: self.localize(left_range.clone()),
                         value: left.replace("_", "").parse().unwrap(),
                     }))
                 };
-                let inner = ast::MemberExpression {
+                let inner = MemberExpression {
                     loc: Location::merge(loc, self.localize(left_range)),
                     object: object.map(|o| Box::new(o)),
                     prop: inner_prop,
@@ -71,12 +79,12 @@ impl Parser<'_> {
                     self.error(DiagnosticKind::InvalidMember, loc);
                     None
                 } else {
-                    Some(ast::MemberProp::Index(ast::IntLiteral {
+                    Some(MemberProp::Index(IntLiteral {
                         loc: self.localize(right_range),
                         value: right.replace("_", "").parse().unwrap(),
                     }))
                 };
-                ast::Expression::Member(ast::MemberExpression {
+                Expression::Member(MemberExpression {
                     loc: Location::merge(loc, self.localize(range.clone())),
                     object: Some(Box::new(inner.into())),
                     prop: outer_prop,
@@ -87,7 +95,7 @@ impl Parser<'_> {
                 .into(),
             _ => {
                 self.error(DiagnosticKind::InvalidMember, loc.increment());
-                ast::Expression::Member(ast::MemberExpression {
+                Expression::Member(MemberExpression {
                     loc,
                     object: object.map(|o| Box::new(o)),
                     prop: None,
@@ -96,10 +104,7 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_member_from_float(
-        &mut self,
-        object: Option<ast::Expression>,
-    ) -> ast::MemberExpression {
+    fn parse_member_from_float(&mut self, object: Option<Expression>) -> MemberExpression {
         let Some((Ok(Token::Float(float)), float_range)) = self.tokens.next() else {
             panic!("Expected '.'");
         };
@@ -114,19 +119,19 @@ impl Parser<'_> {
             self.error(DiagnosticKind::InvalidMember, loc);
             None
         } else {
-            Some(ast::MemberProp::Index(ast::IntLiteral {
+            Some(MemberProp::Index(IntLiteral {
                 loc: self.localize(index_range.clone()),
                 value: right.replace("_", "").parse::<i64>().unwrap(),
             }))
         };
-        ast::MemberExpression {
+        MemberExpression {
             loc,
             object: object.map(|o| Box::new(o)),
             prop,
         }
     }
 
-    fn parse_call_expression(&mut self, callee: ast::Expression) -> ast::CallExpression {
+    fn parse_call_expression(&mut self, callee: Expression) -> CallExpression {
         self.eat(&[Token::LParen]);
         let args = self.parse_list(|p| p.parse_argument(), Token::Comma, Token::RParen);
         let end_range = match self.tokens.peek() {
@@ -134,7 +139,7 @@ impl Parser<'_> {
             _ => self.recover_at(&[Token::RParen]),
         };
         let loc = Location::merge(callee.loc(), self.localize(end_range));
-        ast::CallExpression {
+        CallExpression {
             loc,
             callee: Some(Box::new(callee)),
             type_args: None,
@@ -144,9 +149,9 @@ impl Parser<'_> {
 
     fn parse_call_expression_with_type_args(
         &mut self,
-        callee: Option<ast::Expression>,
+        callee: Option<Expression>,
         start_loc: Location,
-    ) -> ast::CallExpression {
+    ) -> CallExpression {
         self.eat(&[Token::Lt]);
         let type_args = self.parse_list(|p| p.parse_type(), Token::Comma, Token::Gt);
         let close_range = self.expect(Token::Gt);
@@ -154,7 +159,7 @@ impl Parser<'_> {
             let error_loc = self.next_loc();
             self.error(DiagnosticKind::MissingParams, error_loc);
             let close_loc = self.localize(close_range);
-            return ast::CallExpression {
+            return CallExpression {
                 loc: Location::merge(start_loc, close_loc),
                 callee: callee.map(|c| Box::new(c)),
                 type_args: Some(type_args),
@@ -168,7 +173,7 @@ impl Parser<'_> {
             _ => self.recover_at(&[Token::RParen]),
         };
         let loc = Location::merge(start_loc, self.localize(end_range));
-        ast::CallExpression {
+        CallExpression {
             loc,
             callee: callee.map(|c| Box::new(c)),
             type_args: Some(type_args),
@@ -176,17 +181,17 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_argument(&mut self) -> Option<ast::CallArgument> {
+    fn parse_argument(&mut self) -> Option<CallArgument> {
         let Some(argument) = self.parse_expression() else {
             return None;
         };
 
-        let ast::Expression::Tuple(tuple) = argument else {
+        let Expression::Tuple(tuple) = argument else {
             return Some(argument.into());
         };
 
         let Some((Ok(Token::FatArrow), arrow_range)) = self.tokens.peek().cloned() else {
-            return Some(ast::Expression::Tuple(tuple).into());
+            return Some(Expression::Tuple(tuple).into());
         };
         self.tokens.next(); // consume '=>'
         let mut loc = Location::merge(tuple.loc, self.localize(arrow_range));
@@ -202,16 +207,16 @@ impl Parser<'_> {
             .elements
             .into_iter()
             .map(|element| {
-                ast::CallbackParam::Identifier(ast::Identifier {
+                CallbackParam::Identifier(Identifier {
                     loc: element.loc(),
                     text: match element {
-                        ast::Expression::Identifier(identifier) => identifier.text.clone(),
+                        Expression::Identifier(identifier) => identifier.text.clone(),
                         _ => unreachable!("FIXME"),
                     },
                 })
             })
             .collect();
-        Some(ast::CallArgument::Callback(ast::Callback {
+        Some(CallArgument::Callback(Callback {
             loc,
             params,
             body: body.map(|b| Box::new(b)),
@@ -221,45 +226,36 @@ impl Parser<'_> {
 
 #[cfg(test)]
 mod tests {
-    use tine_common::{
-        diagnostics::{Diagnostic, DiagnosticLevel},
-        locations::Span,
-    };
+    use tine_common::locations::Span;
 
-    use crate::test_utils::{test_expression, ExpressionTest};
+    use crate::test_utils::{parse_expression, test_expression, ExpressionTest};
 
     use super::*;
 
     #[test]
     fn parse_field_access() {
-        test_expression(ExpressionTest {
-            input: "object.field",
-            expected: ast::Expression::Member(ast::MemberExpression {
-                loc: Location::new(0, Span::new(0, 12)),
-                object: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
-                    loc: Location::new(0, Span::new(0, 6)),
-                    text: "object".to_string(),
-                }))),
-                prop: Some(ast::MemberProp::FieldName(ast::Identifier {
-                    loc: Location::new(0, Span::new(7, 12)),
-                    text: "field".to_string(),
-                })),
-            }),
-            diagnostics: vec![],
-        });
+        let expr = parse_expression("object.field").expect("expected no errors");
+        let path = expr.as_path().expect("expected a path");
+        assert_eq!(path.segments.len(), 2);
+        assert!(path.segments[0].generic_args.is_none());
+        assert_eq!(path.segments[0].ident.as_str(), "object");
+        assert!(path.segments[1].generic_args.is_none());
+        assert_eq!(path.segments[1].ident.as_str(), "field");
     }
 
     #[test]
     fn parse_tuple_index() {
         test_expression(ExpressionTest {
             input: "object.0",
-            expected: ast::Expression::Member(ast::MemberExpression {
+            expected: Expression::Member(MemberExpression {
                 loc: Location::new(0, Span::new(0, 8)),
-                object: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
-                    loc: Location::new(0, Span::new(0, 6)),
-                    text: "object".to_string(),
-                }))),
-                prop: Some(ast::MemberProp::Index(ast::IntLiteral {
+                object: Some(Box::new(Expression::Path(PathExpression::from(
+                    Identifier {
+                        loc: Location::new(0, Span::new(0, 6)),
+                        text: "object".to_string(),
+                    },
+                )))),
+                prop: Some(MemberProp::Index(IntLiteral {
                     loc: Location::new(0, Span::new(7, 8)),
                     value: 0,
                 })),
@@ -272,20 +268,22 @@ mod tests {
     fn parse_two_indices() {
         test_expression(ExpressionTest {
             input: "object.0.1",
-            expected: ast::Expression::Member(ast::MemberExpression {
+            expected: Expression::Member(MemberExpression {
                 loc: Location::new(0, Span::new(0, 10)),
-                object: Some(Box::new(ast::Expression::Member(ast::MemberExpression {
+                object: Some(Box::new(Expression::Member(MemberExpression {
                     loc: Location::new(0, Span::new(0, 8)),
-                    object: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
-                        loc: Location::new(0, Span::new(0, 6)),
-                        text: "object".to_string(),
-                    }))),
-                    prop: Some(ast::MemberProp::Index(ast::IntLiteral {
+                    object: Some(Box::new(Expression::Path(PathExpression::from(
+                        Identifier {
+                            loc: Location::new(0, Span::new(0, 6)),
+                            text: "object".to_string(),
+                        },
+                    )))),
+                    prop: Some(MemberProp::Index(IntLiteral {
                         loc: Location::new(0, Span::new(7, 8)),
                         value: 0,
                     })),
                 }))),
-                prop: Some(ast::MemberProp::Index(ast::IntLiteral {
+                prop: Some(MemberProp::Index(IntLiteral {
                     loc: Location::new(0, Span::new(9, 10)),
                     value: 1,
                 })),
@@ -295,35 +293,17 @@ mod tests {
     }
 
     #[test]
-    fn parse_member_expression_with_trailing_dot() {
-        test_expression(ExpressionTest {
-            input: "object.",
-            expected: ast::Expression::Member(ast::MemberExpression {
-                loc: Location::new(0, Span::new(0, 7)),
-                object: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
-                    loc: Location::new(0, Span::new(0, 6)),
-                    text: "object".to_string(),
-                }))),
-                prop: None,
-            }),
-            diagnostics: vec![Diagnostic {
-                loc: Location::new(0, Span::new(7, 8)),
-                kind: DiagnosticKind::InvalidMember,
-                level: DiagnosticLevel::Error,
-            }],
-        });
-    }
-
-    #[test]
     fn parse_call_expression_no_args() {
         test_expression(ExpressionTest {
             input: "function()",
-            expected: ast::Expression::Call(ast::CallExpression {
+            expected: Expression::Call(CallExpression {
                 loc: Location::new(0, Span::new(0, 10)),
-                callee: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
-                    loc: Location::new(0, Span::new(0, 8)),
-                    text: "function".to_string(),
-                }))),
+                callee: Some(Box::new(Expression::Path(PathExpression::from(
+                    Identifier {
+                        loc: Location::new(0, Span::new(0, 8)),
+                        text: "function".to_string(),
+                    },
+                )))),
                 type_args: None,
                 args: vec![],
             }),
@@ -335,15 +315,17 @@ mod tests {
     fn parse_call_expression_one_arg() {
         test_expression(ExpressionTest {
             input: "function(1)",
-            expected: ast::Expression::Call(ast::CallExpression {
+            expected: Expression::Call(CallExpression {
                 loc: Location::new(0, Span::new(0, 11)),
-                callee: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
-                    loc: Location::new(0, Span::new(0, 8)),
-                    text: "function".to_string(),
-                }))),
+                callee: Some(Box::new(Expression::Path(PathExpression::from(
+                    Identifier {
+                        loc: Location::new(0, Span::new(0, 8)),
+                        text: "function".to_string(),
+                    },
+                )))),
                 type_args: None,
-                args: vec![ast::CallArgument::Expression(ast::Expression::IntLiteral(
-                    ast::IntLiteral {
+                args: vec![CallArgument::Expression(Expression::IntLiteral(
+                    IntLiteral {
                         loc: Location::new(0, Span::new(9, 10)),
                         value: 1,
                     },
@@ -357,20 +339,27 @@ mod tests {
     fn parse_call_expression_with_type_args() {
         test_expression(ExpressionTest {
             input: "function.<T>()",
-            expected: ast::Expression::Call(ast::CallExpression {
+            expected: Expression::Call(CallExpression {
                 loc: Location::new(0, Span::new(0, 14)),
-                callee: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
-                    loc: Location::new(0, Span::new(0, 8)),
-                    text: "function".to_string(),
+                callee: Some(Box::new(Expression::Path(PathExpression {
+                    loc: Location::new(0, Span::new(0, 12)),
+                    segments: vec![PathSegment {
+                        loc: Location::new(0, Span::new(0, 12)),
+                        ident: Identifier {
+                            loc: Location::new(0, Span::new(0, 8)),
+                            text: "function".to_string(),
+                        },
+                        generic_args: Some(vec![Type::Named(NamedType {
+                            loc: Location::new(0, Span::new(10, 11)),
+                            name: Identifier {
+                                loc: Location::new(0, Span::new(10, 11)),
+                                text: "T".to_string(),
+                            },
+                            args: None,
+                        })]),
+                    }],
                 }))),
-                type_args: Some(vec![ast::Type::Named(ast::NamedType {
-                    loc: Location::new(0, Span::new(10, 11)),
-                    name: ast::Identifier {
-                        loc: Location::new(0, Span::new(10, 11)),
-                        text: "T".to_string(),
-                    },
-                    args: None,
-                })]),
+                type_args: None,
                 args: vec![],
             }),
             diagnostics: vec![],

@@ -1,219 +1,44 @@
 use std::collections::HashSet;
 use tine_ast as ast;
-use tine_common::{
-    diagnostics::DiagnosticKind,
-    locations::{Locatable, Location},
-};
+use tine_common::{diagnostics::DiagnosticKind, locations::Locatable};
 use tine_ir as ir;
 use tine_symbols::symbols::*;
-use tine_types::types;
 
-use crate::substitutions::{SubstitutionTable, Substitutions};
+use crate::{expressions::path::PathContext, substitutions::Substitutions};
 
 use super::super::TypeChecker;
 
-struct ConstructorVisit {
-    pub constructor: ir::StructConstructor,
-    pub expected_body: Option<TypeSymbolBody>,
-    pub substitutions: Substitutions,
-}
-
 impl TypeChecker {
-    pub fn visit_constructor_literal(
+    pub fn visit_struct_expression(
         &mut self,
-        node: ast::ConstructorLiteral,
-    ) -> Option<ir::Expression> {
-        match &node.constructor {
-            ast::Constructor::Map(_) => {
-                return self.visit_map_literal(node);
-            }
-            ast::Constructor::Invalid(_) => {
-                self.fallback_check_literal_body(node.body);
-                return None;
-            }
-            _ => {}
-        }
-
-        let Some(ConstructorVisit {
-            constructor,
-            expected_body,
-            substitutions,
-        }) = self.visit_constructor(node.constructor)
+        node: ast::StructExpression,
+    ) -> Option<ir::StructExpression> {
+        let path = self.visit_path_expression(node.constructor, PathContext::Struct)?;
+        let ir::Expression::Identifier(ir::Identifier {
+            ty,
+            symbol: SymbolId::Struct(symbol),
+            loc: constructor_loc,
+        }) = path
         else {
-            self.fallback_check_literal_body(node.body);
+            node.fields
+                .into_iter()
+                .filter_map(|f| f.value)
+                .for_each(|v| {
+                    self.visit_expression(v);
+                });
+            self.error(DiagnosticKind::InvalidTypeConstructor, path.loc());
             return None;
         };
 
-        match node.body {
-            Some(ast::ConstructorBody::Struct(s)) => match expected_body {
-                Some(TypeSymbolBody::Struct(fields)) => self
-                    .visit_struct_literal_body(
-                        s,
-                        fields.into_iter().map(|f| f.1).collect(),
-                        constructor,
-                        substitutions,
-                    )
-                    .map(Into::into),
-                _ => {
-                    self.handle_unexpected_struct_body(s, true);
-                    None
-                }
-            },
-            Some(ast::ConstructorBody::Tuple(t)) => match expected_body {
-                Some(TypeSymbolBody::Tuple(elements)) => self
-                    .visit_struct_tuple_body(t, elements, constructor, substitutions)
-                    .map(Into::into),
-                _ => {
-                    self.handle_unexpected_tuple_body(t, true);
-                    None
-                }
-            },
-            None => match expected_body {
-                None => Some(ir::Expression::Array(ir::ArrayExpression {
-                    loc: node.loc,
-                    elements: vec![],
-                    ty: self.constructor_type(&constructor),
-                })),
-                _ => {
-                    self.error(DiagnosticKind::ExpectedVariantUnit, node.loc);
-                    None
-                }
-            },
-        }
-    }
+        let members = self.symbols.get(symbol).members.clone();
 
-    /// Get the type's symbol and a list of expected members.
-    ///
-    /// Members are not directly in the type symbol because of enums (it is then in the appropriate constructor)
-    fn visit_constructor(&mut self, node: ast::Constructor) -> Option<ConstructorVisit> {
-        match node {
-            ast::Constructor::Invalid(_) => None,
-            ast::Constructor::Map(_) => None,
-            ast::Constructor::Named(named) => self.visit_named_constructor(named),
-            ast::Constructor::Variant(variant) => self.visit_variant_constructor(variant),
-        }
-    }
+        let (struct_ty, mut sub) = self.unwrap_type(ty);
 
-    fn visit_named_constructor(&mut self, named: ast::NamedType) -> Option<ConstructorVisit> {
-        let symbol = self.find_type(&named)?;
-        let expected_type_params = match self.symbol_type(symbol) {
-            types::Type::Generic(g) => g.params,
-            _ => vec![],
-        };
-        let (_, substitutions) = self.visit_type_args(named.args, &expected_type_params, named.loc);
-        let symbol_id = match symbol {
-            TypeSymbolId::Struct(st) => st,
-            _ => {
-                self.error(DiagnosticKind::ExpectedStructGotEnum, named.loc);
-                return None;
-            }
-        };
-        self.read_symbol(symbol_id, named.name.loc);
-        let body = self.symbols.get(symbol_id).body.clone();
-        Some(ConstructorVisit {
-            constructor: ir::StructConstructor::Struct(named.loc, symbol_id.clone()),
-            expected_body: Some(body),
-            substitutions,
-        })
-    }
-
-    /// Visit constructors of the form `Enum.Variant`
-    fn visit_variant_constructor(
-        &mut self,
-        node: ast::VariantConstructor,
-    ) -> Option<ConstructorVisit> {
-        let (enum_id, type_params) = self.resolve_enum_name(&node.enum_name)?;
-        let (_, substitutions) =
-            self.visit_type_args(node.enum_name.args, &type_params, node.enum_name.loc);
-        let enum_name = node.enum_name.name;
-        let variant_name = node.variant_name?;
-        let e = self.symbols.get(enum_id);
-        let variant = e
-            .variants
-            .iter()
-            .find(|v| self.symbol_name(**v) == variant_name.text)
-            .copied();
-        let Some(variant_id) = variant else {
-            let error = DiagnosticKind::UnknownVariant {
-                variant: variant_name.text,
-                enum_name: enum_name.text,
-            };
-            self.error(error, variant_name.loc);
-            return None;
-        };
-        let expected_body = self.symbols.get(variant_id).body.clone();
-        Some(ConstructorVisit {
-            constructor: ir::StructConstructor::Enum(node.loc, enum_id, variant_id),
-            expected_body,
-            substitutions,
-        })
-    }
-
-    fn find_type(&mut self, ty: &ast::NamedType) -> Option<TypeSymbolId> {
-        let Some(symbol) = self.get_symbol_id(ty.name.as_str()) else {
-            let error = DiagnosticKind::CannotFindName {
-                name: ty.name.as_str().to_string(),
-            };
-            self.error(error, ty.loc);
-            return None;
-        };
-        let symbol = symbol.as_type_symbol_id();
-        if symbol.is_none() {
-            self.error(DiagnosticKind::ExpectedTypeGotValue, ty.loc);
-        }
-        symbol
-    }
-
-    fn constructor_type(&self, constructor: &ir::StructConstructor) -> types::TypeId {
-        use ir::StructConstructor::*;
-        match constructor {
-            Enum(_, e, _) => self.symbols.get(*e).ty,
-            Struct(_, s) => self.symbols.get(*s).ty,
-        }
-    }
-
-    /// Tries to resolve the name of the constructor being called.
-    /// Returns the type definition and a substitution map.
-    /// `GenericType` definitions will be unwrapped to the inner definition type.
-    fn resolve_enum_name(
-        &mut self,
-        node: &ast::NamedType,
-    ) -> Option<(EnumSymbolId, Vec<types::TypeParam>)> {
-        let symbol = match self.get_symbol_id(node.name.as_str()) {
-            Some(SymbolId::Enum(symbol)) => symbol,
-            Some(_) => {
-                self.error(DiagnosticKind::InvalidTypeConstructor, node.name.loc);
-                return None;
-            }
-            None => {
-                let error = DiagnosticKind::CannotFindName {
-                    name: node.name.as_str().to_string(),
-                };
-                self.error(error, node.loc);
-                return None;
-            }
-        };
-
-        match self.symbol_type(symbol) {
-            types::Type::Generic(g) => Some((symbol, g.params)),
-            _ => Some((symbol, vec![])),
-        }
-    }
-
-    fn visit_struct_literal_body(
-        &mut self,
-        body: ast::StructLiteralBody,
-        members: Vec<MemberSymbolId>,
-        constructor: ir::StructConstructor,
-        mut substitutions: Substitutions,
-    ) -> Option<ir::StructLiteral> {
         let mut encountered = HashSet::new();
-        let fields = body
+        let fields = node
             .fields
             .into_iter()
-            .map(|field| {
-                self.visit_struct_field(field, &members, &mut encountered, &mut substitutions)
-            })
+            .map(|field| self.visit_struct_field(field, &members, &mut encountered, &mut sub))
             .collect::<Vec<Option<_>>>()
             .into_iter()
             .collect::<Option<Vec<_>>>()?;
@@ -224,17 +49,13 @@ impl TypeChecker {
             .cloned()
             .collect::<Vec<_>>();
         if !missing.is_empty() {
-            self.error(DiagnosticKind::MissingMembers(missing), constructor.loc());
+            self.error(DiagnosticKind::MissingMembers(missing), constructor_loc);
         }
-        let ty = self.resolve_constructor_type(
-            self.constructor_type(&constructor),
-            body.loc,
-            &substitutions,
-        );
+        let ty = sub.apply(&mut self.types, struct_ty);
 
-        Some(ir::StructLiteral {
-            loc: body.loc,
-            constructor,
+        Some(ir::StructExpression {
+            loc: node.loc,
+            constructor: (constructor_loc, symbol),
             fields,
             ty,
         })
@@ -242,13 +63,13 @@ impl TypeChecker {
 
     fn visit_struct_field(
         &mut self,
-        field: ast::ConstructorField,
+        field: ast::StructExprField,
         members: &[MemberSymbolId],
         encountered_field_names: &mut HashSet<String>,
         mut substitutions: &mut Substitutions,
     ) -> Option<ir::StructLiteralField> {
         let key = match field.key {
-            Some(ast::ConstructorKey::Name(n)) => n,
+            Some(ast::StructExprFieldKey::Name(n)) => n,
             Some(_) => {
                 self.error(DiagnosticKind::InvalidMember, field.loc);
                 field.value.and_then(|v| self.visit_expression(v));
@@ -282,104 +103,5 @@ impl TypeChecker {
             name: (key.loc, symbol),
             value,
         })
-    }
-
-    /// Visit the body of tuple-like structs, like `Struct(a, b)`.
-    ///
-    /// These get lowered to regular structs `{ _0: a, _1: b }`.
-    fn visit_struct_tuple_body(
-        &mut self,
-        body: ast::TupleExpression,
-        members: Vec<MemberSymbolId>,
-        constructor: ir::StructConstructor,
-        mut substitutions: Substitutions,
-    ) -> Option<ir::StructLiteral> {
-        let fields = body
-            .elements
-            .into_iter()
-            .zip(members.into_iter())
-            .map(|(got, expected)| {
-                self.visit_struct_tuple_element(got, expected, &mut substitutions)
-            })
-            .collect::<Vec<Option<_>>>()
-            .into_iter()
-            .collect::<Option<Vec<_>>>()?;
-        let ty = self.resolve_constructor_type(
-            self.constructor_type(&constructor),
-            body.loc,
-            &substitutions,
-        );
-        Some(ir::StructLiteral {
-            loc: body.loc,
-            constructor,
-            fields,
-            ty,
-        })
-    }
-
-    fn visit_struct_tuple_element(
-        &mut self,
-        got: ast::Expression,
-        expected: MemberSymbolId,
-        mut substitutions: &mut Substitutions,
-    ) -> Option<ir::StructLiteralField> {
-        let ty = self.symbol_type_id(expected);
-        let expr = self.check_expression_against(got, ty, &mut substitutions)?;
-        Some(ir::StructLiteralField {
-            loc: expr.loc(),
-            name: (expr.loc(), expected),
-            value: expr,
-        })
-    }
-
-    fn resolve_constructor_type(
-        &mut self,
-        unresolved_type: types::TypeId,
-        at: Location,
-        substitutions: &Substitutions,
-    ) -> types::TypeId {
-        let params = self
-            .resolve(unresolved_type)
-            .as_params()
-            .map_or(vec![], |p| p.to_vec());
-        let table: SubstitutionTable = substitutions.into();
-        if params.iter().find(|p| table.get(p).is_none()).is_some() {
-            self.error(DiagnosticKind::CannotInferType, at);
-        }
-        let args = params
-            .into_iter()
-            .map(|p| table.get(&p).copied().unwrap_or(p.id))
-            .collect::<Vec<_>>();
-
-        self.intern(types::TypeRef {
-            inner: unresolved_type,
-            args,
-        })
-    }
-
-    pub(super) fn handle_unexpected_tuple_body(&mut self, t: ast::TupleExpression, report: bool) {
-        if report {
-            self.error(DiagnosticKind::ExpectedStructLikeBody, t.loc);
-        }
-        t.elements.into_iter().for_each(|e| {
-            self.visit_expression(e);
-        });
-    }
-
-    fn handle_unexpected_struct_body(&mut self, st: ast::StructLiteralBody, report: bool) {
-        if report {
-            self.error(DiagnosticKind::ExpectedTupleLikeBody, st.loc);
-        }
-        st.fields.into_iter().filter_map(|f| f.value).for_each(|v| {
-            self.visit_expression(v);
-        })
-    }
-
-    fn fallback_check_literal_body(&mut self, body: Option<ast::ConstructorBody>) {
-        match body {
-            Some(ast::ConstructorBody::Struct(st)) => self.handle_unexpected_struct_body(st, false),
-            Some(ast::ConstructorBody::Tuple(t)) => self.handle_unexpected_tuple_body(t, false),
-            None => {}
-        }
     }
 }

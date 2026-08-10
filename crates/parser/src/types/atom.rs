@@ -1,10 +1,10 @@
-use tine_ast as ast;
-use tine_common::diagnostics::DiagnosticKind;
+use tine_ast::*;
+use tine_common::locations::Location;
 
 use crate::{tokens::Token, Parser};
 
 impl Parser<'_> {
-    pub fn parse_atomic_type(&mut self) -> Option<ast::Type> {
+    pub fn parse_atomic_type(&mut self) -> Option<Type> {
         match self.tokens.peek() {
             Some((Ok(Token::Ident(_)), _)) => Some(self.parse_named_type().into()),
             Some((Ok(Token::LParen), _)) => Some(self.parse_tuple_type().into()),
@@ -12,57 +12,20 @@ impl Parser<'_> {
         }
     }
 
-    pub fn parse_named_type(&mut self) -> ast::NamedType {
-        let Some((Ok(Token::Ident(name)), mut range)) = self.tokens.next() else {
+    pub fn parse_named_type(&mut self) -> NamedType {
+        let Some((Ok(Token::Ident(name)), range)) = self.tokens.next() else {
             panic!()
         };
-        let name = ast::Identifier {
-            loc: self.localize(range.clone()),
+        let name = Identifier {
+            loc: self.localize(range),
             text: name,
         };
 
-        let args = if let Some((Ok(Token::Lt), _)) = self.tokens.peek() {
-            let (args, end) = self.parse_type_args();
-            range.end = end;
-            Some(args)
-        } else {
-            None
+        let (args, loc) = match self.maybe_parse_generic_args() {
+            Some((args, loc)) => (Some(args), Location::merge(name.loc, loc)),
+            None => (None, name.loc),
         };
 
-        ast::NamedType {
-            loc: self.localize(range),
-            name,
-            args,
-        }
-    }
-
-    pub(super) fn parse_type_args(&mut self) -> (Vec<ast::Type>, usize) {
-        self.eat(&[Token::Lt]);
-        let args = self.parse_list(|p| p.parse_type(), Token::Comma, Token::Gt);
-        let result = self.better_expect(
-            |t| match t {
-                Token::Gt => Some(()),
-                _ => None,
-            },
-            &[],
-        );
-        let end = match result {
-            Ok((_, range)) => range.end.clone(),
-            Err(range) => {
-                let error = DiagnosticKind::ExpectedToken {
-                    expected: vec![Token::Gt.to_string()],
-                };
-                let loc = self.localize(range.clone());
-                self.error(error, loc);
-                if let Some((Ok(Token::Gt), range)) = self.tokens.peek() {
-                    let range = range.clone();
-                    self.tokens.next();
-                    range.end
-                } else {
-                    range.end
-                }
-            }
-        };
-        (args, end)
+        NamedType { loc, name, args }
     }
 }

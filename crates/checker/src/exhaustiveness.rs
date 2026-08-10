@@ -31,7 +31,7 @@ impl TypeChecker {
         query_tail: &[&'p Pattern],
     ) -> Specialization<'p> {
         let expects_arg = match query_head.identifier.symbol {
-            SymbolId::Variant(s) => self.symbols.get(s).body.is_some(),
+            SymbolId::Variant(s) => !self.symbols.get(s).body.is_empty(),
             _ => panic!(),
         };
         let new_arms = arms
@@ -143,7 +143,7 @@ impl TypeChecker {
         query_tail: &[&Pattern],
     ) -> Vec<Vec<Pattern>> {
         let expects_arg = match query_head.identifier.symbol {
-            SymbolId::Variant(s) => self.symbols.get(s).body.is_some(),
+            SymbolId::Variant(s) => !self.symbols.get(s).body.is_empty(),
             _ => panic!(),
         };
         let s = self.specialize_constructor(arms, query_head, query_tail);
@@ -271,10 +271,10 @@ impl TypeChecker {
             .into_iter()
             .flat_map(|&symbol| {
                 let variant = self.symbols.get::<VariantSymbolId>(symbol);
-                let arg = if variant.body.is_some() {
-                    Some(Box::new(Pattern::Wildcard))
-                } else {
+                let arg = if variant.body.is_empty() {
                     None
+                } else {
+                    Some(Box::new(Pattern::Wildcard))
                 };
                 let identifier = ir::Identifier {
                     loc: Location::dummy(),

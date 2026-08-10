@@ -27,7 +27,7 @@ ir_enum!(
         Member(MemberExpression),
         Method(MethodExpression),
         StringLiteral(StringLiteral),
-        Struct(StructLiteral),
+        Struct(StructExpression),
         Tuple(TupleExpression),
         TypeMatch(TypeMatch),
         Unary(UnaryExpression),
@@ -244,24 +244,10 @@ impl std::fmt::Display for StringLiteral {
 
 #[tree_struct]
 #[derive(Debug, Clone)]
-pub struct StructLiteral {
-    pub constructor: StructConstructor,
+pub struct StructExpression {
+    pub constructor: (Location, StructSymbolId),
     #[child]
     pub fields: Vec<StructLiteralField>,
-}
-
-#[derive(Debug, Clone)]
-pub enum StructConstructor {
-    Struct(Location, StructSymbolId),
-    Enum(Location, EnumSymbolId, VariantSymbolId),
-}
-impl Locatable for StructConstructor {
-    fn loc(&self) -> Location {
-        match self {
-            Self::Struct(loc, _) => *loc,
-            Self::Enum(loc, _, _) => *loc,
-        }
-    }
 }
 
 #[tree_struct(untyped)]

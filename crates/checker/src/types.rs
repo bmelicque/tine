@@ -12,7 +12,7 @@ impl TypeChecker {
             ast::Type::Array(array) => self.visit_array_type(array),
             ast::Type::Function(function) => self.visit_function_type(function),
             ast::Type::Map(map) => self.visit_map_type(map),
-            ast::Type::Named(named) => self.visit_named_type(named),
+            ast::Type::Named(ty) => self.visit_named_type(ty),
             ast::Type::Option(option) => self.visit_option_type(option),
             ast::Type::Result(result) => self.visit_result_type(result),
             ast::Type::Tuple(tuple) => self.visit_tuple_type(tuple),
@@ -252,7 +252,6 @@ mod tests {
         let id = checker.symbols.insert::<StructSymbolId>(StructSymbol {
             name: "Box".into(),
             ty: def,
-            body: TypeSymbolBody::Struct(vec![]),
             ..Default::default()
         });
         checker.current_scope().bind("Box".into(), id.into());

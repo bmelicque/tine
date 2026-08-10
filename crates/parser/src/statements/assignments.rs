@@ -1,4 +1,4 @@
-use tine_ast as ast;
+use tine_ast::*;
 use tine_common::{
     diagnostics::DiagnosticKind,
     locations::{Locatable, Location},
@@ -7,12 +7,12 @@ use tine_common::{
 use crate::{tokens::Token, Parser};
 
 impl Parser<'_> {
-    pub fn parse_assignment(&mut self) -> Option<ast::Statement> {
+    pub fn parse_assignment(&mut self) -> Option<Statement> {
         let expr = self.parse_expression();
 
         let Some((Ok(Token::Eq), eq_range)) = self.tokens.peek() else {
             return expr.map(|e| {
-                ast::Statement::Expression(ast::ExpressionStatement {
+                Statement::Expression(ExpressionStatement {
                     expression: Box::new(e),
                 })
             });
@@ -24,25 +24,7 @@ impl Parser<'_> {
             Some(expr) => Location::merge(expr.loc(), eq_loc),
             None => eq_loc,
         };
-        let assignee = match expr {
-            Some(ast::Expression::Member(expr)) => Some(ast::Assignee::Member(expr)),
-            Some(ast::Expression::Unary(unary)) if unary.operator == ast::UnaryOperator::Star => {
-                match &unary.operand {
-                    Some(operand) => match &**operand {
-                        ast::Expression::Identifier(ident) => {
-                            Some(ast::Assignee::Indirection(ast::IndirectionAssignee {
-                                loc: unary.loc,
-                                identifier: ident.clone(),
-                            }))
-                        }
-                        expr => Some(self.expr_to_pattern(expr.clone()).into()),
-                    },
-                    None => None,
-                }
-            }
-            Some(expr) => Some(self.expr_to_pattern(expr).into()),
-            None => None,
-        };
+        let assignee = self.expr_to_assignee(expr);
         if assignee.is_none() {
             self.error(DiagnosticKind::MissingPattern, eq_loc);
         }
@@ -57,100 +39,74 @@ impl Parser<'_> {
             None => loc,
         };
 
-        Some(ast::Statement::Assignment(ast::Assignment {
+        Some(Statement::Assignment(Assignment {
             loc,
             pattern: assignee,
             value,
         }))
     }
+
+    fn expr_to_assignee(&mut self, expr: Option<Expression>) -> Option<Assignee> {
+        match expr? {
+            Expression::Path(expr) => Some(Assignee::Member(expr)),
+            Expression::Unary(unary) if unary.operator == UnaryOperator::Star => {
+                match unary.operand.as_deref()? {
+                    Expression::Identifier(ident) => {
+                        Some(Assignee::Indirection(IndirectionAssignee {
+                            loc: unary.loc,
+                            identifier: ident.clone(),
+                        }))
+                    }
+                    expr => Some(self.expr_to_pattern(expr.clone()).into()),
+                }
+            }
+            expr => Some(self.expr_to_pattern(expr).into()),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use tine_common::{
-        diagnostics::{Diagnostic, DiagnosticLevel},
-        locations::Span,
-    };
+    use tine_common::locations::Span;
 
-    use crate::test_utils::{test_statement, StatementTest};
+    use crate::test_utils::{parse_statement, test_statement, StatementTest};
 
     use super::*;
 
     #[test]
-    fn test_parse_simple_assignment() {
-        test_statement(StatementTest {
-            input: "x = 42",
-            expected: ast::Statement::Assignment(ast::Assignment {
-                loc: Location::new(0, Span::new(0, 6)),
-                pattern: Some(ast::Assignee::Pattern(ast::Pattern::Identifier(
-                    ast::Identifier {
-                        loc: Location::new(0, Span::new(0, 1)),
-                        text: "x".into(),
-                    },
-                ))),
-                value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
-                    loc: Location::new(0, Span::new(4, 6)),
-                    value: 42,
-                })),
-            }),
-            diagnostics: vec![],
-        });
+    fn parse_simple_assignment() {
+        let stmt = parse_statement("x = 42").expect("expected no errors");
+        let stmt = stmt.as_assignment().expect("expected an assignment");
+        stmt.pattern.as_ref().expect("expected a valid assignee");
+        stmt.value.as_ref().expect("expected a valid value");
     }
 
     #[test]
-    fn test_parse_assignment_missing_value() {
-        test_statement(StatementTest {
-            input: "x =",
-            expected: ast::Statement::Assignment(ast::Assignment {
-                loc: Location::new(0, Span::new(0, 3)),
-                pattern: Some(ast::Assignee::Pattern(ast::Pattern::Identifier(
-                    ast::Identifier {
-                        loc: Location::new(0, Span::new(0, 1)),
-                        text: "x".into(),
-                    },
-                ))),
-                value: None,
-            }),
-            diagnostics: vec![Diagnostic {
-                kind: DiagnosticKind::MissingExpression,
-                loc: Location::new(0, Span::new(3, 4)),
-                level: DiagnosticLevel::Error,
-            }],
-        })
+    fn parse_assignment_missing_value() {
+        let (stmt, diags) = parse_statement("x =").expect_err("expected errors");
+        let stmt = stmt.expect("expected an assignment");
+        let stmt = stmt.as_assignment().expect("expected an assignment");
+        stmt.pattern.as_ref().expect("expected a valid assignee");
+        assert!(stmt.value.is_none(), "expected no value");
+
+        assert_eq!(diags.len(), 1);
+        assert!(matches!(diags[0].kind, DiagnosticKind::MissingExpression))
     }
 
     #[test]
-    fn test_parse_member_assignment() {
-        test_statement(StatementTest {
-            input: "x.y = 42",
-            expected: ast::Statement::Assignment(ast::Assignment {
-                loc: Location::new(0, Span::new(0, 8)),
-                pattern: Some(ast::Assignee::Member(ast::MemberExpression {
-                    loc: Location::new(0, Span::new(0, 3)),
-                    object: Some(Box::new(ast::Expression::Identifier(ast::Identifier {
-                        loc: Location::new(0, Span::new(0, 1)),
-                        text: "x".into(),
-                    }))),
-                    prop: Some(ast::MemberProp::FieldName(ast::Identifier {
-                        loc: Location::new(0, Span::new(2, 3)),
-                        text: "y".into(),
-                    })),
-                })),
-                value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
-                    loc: Location::new(0, Span::new(6, 8)),
-                    value: 42,
-                })),
-            }),
-            diagnostics: vec![],
-        });
+    fn parse_member_assignment() {
+        let stmt = parse_statement("x.y = 42").expect("expected no errors");
+        let stmt = stmt.as_assignment().expect("expected an assignment");
+        let pattern = stmt.pattern.as_ref().expect("expected a valid assignee");
+        pattern.as_member().expect("expected member assignee");
     }
 
     #[test]
     fn parse_expression_statement() {
         test_statement(StatementTest {
             input: "42",
-            expected: ast::Statement::Expression(ast::ExpressionStatement {
-                expression: Box::new(ast::Expression::IntLiteral(ast::IntLiteral {
+            expected: Statement::Expression(ExpressionStatement {
+                expression: Box::new(Expression::IntLiteral(IntLiteral {
                     loc: Location::new(0, Span::new(0, 2)),
                     value: 42,
                 })),

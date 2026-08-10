@@ -59,13 +59,13 @@ impl TypeChecker {
     ) -> Option<ir::StructDefinition> {
         let Some(body) = node.body else { return None };
         let Some(name) = node.name else {
-            self.fallback_check_body(body);
+            self.fallback_check_struct_body(body);
             return None;
         };
         if self.current_scope().has(name.as_str()) {
             let error = DiagnosticKind::DuplicateIdentifier { name: name.text };
             self.error(error, name.loc);
-            self.fallback_check_body(body);
+            self.fallback_check_struct_body(body);
             return None;
         }
         let owner_id: StructSymbolId = self.insert(StructSymbol {
@@ -74,15 +74,15 @@ impl TypeChecker {
             ..Default::default()
         });
 
-        let ((mut ty, body), params) = self.with_type_params(&node.params, |checker| {
-            checker.visit_type_body(body, owner_id.into(), false)
+        let ((mut ty, members), params) = self.with_type_params(&node.params, |checker| {
+            checker.visit_type_struct_body(body, owner_id.into(), false)
         });
         ty.set_params(params);
 
         let ty = self.intern_unique(ty);
         let owner = self.symbols.get_mut(owner_id);
         owner.ty = ty;
-        owner.body = body;
+        owner.members = members;
         self.types.add_alias(ty, name.text);
 
         Some(ir::StructDefinition {
@@ -99,7 +99,10 @@ impl TypeChecker {
         if self.current_scope().has(name.as_str()) {
             let error = DiagnosticKind::DuplicateIdentifier { name: name.text };
             self.error(error, name.loc);
-            self.fallback_check_variants(node.variants);
+            node.variants
+                .into_iter()
+                .map(|v| self.fallback_visit_variant_body(v.body))
+                .for_each(drop);
             return None;
         }
         let owner_id: EnumSymbolId = self.insert(EnumSymbol {
@@ -143,14 +146,12 @@ impl TypeChecker {
         owner: EnumSymbolId,
     ) -> Option<VariantSymbolId> {
         let Some(ident) = variant.name else {
-            if let Some(body) = variant.body {
-                self.fallback_check_body(body);
-            }
+            self.fallback_visit_variant_body(variant.body);
             return None;
         };
         let body = variant
             .body
-            .map(|body| self.visit_type_body(body, owner.into(), true).1);
+            .map_or(vec![], |body| self.visit_variant_body(body, owner.into()));
         let ty = self.symbol_type_id(owner);
 
         Some(self.symbols.insert(VariantSymbol {
@@ -163,25 +164,12 @@ impl TypeChecker {
         }))
     }
 
-    /// return the final type with the symbol body
-    fn visit_type_body(
-        &mut self,
-        body: ast::TypeBody,
-        owner: TypeSymbolId,
-        is_enum: bool,
-    ) -> (TypeBody, TypeSymbolBody) {
-        match body {
-            ast::TypeBody::Struct(body) => self.visit_type_struct_body(body, owner, is_enum),
-            ast::TypeBody::Tuple(body) => self.visit_type_tuple_body(body, owner, is_enum),
-        }
-    }
-
     fn visit_type_struct_body(
         &mut self,
         body: ast::StructBody,
         owner: TypeSymbolId,
         is_enum: bool,
-    ) -> (TypeBody, TypeSymbolBody) {
+    ) -> (TypeBody, Vec<MemberSymbolId>) {
         let symbols = body
             .fields
             .into_iter()
@@ -200,13 +188,7 @@ impl TypeChecker {
             fields,
             ..Default::default()
         };
-        let body = TypeSymbolBody::Struct(
-            symbols
-                .into_iter()
-                .map(|s| (self.symbol_name(s).to_string(), s))
-                .collect(),
-        );
-        (ty.into(), body)
+        (ty.into(), symbols)
     }
 
     fn visit_struct_definition_field(
@@ -227,59 +209,52 @@ impl TypeChecker {
         }))
     }
 
-    fn visit_type_tuple_body(
+    fn visit_variant_body(
         &mut self,
-        body: ast::TupleBody,
+        body: ast::VariantBody,
         owner: TypeSymbolId,
-        is_enum: bool,
-    ) -> (TypeBody, TypeSymbolBody) {
-        let symbols = body
-            .elements
+    ) -> Vec<MemberSymbolId> {
+        body.elements
             .into_iter()
             .enumerate()
-            .map(|(i, (public, ty))| {
-                let loc = ty.loc();
-                let ty = self.visit_type(ty);
-                self.symbols.insert(MemberSymbol {
-                    name: format!("_{}", i),
-                    public: public || is_enum,
-                    ty,
-                    owner,
-                    defined_at: loc,
-                    ..Default::default()
-                })
-            })
-            .collect::<Vec<_>>();
-        let elements = symbols.iter().map(|s| self.symbol_type_id(*s)).collect();
-        let ty = types::TupleType {
-            elements,
-            ..Default::default()
-        };
-        let body = TypeSymbolBody::Tuple(symbols);
-        (ty.into(), body)
+            .map(|(i, (public, ty))| self.visit_variant_body_element(owner, ty, public, i))
+            .collect::<Vec<_>>()
     }
 
-    fn fallback_check_body(&mut self, body: ast::TypeBody) {
-        match body {
-            ast::TypeBody::Struct(s) => {
-                s.fields
-                    .into_iter()
-                    .filter_map(|f| f.definition)
-                    .for_each(|def| {
-                        self.visit_type(def);
-                    })
-            }
-            ast::TypeBody::Tuple(t) => {
-                t.elements.into_iter().for_each(|(_, ty)| {
-                    self.visit_type(ty);
-                });
-            }
+    fn visit_variant_body_element(
+        &mut self,
+        owner: TypeSymbolId,
+        ty: ast::Type,
+        public: bool,
+        i: usize,
+    ) -> MemberSymbolId {
+        let loc = ty.loc();
+        let ty = self.visit_type(ty);
+        self.symbols.insert(MemberSymbol {
+            name: format!("_{}", i),
+            public,
+            ty,
+            owner,
+            defined_at: loc,
+            ..Default::default()
+        })
+    }
+
+    fn fallback_visit_variant_body(&mut self, body: Option<ast::VariantBody>) {
+        if let Some(body) = body {
+            body.elements
+                .into_iter()
+                .map(|e| self.visit_type(e.1))
+                .for_each(drop);
         }
     }
 
-    fn fallback_check_variants(&mut self, body: Vec<ast::VariantDefinition>) {
-        body.into_iter()
-            .filter_map(|v| v.body)
-            .for_each(|b| self.fallback_check_body(b));
+    fn fallback_check_struct_body(&mut self, body: ast::StructBody) {
+        body.fields
+            .into_iter()
+            .filter_map(|f| f.definition)
+            .for_each(|def| {
+                self.visit_type(def);
+            })
     }
 }

@@ -10,7 +10,6 @@ impl Expander {
             Binary(b) => self.expand_binary(b),
             Block(b) => self.expand_block(b).into(),
             Call(c) => self.expand_call(c),
-            ConstructorLiteral(c) => self.expand_constructor_literal(c),
             Element(ElementExpression::Element(e)) => self.expand_element(e).into(),
             Element(ElementExpression::Void(e)) => self.expand_void_element(e).into(),
             Function(f) => self.expand_function(f).into(),
@@ -20,6 +19,7 @@ impl Expander {
             Loop(tine_ast::Loop::ForIn(f)) => self.expand_for_in(f).into(),
             Match(m) => self.expand_match(m),
             Member(m) => self.expand_member(m),
+            Struct(s) => self.expand_struct_expression(s),
             Tuple(t) => self.expand_tuple(t).into(),
             Unary(u) => self.expand_unary(u),
             no_expand => no_expand,
@@ -71,12 +71,15 @@ impl Expander {
         }
     }
 
-    fn expand_constructor_literal(&mut self, mut node: ConstructorLiteral) -> Expression {
-        node.body = match node.body {
-            Some(ConstructorBody::Struct(s)) => Some(self.expand_struct_body(s).into()),
-            Some(ConstructorBody::Tuple(t)) => Some(self.expand_tuple(t).into()),
-            None => None,
-        };
+    fn expand_struct_expression(&mut self, mut node: StructExpression) -> Expression {
+        node.fields = node
+            .fields
+            .into_iter()
+            .map(|mut f| {
+                f.value = f.value.map(|v| self.expand_expression(v).into());
+                f
+            })
+            .collect();
         node.into()
     }
 
@@ -177,18 +180,6 @@ impl Expander {
     fn expand_member(&mut self, mut member: MemberExpression) -> Expression {
         member.object = member.object.map(|o| self.expand_expression(*o).into());
         member.into()
-    }
-
-    fn expand_struct_body(&mut self, mut body: StructLiteralBody) -> StructLiteralBody {
-        body.fields = body
-            .fields
-            .into_iter()
-            .map(|mut f| {
-                f.value = f.value.map(|v| self.expand_expression(v).into());
-                f
-            })
-            .collect();
-        body
     }
 
     fn expand_tuple(&mut self, mut tuple: TupleExpression) -> TupleExpression {

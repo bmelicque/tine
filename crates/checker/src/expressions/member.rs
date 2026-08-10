@@ -60,12 +60,12 @@ impl TypeChecker {
         field: ast::Identifier,
         substitutions: &Substitutions,
     ) -> Result<ir::MemberExpression, (ir::Expression, ast::Identifier)> {
-        let fields = match &root_symbol.body {
-            TypeSymbolBody::Struct(s) => s,
-            _ => return Err((root, field)),
-        };
+        let members = &root_symbol.members;
 
-        let Some((_, symbol_id)) = fields.iter().find(|(name, _)| *name == field.text) else {
+        let Some(symbol_id) = members
+            .into_iter()
+            .find(|m| self.symbol_name(**m) == field.as_str())
+        else {
             return Err((root, field));
         };
         self.read_symbol(*symbol_id, field.loc);
@@ -160,10 +160,7 @@ impl TypeChecker {
             }
             return None;
         };
-        let elements = match &root_symbol.body {
-            TypeSymbolBody::Struct(s) => s,
-            _ => panic!(),
-        };
+        let elements = &root_symbol.members;
 
         // check index is in range
         let value = index.value;
@@ -186,15 +183,34 @@ impl TypeChecker {
             loc: expr.loc,
             object: Box::new(object),
             ty: ty.elements[value],
-            member: (index.loc, elements[value].1),
+            member: (index.loc, elements[value]),
         })
     }
 
-    fn get_struct_symbol(&self, mut ty: types::TypeId) -> Option<&StructSymbol> {
+    pub fn get_struct_symbol(&self, mut ty: types::TypeId) -> Option<&StructSymbol> {
         while let types::Type::Ref(r) = self.resolve(ty) {
             ty = r.inner
         }
         self.symbols.find::<StructSymbolId, _>(|s| s.ty == ty)
+    }
+
+    pub fn get_type_symbol_id(&self, mut ty: types::TypeId) -> Option<TypeSymbolId> {
+        while let types::Type::Ref(r) = self.resolve(ty) {
+            ty = r.inner
+        }
+        self.symbols
+            .find_id::<StructSymbolId, _>(|s| s.ty == ty)
+            .map(Into::into)
+            .or_else(|| {
+                self.symbols
+                    .find_id::<EnumSymbolId, _>(|s| s.ty == ty)
+                    .map(Into::into)
+            })
+            .or_else(|| {
+                self.symbols
+                    .find_id::<PrimitiveTypeSymbolId, _>(|s| s.ty == ty)
+                    .map(Into::into)
+            })
     }
 
     pub(crate) fn is_visible(&self, symbol: SymbolId) -> bool {
@@ -204,7 +220,7 @@ impl TypeChecker {
         self.symbols.get_symbol(symbol).defined_at().module() == self.current_module()
     }
 
-    fn method_matches(
+    pub fn method_matches(
         &self,
         symbol_id: MethodSymbolId,
         name: &str,

@@ -12,7 +12,8 @@ use crate::{
     expressions::expressions::{
         visit_boolean_literal, visit_float_literal, visit_int_literal, visit_string_literal,
     },
-    TypeChecker,
+    substitutions::Substitutions,
+    PathContext, TypeChecker,
 };
 
 #[derive(Debug, Default)]
@@ -303,137 +304,80 @@ fn visit_pattern(
 ) -> Option<Pattern> {
     use tine_ast::Pattern::*;
     match pattern {
-        Constructor(c) => visit_constructor_pattern(c, visitor, expected),
         Identifier(i) => visit_identifier_pattern(i, visitor, expected, false),
         Invalid(_) => None,
         MutIdentifier(i) => visit_identifier_pattern(i.identifier, visitor, expected, true),
         Literal(l) => Some(visit_literal_pattern(l).into()),
+        Struct(c) => visit_struct_pattern(c, visitor, expected),
         Tuple(t) => visit_tuple_pattern(t, visitor, expected).map(Into::into),
     }
 }
 
-fn visit_constructor_pattern(
-    pattern: ast::ConstructorPattern,
+fn visit_struct_pattern(
+    pattern: ast::StructPattern,
     visitor: &mut PatternVisitor,
     expected: types::TypeId,
 ) -> Option<Pattern> {
-    use tine_ast::Constructor::*;
-    let got_name = match pattern.constructor {
-        Invalid(_) => return None,
-        Map(_) => unimplemented!(),
-        Named(n) => n.name,
-        Variant(v) => v.variant_name?,
+    let path = visitor
+        .tc
+        .visit_path_expression(pattern.path, PathContext::Struct);
+    let Some(ir::Expression::Identifier(ir::Identifier {
+        symbol: SymbolId::Struct(symbol),
+        loc: constructor_loc,
+        ..
+    })) = path
+    else {
+        panic!()
     };
 
-    let symbol = visitor.tc.resolve_type_symbol(expected)?;
-    match symbol {
-        TypeSymbolId::Struct(s) => {
-            let body = &visitor.tc.symbols.get(s).body.clone();
-            visit_type_symbol_body(visitor, pattern.body, body)
-        }
-        TypeSymbolId::Enum(e) => {
-            let variants = &visitor.tc.symbols.get(e).variants;
-            let variant = variants
-                .iter()
-                .find(|v| got_name.as_str() == visitor.tc.symbol_name(**v));
-            let Some(variant) = variant else {
-                visitor
-                    .tc
-                    .error(DiagnosticKind::InvalidPattern, pattern.loc);
-                return None;
-            };
-            let identifier = ir::Identifier {
-                loc: got_name.loc,
-                symbol: (*variant).into(),
-                ty: visitor.tc.symbol_type_id(e),
-            };
-            let body = visitor.tc.symbols.get(*variant).body.as_ref().cloned();
-            let arg = body
-                .and_then(|b| visit_type_symbol_body(visitor, pattern.body, &b))
-                .map(Into::into);
-            Some(Pattern::Constructor(ConstructorPattern { identifier, arg }))
-        }
-        _ => panic!(),
+    let (expected, sub) = visitor.tc.unwrap_type(expected);
+    if expected != visitor.tc.symbol_type_id(symbol) {
+        visitor
+            .tc
+            .error(DiagnosticKind::InvalidTypeConstructor, constructor_loc);
+        return None;
     }
-}
-fn visit_type_symbol_body(
-    visitor: &mut PatternVisitor,
-    pattern: Option<ast::ConstructorPatternBody>,
-    expected: &TypeSymbolBody,
-) -> Option<Pattern> {
-    use tine_ast::ConstructorPatternBody::*;
-    match (expected, pattern?) {
-        (TypeSymbolBody::Struct(expected), Struct(s)) => visit_struct_body(visitor, s, expected),
-        (TypeSymbolBody::Tuple(expected), Tuple(t)) => visit_tuple_body(visitor, t, expected),
-        (_, p) => {
-            visitor.tc.error(DiagnosticKind::InvalidPattern, p.loc());
-            None
-        }
-    }
+    let body = &visitor.tc.symbols.get(symbol).members.clone();
+    visit_struct_body(visitor, pattern.fields, body, sub)
 }
 
 /// Visit a struct body, comparing it to its expected type
 fn visit_struct_body(
     visitor: &mut PatternVisitor,
-    pattern: ast::StructPatternBody,
-    expected: &[(String, MemberSymbolId)],
+    fields: Vec<ast::StructPatternField>,
+    expected_members: &[MemberSymbolId],
+    substitutions: Substitutions,
 ) -> Option<Pattern> {
-    let fields = pattern
-        .fields
+    let fields = fields
         .into_iter()
-        .map(|f| visit_pattern_field(visitor, f, &expected))
+        .map(|f| visit_pattern_field(visitor, f, &expected_members, &substitutions))
         .collect::<Option<Vec<_>>>()?;
     Some(StructPattern { fields }.into())
-}
-
-fn visit_tuple_body(
-    visitor: &mut PatternVisitor,
-    pattern: ast::TuplePattern,
-    expected: &[MemberSymbolId],
-) -> Option<Pattern> {
-    if expected.len() < pattern.elements.len() {
-        visitor
-            .tc
-            .error(DiagnosticKind::InvalidPattern, pattern.loc);
-    }
-    let items: Vec<PatternField> = pattern
-        .elements
-        .into_iter()
-        .enumerate()
-        .map(|(i, e)| {
-            let symbol_id = *expected.get(i)?;
-            let symbol = visitor.tc.symbols.get(symbol_id);
-            let identifier = ir::Identifier {
-                loc: e.loc(),
-                symbol: symbol_id.into(),
-                ty: symbol.ty,
-            };
-            let pattern = visit_pattern(e, visitor, symbol.ty);
-            Some(PatternField(identifier, pattern?))
-        })
-        .collect::<Option<Vec<_>>>()?;
-    Some(TuplePattern { items }.into())
 }
 
 fn visit_pattern_field(
     visitor: &mut PatternVisitor,
     field: ast::StructPatternField,
-    expected: &[(String, MemberSymbolId)],
+    expected_members: &[MemberSymbolId],
+    substitutions: &Substitutions,
 ) -> Option<PatternField> {
     let identifier = match field.identifier {
         Some(ast::FieldPatternIdentifier::Const(i)) => i,
         Some(ast::FieldPatternIdentifier::Mut(i)) => i.identifier,
         None => panic!(),
     };
-    let expected = expected.iter().find(|&(n, _)| n == identifier.as_str());
-    let Some((_, expected)) = expected else {
+    let expected = expected_members
+        .iter()
+        .find(|&m| visitor.tc.symbol_name(*m) == identifier.as_str());
+    let Some(&expected) = expected else {
         visitor.tc.error(DiagnosticKind::InvalidMember, field.loc);
         return None;
     };
-    let ty = visitor.tc.symbol_type_id(*expected);
+    let ty = visitor.tc.symbol_type_id(expected);
+    let ty = substitutions.apply(&mut visitor.tc.types, ty);
     let identifier = ir::Identifier {
         loc: identifier.loc,
-        symbol: (*expected).into(),
+        symbol: expected.into(),
         ty,
     };
     let pattern = visit_pattern(field.pattern?, visitor, ty)?;

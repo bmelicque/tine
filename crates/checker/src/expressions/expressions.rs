@@ -1,9 +1,12 @@
 use tine_ast as ast;
 use tine_common::diagnostics::DiagnosticKind;
+use tine_common::locations::Locatable;
 use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_types::store::TypeStore;
 use tine_types::types;
+
+use crate::expressions::path::PathContext;
 
 use super::TypeChecker;
 
@@ -16,7 +19,6 @@ impl TypeChecker {
             BooleanLiteral(node) => Some(visit_boolean_literal(node).into()),
             Block(node) => Some(self.visit_block_expression(node).into()),
             Call(node) => self.visit_call_expression(node).map(|n| n.into()),
-            ConstructorLiteral(node) => self.visit_constructor_literal(node).map(Into::into),
             Element(node) => self.visit_element_expression(node).map(Into::into),
             FloatLiteral(node) => Some(visit_float_literal(node).into()),
             Member(node) => self.visit_member_expression(node).map(Into::into),
@@ -31,7 +33,9 @@ impl TypeChecker {
             Intrinsic(node) => Some(self.visit_intrinsic_call(node).into()),
             Loop(node) => self.visit_loop(node),
             Match(node) => self.visit_match_expression(node).map(Into::into),
+            Path(node) => self.visit_path_expression(node, PathContext::Expr),
             StringLiteral(node) => Some(visit_string_literal(node).into()),
+            Struct(node) => self.visit_struct_expression(node).map(Into::into),
             Tuple(node) => self.visit_tuple_expression(node),
             TypeMatch(node) => self.visit_type_match(node).map(Into::into),
             Unary(node) => self.visit_unary_expression(node).map(Into::into),
@@ -174,27 +178,28 @@ impl TypeChecker {
     }
 
     fn visit_type_match(&mut self, node: ast::TypeMatch) -> Option<ir::TypeMatch> {
-        let expression = node.expression.and_then(|e| self.visit_expression(*e));
-        let Some(symbol_id) = self.get_symbol_id(node.constructor.enum_name.name.as_str()) else {
-            let error = DiagnosticKind::CannotFindName {
-                name: node.constructor.enum_name.name.as_str().to_string(),
-            };
-            self.error(error, node.constructor.enum_name.loc);
-            return None;
-        };
-        let SymbolId::Enum(e) = symbol_id else {
-            self.error(DiagnosticKind::InvalidTypeConstructor, node.constructor.loc);
+        let expression = node.expression.and_then(|e| self.visit_expression(*e))?;
+        self.resolve(expression.ty()).as_ref();
+        let (ty, _) = self.unwrap_type(expression.ty());
+        let Some(TypeSymbolId::Enum(e)) = self.resolve_type_symbol(ty) else {
+            self.error(DiagnosticKind::ExpectedEnum, expression.loc());
             return None;
         };
         let e = self.symbols.get(e);
-        let variant_name = node.constructor.variant_name?;
-        let variant = *e
+
+        let variant = e
             .variants
             .iter()
-            .find(|&&v| self.symbol_name(v) == variant_name.text)?;
+            .find(|v| self.symbol_name(**v) == node.variant.text);
+        let Some(&variant) = variant else {
+            let name = node.variant.text;
+            let error = DiagnosticKind::CannotFindName { name };
+            self.error(error, node.variant.loc);
+            return None;
+        };
         Some(ir::TypeMatch {
             loc: node.loc,
-            expr: Box::new(expression?),
+            expr: Box::new(expression),
             variant,
         })
     }

@@ -3,7 +3,7 @@ use tine_common::locations::Location;
 
 const HASH_INIT: i64 = 0x9747b28c;
 
-pub fn derive_struct(node: &Option<TypeBody>, at: Location) -> ImplementationItem {
+pub fn derive_struct(node: &Option<StructBody>, at: Location) -> ImplementationItem {
     let receiver = MethodReceiver {
         loc: at,
         mutable: false,
@@ -11,8 +11,7 @@ pub fn derive_struct(node: &Option<TypeBody>, at: Location) -> ImplementationIte
         self_type: None,
     };
     let stmts = match node {
-        Some(TypeBody::Struct(s)) => derive_struct_struct(s, at),
-        Some(TypeBody::Tuple(t)) => derive_tuple_struct(t, at),
+        Some(s) => derive_struct_body(s, at),
         None => vec![IntLiteral::new(HASH_INIT, at).into()],
     };
 
@@ -35,26 +34,13 @@ pub fn derive_struct(node: &Option<TypeBody>, at: Location) -> ImplementationIte
     })
 }
 
-fn derive_struct_struct(node: &StructBody, at: Location) -> Vec<Statement> {
+fn derive_struct_body(node: &StructBody, at: Location) -> Vec<Statement> {
     let mut stmts = Vec::with_capacity(node.fields.len() + 2);
     stmts.push(init_hash(at).into());
     node.fields
         .iter()
         .filter_map(|field| field.name.as_ref())
         .map(|id| hash_combine_assignment(id.as_str(), at))
-        .for_each(|stmt| stmts.push(stmt));
-    stmts.push(Identifier::new("h".to_string(), at).into());
-    stmts
-}
-
-fn derive_tuple_struct(node: &TupleBody, at: Location) -> Vec<Statement> {
-    let len = node.elements.len();
-    let mut stmts = Vec::with_capacity(len + 2);
-    stmts.push(init_hash(at).into());
-    (0..node.elements.len())
-        .into_iter()
-        .map(|field| format!("_{field}"))
-        .map(|name| hash_combine_assignment(name.as_str(), at))
         .for_each(|stmt| stmts.push(stmt));
     stmts.push(Identifier::new("h".to_string(), at).into());
     stmts

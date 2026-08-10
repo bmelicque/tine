@@ -15,7 +15,7 @@ impl Default for TypeSymbolBody {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum MethodReceiverKind {
     #[default]
     Static,
@@ -175,7 +175,7 @@ pub struct TypeAliasSymbol {
 pub struct StructSymbol {
     pub name: String,
     pub public: bool,
-    pub body: TypeSymbolBody,
+    pub members: Vec<MemberSymbolId>,
     pub methods: Vec<MethodSymbolId>,
     pub ty: TypeId,
     pub docs: Option<String>,
@@ -187,8 +187,6 @@ pub struct StructSymbol {
 pub struct EnumSymbol {
     pub name: String,
     pub public: bool,
-    /// All the variants of the enum.
-    /// This should only contain `Constructor` symbols
     pub variants: Vec<VariantSymbolId>,
     pub methods: Vec<MethodSymbolId>,
     pub ty: TypeId,
@@ -203,7 +201,7 @@ pub struct VariantSymbol {
     pub name: String,
     /// The enum symbol owning this.
     pub owner: EnumSymbolId,
-    pub body: Option<TypeSymbolBody>,
+    pub body: Vec<MemberSymbolId>,
     pub ty: TypeId,
     pub docs: Option<String>,
     pub defined_at: Location,

@@ -7,10 +7,10 @@ use tine_macros::tree_struct;
 use crate::{
     nodes::{ast_enum, operator_enum},
     walk::PushNodes,
-    ElementExpression, VariantConstructor,
+    ElementExpression,
 };
 
-use super::{constructor_literals::ConstructorLiteral, types::Type, Loop, Pattern, Statement};
+use super::{types::Type, Loop, Pattern, Statement};
 
 ast_enum!(Expression {
     Array(ArrayExpression),
@@ -18,7 +18,6 @@ ast_enum!(Expression {
     BooleanLiteral(BooleanLiteral),
     Block(BlockExpression),
     Call(CallExpression),
-    ConstructorLiteral(ConstructorLiteral),
     Element(ElementExpression),
     Function(FunctionExpression),
     Identifier(Identifier),
@@ -30,8 +29,10 @@ ast_enum!(Expression {
     Loop(Loop),
     Match(MatchExpression),
     Member(MemberExpression),
+    Path(PathExpression),
     FloatLiteral(FloatLiteral),
     StringLiteral(StringLiteral),
+    Struct(StructExpression),
     Tuple(TupleExpression),
     TypeMatch(TypeMatch),
     Unary(UnaryExpression),
@@ -321,7 +322,7 @@ pub struct TupleExpression {
 pub struct TypeMatch {
     #[child]
     pub expression: Option<Box<Expression>>,
-    pub constructor: VariantConstructor,
+    pub variant: Identifier,
 }
 
 #[tree_struct(untyped)]
@@ -362,3 +363,61 @@ pub struct FunctionParam {
     pub name: Option<Identifier>,
     pub type_annotation: Option<Type>,
 }
+
+#[tree_struct(untyped)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructExpression {
+    pub constructor: PathExpression,
+    pub fields: Vec<StructExprField>,
+}
+
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct PathExpression {
+    pub segments: Vec<PathSegment>,
+}
+impl From<Vec<PathSegment>> for PathExpression {
+    fn from(segments: Vec<PathSegment>) -> Self {
+        let first_loc = segments.first().unwrap().loc;
+        let last_loc = segments.last().unwrap().loc;
+        let loc = Location::merge(first_loc, last_loc);
+        Self { loc, segments }
+    }
+}
+impl<I: Into<PathSegment>> From<I> for PathExpression {
+    fn from(value: I) -> Self {
+        let segment = value.into();
+        Self {
+            loc: segment.loc,
+            segments: vec![segment],
+        }
+    }
+}
+
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct PathSegment {
+    pub ident: Identifier,
+    pub generic_args: Option<Vec<Type>>,
+}
+impl From<Identifier> for PathSegment {
+    fn from(ident: Identifier) -> Self {
+        Self {
+            loc: ident.loc,
+            ident,
+            generic_args: None,
+        }
+    }
+}
+
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct StructExprField {
+    pub key: Option<StructExprFieldKey>,
+    pub value: Option<Expression>,
+}
+
+ast_enum!(StructExprFieldKey {
+    Name(Identifier),
+    MapKey(Expression),
+});

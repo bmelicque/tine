@@ -60,7 +60,10 @@ pub enum DiagnosticKind {
     ExpectedBool {
         got: String,
     },
+    ExpectedEnum,
+    ExpectedFunctionGotType,
     ExpectedMapKey,
+    ExpectedMember,
     ExpectedNumber {
         got: String,
     },
@@ -74,6 +77,7 @@ pub enum DiagnosticKind {
     },
     ExpectedTupleLikeBody,
     ExpectedTypeGotValue,
+    ExpectedValueGotType,
     ExpectedVariantUnit,
     FieldIsPrivate(String),
     InvalidCondition {
@@ -132,6 +136,7 @@ pub enum DiagnosticKind {
         expected: usize,
         got: usize,
     },
+    TraitNotAllowedInExpression,
     TypeDoesNotImplementTrait {
         type_name: String,
         trait_name: String,
@@ -143,6 +148,7 @@ pub enum DiagnosticKind {
     UnexpectedToken {
         token: String,
     },
+    UnexpectedType,
     UnexpectedTypeParams,
     UnknownDeriveArgument,
     UnknownMacro,
@@ -191,7 +197,10 @@ impl Display for DiagnosticKind {
                 write!(f, "duplicate method: `{}`", name)
             }
             Self::ExpectedBool { got } => write!(f, "expected bool but got `{}`", got),
+            Self::ExpectedEnum => write!(f, "expected an enum"),
+            Self::ExpectedFunctionGotType => write!(f, "expected a function but got a type"),
             Self::ExpectedMapKey => write!(f, "expected map key but got an identifier"),
+            Self::ExpectedMember => write!(f, "expected a member"),
             Self::ExpectedNumber { got } => write!(f, "expected number but got `{}`", got),
             Self::ExpectedStructGotEnum => write!(f, "expected a struct but found an enum"),
             Self::ExpectedStructLikeBody => {
@@ -207,6 +216,7 @@ impl Display for DiagnosticKind {
                 write!(f, "expected tuple-like body but got a struct-like body")
             }
             Self::ExpectedTypeGotValue => write!(f, "expected a type but got a value"),
+            Self::ExpectedValueGotType => write!(f, "expected a value but got a type"),
             Self::ExpectedVariantUnit => write!(f, "expected unit variant"),
             Self::FieldIsPrivate(s) => write!(f, "field `{}` is private", s),
             Self::InvalidCondition { type_name } => {
@@ -293,6 +303,7 @@ impl Display for DiagnosticKind {
             Self::TooManyParams { expected, got } => {
                 write!(f, "expected {} parameter(s) but got {}", expected, got)
             }
+            Self::TraitNotAllowedInExpression => write!(f, "traits are not allowed in expressions"),
             Self::TypeDoesNotImplementTrait { type_name, trait_name} => {
                 write!(f, "type `{}` is expected to implement trait `{}` but does not", type_name, trait_name)
             }
@@ -302,6 +313,7 @@ impl Display for DiagnosticKind {
             Self::UnexpectedToken { token } => {
                 write!(f, "unexpected token: {}", token)
             }
+            Self::UnexpectedType => write!(f, "unexpected type"),
             Self::UnexpectedTypeParams => write!(f, "unexpected type parameters"),
             Self::UnknownMacro => write!(f, "unknown macro"),
             Self::UnknownDeriveArgument => write!(f, "unknown derive argument"),

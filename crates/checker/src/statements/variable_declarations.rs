@@ -56,7 +56,7 @@ impl TypeChecker {
         value: ir::Expression,
     ) -> (Vec<ir::VariableDeclaration>, ir::Expression) {
         use ast::Pattern::*;
-        if !matches!(pattern, Constructor(_) | Tuple(_)) {
+        if !matches!(pattern, Struct(_) | Tuple(_)) {
             return (vec![], value);
         }
 

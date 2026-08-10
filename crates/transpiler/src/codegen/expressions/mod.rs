@@ -78,7 +78,7 @@ impl CodeGenerator<'_, '_> {
             Member(m) => self.member_expr_to_swc(m),
             Method(m) => self.handle_method(m),
             StringLiteral(s) => self.string_literal_to_swc(s).into(),
-            Struct(s) => self.struct_to_swc(s),
+            Struct(s) => self.handle_simple_struct(s),
             Unary(u) => self.handle_unary_expression(u),
             Tuple(t) => self.handle_array(t.elements),
             TypeMatch(t) => self.handle_type_match(t),
@@ -183,6 +183,9 @@ impl CodeGenerator<'_, '_> {
     }
 
     pub fn handle_identifier(&mut self, node: ir::Identifier) -> swc::Expr {
+        if let SymbolId::Variant(v) = node.symbol {
+            return self.handle_variant_construct(v);
+        }
         let name = self.symbols.get_symbol(node.symbol).name();
         match self.identifier_ownership(&node) {
             OwnershipAction::Borrow | OwnershipAction::Copy | OwnershipAction::Move => {
@@ -197,6 +200,26 @@ impl CodeGenerator<'_, '_> {
                 ..Default::default()
             }),
         }
+    }
+
+    /// ```js
+    /// Enum.Variant()
+    /// ```
+    fn handle_variant_construct(&mut self, v: VariantSymbolId) -> swc::Expr {
+        let variant = self.symbols.get(v);
+        let enum_ = variant.owner;
+        let enum_name = self.symbol_name(enum_);
+        let variant_name = &variant.name;
+        let callee = swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(ident_from_str(enum_name).into()),
+            prop: swc::MemberProp::Ident(ident_from_str(variant_name).into()),
+        })));
+
+        swc::Expr::Call(swc::CallExpr {
+            callee,
+            ..Default::default()
+        })
     }
 
     fn handle_intrinsic_call(&mut self, node: ir::IntrinsicCall) -> ExpressionResult {
@@ -300,50 +323,10 @@ impl CodeGenerator<'_, '_> {
         }
     }
 
-    fn struct_to_swc(&mut self, node: ir::StructLiteral) -> ExpressionResult {
-        use ir::StructConstructor::*;
-        match node.constructor {
-            Enum(_, _, v) => self.handle_variant_struct(node, v),
-            Struct(_, _) => self.handle_simple_struct(node),
-        }
-    }
-
-    fn handle_variant_struct(
-        &mut self,
-        node: ir::StructLiteral,
-        variant: VariantSymbolId,
-    ) -> ExpressionResult {
-        let constructor_name = self.get_constructor_name(node.ty, &node.constructor);
-        let body = &self.symbols.get(variant).body;
-        let (prelim_stmts, args) = match &body {
-            Some(TypeSymbolBody::Struct(fields)) => self.handle_struct_like_body(node, fields),
-            Some(TypeSymbolBody::Tuple(_)) => self.handle_tuple_like_body(node),
-            None => (vec![], vec![]),
-        };
-        let variant_name = &self.symbols.get(variant).name;
-        let callee = swc::Expr::Member(swc::MemberExpr {
-            span: DUMMY_SP,
-            obj: Box::new(constructor_name),
-            prop: swc::MemberProp::Ident(ident_from_str(variant_name).into()),
-        });
-        let expr = swc::Expr::Call(swc::CallExpr {
-            callee: swc::Callee::Expr(Box::new(callee)),
-            args: args.into_iter().map(Into::into).collect(),
-            ..Default::default()
-        });
-        ExpressionResult { prelim_stmts, expr }
-    }
-
-    fn handle_simple_struct(&mut self, node: ir::StructLiteral) -> ExpressionResult {
-        let constructor_name = self.get_constructor_name(node.ty, &node.constructor);
-        let expected_body = match node.constructor {
-            ir::StructConstructor::Enum(_, _, v) => self.symbols.get(v).body.as_ref().unwrap(),
-            ir::StructConstructor::Struct(_, s) => &self.symbols.get(s).body,
-        };
-        let (prelim_stmts, args) = match expected_body {
-            TypeSymbolBody::Struct(fields) => self.handle_struct_like_body(node, fields),
-            TypeSymbolBody::Tuple(_) => self.handle_tuple_like_body(node),
-        };
+    fn handle_simple_struct(&mut self, node: ir::StructExpression) -> ExpressionResult {
+        let constructor_name = self.make_constructor(node.ty, node.constructor.1.into());
+        let expected_members = &self.symbols.get(node.constructor.1).members;
+        let (prelim_stmts, args) = self.handle_struct_like_body(node, expected_members);
         let expr = swc::Expr::New(swc::NewExpr {
             callee: Box::new(constructor_name),
             args: Some(args.into_iter().map(Into::into).collect()),
@@ -355,12 +338,13 @@ impl CodeGenerator<'_, '_> {
 
     fn handle_struct_like_body(
         &mut self,
-        node: ir::StructLiteral,
-        expected: &[(String, MemberSymbolId)],
+        node: ir::StructExpression,
+        expected: &[MemberSymbolId],
     ) -> (Vec<swc::Stmt>, Vec<swc::Expr>) {
         let mut order = expected
             .into_iter()
-            .map(|(name, _)| {
+            .map(|s| {
+                let name = self.symbol_name(*s);
                 node.fields
                     .iter()
                     .enumerate()
@@ -387,18 +371,6 @@ impl CodeGenerator<'_, '_> {
         (prelim, args)
     }
 
-    fn handle_tuple_like_body(
-        &mut self,
-        node: ir::StructLiteral,
-    ) -> (Vec<swc::Stmt>, Vec<swc::Expr>) {
-        let results = node
-            .fields
-            .into_iter()
-            .map(|field| self.handle_expression(field.value))
-            .collect::<Vec<_>>();
-        self.extract_necessary(results)
-    }
-
     fn handle_type_match(&mut self, node: ir::TypeMatch) -> ExpressionResult {
         let obj_result = self.handle_expression(*node.expr);
 
@@ -420,22 +392,12 @@ impl CodeGenerator<'_, '_> {
         }
     }
 
-    fn get_constructor_name(
-        &self,
-        expr_ty: types::TypeId,
-        constructor: &ir::StructConstructor,
-    ) -> swc::Expr {
-        // déterminer les arguments de type de l'appelant
+    fn make_constructor(&self, expr_ty: types::TypeId, constructor: TypeSymbolId) -> swc::Expr {
         let type_args = match self.types.get(expr_ty) {
             types::Type::Ref(r) => &r.args,
             _ => &vec![],
         };
-
-        let constructor_type = match constructor {
-            ir::StructConstructor::Enum(_, e, _) => self.symbols.get(*e).ty,
-            ir::StructConstructor::Struct(_, s) => self.symbols.get(*s).ty,
-        };
-
+        let constructor_type = self.symbol_type_id(constructor);
         let params = match self.types.get(constructor_type).as_params() {
             Some(p) => p.to_vec(),
             None => vec![],
@@ -443,8 +405,9 @@ impl CodeGenerator<'_, '_> {
         let ty_args = Substitutions::with_initial(&params, type_args).into();
 
         let methods = match constructor {
-            ir::StructConstructor::Enum(_, e, _) => &self.symbols.get(*e).methods,
-            ir::StructConstructor::Struct(_, s) => &self.symbols.get(*s).methods,
+            TypeSymbolId::Enum(s) => &self.symbols.get(s).methods,
+            TypeSymbolId::Struct(s) => &self.symbols.get(s).methods,
+            _ => panic!(),
         };
 
         let concrete_exists = methods
@@ -452,16 +415,9 @@ impl CodeGenerator<'_, '_> {
             .any(|m| self.symbols.get(*m).owner_args == ty_args);
 
         if concrete_exists {
-            let id = match constructor {
-                ir::StructConstructor::Enum(_, e, _) => (*e).into(),
-                ir::StructConstructor::Struct(_, s) => (*s).into(),
-            };
-            self.generate_constructor_name(id, &ty_args)
+            self.generate_constructor_name(constructor.into(), &ty_args)
         } else {
-            let name = match constructor {
-                ir::StructConstructor::Enum(_, e, _) => &self.symbols.get(*e).name,
-                ir::StructConstructor::Struct(_, s) => &self.symbols.get(*s).name,
-            };
+            let name = self.symbol_name(constructor);
             swc::Expr::Ident(ident_from_str(name))
         }
     }

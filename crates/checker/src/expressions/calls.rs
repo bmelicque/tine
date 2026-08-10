@@ -23,6 +23,15 @@ impl TypeChecker {
             return None;
         };
 
+        if let ir::Expression::Identifier(ir::Identifier {
+            symbol: SymbolId::Variant(v),
+            ty,
+            loc,
+        }) = callee
+        {
+            return self.visit_variant_literal(v, ty, node.args, loc, node.loc);
+        }
+
         let (_, mut substitutions) =
             self.visit_type_args(node.type_args, &callee_type.type_params, node.loc);
 
@@ -47,6 +56,35 @@ impl TypeChecker {
                 ty,
             })),
         }
+    }
+
+    fn visit_variant_literal(
+        &mut self,
+        v: VariantSymbolId,
+        constructor: types::TypeId,
+        args: Vec<ast::CallArgument>,
+        variant_loc: Location,
+        loc: Location,
+    ) -> Option<ir::Expression> {
+        let (constructor, mut sub) = self.unwrap_type(constructor);
+        let symbol = self.symbols.get(v);
+        let params = symbol
+            .body
+            .iter()
+            .map(|m| self.symbol_type_id(*m))
+            .collect::<Vec<_>>();
+        let args = self.check_arguments(args, &params, &mut sub, loc);
+        let ty = sub.apply(&mut self.types, constructor);
+        Some(ir::Expression::Call(ir::CallExpression {
+            ty,
+            loc,
+            callee: Box::new(ir::Expression::Identifier(ir::Identifier {
+                ty,
+                loc: variant_loc,
+                symbol: v.into(),
+            })),
+            args,
+        }))
     }
 
     /// Tries to resolve the type of the function being called.
