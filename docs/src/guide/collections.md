@@ -90,6 +90,8 @@ Since tuple have a fixed length, the compiler can safely infer the type of each 
 
 ## Equality
 
+_🚧 : this will maybe not stay, since it would imply all elements to also be comparable with `==`._
+
 Since Tine uses value-based semantics, collections are equal if they contain the same values, even if they are represented by different objects in-memory.
 
 ```tine

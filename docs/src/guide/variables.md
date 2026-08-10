@@ -70,6 +70,8 @@ let isLessEq = 2 <= 2     // true
 let isGreaterEq = 3 >= 2  // true
 ```
 
+There is no implicit type coercion in Tine, so the `===` and `!==` do not exist.
+
 ### Booleans (`bool`)
 
 ```tine
