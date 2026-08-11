@@ -3,6 +3,9 @@
     "name": "Tine",
     "patterns": [
         {
+            "include": "#keywords"
+        },
+        {
             "include": "#functions"
         },
         {
@@ -10,9 +13,6 @@
         },
         {
             "include": "#xml-children"
-        },
-        {
-            "include": "#keywords"
         },
         {
             "include": "#types"

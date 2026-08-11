@@ -91,46 +91,24 @@ impl Parser<'_> {
     }
 
     fn parse_function_param(&mut self) -> Option<FunctionParam> {
-        let identifier = match self.tokens.peek() {
-            Some((Ok(Token::Ident(ident)), range)) => {
-                let range = range.clone();
-                let text = ident.to_owned();
-                let loc = self.localize(range);
-                Some(Identifier { loc, text })
-            }
-            _ => None,
+        let name = self.maybe_parse_name(|t| matches!(t, Token::Comma | Token::RParen))?;
+        let Some((_, colon_loc)) = self.maybe_eat(|t| t.colon()) else {
+            return Some(FunctionParam {
+                loc: name.loc,
+                name: Some(name),
+                type_annotation: None,
+            });
         };
-        let colon = self.better_expect(
-            |t| match t {
-                Token::Colon => Some(()),
-                _ => None,
-            },
-            &[Token::Comma, Token::RParen, Token::Newline],
-        );
-        let colon_range = match colon {
-            Ok((_, r)) => r,
-            Err(r) => {
-                self.error(DiagnosticKind::MissingPattern, self.localize(r));
-                return identifier.map(|i| FunctionParam {
-                    loc: i.loc,
-                    name: Some(i),
-                    type_annotation: None,
-                });
-            }
-        };
-
         let type_annotation = self.parse_type();
 
-        let loc = match (&identifier, &type_annotation) {
-            (Some(i), Some(t)) => Location::merge(i.loc, t.loc()),
-            (Some(i), None) => Location::merge(i.loc, self.localize(colon_range)),
-            (None, Some(t)) => Location::merge(self.localize(colon_range), t.loc()),
-            (None, None) => self.localize(colon_range),
+        let loc = match &type_annotation {
+            Some(t) => Location::merge(name.loc, t.loc()),
+            None => Location::merge(name.loc, colon_loc),
         };
 
         Some(FunctionParam {
             loc,
-            name: identifier,
+            name: Some(name),
             type_annotation,
         })
     }
@@ -163,7 +141,7 @@ impl Parser<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::parse_expression;
+    use crate::{test_utils::parse_expression, Parser};
 
     #[test]
     fn parse_empty_function() {
@@ -182,5 +160,47 @@ mod tests {
             .expect("expected a function body")
             .as_block()
             .expect("expected a block body");
+    }
+
+    #[test]
+    fn parse_function_with_param() {
+        let expr = parse_expression("fn(a) {}").expect("expected no errors");
+        let expr = expr.as_function().expect("expected a function expression");
+        let params = &expr.params.as_ref().expect("expected params").params;
+        assert_eq!(params.len(), 1);
+    }
+
+    #[test]
+    fn parse_callback() {
+        let expr = parse_expression("fn(a, b) a + b").expect("expected no errors");
+        let expr = expr.as_function().expect("expected a function expression");
+        assert_eq!(
+            expr.params.as_ref().expect("expected params").params.len(),
+            2
+        );
+        expr.body
+            .as_ref()
+            .expect("expected a function body")
+            .as_binary()
+            .expect("expected a binary expression");
+    }
+
+    #[test]
+    fn parse_function_param() {
+        let mut parser = Parser::new(0, "param: Type");
+        let param = parser
+            .parse_function_param()
+            .expect("expected a function param");
+        assert_eq!(param.name.expect("expected a param name").as_str(), "param");
+        assert_eq!(
+            param
+                .type_annotation
+                .expect("expected a type annotation")
+                .as_named()
+                .expect("expected a named type")
+                .name
+                .as_str(),
+            "Type"
+        );
     }
 }
