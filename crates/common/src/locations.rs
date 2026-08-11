@@ -89,6 +89,12 @@ impl Location {
         }
     }
 
+    pub fn merge_list(locatables: &[Option<&dyn Locatable>]) -> Option<Location> {
+        let start = locatables.iter().find_map(|l| l.as_ref())?;
+        let end = locatables.iter().rev().find_map(|l| l.as_ref())?;
+        Some(Self::merge(start.loc(), end.loc()))
+    }
+
     pub fn module(&self) -> ModuleId {
         self.module
     }

@@ -57,6 +57,7 @@ pub enum DiagnosticKind {
     DuplicateMethodName {
         name: String,
     },
+    ExpectedBlock,
     ExpectedBool {
         got: String,
     },
@@ -76,6 +77,7 @@ pub enum DiagnosticKind {
         got: String,
     },
     ExpectedTupleLikeBody,
+    ExpectedType,
     ExpectedTypeGotValue,
     ExpectedValueGotType,
     ExpectedVariantUnit,
@@ -196,6 +198,7 @@ impl Display for DiagnosticKind {
             Self::DuplicateMethodName { name } => {
                 write!(f, "duplicate method: `{}`", name)
             }
+            Self::ExpectedBlock  => write!(f, "expected a block expression"),
             Self::ExpectedBool { got } => write!(f, "expected bool but got `{}`", got),
             Self::ExpectedEnum => write!(f, "expected an enum"),
             Self::ExpectedFunctionGotType => write!(f, "expected a function but got a type"),
@@ -215,6 +218,7 @@ impl Display for DiagnosticKind {
             Self::ExpectedTupleLikeBody => {
                 write!(f, "expected tuple-like body but got a struct-like body")
             }
+            Self::ExpectedType => write!(f, "expected a type"),
             Self::ExpectedTypeGotValue => write!(f, "expected a type but got a value"),
             Self::ExpectedValueGotType => write!(f, "expected a value but got a type"),
             Self::ExpectedVariantUnit => write!(f, "expected unit variant"),

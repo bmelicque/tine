@@ -77,7 +77,7 @@ impl TypeChecker {
             docs, definition, ..
         } = node;
         let docs = docs.map(|d| d.text);
-        let definition = self.visit_function_expression(definition, docs)?;
+        let definition = self.visit_function_expression(definition, docs, None)?;
         Some(ir::FunctionDefinition {
             loc: definition.loc,
             name: definition.name.map(|(loc, s)| (loc, s.into()))?,

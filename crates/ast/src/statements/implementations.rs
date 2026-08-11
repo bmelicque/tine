@@ -3,7 +3,7 @@ use tine_macros::tree_struct;
 
 use crate::{
     nodes::ast_enum, BlockExpression, Docs, FunctionDefinition, FunctionExpression, FunctionParams,
-    Identifier, NamedType, Pattern, Type,
+    Identifier, NamedType, Pattern, Statement, Type,
 };
 
 /// `implemented_type` is th type being implemented.
@@ -64,7 +64,9 @@ impl MethodDefinition {
         self.type_params = function.type_params;
         self.params = function.params;
         self.return_type = function.return_type;
-        self.body = function.body;
+        self.body = function
+            .body
+            .map(|b| BlockExpression::from(Statement::from(*b)));
     }
 }
 

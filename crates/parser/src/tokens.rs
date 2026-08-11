@@ -127,6 +127,8 @@ pub enum Token {
     Comma,
     #[token(".")]
     Dot,
+    #[token("->")]
+    SlimArrow,
     #[token("=>")]
     FatArrow,
 
@@ -293,6 +295,7 @@ impl Token {
             Token::RBracket => "]".to_string(),
             Token::Comma => ",".to_string(),
             Token::Dot => ".".to_string(),
+            Token::SlimArrow => "->".to_string(),
             Token::FatArrow => "=>".to_string(),
             Token::Whitespace => " ".to_string(),
             Token::Newline => "\n".to_string(),

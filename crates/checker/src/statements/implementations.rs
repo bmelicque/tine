@@ -112,8 +112,9 @@ impl TypeChecker {
                         };
                         declare_variable(&mut visitor, &i, host_type, false)
                     });
-                let params = s.visit_function_params(node.params);
-                let visited_body = s.visit_function_body(node.return_type, node.body);
+                let params = s.visit_function_params(node.params, None);
+                let body = node.body.map(|b| Box::new(b.into()));
+                let visited_body = s.visit_function_return_body(node.return_type, body, None);
                 (receiver, params, visited_body)
             });
         let (_, host_symbol) = host?;
@@ -204,9 +205,12 @@ impl TypeChecker {
     ) -> Option<ir::FunctionDefinition> {
         let ((params, visited_body), type_params) =
             self.with_type_params(&node.definition.type_params, |s| {
-                let params = s.visit_function_params(node.definition.params);
-                let visited_body =
-                    s.visit_function_body(node.definition.return_type, node.definition.body);
+                let params = s.visit_function_params(node.definition.params, None);
+                let visited_body = s.visit_function_return_body(
+                    node.definition.return_type,
+                    node.definition.body,
+                    None,
+                );
                 (params, visited_body)
             });
 

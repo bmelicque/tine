@@ -143,8 +143,12 @@ impl<'src> Parser<'src> {
     }
 
     fn eat_if(&mut self, tokens: &[Token]) -> Option<Range<usize>> {
-        match self.tokens.next() {
-            Some((Ok(tok), range)) if tokens.contains(&tok) => Some(range),
+        match self.tokens.peek() {
+            Some((Ok(tok), range)) if tokens.contains(&tok) => {
+                let range = range.clone();
+                self.tokens.next();
+                Some(range)
+            }
             _ => None,
         }
     }

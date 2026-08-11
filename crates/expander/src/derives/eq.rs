@@ -45,12 +45,10 @@ fn field_eq(name: String, loc: Location) -> Expression {
             Identifier::new("eq".to_string(), loc),
             loc,
         )))),
-        args: vec![CallArgument::Expression(Expression::Member(
-            MemberExpression::valid(
-                Identifier::new("other".to_string(), loc),
-                Identifier::new(name, loc),
-                loc,
-            ),
+        args: vec![Expression::Member(MemberExpression::valid(
+            Identifier::new("other".to_string(), loc),
+            Identifier::new(name, loc),
+            loc,
         ))],
         type_args: None,
     })
