@@ -94,7 +94,7 @@ impl TypeChecker {
         &mut self,
         callee: Option<Box<ast::Expression>>,
     ) -> Result<(ir::Expression, types::FunctionType)> {
-        let Some(callee) = callee.and_then(|c| self.visit_expression(*c)) else {
+        let Some(callee) = callee.and_then(|c| self.visit_callee(*c)) else {
             bail!("");
         };
 
@@ -108,6 +108,12 @@ impl TypeChecker {
                 self.error(error, callee.loc());
                 Err(anyhow!(""))
             }
+        }
+    }
+    fn visit_callee(&mut self, callee: ast::Expression) -> Option<ir::Expression> {
+        match callee {
+            ast::Expression::Path(p) => self.visit_path_expression(p, super::PathContext::Call),
+            expr => self.visit_expression(expr),
         }
     }
 

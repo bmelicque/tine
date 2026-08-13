@@ -66,6 +66,11 @@ impl<'a> PathVisitor<'a> {
         ))
     }
 
+    fn read<S: Into<SymbolId>>(&mut self, sym: S, at: Location) {
+        let symbol = self.tc.symbols.get_symbol_mut(sym.into());
+        symbol.access().read(at);
+    }
+
     fn error(&mut self, kind: DiagnosticKind, loc: Location) {
         self.tc.error(kind, loc)
     }

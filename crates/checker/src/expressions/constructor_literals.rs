@@ -94,13 +94,17 @@ impl TypeChecker {
         }
         encountered_field_names.insert(key.as_str().to_string());
 
-        let value = field.value.and_then(|v| {
-            self.check_expression_against(v, self.symbol_type_id(symbol), &mut substitutions)
-        })?;
+        let key_loc = key.loc;
+        let value = match field.value {
+            Some(v) => {
+                self.check_expression_against(v, self.symbol_type_id(symbol), &mut substitutions)?
+            }
+            None => self.visit_identifier(key).map(Into::into)?,
+        };
 
         Some(ir::StructLiteralField {
             loc: field.loc,
-            name: (key.loc, symbol),
+            name: (key_loc, symbol),
             value,
         })
     }

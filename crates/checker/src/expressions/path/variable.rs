@@ -43,6 +43,7 @@ fn visit_chain_segment(
     let member_name = segment.ident.as_str();
     let variable_prop = find_variable_prop(&mut visitor.tc, host_ty, &generic_args, member_name);
     if let Some((sym, ty)) = variable_prop {
+        visitor.read(sym, segment.loc);
         return Some(ir::Expression::Member(ir::MemberExpression {
             loc: Location::merge(host.loc(), segment.loc),
             object: Some(Box::new(host)),
@@ -52,6 +53,7 @@ fn visit_chain_segment(
     }
 
     if let Some((sym, ty)) = visitor.tc.find_method(host.ty(), member_name, |_| true) {
+        visitor.read(sym, segment.loc);
         return Some(ir::Expression::Method(ir::MethodExpression {
             loc: Location::merge(host.loc(), segment.loc),
             host: Some(Box::new(host)),

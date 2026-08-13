@@ -22,6 +22,7 @@ pub(super) fn visit_static_method_path(
         visitor.error(DiagnosticKind::UnknownMember { member }, segment.loc);
         return None;
     };
+    visitor.read(symbol, segment.loc);
     Some(ir::Expression::Identifier(ir::Identifier {
         ty,
         loc: segment.loc,
