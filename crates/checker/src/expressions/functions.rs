@@ -22,7 +22,7 @@ impl TypeChecker {
         docs: Option<String>,
         type_hint: Option<&types::FunctionType>,
     ) -> Option<ir::FunctionExpression> {
-        let (result, type_params) = self.with_type_params(&node.type_params, |s| {
+        let (result, type_params) = self.with_type_params(&node.type_params, |s, _| {
             let params = s.visit_function_params(node.params, type_hint);
             let (return_type, body) =
                 s.visit_function_return_body(node.return_type, node.body, type_hint)?;

@@ -102,7 +102,7 @@ impl TypeChecker {
 
     pub fn visit_type_alias(&mut self, node: ast::TypeAlias) {
         let (ty, params) = if let Some(definition) = node.definition {
-            self.with_type_params(&node.params, |checker| checker.visit_type(definition))
+            self.with_type_params(&node.params, |checker, _| checker.visit_type(definition))
         } else {
             (TypeStore::UNKNOWN, vec![])
         };

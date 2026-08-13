@@ -159,7 +159,7 @@
                 },
                 {
                     "name": "keyword.declaration.function.tine",
-                    "match": "\\b(fn|impl)\\b"
+                    "match": "\\b(fn|impl|static)\\b"
                 },
                 {
                     "name": "keyword.modifier.visibility.tine",

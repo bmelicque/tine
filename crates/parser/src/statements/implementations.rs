@@ -152,4 +152,14 @@ mod tests {
             diagnostics: vec![],
         });
     }
+
+    #[test]
+    fn parse_method_definition() {
+        let mut parser = Parser::new(0, "fn method() {}");
+        let result = parser
+            .parse_method_definition(None, None)
+            .expect("expected a positive result");
+        assert!(result.return_type.is_none(),);
+        result.body.expect("expected a body");
+    }
 }

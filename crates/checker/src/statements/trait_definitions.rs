@@ -7,7 +7,7 @@ use crate::TypeChecker;
 
 impl TypeChecker {
     pub(crate) fn visit_trait_definition(&mut self, node: ast::TraitDefinition) {
-        let (methods, type_params) = self.with_type_params(&node.params, |self_| {
+        let (methods, type_params) = self.with_type_params(&node.params, |self_, _| {
             node.methods.and_then(|m| self_.check_method_signatures(m))
         });
 
@@ -57,13 +57,14 @@ impl TypeChecker {
         let has_receiver = node.receiver.is_some();
         let type_params = type_params(node.receiver, node.type_params);
 
-        let ((params, return_type), type_params) = self.with_type_params(&type_params, |self_| {
-            let params = self_.visit_function_params(node.params, None);
-            let return_type = node
-                .return_annotation
-                .map_or(TypeStore::UNIT, |ann| self_.visit_type(ann));
-            (params, return_type)
-        });
+        let ((params, return_type), type_params) =
+            self.with_type_params(&type_params, |self_, _| {
+                let params = self_.visit_function_params(node.params, None);
+                let return_type = node
+                    .return_annotation
+                    .map_or(TypeStore::UNIT, |ann| self_.visit_type(ann));
+                (params, return_type)
+            });
 
         let (self_type, type_params) = match has_receiver {
             true => {

@@ -141,10 +141,7 @@ impl TypeChecker {
             .flatten()
             .map(|p| self.infer_method_param(p))
             .unzip();
-        let return_type = node
-            .return_type
-            .as_ref()
-            .map_or(TypeStore::UNKNOWN, |t| self.visit_type(t.clone()));
+        let return_type = self.infer_method_return_type(node);
         let ty = self.intern(types::FunctionType {
             type_params,
             params: param_types,
@@ -170,6 +167,11 @@ impl TypeChecker {
             .as_ref()
             .map_or(TypeStore::UNKNOWN, |t| self.visit_type(t.clone()));
         (name, ty)
+    }
+    fn infer_method_return_type(&mut self, node: &ast::MethodDefinition) -> types::TypeId {
+        node.return_type
+            .as_ref()
+            .map_or(TypeStore::UNIT, |t| self.visit_type(t.clone()))
     }
 
     pub fn visit_methods(
@@ -242,10 +244,11 @@ impl TypeChecker {
         nodes
             .zip(types)
             .filter_map(|(n, &ty)| {
+                let name = n.name?;
                 let sym = self.insert(VariableSymbol {
-                    name: n.name?.as_str().into(),
+                    name: name.as_str().into(),
                     ty,
-                    defined_at: n.loc,
+                    defined_at: name.loc,
                     ..Default::default()
                 });
                 Some((n.loc, sym))
@@ -297,5 +300,34 @@ impl TypeChecker {
             .into_iter()
             .find(|m| self.symbol_name(**m) == field)
             .is_some()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn infer_no_return_type() {
+        let mut checker = TypeChecker::new();
+        let node = ast::MethodDefinition {
+            return_type: None,
+            ..Default::default()
+        };
+        let ty = checker.infer_method_return_type(&node);
+        assert_eq!(ty, TypeStore::UNIT);
+    }
+
+    #[test]
+    fn infer_return_type() {
+        let mut checker = TypeChecker::new();
+        let node = ast::MethodDefinition {
+            return_type: Some(ast::Type::Named(
+                ast::Identifier::new("int".into(), Location::dummy()).into(),
+            )),
+            ..Default::default()
+        };
+        let ty = checker.infer_method_return_type(&node);
+        assert_eq!(ty, TypeStore::INTEGER);
     }
 }

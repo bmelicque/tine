@@ -34,11 +34,14 @@ impl TypeChecker {
         let tc = &mut self.with_this(owner_id.into()).tc;
 
         let (fields, method_nodes) = split_struct_body(body);
-        let ((members, methods), params) = tc.with_type_params(&node.params, |self_| {
+        let (methods, _) = tc.with_type_params(&node.params, |self_, params| {
             let members = fields
                 .into_iter()
                 .filter_map(|f| self_.visit_struct_definition_field(owner_id.into(), f))
                 .collect::<Vec<_>>();
+            let ty = self_.get_struct_type(&members, params.to_vec());
+            self_.symbols.get_mut(owner_id).ty = ty;
+            self_.types.add_alias(ty, name.text);
             let methods = self_.infer_method_symbols(
                 &method_nodes,
                 owner_id.into(),
@@ -47,13 +50,8 @@ impl TypeChecker {
             let symbol = self_.symbols.get_mut(owner_id);
             symbol.members = members.clone();
             symbol.methods.extend(methods.values().copied());
-            (members, methods)
+            methods
         });
-
-        let ty = tc.get_struct_type(&members, params);
-        let owner = tc.symbols.get_mut(owner_id);
-        owner.ty = ty;
-        tc.types.add_alias(ty, name.text);
 
         let def = ir::StructDefinition {
             loc: node.loc,
@@ -138,4 +136,28 @@ fn split_struct_body(
     }
 
     (fields, methods)
+}
+
+#[cfg(test)]
+mod tests {
+    use tine_common::locations::Location;
+
+    use super::*;
+
+    #[test]
+    fn visit_self_ref_method() {
+        let mut checker = TypeChecker::new();
+        let name = ast::Identifier::new("Struct".into(), Location::dummy());
+        let node = ast::StructDefinition {
+            name: Some(name.clone()),
+            body: Some(vec![ast::StructItem::Method(ast::MethodDefinition {
+                name: Some(ast::Identifier::new("method".into(), Location::dummy())),
+                return_type: Some(ast::Type::Named(name.into())),
+                ..Default::default()
+            })]),
+            ..Default::default()
+        };
+        checker.visit_struct_definition(node);
+        assert!(checker.diagnostics.is_empty());
+    }
 }

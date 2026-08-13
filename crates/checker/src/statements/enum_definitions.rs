@@ -33,11 +33,14 @@ impl TypeChecker {
         let tc = &mut self.with_this(owner_id.into()).tc;
 
         let (variants, method_nodes) = split_enum_body(items);
-        let ((variants, methods), params) = tc.with_type_params(&node.params, |self_| {
+        let (methods, _) = tc.with_type_params(&node.params, |self_, params| {
             let variants = variants
                 .into_iter()
                 .filter_map(|v| self_.visit_enum_variant(v, owner_id))
                 .collect::<Vec<_>>();
+            let ty = self_.get_enum_type(&variants, params.to_vec());
+            self_.symbols.get_mut(owner_id).ty = ty;
+            self_.types.add_alias(ty, name.text);
             let methods = self_.infer_method_symbols(
                 &method_nodes,
                 owner_id.into(),
@@ -46,13 +49,8 @@ impl TypeChecker {
             let symbol = self_.symbols.get_mut(owner_id);
             symbol.variants = variants.clone();
             symbol.methods.extend(methods.values().copied());
-            (variants, methods)
+            methods
         });
-
-        let ty = tc.get_enum_type(&variants, params);
-        let owner = tc.symbols.get_mut(owner_id);
-        owner.ty = ty;
-        tc.types.add_alias(ty, name.text);
 
         let def = ir::EnumDefinition {
             loc: node.loc,
