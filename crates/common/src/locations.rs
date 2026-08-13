@@ -156,6 +156,11 @@ impl Ord for Location {
 pub trait Locatable {
     fn loc(&self) -> Location;
 }
+impl Locatable for Location {
+    fn loc(&self) -> Location {
+        *self
+    }
+}
 
 pub fn vec_loc<L: Locatable>(vec: &Vec<L>) -> Option<Location> {
     let first = vec.first()?;

@@ -94,7 +94,7 @@ impl WellknownSymbols {
 }
 
 fn primitive_eq(gen: &mut CodeGenerator, mut method: ir::MethodExpression) -> ExpressionResult {
-    let left_result = gen.handle_expression(*method.host);
+    let left_result = gen.handle_expression(*method.host.unwrap());
     let mut prelim_stmts = left_result.prelim_stmts;
     let right_result = gen.handle_expression(method.args.remove(0));
     prelim_stmts.extend(right_result.prelim_stmts);
@@ -113,7 +113,7 @@ fn hash_primitive(
     method: ir::MethodExpression,
     name: &str,
 ) -> ExpressionResult {
-    let result = gen.handle_expression(*method.host);
+    let result = gen.handle_expression(*method.host.unwrap());
     let expr = internal_method_call(name, vec![result.expr.into()]).into();
     ExpressionResult {
         prelim_stmts: result.prelim_stmts,
@@ -134,7 +134,7 @@ fn hash_string(gen: &mut CodeGenerator, method: ir::MethodExpression) -> Express
 }
 
 fn array_length(gen: &mut CodeGenerator, method: ir::MethodExpression) -> ExpressionResult {
-    let array = gen.handle_expression(*method.host);
+    let array = gen.handle_expression(*method.host.unwrap());
     let prelim_stmts = array.prelim_stmts;
     let expr = swc::Expr::Member(swc::MemberExpr {
         span: DUMMY_SP,
@@ -145,7 +145,7 @@ fn array_length(gen: &mut CodeGenerator, method: ir::MethodExpression) -> Expres
 }
 
 fn array_get(gen: &mut CodeGenerator, mut method: ir::MethodExpression) -> ExpressionResult {
-    let array = gen.handle_expression(*method.host);
+    let array = gen.handle_expression(*method.host.unwrap());
     let mut prelim_stmts = array.prelim_stmts;
     let index = gen.handle_expression(method.args.remove(0));
     prelim_stmts.extend(index.prelim_stmts);
@@ -159,7 +159,7 @@ fn array_get(gen: &mut CodeGenerator, mut method: ir::MethodExpression) -> Expre
 }
 
 fn array_set(gen: &mut CodeGenerator, mut method: ir::MethodExpression) -> ExpressionResult {
-    let array = gen.handle_expression(*method.host);
+    let array = gen.handle_expression(*method.host.unwrap());
     let mut prelim_stmts = array.prelim_stmts;
     let index = gen.handle_expression(method.args.remove(0));
     prelim_stmts.extend(index.prelim_stmts);
@@ -173,7 +173,7 @@ fn array_set(gen: &mut CodeGenerator, mut method: ir::MethodExpression) -> Expre
 }
 
 fn array_pop(gen: &mut CodeGenerator, method: ir::MethodExpression) -> ExpressionResult {
-    let array = gen.handle_expression(*method.host);
+    let array = gen.handle_expression(*method.host.unwrap());
     let prelim_stmts = array.prelim_stmts;
     let expr = swc::Expr::Call(swc::CallExpr {
         callee: swc::Callee::Expr(Box::new(member(array.expr, "pop").into())),

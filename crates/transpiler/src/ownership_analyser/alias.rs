@@ -100,10 +100,12 @@ impl AliasSignature {
         semantics: &SemanticsChecker,
     ) -> Self {
         let def_loc = def.loc;
-        let is_receiver_aliased = return_group
-            .iter()
-            .find(|id| **id == def.receiver_type.1.into())
-            .is_some();
+        let is_receiver_aliased = def
+            .body
+            .returned_values()
+            .into_iter()
+            .flatten()
+            .any(|e| e.contains_this());
         let params = get_param_aliases(&def.params, &return_group);
         let captures = get_captures(return_group, def_loc, semantics);
 
@@ -217,7 +219,7 @@ impl AliasMap {
                 .signatures
                 .get(&checker.get_symbol(i.symbol).defined_at()),
             ir::Expression::Method(m) => {
-                if checker.is_trait(m.host.ty()) {
+                if m.host.is_some() && checker.is_trait(m.host.as_ref().unwrap().ty()) {
                     return None;
                 }
                 eprintln!("Cannot perform function signature optimization on methods (not implemented yet). Defaulting to safe mode.");
@@ -267,7 +269,7 @@ fn visit_stmt(stmt: &ir::Statement, checker: &SemanticsChecker, map: &mut AliasM
                 map.register(v.symbol.into());
                 roots
                     .into_iter()
-                    .filter(|root| !checker.is_mutable(*root))
+                    .filter(|root| !checker.is_mutable_symbol(*root))
                     .for_each(|root| map.union(v.symbol.into(), root));
             }
         }
@@ -312,7 +314,7 @@ fn visit_expr(
     match expr {
         ir::Expression::Identifier(id) => {
             let ty = checker.get_symbol(id.symbol.into()).ty();
-            if checker.is_mutable(id.symbol) || checker.is_copy(ty) {
+            if checker.is_mutable_symbol(id.symbol) || checker.is_copy(ty) {
                 return vec![];
             }
             map.register(id.symbol.into());
@@ -320,13 +322,15 @@ fn visit_expr(
         }
         ir::Expression::Member(m) => {
             if checker.is_copy(m.ty) {
-                visit_expr(&m.object, checker, map);
+                m.object.as_deref().map(|o| visit_expr(o, checker, map));
                 return vec![];
             }
-            visit_expr(&m.object, checker, map)
+            m.object
+                .as_deref()
+                .map_or(vec![], |o| visit_expr(o, checker, map))
         }
         ir::Expression::Method(m) => {
-            visit_expr(&m.host, checker, map);
+            m.host.as_deref().map(|h| visit_expr(h, checker, map));
             vec![]
         }
 

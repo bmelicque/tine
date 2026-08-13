@@ -37,7 +37,7 @@ impl SemanticsChecker<'_, '_> {
         self.symbols.get_symbol(id)
     }
 
-    pub fn is_mutable(&self, id: SymbolId) -> bool {
+    pub fn is_mutable_symbol(&self, id: SymbolId) -> bool {
         self.symbols.is_mutable(id)
     }
 }

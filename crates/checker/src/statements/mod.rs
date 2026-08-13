@@ -1,11 +1,14 @@
 mod assignments;
+mod enum_definitions;
 mod implementations;
+mod struct_definitions;
 mod trait_definitions;
-mod type_definitions;
 mod variable_declarations;
 
 use tine_ast as ast;
 use tine_ir as ir;
+use tine_symbols::symbols::*;
+use tine_types::{store::TypeStore, types};
 
 use super::TypeChecker;
 
@@ -21,10 +24,7 @@ impl TypeChecker {
                     loc: node.loc,
                 })]
             }
-            ast::Statement::Enum(node) => match self.visit_enum_definition(node) {
-                Some(def) => vec![def.into()],
-                None => vec![],
-            },
+            ast::Statement::Enum(node) => self.visit_enum_definition(node),
             ast::Statement::Expression(node) => self
                 .visit_expression(*node.expression)
                 .map_or(vec![], |e| vec![e.into()]),
@@ -38,10 +38,7 @@ impl TypeChecker {
             ast::Statement::Return(node) => self
                 .visit_return_statement(node)
                 .map_or(vec![], |s| vec![s.into()]),
-            ast::Statement::StructDefinition(node) => {
-                self.visit_struct_definition(node);
-                vec![]
-            }
+            ast::Statement::StructDefinition(node) => self.visit_struct_definition(node),
             ast::Statement::Trait(node) => {
                 self.visit_trait_definition(node);
                 vec![]
@@ -100,6 +97,29 @@ impl TypeChecker {
                 loc: node.loc,
                 expression: None,
             }),
+        }
+    }
+
+    pub fn visit_type_alias(&mut self, node: ast::TypeAlias) {
+        let (ty, params) = if let Some(definition) = node.definition {
+            self.with_type_params(&node.params, |checker| checker.visit_type(definition))
+        } else {
+            (TypeStore::UNKNOWN, vec![])
+        };
+
+        let ty = match params.len() {
+            0 => ty,
+            _ => self.intern(types::GenericDef { params, def: ty }),
+        };
+
+        if let Some(name) = node.name {
+            self.symbols.insert::<TypeAliasSymbolId>(TypeAliasSymbol {
+                name: name.text.clone(),
+                ty,
+                defined_at: node.loc,
+                ..Default::default()
+            });
+            self.types.add_alias(ty, name.text);
         }
     }
 }

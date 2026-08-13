@@ -107,7 +107,7 @@ impl ForInExpression {
  * */
 pub fn root_identifier(expr: &Expression) -> Option<&Identifier> {
     match expr {
-        Expression::Member(expr) => root_identifier(&expr.object),
+        Expression::Member(expr) => expr.object.as_deref().and_then(|o| root_identifier(o)),
         Expression::Identifier(expr) => Some(expr),
         _ => None,
     }

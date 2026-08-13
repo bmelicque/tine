@@ -54,6 +54,10 @@ impl Substitutions {
         sub
     }
 
+    pub fn table(&self) -> &SubstitutionTable {
+        &self.table
+    }
+
     /// Find all the substitutions that would make the given generic equal to
     /// the given concrete type.
     pub fn unify(

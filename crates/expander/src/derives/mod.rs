@@ -11,8 +11,8 @@ impl Expander {
         &mut self,
         callee: Identifier,
         args: Option<Vec<Identifier>>,
-        node: &Option<StructBody>,
-    ) -> Vec<ImplementationItem> {
+        node: &Option<Vec<StructItem>>,
+    ) -> Vec<MethodDefinition> {
         let Some(args) = args else {
             self.error(callee.loc, DiagnosticKind::MissingArguments);
             return vec![];
@@ -35,7 +35,7 @@ impl Expander {
         callee: Identifier,
         args: Option<Vec<Identifier>>,
         _node: &EnumDefinition,
-    ) -> Vec<ImplementationItem> {
+    ) -> Vec<MethodDefinition> {
         let Some(args) = args else {
             self.error(callee.loc, DiagnosticKind::MissingArguments);
             return vec![];

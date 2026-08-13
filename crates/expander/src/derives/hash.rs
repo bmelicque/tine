@@ -3,23 +3,18 @@ use tine_common::locations::Location;
 
 const HASH_INIT: i64 = 0x9747b28c;
 
-pub fn derive_struct(node: &Option<StructBody>, at: Location) -> ImplementationItem {
-    let receiver = MethodReceiver {
-        loc: at,
-        mutable: false,
-        pattern: Some(Identifier::new("self".to_string(), at).into()),
-        self_type: None,
-    };
+pub fn derive_struct(node: &Option<Vec<StructItem>>, at: Location) -> MethodDefinition {
     let stmts = match node {
         Some(s) => derive_struct_body(s, at),
         None => vec![IntLiteral::new(HASH_INIT, at).into()],
     };
 
-    ImplementationItem::Method(MethodDefinition {
+    MethodDefinition {
         loc: at,
         docs: None,
         public: true,
-        receiver,
+        static_: false,
+        mut_: false,
         name: Some(Identifier::new("eq".to_string(), at)),
         type_params: None,
         params: Some(FunctionParams {
@@ -27,18 +22,18 @@ pub fn derive_struct(node: &Option<StructBody>, at: Location) -> ImplementationI
             params: vec![],
         }),
         return_type: Some(Type::Named(Identifier::new("bool".to_string(), at).into())),
-        body: Some(BlockExpression {
+        body: Some(Box::new(Expression::Block(BlockExpression {
             loc: at,
             statements: stmts,
-        }),
-    })
+        }))),
+    }
 }
 
-fn derive_struct_body(node: &StructBody, at: Location) -> Vec<Statement> {
-    let mut stmts = Vec::with_capacity(node.fields.len() + 2);
+fn derive_struct_body(body: &Vec<StructItem>, at: Location) -> Vec<Statement> {
+    let mut stmts = Vec::new();
     stmts.push(init_hash(at).into());
-    node.fields
-        .iter()
+    body.into_iter()
+        .filter_map(|f| f.as_field())
         .filter_map(|field| field.name.as_ref())
         .map(|id| hash_combine_assignment(id.as_str(), at))
         .for_each(|stmt| stmts.push(stmt));

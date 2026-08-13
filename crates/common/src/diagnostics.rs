@@ -134,6 +134,7 @@ pub enum DiagnosticKind {
     },
     PubMut,
     RefutablePatternExpected,
+    StaticMutMethod,
     TooManyParams {
         expected: usize,
         got: usize,
@@ -302,6 +303,9 @@ impl Display for DiagnosticKind {
             }
             Self::RefutablePatternExpected => {
                 write!(f, "expected refutable pattern")
+            }
+            Self::StaticMutMethod => {
+                write!(f, "methods cannot be both static and mutating")
             }
             Self::PubMut => write!(f, "cannot declare variables that are both public and mutable"),
             Self::TooManyParams { expected, got } => {

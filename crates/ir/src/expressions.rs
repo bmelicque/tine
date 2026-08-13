@@ -33,6 +33,17 @@ ir_enum!(
         Unary(UnaryExpression),
     }
 );
+impl Expression {
+    pub fn contains_this(&self) -> bool {
+        self.walk()
+            .filter_map(|n| n.as_expression())
+            .any(|e| match e {
+                Expression::Member(m) => m.object.is_none(),
+                Expression::Method(m) => m.host.is_none(),
+                _ => false,
+            })
+    }
+}
 
 #[tree_struct]
 #[derive(Debug, Clone)]
@@ -70,7 +81,6 @@ pub struct Block {
     #[child]
     pub statements: Vec<Statement>,
 }
-
 impl From<Expression> for Block {
     fn from(value: Expression) -> Self {
         match value {
@@ -90,6 +100,18 @@ impl From<Statement> for Block {
             ty: TypeStore::UNIT,
             statements: vec![value],
         }
+    }
+}
+impl Block {
+    pub fn returned_values(&self) -> Vec<Option<&Expression>> {
+        self.statements
+            .iter()
+            .flat_map(|s| s.walk())
+            .filter_map(|n| n.as_statement())
+            .filter_map(|s| s.as_return())
+            .map(|r| r.expression.as_deref())
+            .chain(self.statements.last().map(|s| s.as_expression()))
+            .collect()
     }
 }
 
@@ -217,7 +239,7 @@ pub struct IntrinsicConstruct {
 #[derive(Debug, Clone)]
 pub struct MemberExpression {
     #[child]
-    pub object: Box<Expression>,
+    pub object: Option<Box<Expression>>,
     pub member: (Location, MemberSymbolId),
 }
 
@@ -225,7 +247,7 @@ pub struct MemberExpression {
 #[derive(Debug, Clone)]
 pub struct MethodExpression {
     #[child]
-    pub host: Box<Expression>,
+    pub host: Option<Box<Expression>>,
     pub method: (Location, MethodSymbolId),
     #[child]
     pub args: Vec<Expression>,

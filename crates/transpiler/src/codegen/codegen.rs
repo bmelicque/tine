@@ -122,15 +122,6 @@ impl CodeGenerator<'_, '_> {
         self.types.get(ty)
     }
 
-    pub(crate) fn with_this<F, T>(&mut self, this: VariableSymbolId, callback: F) -> T
-    where
-        F: FnOnce(&mut Self) -> T,
-    {
-        self.this_stack.push(this);
-        let ret = callback(self);
-        self.this_stack.pop();
-        ret
-    }
     pub(crate) fn is_current_this(&self, expr: &ir::Expression) -> bool {
         match expr {
             ir::Expression::Identifier(id) => {

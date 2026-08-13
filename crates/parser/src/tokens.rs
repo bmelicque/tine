@@ -36,6 +36,8 @@ pub enum Token {
     Pub,
     #[token("return")]
     Return,
+    #[token("static")]
+    Static,
     #[token("struct")]
     Struct,
     #[token("trait")]
@@ -250,6 +252,7 @@ impl Token {
             Token::Mut => "mut".to_string(),
             Token::Pub => "pub".to_string(),
             Token::Return => "return".to_string(),
+            Token::Static => "static".to_string(),
             Token::Struct => "struct".to_string(),
             Token::Trait => "trait".to_string(),
             Token::Type => "type".to_string(),

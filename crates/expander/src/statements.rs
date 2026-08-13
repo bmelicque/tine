@@ -43,24 +43,16 @@ impl Expander {
             b.items = b
                 .items
                 .into_iter()
-                .map(|i| self.expand_implementation_item(i))
+                .map(|i| self.expand_method_definition(i))
                 .collect();
             b
         });
         node
     }
 
-    fn expand_implementation_item(&mut self, node: ImplementationItem) -> ImplementationItem {
-        match node {
-            ImplementationItem::Method(mut m) => {
-                m.body = m.body.map(|b| self.expand_block(b));
-                m.into()
-            }
-            ImplementationItem::StaticMethod(mut m) => {
-                m.definition = self.expand_function(m.definition);
-                m.into()
-            }
-        }
+    fn expand_method_definition(&mut self, mut node: MethodDefinition) -> MethodDefinition {
+        node.body = node.body.map(|b| Box::new(self.expand_expression(*b)));
+        node.into()
     }
 
     fn expand_struct_def(&mut self, node: StructDefinition) -> Vec<Statement> {

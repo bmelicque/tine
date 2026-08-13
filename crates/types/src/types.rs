@@ -98,7 +98,7 @@ impl Type {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct EnumType {
     /// This `id` is used to differentiate between enums with identical definitions,
     /// like `A :: True|False` and `B :: True|False`.
