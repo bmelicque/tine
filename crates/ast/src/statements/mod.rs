@@ -91,18 +91,18 @@ pub struct StructDefinition {
     pub public: bool,
     pub name: Option<Identifier>,
     pub params: Option<Vec<Identifier>>,
-    pub body: Option<StructBody>,
+    pub body: Option<Vec<StructItem>>,
 }
 
-#[tree_struct(untyped)]
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct StructBody {
-    pub fields: Vec<StructDefinitionField>,
-}
+ast_enum!(StructItem {
+    Field(StructDefinitionField),
+    Method(MethodDefinition),
+});
 
 #[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct StructDefinitionField {
+    pub docs: Option<Docs>,
     pub public: bool,
     pub name: Option<Identifier>,
     pub definition: Option<Type>,
@@ -116,12 +116,19 @@ pub struct EnumDefinition {
     pub public: bool,
     pub name: Option<Identifier>,
     pub params: Option<Vec<Identifier>>,
-    pub variants: Vec<VariantDefinition>,
+    pub items: Option<Vec<EnumItem>>,
 }
+
+ast_enum!(EnumItem {
+    Variant(VariantDefinition),
+    Method(MethodDefinition)
+});
 
 #[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct VariantDefinition {
+    pub docs: Option<Docs>,
+    pub public: bool,
     pub name: Option<Identifier>,
     pub body: Option<VariantBody>,
 }

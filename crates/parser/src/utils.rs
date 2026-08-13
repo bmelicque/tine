@@ -60,7 +60,11 @@ impl Parser<'_> {
 
     pub(super) fn close(&mut self, with: Token) -> Location {
         let end_range = match self.tokens.peek() {
-            Some((Ok(t), r)) if *t == with => r.clone(),
+            Some((Ok(t), r)) if *t == with => {
+                let r = r.clone();
+                self.tokens.next();
+                r
+            }
             _ => self.recover_at(&[Token::RBrace]),
         };
         self.localize(end_range)

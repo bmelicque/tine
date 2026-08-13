@@ -172,7 +172,7 @@ fn lower_tuple_pattern(pattern: TuplePattern, value: ir::Expression) -> LoweredP
 fn lower_pattern_field(field: PatternField, value: ir::Expression) -> LoweredPattern {
     let value = ir::Expression::Member(ir::MemberExpression {
         loc: value.loc(),
-        object: Box::new(value),
+        object: Some(Box::new(value)),
         member: (field.0.loc, field.0.symbol.as_member().unwrap()),
         ty: TypeStore::UNKNOWN,
     });

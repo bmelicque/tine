@@ -61,6 +61,13 @@ impl TypeChecker {
 
     pub fn visit_named_type(&mut self, node: ast::NamedType) -> types::TypeId {
         let name = node.name.as_str();
+        let Some(type_symbol) = self.lookup_mut(name) else {
+            let name = name.to_string();
+            let error = DiagnosticKind::CannotFindName { name };
+            self.error(error, node.loc);
+            return TypeStore::UNKNOWN;
+        };
+        type_symbol.access().write(node.name.loc);
         match name {
             "bool" => return TypeStore::BOOLEAN,
             "float" => return TypeStore::FLOAT,
@@ -69,12 +76,7 @@ impl TypeChecker {
             "void" => return TypeStore::UNIT,
             _ => {}
         }
-        let Some(type_symbol) = self.lookup(name) else {
-            let name = name.to_string();
-            let error = DiagnosticKind::CannotFindName { name };
-            self.error(error, node.loc);
-            return TypeStore::UNKNOWN;
-        };
+
         let ty = type_symbol.ty();
         if node.args.is_none() {
             return ty;

@@ -73,7 +73,7 @@ impl Backend {
             TypeStore::UNIT => String::new(),
             ty => {
                 let displayed = display_type(&self.types.read().unwrap(), ty);
-                format!(": {}", displayed)
+                format!(" -> {}", displayed)
             }
         };
         format!("fn {}{}({}){}", name, type_params, params, return_type)
@@ -104,7 +104,7 @@ impl Backend {
         let params = self.display_function_params(symbol.ty, &symbol.param_names);
         let return_type = match self.get_return_type(symbol.ty) {
             TypeStore::UNIT => String::new(),
-            t => format!(" {}", display_type(&self.types(), t)),
+            t => format!(" -> {}", display_type(&self.types(), t)),
         };
         format!("fn {}{}({}){}", receiver, symbol.name, params, return_type)
     }

@@ -1,5 +1,4 @@
 use crate::codegen::{
-    statements::utils::declare_const,
     utils::{ident_from_str, member},
     CodeGenerator,
 };
@@ -83,23 +82,13 @@ impl CodeGenerator<'_, '_> {
         let method = self.symbols.get(node.name.1);
         let constructor = self.generate_constructor_name(method.owner.into(), &method.owner_args);
         let left = member(member(constructor, "prototype").into(), &method.name).into();
-
-        let mut right = self.with_this(node.receiver_name.1, |self_| {
-            self_.handle_function(node.params, node.body)
-        });
-        right.body.as_mut().unwrap().stmts.insert(
-            0,
-            swc::Stmt::Decl(declare_const(
-                self.symbol_name(node.receiver_name.1),
-                swc::ThisExpr { span: DUMMY_SP }.into(),
-            )),
-        );
+        let right = self.handle_function(node.params, node.body).into();
 
         swc::Stmt::Expr(swc::ExprStmt {
             span: DUMMY_SP,
             expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
                 left,
-                right: right.into(),
+                right: right,
                 ..Default::default()
             })),
         })

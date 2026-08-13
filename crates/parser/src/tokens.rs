@@ -36,6 +36,8 @@ pub enum Token {
     Pub,
     #[token("return")]
     Return,
+    #[token("static")]
+    Static,
     #[token("struct")]
     Struct,
     #[token("trait")]
@@ -127,6 +129,8 @@ pub enum Token {
     Comma,
     #[token(".")]
     Dot,
+    #[token("->")]
+    SlimArrow,
     #[token("=>")]
     FatArrow,
 
@@ -248,6 +252,7 @@ impl Token {
             Token::Mut => "mut".to_string(),
             Token::Pub => "pub".to_string(),
             Token::Return => "return".to_string(),
+            Token::Static => "static".to_string(),
             Token::Struct => "struct".to_string(),
             Token::Trait => "trait".to_string(),
             Token::Type => "type".to_string(),
@@ -293,6 +298,7 @@ impl Token {
             Token::RBracket => "]".to_string(),
             Token::Comma => ",".to_string(),
             Token::Dot => ".".to_string(),
+            Token::SlimArrow => "->".to_string(),
             Token::FatArrow => "=>".to_string(),
             Token::Whitespace => " ".to_string(),
             Token::Newline => "\n".to_string(),

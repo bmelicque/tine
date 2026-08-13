@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use tine_ast::*;
 use tine_common::{
     diagnostics::DiagnosticKind,
@@ -31,17 +33,14 @@ impl Parser<'_> {
             loc = Location::merge(loc, type_name.loc);
         }
 
-        let body = self.maybe_parse_struct_body();
+        let (body, end) = self.parse_struct_items().unzip();
 
-        match &body {
-            Some(body) => {
-                loc = Location::merge(loc, body.loc());
-            }
-            None => {
-                let loc = self.next_loc();
-                self.error(DiagnosticKind::MissingBody, loc);
-            }
+        if body.is_none() {
+            let loc = self.next_loc();
+            self.error(DiagnosticKind::MissingBody, loc);
         }
+
+        let loc = end.map_or(loc, |e| Location::merge(loc, e));
 
         StructDefinition {
             docs,
@@ -54,34 +53,34 @@ impl Parser<'_> {
         }
     }
 
-    fn maybe_parse_struct_body(&mut self) -> Option<StructBody> {
-        if !self.maybe_is(|t| *t == Token::LBrace) {
-            return None;
+    fn parse_struct_items(&mut self) -> Option<(Vec<StructItem>, Location)> {
+        self.eat_if(&[Token::LBrace])?;
+        let items = self.parse_list(|p| p.parse_struct_item(), Token::Comma, Token::RBrace);
+        let end = self.expect(Token::RBrace);
+        let end = self.localize(end);
+        Some((items, end))
+    }
+
+    fn parse_struct_item(&mut self) -> Option<StructItem> {
+        let docs = self.maybe_parse_docs();
+        let public_range = self.eat_if(&[Token::Pub]);
+
+        match self.tokens.peek()?.0.as_ref().ok()? {
+            Token::Static | Token::Mut | Token::Fn => self
+                .parse_method_definition(docs, public_range)
+                .map(Into::into),
+            _ => self
+                .parse_struct_definition_field(docs, public_range)
+                .map(Into::into),
         }
-        self.try_parse(
-            |self_| Some(self_.parse_struct_body()),
-            |t| *t == Token::Newline,
-        )
-        .ok()?
     }
 
-    pub(crate) fn parse_struct_body(&mut self) -> StructBody {
-        let start_range = self.eat(&[Token::LBrace]);
-
-        let fields = self.parse_list(
-            |p| p.parse_struct_definition_field(),
-            Token::Comma,
-            Token::RBrace,
-        );
-
-        let end_range = self.expect(Token::RBrace);
-        let loc = self.localize(start_range.start..end_range.end);
-        StructBody { loc, fields }
-    }
-
-    fn parse_struct_definition_field(&mut self) -> Option<StructDefinitionField> {
-        let (_, pub_loc) = self.maybe_eat(|t| t.pub_()).unzip();
-
+    fn parse_struct_definition_field(
+        &mut self,
+        docs: Option<Docs>,
+        public_range: Option<Range<usize>>,
+    ) -> Option<StructDefinitionField> {
+        let pub_loc = public_range.map(|r| self.localize(r));
         let name = self.maybe_parse_name(|t| {
             matches!(
                 t,
@@ -100,6 +99,7 @@ impl Parser<'_> {
             let loc = self.localize(skipped);
             self.error(error, loc);
             return Some(StructDefinitionField {
+                docs,
                 loc: pub_loc.map_or(name.loc, |l| Location::merge(l, name.loc)),
                 name: Some(name),
                 definition: None,
@@ -121,6 +121,7 @@ impl Parser<'_> {
         };
 
         Some(StructDefinitionField {
+            docs,
             loc,
             name: Some(name),
             definition,
@@ -151,10 +152,7 @@ mod tests {
                     text: "Foo".to_string(),
                 }),
                 params: None,
-                body: Some(StructBody {
-                    loc: Location::new(0, Span::new(11, 13)),
-                    fields: vec![],
-                }),
+                body: Some(vec![]),
             }),
             diagnostics: vec![],
         });
@@ -170,25 +168,23 @@ mod tests {
                     loc: Location::new(0, Span::new(7, 10)),
                     text: "Foo".to_string(),
                 }),
-                body: Some(StructBody {
-                    loc: Location::new(0, Span::new(11, 27)),
-                    fields: vec![StructDefinitionField {
-                        loc: Location::new(0, Span::new(17, 25)),
-                        name: Some(Identifier {
-                            loc: Location::new(0, Span::new(17, 20)),
-                            text: "bar".to_string(),
-                        }),
-                        definition: Some(Type::Named(NamedType {
+                body: Some(vec![StructItem::Field(StructDefinitionField {
+                    docs: None,
+                    loc: Location::new(0, Span::new(17, 25)),
+                    name: Some(Identifier {
+                        loc: Location::new(0, Span::new(17, 20)),
+                        text: "bar".to_string(),
+                    }),
+                    definition: Some(Type::Named(NamedType {
+                        loc: Location::new(0, Span::new(22, 25)),
+                        name: Identifier {
                             loc: Location::new(0, Span::new(22, 25)),
-                            name: Identifier {
-                                loc: Location::new(0, Span::new(22, 25)),
-                                text: "int".to_string(),
-                            },
-                            args: None,
-                        })),
-                        public: false,
-                    }],
-                }),
+                            text: "int".to_string(),
+                        },
+                        args: None,
+                    })),
+                    public: false,
+                })]),
                 ..Default::default()
             }),
             diagnostics: vec![],

@@ -55,20 +55,9 @@ impl Expander {
         call.args = call
             .args
             .into_iter()
-            .map(|e| self.expand_call_argument(e))
+            .map(|e| self.expand_expression(e))
             .collect();
         call.into()
-    }
-
-    fn expand_call_argument(&mut self, arg: CallArgument) -> CallArgument {
-        use CallArgument::*;
-        match arg {
-            Expression(e) => Expression(self.expand_expression(e).into()),
-            Callback(mut c) => {
-                c.body = c.body.map(|b| self.expand_expression(*b).into());
-                Callback(c)
-            }
-        }
     }
 
     fn expand_struct_expression(&mut self, mut node: StructExpression) -> Expression {
@@ -116,7 +105,7 @@ impl Expander {
     }
 
     pub fn expand_function(&mut self, mut function: FunctionExpression) -> FunctionExpression {
-        function.body = function.body.map(|b| self.expand_block(b));
+        function.body = function.body.map(|b| Box::new(self.expand_expression(*b)));
         function
     }
 

@@ -1,8 +1,5 @@
 use tine_ast as ast;
-use tine_common::{
-    diagnostics::DiagnosticKind,
-    locations::{Locatable, Location},
-};
+use tine_common::{diagnostics::DiagnosticKind, locations::Location};
 use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_types::{store::TypeStore, types};
@@ -30,36 +27,55 @@ impl TypeChecker {
 
     fn visit_field_access(&mut self, expr: ast::MemberExpression) -> Option<ir::Expression> {
         debug_assert!(matches!(expr.prop, Some(ast::MemberProp::FieldName(_))));
-        let object = expr.object.and_then(|o| self.visit_expression(*o))?;
+        let object = match expr.object {
+            Some(o) => Some(self.visit_expression(*o)?),
+            None => None,
+        };
+        let Some(object_ty) = self.get_object_ty(&object) else {
+            self.error(DiagnosticKind::MissingExpression, expr.loc.nth_char(0));
+            return None;
+        };
         let Some(ast::MemberProp::FieldName(field_name)) = expr.prop else {
             unreachable!()
         };
-        let Some(root_symbol) = self.get_struct_symbol(object.ty()).cloned() else {
+        let Some(root_symbol) = self.get_struct_symbol(object_ty).cloned() else {
             let error = DiagnosticKind::UnknownMember {
                 member: field_name.as_str().to_string(),
             };
             self.error(error, field_name.loc);
             return None;
         };
-        let substitutions = self.infer_type_args(&root_symbol, object.ty());
+        let substitutions = self.infer_type_args(&root_symbol, object_ty);
 
-        let (object, field) =
-            match self.visit_field_as_prop(&root_symbol, object, field_name, &substitutions) {
-                Ok(expr) => return Some(expr.into()),
-                Err(r) => r,
-            };
-        self.visit_field_as_method(object, field, &root_symbol.methods, &substitutions)
-            .map(Into::into)
+        let (object, field) = match self.visit_field_as_prop(
+            &root_symbol,
+            object,
+            field_name,
+            expr.loc,
+            &substitutions,
+        ) {
+            Ok(expr) => return Some(expr.into()),
+            Err(r) => r,
+        };
+        self.visit_field_as_method(
+            object,
+            field,
+            &root_symbol.methods,
+            expr.loc,
+            &substitutions,
+        )
+        .map(Into::into)
     }
 
     /// Return the `root` back on error
     fn visit_field_as_prop(
         &mut self,
         root_symbol: &StructSymbol,
-        root: ir::Expression,
+        root: Option<ir::Expression>,
         field: ast::Identifier,
+        loc: Location,
         substitutions: &Substitutions,
-    ) -> Result<ir::MemberExpression, (ir::Expression, ast::Identifier)> {
+    ) -> Result<ir::MemberExpression, (Option<ir::Expression>, ast::Identifier)> {
         let members = &root_symbol.members;
 
         let Some(symbol_id) = members
@@ -76,8 +92,8 @@ impl TypeChecker {
         let ty = self.symbol_type_id(*symbol_id);
         let ty = substitutions.apply(&mut self.types, ty);
         Ok(ir::MemberExpression {
-            loc: Location::merge(root.loc(), field.loc),
-            object: Box::new(root),
+            loc,
+            object: root.map(Box::new),
             ty,
             member: (field.loc, *symbol_id),
         })
@@ -85,17 +101,19 @@ impl TypeChecker {
 
     fn visit_field_as_method(
         &mut self,
-        object: ir::Expression,
+        object: Option<ir::Expression>,
         field: ast::Identifier,
         methods: &Vec<MethodSymbolId>,
+        loc: Location,
         substitutions: &Substitutions,
     ) -> Option<ir::MethodExpression> {
+        let object_mutability = match &object {
+            Some(o) => self.is_mutable(o),
+            None => self.mutable_this,
+        };
         let matching_methods = methods
             .into_iter()
-            .filter(|m| {
-                let is_mutable = self.is_mutable(&object);
-                self.method_matches(**m, field.as_str(), is_mutable, &substitutions)
-            })
+            .filter(|m| self.method_matches(**m, field.as_str(), object_mutability, &substitutions))
             .collect::<Vec<_>>();
 
         if matching_methods.len() == 0 {
@@ -109,9 +127,8 @@ impl TypeChecker {
         let &most_concrete_id = matching_methods
             .into_iter()
             .max_by_key(|m| self.symbols.get(**m).concreteness())?;
-        let object_mutablity = self.is_mutable(&object);
         let is_method_mutating = self.symbols.get(most_concrete_id).is_mutating();
-        if is_method_mutating && object_mutablity == Some(false) {
+        if is_method_mutating && object_mutability == Some(false) {
             self.error(DiagnosticKind::MutatingMethodOnImmutable, field.loc);
         }
         if !self.is_visible(most_concrete_id.into()) {
@@ -125,8 +142,8 @@ impl TypeChecker {
         self.error(DiagnosticKind::NonCalledMethod, field.loc);
 
         Some(ir::MethodExpression {
-            loc: Location::merge(object.loc(), field.loc),
-            host: Box::new(object),
+            loc: Location::merge(loc, field.loc),
+            host: object.map(Box::new),
             ty,
             method: (field.loc, most_concrete_id),
             args: vec![],
@@ -141,22 +158,26 @@ impl TypeChecker {
             panic!();
         };
 
-        // check object
-        let object = expr.object.and_then(|o| self.visit_expression(*o))?;
-        let Some(root_symbol) = self.get_struct_symbol(object.ty()).cloned() else {
-            let error = DiagnosticKind::UnknownMember {
-                member: index.value.to_string(),
-            };
+        let object = match expr.object {
+            Some(o) => Some(self.visit_expression(*o)?),
+            None => None,
+        };
+        let Some(object_ty) = self.get_object_ty(&object) else {
+            self.error(DiagnosticKind::MissingExpression, expr.loc.nth_char(0));
+            return None;
+        };
+        let Some(root_symbol) = self.get_struct_symbol(object_ty).cloned() else {
+            let member = index.value.to_string();
+            let error = DiagnosticKind::UnknownMember { member };
             self.error(error, index.loc);
             return None;
         };
 
-        let types::Type::Tuple(ty) = self.resolve(object.ty()) else {
-            if object.ty() != TypeStore::UNKNOWN {
-                let error = DiagnosticKind::ExpectedTuple {
-                    got: self.types.display(object.ty()),
-                };
-                self.error(error, object.loc());
+        let types::Type::Tuple(ty) = self.resolve(object_ty) else {
+            if object_ty != TypeStore::UNKNOWN {
+                let got = self.types.display(object_ty);
+                let error = DiagnosticKind::ExpectedTuple { got };
+                self.error(error, expr.loc);
             }
             return None;
         };
@@ -181,7 +202,7 @@ impl TypeChecker {
 
         Some(ir::MemberExpression {
             loc: expr.loc,
-            object: Box::new(object),
+            object: object.map(Into::into),
             ty: ty.elements[value],
             member: (index.loc, elements[value]),
         })
@@ -192,6 +213,13 @@ impl TypeChecker {
             ty = r.inner
         }
         self.symbols.find::<StructSymbolId, _>(|s| s.ty == ty)
+    }
+
+    fn get_object_ty(&self, object: &Option<ir::Expression>) -> Option<types::TypeId> {
+        match object {
+            Some(o) => Some(o.ty()),
+            None => self.this_type(),
+        }
     }
 
     pub fn get_type_symbol_id(&self, mut ty: types::TypeId) -> Option<TypeSymbolId> {

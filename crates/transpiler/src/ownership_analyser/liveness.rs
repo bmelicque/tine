@@ -225,14 +225,6 @@ fn visit_stmt(stmt: &ir::Statement, ctx: Ctx, out: &mut UseSites) {
             visit_block(&f.body, ctx.enter_closure(f.body.loc), out);
         }
         ir::Statement::Method(m) => {
-            out.0.insert(
-                m.receiver_type.1.into(),
-                vec![UseSite {
-                    loc: m.receiver_type.0,
-                    is_external: true,
-                    ..Default::default()
-                }],
-            );
             for param in &m.params {
                 out.0.insert(
                     param.1.into(),
@@ -275,8 +267,14 @@ fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
         | ir::Expression::StringLiteral(_) => {}
 
         ir::Expression::Unary(u) => visit_expr(&u.operand, ctx, out),
-        ir::Expression::Member(m) => visit_expr(&m.object, ctx, out),
-        ir::Expression::Method(m) => visit_expr(&m.host, ctx, out),
+        ir::Expression::Member(m) => match m.object.as_deref() {
+            Some(o) => visit_expr(o, ctx, out),
+            None => {}
+        },
+        ir::Expression::Method(m) => match m.host.as_deref() {
+            Some(o) => visit_expr(o, ctx, out),
+            None => {}
+        },
         ir::Expression::Binary(b) => {
             visit_expr(&b.left, ctx, out);
             visit_expr(&b.right, ctx, out);

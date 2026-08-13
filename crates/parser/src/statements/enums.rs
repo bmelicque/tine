@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use tine_ast::*;
 use tine_common::{
     diagnostics::DiagnosticKind,
@@ -17,32 +19,50 @@ impl Parser<'_> {
         let start = pub_loc.unwrap_or(self.localize(kw_range));
 
         let (name, params) = self.try_parse_type_name();
-        self.expect(Token::LBrace);
-        let variants = self.parse_enum_variants();
-        let end_range = self.expect(Token::RBrace);
-        let end = self.localize(end_range);
+        let (items, end) = self
+            .try_parse(|s| s.parse_enum_items(), |t| matches!(t, Token::Newline))
+            .ok()
+            .flatten()
+            .unzip();
 
         EnumDefinition {
             docs,
             meta,
-            loc: Location::merge(start, end),
+            loc: Location::merge(start, end.unwrap()),
             public: pub_loc.is_some(),
             name,
             params,
-            variants,
+            items,
         }
     }
 
-    fn parse_enum_variants(&mut self) -> Vec<VariantDefinition> {
-        let variants = self.parse_list(
-            |p| p.parse_variant_definition(),
-            Token::Comma,
-            Token::RBrace,
-        );
-        variants
+    fn parse_enum_items(&mut self) -> Option<(Vec<EnumItem>, Location)> {
+        self.eat_if(&[Token::LBrace])?;
+        let items = self.parse_list(|p| p.parse_enum_item(), Token::Comma, Token::RBrace);
+        let end = self.expect(Token::LBrace);
+        let end = self.localize(end);
+        Some((items, end))
     }
 
-    fn parse_variant_definition(&mut self) -> Option<VariantDefinition> {
+    fn parse_enum_item(&mut self) -> Option<EnumItem> {
+        let docs = self.maybe_parse_docs();
+        let public_range = self.eat_if(&[Token::Pub]);
+
+        match self.tokens.peek()?.0.as_ref().ok()? {
+            Token::Static | Token::Mut | Token::Fn => self
+                .parse_method_definition(docs, public_range)
+                .map(Into::into),
+            _ => self
+                .parse_variant_definition(docs, public_range)
+                .map(Into::into),
+        }
+    }
+
+    fn parse_variant_definition(
+        &mut self,
+        docs: Option<Docs>,
+        public_range: Option<Range<usize>>,
+    ) -> Option<VariantDefinition> {
         let Ok(type_name) = self.parse_type_name(&[Token::LBrace, Token::LParen, Token::Newline])
         else {
             return None;
@@ -56,14 +76,17 @@ impl Parser<'_> {
             self.error(DiagnosticKind::UnexpectedTypeParams, loc);
         }
         let body = self.parse_variant_body();
-        let loc = match (&type_name, &body) {
-            (Some(type_name), Some(body)) => Location::merge(type_name.loc, body.loc()),
-            (Some(type_name), None) => type_name.loc,
-            (None, Some(body)) => body.loc(),
-            (None, None) => return None,
-        };
+        let public_loc = public_range.map(|r| self.localize(r));
+        let loc = Location::merge_list(&[
+            public_loc.as_ref().map(|x| x as &dyn Locatable),
+            type_name.as_ref().map(|x| x as &dyn Locatable),
+            body.as_ref().map(|x| x as &dyn Locatable),
+            body.as_ref().map(|x| x as &dyn Locatable),
+        ])?;
         Some(VariantDefinition {
             loc,
+            docs,
+            public: public_loc.is_some(),
             body,
             name: type_name.map(|t| t.name),
         })

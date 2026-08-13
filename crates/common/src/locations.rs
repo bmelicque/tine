@@ -89,6 +89,12 @@ impl Location {
         }
     }
 
+    pub fn merge_list(locatables: &[Option<&dyn Locatable>]) -> Option<Location> {
+        let start = locatables.iter().find_map(|l| l.as_ref())?;
+        let end = locatables.iter().rev().find_map(|l| l.as_ref())?;
+        Some(Self::merge(start.loc(), end.loc()))
+    }
+
     pub fn module(&self) -> ModuleId {
         self.module
     }
@@ -149,6 +155,11 @@ impl Ord for Location {
 
 pub trait Locatable {
     fn loc(&self) -> Location;
+}
+impl Locatable for Location {
+    fn loc(&self) -> Location {
+        *self
+    }
 }
 
 pub fn vec_loc<L: Locatable>(vec: &Vec<L>) -> Option<Location> {

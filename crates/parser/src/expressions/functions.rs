@@ -1,4 +1,4 @@
-use tine_ast as ast;
+use tine_ast::*;
 use tine_common::{
     diagnostics::DiagnosticKind,
     locations::{Locatable, Location},
@@ -7,7 +7,7 @@ use tine_common::{
 use crate::{tokens::Token, Parser};
 
 impl Parser<'_> {
-    pub fn parse_function_expression(&mut self) -> ast::FunctionExpression {
+    pub fn parse_function_expression(&mut self) -> FunctionExpression {
         let start_range = self.eat(&[Token::Fn]);
         let start_loc = self.localize(start_range);
         let function = self.parse_function_expression_without_kw();
@@ -16,61 +16,42 @@ impl Parser<'_> {
                 function.loc = Location::merge(start_loc, function.loc);
                 function
             }
-            _ => ast::FunctionExpression {
+            _ => FunctionExpression {
                 loc: start_loc,
-                name: None,
-                type_params: None,
-                params: None,
-                return_type: None,
-                body: None,
+                ..Default::default()
             },
         }
     }
 
-    pub fn parse_function_expression_without_kw(&mut self) -> Option<ast::FunctionExpression> {
+    pub fn parse_function_expression_without_kw(&mut self) -> Option<FunctionExpression> {
         let name = self.parse_function_name();
         let type_params = self.parse_function_type_params();
         let params = self.parse_function_params();
         let return_type = self.parse_function_return_type();
-        let body = self.parse_function_body();
-        let start_loc = if let Some(name) = &name {
-            name.loc
-        } else if let Some(params) = &params {
-            params.loc
-        } else if let Some(return_type) = &return_type {
-            return_type.loc()
-        } else if let Some(body) = &body {
-            body.loc
-        } else {
-            return None;
-        };
-        let end_loc = if let Some(body) = &body {
-            body.loc
-        } else if let Some(return_type) = &return_type {
-            return_type.loc()
-        } else if let Some(params) = &params {
-            params.loc
-        } else {
-            name.as_ref().unwrap().loc
-        };
-        let loc = Location::merge(start_loc, end_loc);
+        let body = self.parse_function_body(return_type.is_some());
+        let loc = Location::merge_list(&[
+            name.as_ref().map(|x| x as &dyn Locatable),
+            params.as_ref().map(|x| x as &dyn Locatable),
+            return_type.as_ref().map(|x| x as &dyn Locatable),
+            body.as_ref().map(|x| x as &dyn Locatable),
+        ])?;
 
-        Some(ast::FunctionExpression {
+        Some(FunctionExpression {
             loc,
             name,
             type_params,
             params,
             return_type,
-            body,
+            body: body.map(Box::new),
         })
     }
 
-    fn parse_function_name(&mut self) -> Option<ast::Identifier> {
+    fn parse_function_name(&mut self) -> Option<Identifier> {
         if let Some((Ok(Token::Ident(ident)), range)) = self.tokens.peek() {
             let name = ident.to_owned();
             let range = range.clone();
             self.tokens.next();
-            Some(ast::Identifier {
+            Some(Identifier {
                 loc: self.localize(range),
                 text: name,
             })
@@ -79,14 +60,14 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_function_type_params(&mut self) -> Option<Vec<ast::Identifier>> {
+    fn parse_function_type_params(&mut self) -> Option<Vec<Identifier>> {
         match self.tokens.peek() {
             Some((Ok(Token::Lt), _)) => Some(self.parse_type_params()),
             _ => None,
         }
     }
 
-    pub fn parse_function_params(&mut self) -> Option<ast::FunctionParams> {
+    pub fn parse_function_params(&mut self) -> Option<FunctionParams> {
         let Some((Ok(Token::LParen), _)) = self.tokens.peek() else {
             let diag = DiagnosticKind::ExpectedToken {
                 expected: vec!["(".to_string()],
@@ -106,103 +87,120 @@ impl Parser<'_> {
         let end_loc = self.localize(end_range);
         let loc = Location::merge(start_loc, end_loc);
 
-        Some(ast::FunctionParams { loc, params })
+        Some(FunctionParams { loc, params })
     }
 
-    fn parse_function_param(&mut self) -> Option<ast::FunctionParam> {
-        let identifier = match self.tokens.peek() {
-            Some((Ok(Token::Ident(ident)), range)) => {
-                let range = range.clone();
-                let text = ident.to_owned();
-                let loc = self.localize(range);
-                Some(ast::Identifier { loc, text })
-            }
-            _ => None,
+    fn parse_function_param(&mut self) -> Option<FunctionParam> {
+        let name = self.maybe_parse_name(|t| matches!(t, Token::Comma | Token::RParen))?;
+        let Some((_, colon_loc)) = self.maybe_eat(|t| t.colon()) else {
+            return Some(FunctionParam {
+                loc: name.loc,
+                name: Some(name),
+                type_annotation: None,
+            });
         };
-        let colon = self.better_expect(
-            |t| match t {
-                Token::Colon => Some(()),
-                _ => None,
-            },
-            &[Token::Comma, Token::RParen, Token::Newline],
-        );
-        let colon_range = match colon {
-            Ok((_, r)) => r,
-            Err(r) => {
-                self.error(DiagnosticKind::MissingPattern, self.localize(r));
-                return identifier.map(|i| ast::FunctionParam {
-                    loc: i.loc,
-                    name: Some(i),
-                    type_annotation: None,
-                });
-            }
-        };
-
         let type_annotation = self.parse_type();
 
-        let loc = match (&identifier, &type_annotation) {
-            (Some(i), Some(t)) => Location::merge(i.loc, t.loc()),
-            (Some(i), None) => Location::merge(i.loc, self.localize(colon_range)),
-            (None, Some(t)) => Location::merge(self.localize(colon_range), t.loc()),
-            (None, None) => self.localize(colon_range),
+        let loc = match &type_annotation {
+            Some(t) => Location::merge(name.loc, t.loc()),
+            None => Location::merge(name.loc, colon_loc),
         };
 
-        Some(ast::FunctionParam {
+        Some(FunctionParam {
             loc,
-            name: identifier,
+            name: Some(name),
             type_annotation,
         })
     }
 
-    fn parse_function_return_type(&mut self) -> Option<ast::Type> {
-        match self.tokens.peek() {
-            Some((Ok(Token::Colon), _)) => {
-                self.tokens.next();
-                self.parse_type()
-            }
-            _ => None,
+    fn parse_function_return_type(&mut self) -> Option<Type> {
+        self.eat_if(&[Token::SlimArrow])?;
+        let ty = self.parse_type();
+        if ty.is_none() {
+            let err_loc = self.next_loc();
+            self.error(DiagnosticKind::ExpectedType, err_loc);
         }
+        ty
     }
 
-    fn parse_function_body(&mut self) -> Option<ast::BlockExpression> {
-        match self.tokens.peek() {
-            Some((Ok(Token::LBrace), _)) => Some(self.parse_block()),
-            _ => {
-                let loc = self.next_loc();
-                self.error(DiagnosticKind::MissingBody, loc);
-                None
-            }
+    fn parse_function_body(&mut self, expect_block: bool) -> Option<Expression> {
+        let is_block = self.maybe_is(|t| *t == Token::LBrace);
+        let body = match (expect_block, is_block) {
+            (true, true) => return Some(self.parse_block().into()),
+            (false, _) => self.parse_expression(),
+            _ => None,
+        };
+
+        if body.is_none() {
+            let loc = self.next_loc();
+            self.error(DiagnosticKind::MissingBody, loc);
         }
+        body
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use tine_common::locations::Span;
-
-    use crate::test_utils::{test_expression, ExpressionTest};
-
-    use super::*;
+    use crate::{test_utils::parse_expression, Parser};
 
     #[test]
-    fn test_parse_empty_function() {
-        test_expression(ExpressionTest {
-            input: "fn() {}",
-            expected: ast::Expression::Function(ast::FunctionExpression {
-                loc: Location::new(0, Span::new(0, 7)),
-                name: None,
-                type_params: None,
-                params: Some(ast::FunctionParams {
-                    loc: Location::new(0, Span::new(2, 4)),
-                    params: vec![],
-                }),
-                return_type: None,
-                body: Some(ast::BlockExpression {
-                    loc: Location::new(0, Span::new(5, 7)),
-                    statements: vec![],
-                }),
-            }),
-            diagnostics: vec![],
-        });
+    fn parse_empty_function() {
+        let expr = parse_expression("fn() {}").expect("expected no errors");
+        let expr = expr.as_function().expect("expected a function expression");
+        assert!(expr.name.is_none());
+        assert!(expr.type_params.is_none());
+        assert!(expr
+            .params
+            .as_ref()
+            .expect("expected params")
+            .params
+            .is_empty());
+        expr.body
+            .as_ref()
+            .expect("expected a function body")
+            .as_block()
+            .expect("expected a block body");
+    }
+
+    #[test]
+    fn parse_function_with_param() {
+        let expr = parse_expression("fn(a) {}").expect("expected no errors");
+        let expr = expr.as_function().expect("expected a function expression");
+        let params = &expr.params.as_ref().expect("expected params").params;
+        assert_eq!(params.len(), 1);
+    }
+
+    #[test]
+    fn parse_callback() {
+        let expr = parse_expression("fn(a, b) a + b").expect("expected no errors");
+        let expr = expr.as_function().expect("expected a function expression");
+        assert_eq!(
+            expr.params.as_ref().expect("expected params").params.len(),
+            2
+        );
+        expr.body
+            .as_ref()
+            .expect("expected a function body")
+            .as_binary()
+            .expect("expected a binary expression");
+    }
+
+    #[test]
+    fn parse_function_param() {
+        let mut parser = Parser::new(0, "param: Type");
+        let param = parser
+            .parse_function_param()
+            .expect("expected a function param");
+        assert_eq!(param.name.expect("expected a param name").as_str(), "param");
+        assert_eq!(
+            param
+                .type_annotation
+                .expect("expected a type annotation")
+                .as_named()
+                .expect("expected a named type")
+                .name
+                .as_str(),
+            "Type"
+        );
     }
 }

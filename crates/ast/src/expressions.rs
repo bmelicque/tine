@@ -229,6 +229,19 @@ pub struct BlockExpression {
     #[child]
     pub statements: Vec<Statement>,
 }
+impl From<Statement> for BlockExpression {
+    fn from(value: Statement) -> Self {
+        Self {
+            loc: value.loc(),
+            statements: vec![value],
+        }
+    }
+}
+impl From<Expression> for BlockExpression {
+    fn from(value: Expression) -> Self {
+        Self::from(Into::<Statement>::into(value))
+    }
+}
 
 #[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -237,39 +250,8 @@ pub struct CallExpression {
     pub callee: Option<Box<Expression>>,
     pub type_args: Option<Vec<Type>>,
     #[child]
-    pub args: Vec<CallArgument>,
+    pub args: Vec<Expression>,
 }
-
-ast_enum!(CallArgument {
-    Expression(Expression),
-    Callback(Callback),
-});
-impl<'a> PushNodes<'a> for CallArgument {
-    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
-        match self {
-            CallArgument::Expression(expr) => expr.push_nodes(stack),
-            CallArgument::Callback(c) => c.push_children(stack),
-        }
-    }
-}
-
-#[tree_struct(untyped)]
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Callback {
-    pub params: Vec<CallbackParam>,
-    #[child]
-    pub body: Option<Box<Expression>>,
-}
-impl<'a> PushNodes<'a> for Callback {
-    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
-        self.body.push_nodes(stack);
-    }
-}
-
-ast_enum!(CallbackParam {
-    Identifier(Identifier),
-    Param(FunctionParam),
-});
 
 #[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -348,7 +330,7 @@ pub struct FunctionExpression {
     pub params: Option<FunctionParams>,
     pub return_type: Option<Type>,
     #[child]
-    pub body: Option<BlockExpression>,
+    pub body: Option<Box<Expression>>,
 }
 
 #[tree_struct(untyped)]

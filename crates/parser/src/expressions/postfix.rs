@@ -133,7 +133,7 @@ impl Parser<'_> {
 
     fn parse_call_expression(&mut self, callee: Expression) -> CallExpression {
         self.eat(&[Token::LParen]);
-        let args = self.parse_list(|p| p.parse_argument(), Token::Comma, Token::RParen);
+        let args = self.parse_list(|p| p.parse_expression(), Token::Comma, Token::RParen);
         let end_range = match self.tokens.peek() {
             Some((Ok(Token::RParen), _)) => self.eat(&[Token::RParen]),
             _ => self.recover_at(&[Token::RParen]),
@@ -167,7 +167,7 @@ impl Parser<'_> {
             };
         };
         self.eat(&[Token::LParen]);
-        let args = self.parse_list(|p| p.parse_argument(), Token::Comma, Token::RParen);
+        let args = self.parse_list(|p| p.parse_expression(), Token::Comma, Token::RParen);
         let end_range = match self.tokens.peek() {
             Some((Ok(Token::RParen), _)) => self.eat(&[Token::RParen]),
             _ => self.recover_at(&[Token::RParen]),
@@ -179,48 +179,6 @@ impl Parser<'_> {
             type_args: Some(type_args),
             args,
         }
-    }
-
-    fn parse_argument(&mut self) -> Option<CallArgument> {
-        let Some(argument) = self.parse_expression() else {
-            return None;
-        };
-
-        let Expression::Tuple(tuple) = argument else {
-            return Some(argument.into());
-        };
-
-        let Some((Ok(Token::FatArrow), arrow_range)) = self.tokens.peek().cloned() else {
-            return Some(Expression::Tuple(tuple).into());
-        };
-        self.tokens.next(); // consume '=>'
-        let mut loc = Location::merge(tuple.loc, self.localize(arrow_range));
-
-        let body = self.parse_expression();
-        if let Some(body) = &body {
-            loc = Location::merge(loc, body.loc());
-        } else {
-            self.error(DiagnosticKind::MissingExpression, loc.increment());
-        }
-
-        let params = tuple
-            .elements
-            .into_iter()
-            .map(|element| {
-                CallbackParam::Identifier(Identifier {
-                    loc: element.loc(),
-                    text: match element {
-                        Expression::Identifier(identifier) => identifier.text.clone(),
-                        _ => unreachable!("FIXME"),
-                    },
-                })
-            })
-            .collect();
-        Some(CallArgument::Callback(Callback {
-            loc,
-            params,
-            body: body.map(|b| Box::new(b)),
-        }))
     }
 }
 
@@ -324,12 +282,10 @@ mod tests {
                     },
                 )))),
                 type_args: None,
-                args: vec![CallArgument::Expression(Expression::IntLiteral(
-                    IntLiteral {
-                        loc: Location::new(0, Span::new(9, 10)),
-                        value: 1,
-                    },
-                ))],
+                args: vec![Expression::IntLiteral(IntLiteral {
+                    loc: Location::new(0, Span::new(9, 10)),
+                    value: 1,
+                })],
             }),
             diagnostics: vec![],
         });

@@ -249,7 +249,7 @@ impl CodeGenerator<'_, '_> {
     }
 
     pub fn member_expr_to_swc(&mut self, node: ir::MemberExpression) -> ExpressionResult {
-        let obj_result = self.handle_expression(*node.object);
+        let obj_result = self.handle_host(node.object);
 
         let prop_name = &self.symbols.get(node.member.1).name;
         let prop = match prop_name.parse::<usize>() {
@@ -283,7 +283,7 @@ impl CodeGenerator<'_, '_> {
 
         let should_clone = self.method_ownership(&node) == OwnershipAction::Clone;
 
-        let obj_result = self.handle_expression(*node.host);
+        let obj_result = self.handle_host(node.host);
         let method_name = &self.symbols.get(node.method.1).name;
         let prop = swc::MemberProp::Ident(ident_from_str(&method_name).into());
         let callee = swc::MemberExpr {
@@ -313,6 +313,17 @@ impl CodeGenerator<'_, '_> {
         }
 
         ExpressionResult { prelim_stmts, expr }
+    }
+
+    fn handle_host(&mut self, node: Option<Box<ir::Expression>>) -> ExpressionResult {
+        if let Some(node) = node {
+            return self.handle_expression(*node);
+        }
+        let expr = swc::Expr::This(swc::ThisExpr { span: DUMMY_SP });
+        ExpressionResult {
+            prelim_stmts: vec![],
+            expr,
+        }
     }
 
     fn string_literal_to_swc(&mut self, node: ir::StringLiteral) -> swc::Str {

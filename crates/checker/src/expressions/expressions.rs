@@ -22,9 +22,11 @@ impl TypeChecker {
             Element(node) => self.visit_element_expression(node).map(Into::into),
             FloatLiteral(node) => Some(visit_float_literal(node).into()),
             Member(node) => self.visit_member_expression(node).map(Into::into),
-            Function(node) => {
-                self.with_scope(|self_| self_.visit_function_expression(node, None).map(Into::into))
-            }
+            Function(node) => self.with_scope(|self_| {
+                self_
+                    .visit_function_expression(node, None, None)
+                    .map(Into::into)
+            }),
             Identifier(node) => self.visit_identifier(node).map(Into::into),
             If(node) => self.visit_if_expression(node).map(Into::into),
             IfDecl(node) => self.visit_if_decl_expression(node).map(Into::into),

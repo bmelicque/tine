@@ -45,7 +45,7 @@ fn visit_chain_segment(
     if let Some((sym, ty)) = variable_prop {
         return Some(ir::Expression::Member(ir::MemberExpression {
             loc: Location::merge(host.loc(), segment.loc),
-            object: Box::new(host),
+            object: Some(Box::new(host)),
             member: (segment.loc, sym),
             ty,
         }));
@@ -54,7 +54,7 @@ fn visit_chain_segment(
     if let Some((sym, ty)) = visitor.tc.find_method(host.ty(), member_name, |_| true) {
         return Some(ir::Expression::Method(ir::MethodExpression {
             loc: Location::merge(host.loc(), segment.loc),
-            host: Box::new(host),
+            host: Some(Box::new(host)),
             method: (segment.loc, sym),
             args: vec![],
             ty,

@@ -1,5 +1,10 @@
+use std::ops::Range;
+
 use tine_ast::*;
-use tine_common::{diagnostics::DiagnosticKind, locations::Location};
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+};
 
 use crate::{tokens::Token, Parser};
 
@@ -40,11 +45,7 @@ impl Parser<'_> {
         let start_range = self.eat(&[Token::LBrace]);
         let start_loc = self.localize(start_range);
 
-        let items = self.parse_list(
-            |p| p.parse_implementation_item(),
-            Token::Newline,
-            Token::RBrace,
-        );
+        let items = self.parse_list(|p| p.parse_impl_item(), Token::Newline, Token::RBrace);
 
         let end_loc = self.close(Token::RBrace);
 
@@ -54,83 +55,70 @@ impl Parser<'_> {
         })
     }
 
-    fn parse_implementation_item(&mut self) -> Option<ImplementationItem> {
-        let docs = match self.tokens.peek() {
-            Some((Ok(Token::LineComment(_)), range)) => {
-                let start = range.start.clone();
-                Some(self.parse_docs(start))
-            }
-            Some((Err(_), _)) | None => return None,
-            _ => None,
-        };
-
-        let public = self.eat_if(&[Token::Pub]).is_some();
-
-        let Some((Ok(Token::Fn), _)) = self.tokens.peek() else {
-            return None;
-        };
-        let start_range = self.eat(&[Token::Fn]);
-        let start_loc = self.localize(start_range);
-
-        let receiver = match self.tokens.peek() {
-            Some((Ok(Token::LParen), _)) => Some(self.parse_method_receiver()),
-            _ => None,
-        };
-
-        let function = self.parse_function_expression_without_kw();
-
-        match receiver {
-            Some(receiver) => {
-                let loc = match &function {
-                    Some(f) => Location::merge(start_loc, f.loc),
-                    None => Location::merge(start_loc, receiver.loc),
-                };
-                let mut method = MethodDefinition {
-                    docs,
-                    loc,
-                    public,
-                    ..Default::default()
-                };
-                method.copy_function(function.unwrap_or(FunctionExpression {
-                    ..Default::default()
-                }));
-                Some(ImplementationItem::Method(method))
-            }
-            None => {
-                let loc = function
-                    .as_ref()
-                    .map_or(start_loc, |f| Location::merge(start_loc, f.loc));
-                let mut definition = function.unwrap_or(FunctionExpression::default());
-                definition.loc = loc;
-                Some(ImplementationItem::StaticMethod(FunctionDefinition {
-                    docs,
-                    loc,
-                    public,
-                    definition,
-                }))
-            }
-        }
+    fn parse_impl_item(&mut self) -> Option<MethodDefinition> {
+        let docs = self.maybe_parse_docs();
+        let public_range = self.eat_if(&[Token::Pub]);
+        self.parse_method_definition(docs, public_range)
     }
 
-    fn parse_method_receiver(&mut self) -> MethodReceiver {
-        let start_range = self.eat(&[Token::LParen]);
-        let start_loc = self.localize(start_range);
-
-        let mutable = self.eat_if(&[Token::Mut]).is_some();
-
-        let pattern = self.parse_pattern();
-        let end_range = match self.tokens.peek() {
-            Some((Ok(Token::RParen), r)) => r.clone(),
-            _ => self.recover_at(&[Token::RParen]),
-        };
-        let loc = Location::merge(start_loc, self.localize(end_range));
-        MethodReceiver {
-            loc,
-            mutable,
-            pattern,
-            // FIXME:
-            self_type: None,
+    pub fn parse_method_definition(
+        &mut self,
+        docs: Option<Docs>,
+        public_range: Option<Range<usize>>,
+    ) -> Option<MethodDefinition> {
+        let static_range = self.eat_if(&[Token::Static]);
+        let mut_range = self.eat_if(&[Token::Mut]);
+        if !self.maybe_is(|t| *t == Token::Fn) {
+            let error_loc = self.next_loc();
+            let expected = vec!["fn".into()];
+            let error = DiagnosticKind::ExpectedToken { expected };
+            self.error(error, error_loc);
+            self.sync2(|t| matches!(t, Token::Newline | Token::RBrace));
+            return None;
         }
+        let public = public_range.is_some();
+        let static_ = static_range.is_some();
+        let mut_ = mut_range.is_some();
+        if static_ && mut_ {
+            let start = self.localize(static_range.clone().unwrap());
+            let end = self.localize(mut_range.clone().unwrap());
+            let loc = Location::merge(start, end);
+            self.error(DiagnosticKind::StaticMutMethod, loc);
+        }
+        let f = self.parse_function_expression();
+        if f.name.is_none() {
+            self.error(DiagnosticKind::MissingName, f.loc);
+        }
+
+        if matches!(&f.body, Some(b) if b.as_block().is_none()) {
+            let loc = f.body.as_ref().unwrap().loc();
+            self.error(DiagnosticKind::ExpectedBlock, loc);
+        };
+        let loc = [public_range, static_range, mut_range]
+            .into_iter()
+            .filter_map(|r| r)
+            .next()
+            .map_or(f.loc, |r| Location::merge(self.localize(r), f.loc));
+        Some(MethodDefinition {
+            loc,
+            docs,
+            public,
+            static_,
+            mut_,
+            name: f.name,
+            type_params: f.type_params,
+            params: f.params,
+            return_type: f.return_type,
+            body: f.body,
+        })
+    }
+
+    pub fn maybe_parse_docs(&mut self) -> Option<Docs> {
+        if !self.maybe_is(|t| matches!(t, Token::LineComment(_))) {
+            return None;
+        }
+        let start = self.next_range().start;
+        Some(self.parse_docs(start))
     }
 }
 
@@ -163,5 +151,27 @@ mod tests {
             }),
             diagnostics: vec![],
         });
+    }
+
+    #[test]
+    fn parse_impl() {
+        let mut parser = Parser::new(0, "impl Type {\nfn method() {}\n}");
+        let stmt = parser
+            .parse_statement()
+            .expect("expected a positive result");
+        let implementation = stmt.as_implementation().expect("expected an `impl` block");
+        assert!(parser.diagnostics.is_empty());
+        let body = implementation.body.as_ref().expect("expected a body");
+        assert_eq!(body.items.len(), 1);
+    }
+
+    #[test]
+    fn parse_method_definition() {
+        let mut parser = Parser::new(0, "fn method() {}");
+        let result = parser
+            .parse_method_definition(None, None)
+            .expect("expected a positive result");
+        assert!(result.return_type.is_none(),);
+        result.body.expect("expected a body");
     }
 }

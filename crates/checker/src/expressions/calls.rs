@@ -6,7 +6,7 @@ use tine_common::{
 };
 use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
-use tine_types::{store::TypeStore, types};
+use tine_types::types;
 
 use crate::{substitutions::Substitutions, TypeChecker};
 
@@ -62,7 +62,7 @@ impl TypeChecker {
         &mut self,
         v: VariantSymbolId,
         constructor: types::TypeId,
-        args: Vec<ast::CallArgument>,
+        args: Vec<ast::Expression>,
         variant_loc: Location,
         loc: Location,
     ) -> Option<ir::Expression> {
@@ -113,7 +113,7 @@ impl TypeChecker {
 
     fn check_arguments(
         &mut self,
-        args: Vec<ast::CallArgument>,
+        args: Vec<ast::Expression>,
         params: &[types::TypeId],
         substitutions: &mut Substitutions,
         node_loc: Location,
@@ -135,153 +135,36 @@ impl TypeChecker {
 
     fn check_argument(
         &mut self,
-        node: ast::CallArgument,
+        node: ast::Expression,
         expected: types::TypeId,
         substitutions: &mut Substitutions,
     ) -> Option<ir::Expression> {
         match node {
-            ast::CallArgument::Expression(expr) => self
+            ast::Expression::Function(f) => self
+                .check_callback(f, expected, substitutions)
+                .map(Into::into),
+            expr => self
                 .check_expression_against(expr, expected, substitutions)
                 .map(|e| e.into()),
-            ast::CallArgument::Callback(node) => self
-                .check_callback(node, expected, substitutions)
-                .map(|c| c.into()),
         }
     }
 
     fn check_callback(
         &mut self,
-        node: ast::Callback,
+        node: ast::FunctionExpression,
         expected_id: types::TypeId,
         substitutions: &mut Substitutions,
     ) -> Option<ir::FunctionExpression> {
         let expected = self.resolve(expected_id);
         let types::Type::Function(expected) = expected else {
-            let error = DiagnosticKind::UnexpectedCallback {
-                expected: self.types.display(expected_id),
-            };
+            let expected = self.types.display(expected_id);
+            let error = DiagnosticKind::UnexpectedCallback { expected };
             self.error(error, node.loc);
             return None;
         };
-
-        let (params, body) = self.with_scope(|s| {
-            let params = expected.params.clone();
-            let return_type = expected.return_type;
-            if params.len() != node.params.len() {
-                let error = DiagnosticKind::CallbackParamCountMismatch {
-                    expected: params.len(),
-                    got: node.params.len(),
-                };
-                s.error(error, node.loc);
-            }
-            let params = s.visit_callback_params(node.params, &params);
-            let Some(body) = node.body else {
-                return (params, None);
-            };
-            let body = match *body {
-                ast::Expression::Block(b) => s.visit_callback_body(b, return_type, substitutions),
-                body => {
-                    let body = s.visit_expression(body);
-                    if let Some(body) = &body {
-                        substitutions.unify(s, return_type, body.ty(), body.loc());
-                    }
-                    body.map(Into::into)
-                }
-            };
-            (params, body)
-        });
-
-        let body = body?;
-
-        Some(ir::FunctionExpression {
-            loc: node.loc,
-            name: None,
-            params: params?,
-            body,
-            ty: expected_id,
-        })
-    }
-
-    pub fn visit_callback_body(
-        &mut self,
-        body: ast::BlockExpression,
-        expected_type: types::TypeId,
-        substitutions: &mut Substitutions,
-    ) -> Option<ir::Block> {
-        let body_type = self.visit_block_expression(body);
-        substitutions.unify(self, expected_type, body_type.ty, body_type.loc);
-        let returns = body_type.find_returns();
-        for ret in returns {
-            let ty = ret.expression.as_ref().map_or(TypeStore::UNIT, |r| r.ty());
-            self.check_assigned_type(expected_type, ty, true, ret.loc);
-        }
-
-        self.check_assigned_type(expected_type, body_type.ty, true, body_type.loc);
-
-        Some(body_type)
-    }
-
-    fn visit_callback_params(
-        &mut self,
-        got: Vec<ast::CallbackParam>,
-        expected: &Vec<types::TypeId>,
-    ) -> Option<Vec<(Location, VariableSymbolId)>> {
-        got.into_iter()
-            .zip(expected.iter())
-            .map(|(got, expected)| self.visit_callback_param(got, *expected))
-            .collect()
-    }
-
-    fn visit_callback_param(
-        &mut self,
-        got: ast::CallbackParam,
-        expected: types::TypeId,
-    ) -> Option<(Location, VariableSymbolId)> {
-        match got {
-            ast::CallbackParam::Identifier(id) => {
-                let symbol = self.symbols.insert(VariableSymbol {
-                    name: id.text,
-                    ty: expected,
-                    defined_at: id.loc,
-                    ..Default::default()
-                });
-                Some((id.loc, symbol))
-            }
-            ast::CallbackParam::Param(param) => {
-                let id = param.name?;
-                let type_annotation = self.visit_type(param.type_annotation.unwrap());
-                let name = id.as_str().into();
-                let defined_at = id.loc;
-                match type_annotation {
-                    TypeStore::UNKNOWN => {
-                        let ty = expected;
-                        let symbol = self.symbols.insert(VariableSymbol {
-                            name,
-                            ty,
-                            defined_at,
-                            ..Default::default()
-                        });
-                        Some((defined_at, symbol))
-                    }
-                    ty => {
-                        let symbol = self.symbols.insert(VariableSymbol {
-                            name,
-                            ty,
-                            defined_at,
-                            ..Default::default()
-                        });
-                        if ty != expected {
-                            let error = DiagnosticKind::MismatchedTypes {
-                                left_name: self.types.display(expected),
-                                right_name: self.types.display(ty),
-                            };
-                            self.error(error, defined_at);
-                        }
-                        Some((id.loc, symbol))
-                    }
-                }
-            }
-        }
+        let f = self.visit_function_expression(node, None, Some(&expected))?;
+        substitutions.unify(self, expected_id, f.ty, f.loc);
+        Some(f)
     }
 
     fn visit_derived_call(&mut self, node: ast::CallExpression) -> Option<ir::CallExpression> {
@@ -297,14 +180,7 @@ impl TypeChecker {
         }
 
         let arg = match node.args.into_iter().next() {
-            Some(ast::CallArgument::Expression(e)) => self.visit_expression(e)?,
-            Some(ast::CallArgument::Callback(c)) => {
-                let error = DiagnosticKind::UnexpectedCallback {
-                    expected: "expression".to_string(),
-                };
-                self.error(error, c.loc);
-                return None;
-            }
+            Some(e) => self.visit_expression(e)?,
             // caught by length check above
             None => unreachable!(),
         };

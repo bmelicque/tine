@@ -82,6 +82,7 @@ struct Ctx {
     /// The binding kind `break` statements should refer to. This is what the
     /// loop's value will be assigned to.
     loop_binding: Binding,
+    in_mutable_method: Option<bool>,
 }
 
 impl Ctx {
@@ -116,6 +117,13 @@ impl Ctx {
     fn in_expression(&self) -> bool {
         self.binding == Binding::None
     }
+
+    fn enter_method(&self, mutable: bool) -> Self {
+        Self {
+            in_mutable_method: Some(mutable),
+            ..*self
+        }
+    }
 }
 
 /// Analyse the program and determine the ownership of each variable.
@@ -147,7 +155,7 @@ fn resolve(
         return OwnershipAction::Borrow;
     }
 
-    let is_mutable = semantics.is_mutable(id.symbol);
+    let is_mutable = semantics.is_mutable_symbol(id.symbol);
     if is_mutable {
         resolve_mutable(id, ctx, sites)
     } else {
@@ -309,12 +317,12 @@ fn visit_stmt(
     }
 }
 
-fn visit_expr(
+fn visit_expr<'a>(
     expr: &ir::Expression,
     ctx: Ctx,
     sites: &UseSites,
     aliases: &mut AliasMap,
-    semantics: &SemanticsChecker,
+    semantics: &'a SemanticsChecker<'a, 'a>,
     out: &mut OwnershipMap,
 ) {
     match expr {
@@ -334,10 +342,15 @@ fn visit_expr(
             } else {
                 ctx
             };
-            visit_expr(&m.object, ctx, sites, aliases, semantics, out)
+            if let Some(o) = &m.object {
+                visit_expr(o, ctx, sites, aliases, semantics, out)
+            }
         }
         ir::Expression::Method(m) => {
-            visit_expr(&m.host, ctx.force_copying(), sites, aliases, semantics, out)
+            let mutable = semantics.is_mutable_symbol(m.method.1.into());
+            if let Some(o) = &m.host {
+                visit_expr(o, ctx.enter_method(mutable), sites, aliases, semantics, out)
+            }
         }
 
         ir::Expression::IntrinsicCall(_)
@@ -454,7 +467,7 @@ fn visit_expr(
             }
 
             let value_aliases_callee = signature.map_or(true, |s| s.is_receiver_aliased());
-            if is_mutable(&c.callee, semantics) == Some(true) && value_aliases_callee {
+            if is_mutable(&c.callee, semantics, ctx) == Some(true) && value_aliases_callee {
                 out.0.insert(c.loc, OwnershipAction::Clone);
             }
         }
@@ -521,11 +534,14 @@ fn visit_expr(
     }
 }
 
-fn is_mutable(expr: &ir::Expression, semantics: &SemanticsChecker) -> Option<bool> {
+fn is_mutable(expr: &ir::Expression, semantics: &SemanticsChecker, ctx: Ctx) -> Option<bool> {
     use ir::Expression::*;
     match expr {
-        Identifier(i) => Some(semantics.is_mutable(i.symbol)),
-        Member(m) => is_mutable(&m.object, semantics),
+        Identifier(i) => Some(semantics.is_mutable_symbol(i.symbol)),
+        Member(m) => match m.object.as_deref() {
+            Some(o) => is_mutable(o, semantics, ctx),
+            None => ctx.in_mutable_method,
+        },
         _ => None,
     }
 }

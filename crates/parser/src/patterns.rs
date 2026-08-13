@@ -52,10 +52,7 @@ impl Parser<'_> {
         let elements = call
             .args
             .into_iter()
-            .map(|e| match e {
-                CallArgument::Callback(c) => Pattern::Invalid(InvalidPattern { loc: c.loc }),
-                CallArgument::Expression(e) => self.expr_to_pattern(e),
-            })
+            .map(|e| self.expr_to_pattern(e))
             .collect::<Vec<_>>();
 
         Pattern::Tuple(TuplePattern {

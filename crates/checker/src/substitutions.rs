@@ -54,6 +54,10 @@ impl Substitutions {
         sub
     }
 
+    pub fn table(&self) -> &SubstitutionTable {
+        &self.table
+    }
+
     /// Find all the substitutions that would make the given generic equal to
     /// the given concrete type.
     pub fn unify(
@@ -137,7 +141,11 @@ impl Substitutions {
             Dynamic => todo!(),
             Enum(e) => {
                 let args = self.resolve_params(&e.params);
-                store.add(types::TypeRef { inner: e.id, args })
+                if args.is_empty() {
+                    e.id
+                } else {
+                    store.add(types::TypeRef { inner: e.id, args })
+                }
             }
             Float => to,
             Function(mut f) => {
@@ -176,11 +184,19 @@ impl Substitutions {
             String => to,
             Struct(s) => {
                 let args = self.resolve_params(&s.params);
-                store.add(types::TypeRef { inner: s.id, args })
+                if args.is_empty() {
+                    s.id
+                } else {
+                    store.add(types::TypeRef { inner: s.id, args })
+                }
             }
             Trait(t) => {
                 let args = self.resolve_params(&t.params);
-                store.add(types::TypeRef { inner: to, args })
+                if args.is_empty() {
+                    to
+                } else {
+                    store.add(types::TypeRef { inner: to, args })
+                }
             }
             Tuple(mut t) => {
                 t.elements = t

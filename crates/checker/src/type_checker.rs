@@ -65,6 +65,25 @@ pub fn check_project(project: ProjectParser) -> CheckProjectResult {
     }
 }
 
+pub struct ThisGuard<'a> {
+    pub tc: &'a mut TypeChecker,
+}
+impl Drop for ThisGuard<'_> {
+    fn drop(&mut self) {
+        self.tc.this.pop();
+    }
+}
+
+pub struct MutableThisGuard<'a> {
+    previous: Option<bool>,
+    pub tc: &'a mut TypeChecker,
+}
+impl Drop for MutableThisGuard<'_> {
+    fn drop(&mut self) {
+        self.tc.mutable_this = self.previous;
+    }
+}
+
 pub struct TypeChecker {
     current_module: ModuleId,
     /// The global type store, that can be read and written through each
@@ -74,6 +93,8 @@ pub struct TypeChecker {
     /// the project.
     pub symbols: SymbolTable,
     pub(crate) scopes: Vec<Scope>,
+    pub(crate) this: Vec<TypeSymbolId>,
+    pub(crate) mutable_this: Option<bool>,
 
     pub(super) loader: Box<dyn ModuleLoader>,
 
@@ -89,6 +110,8 @@ impl TypeChecker {
             types: TypeStore::new(),
             symbols: SymbolTable::default(),
             scopes: vec![Scope::new()],
+            this: vec![],
+            mutable_this: None,
 
             loader: Box::new(MockLoader),
 
@@ -274,14 +297,28 @@ impl TypeChecker {
         }
     }
 
-    pub fn with_scope<F, T>(&mut self, predicate: F) -> T
+    pub fn with_scope<F, T>(&mut self, f: F) -> T
     where
         F: FnOnce(&mut Self) -> T,
     {
         self.scopes.push(Scope::new());
-        let res = predicate(self);
+        let res = f(self);
         self.scopes.pop();
         res
+    }
+
+    pub fn with_this(&mut self, this: TypeSymbolId) -> ThisGuard<'_> {
+        self.this.push(this);
+        ThisGuard { tc: self }
+    }
+    pub(crate) fn this_type(&self) -> Option<types::TypeId> {
+        self.this.last().map(|t| self.symbol_type_id(*t))
+    }
+
+    pub fn with_this_mutability(&mut self, mutable: bool) -> MutableThisGuard<'_> {
+        let previous = self.mutable_this;
+        self.mutable_this = Some(mutable);
+        MutableThisGuard { tc: self, previous }
     }
 
     pub(super) fn current_scope(&mut self) -> &mut Scope {
@@ -319,6 +356,11 @@ impl TypeChecker {
             .map(|id| self.symbols.get_symbol(id))
     }
 
+    pub fn lookup_mut(&mut self, name: &str) -> Option<&mut dyn SymbolMut> {
+        let id = self.get_symbol_id(name)?;
+        Some(self.symbols.get_symbol_mut(id))
+    }
+
     /// Resolve the original symbol behind a type.
     ///
     /// If the given type is a type ref with type arguments, the function
@@ -347,7 +389,10 @@ impl TypeChecker {
         use tine_ir::Expression::*;
         match expr {
             Identifier(i) => Some(self.symbols.is_mutable(i.symbol)),
-            Member(m) => self.is_mutable(&m.object),
+            Member(m) => match m.object.as_deref() {
+                Some(o) => self.is_mutable(o),
+                None => self.mutable_this,
+            },
             _ => None,
         }
     }

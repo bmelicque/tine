@@ -17,7 +17,7 @@ impl TypeChecker {
         visit: F,
     ) -> (R, Vec<types::TypeParam>)
     where
-        F: FnOnce(&mut Self) -> R,
+        F: FnOnce(&mut Self, &[types::TypeParam]) -> R,
     {
         let params = match &params {
             Some(params) => params,
@@ -40,7 +40,7 @@ impl TypeChecker {
                 checker.types.add_alias(ty.id, param.text.clone());
                 param_types.push(ty);
             }
-            (visit(checker), param_types)
+            (visit(checker, &param_types), param_types)
         })
     }
 

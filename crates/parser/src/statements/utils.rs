@@ -1,5 +1,8 @@
 use tine_ast as ast;
-use tine_common::{diagnostics::DiagnosticKind, locations::Location};
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+};
 
 use crate::{tokens::Token, Parser};
 
@@ -7,6 +10,11 @@ pub(super) struct TypeName {
     pub name: ast::Identifier,
     pub params: Option<Vec<ast::Identifier>>,
     pub loc: Location,
+}
+impl Locatable for TypeName {
+    fn loc(&self) -> Location {
+        self.loc
+    }
 }
 
 impl Parser<'_> {

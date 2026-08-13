@@ -83,8 +83,6 @@ impl Into<FunctionExpression> for FunctionDefinition {
 #[tree_struct]
 #[derive(Debug, Clone)]
 pub struct MethodDefinition {
-    pub receiver_name: (Location, VariableSymbolId),
-    pub receiver_type: (Location, TypeSymbolId),
     pub mutating: bool,
     pub name: (Location, MethodSymbolId),
     pub params: Vec<(Location, VariableSymbolId)>,
