@@ -154,6 +154,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_impl() {
+        let mut parser = Parser::new(0, "impl Type {\nfn method() {}\n}");
+        let stmt = parser
+            .parse_statement()
+            .expect("expected a positive result");
+        let implementation = stmt.as_implementation().expect("expected an `impl` block");
+        assert!(parser.diagnostics.is_empty());
+        let body = implementation.body.as_ref().expect("expected a body");
+        assert_eq!(body.items.len(), 1);
+    }
+
+    #[test]
     fn parse_method_definition() {
         let mut parser = Parser::new(0, "fn method() {}");
         let result = parser
