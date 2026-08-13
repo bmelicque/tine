@@ -356,6 +356,11 @@ impl TypeChecker {
             .map(|id| self.symbols.get_symbol(id))
     }
 
+    pub fn lookup_mut(&mut self, name: &str) -> Option<&mut dyn SymbolMut> {
+        let id = self.get_symbol_id(name)?;
+        Some(self.symbols.get_symbol_mut(id))
+    }
+
     /// Resolve the original symbol behind a type.
     ///
     /// If the given type is a type ref with type arguments, the function

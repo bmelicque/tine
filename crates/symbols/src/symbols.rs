@@ -314,7 +314,7 @@ pub trait Symbol {
     fn uses(&self) -> Box<dyn Iterator<Item = Location> + '_>;
     fn is_public(&self) -> bool;
 }
-pub trait SymbolMut {
+pub trait SymbolMut: Symbol {
     fn access(&mut self) -> &mut SymbolAccessManager;
 }
 macro_rules! impl_symbol {

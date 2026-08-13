@@ -25,6 +25,7 @@ impl TypeChecker {
             public: true,
             ..Default::default()
         });
+        self.current_scope().bind(name.into(), symbol.into());
 
         self.add_method(symbol, "eq", vec![ty], &["other"], TypeStore::BOOLEAN);
         self.add_method(symbol, "hash", vec![], &[], TypeStore::INTEGER);
