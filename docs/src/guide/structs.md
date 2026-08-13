@@ -72,44 +72,55 @@ firstUser.id = 0 // `secondUser`'s id has not changed
 
 ## Defining behavior with methods
 
-🚧 _unstable: still wondering whether `impl` blocks should have `fn` before methods_
-
 Methods are just like functions, except they are defined in the context of some struct (or [enum], see later). This is a nice way to group data and the associated behavior.
 
 Let's take a look at the following example:
 
 ```tine
 struct Rectangle {
-    width:  int
-    height: int
-}
+    width:  float
+    height: float
 
-impl Rectangle {
-    new(width: int, height: int): Rectangle {
+    // This is called directly from the constructor, not from an individual
+    // instance
+    static fn new(width: float, height: float) -> Rectangle {
         Rectangle { width, height }
     }
 
-    (r) area(): int {
-        r.width * r.height
+    mut fn growBy(amout: float) {
+        // These refer to an instance's own `width` and `height`
+        .width = .width + amount
+        .height = .height + amount
+    }
+
+    fn area() -> float {
+        .width * .height
     }
 }
 
-let rect = Rectangle.new(25, 15)
+let mut rect = Rectangle.new(25., 15.)
+rect.grow(5.)
 let area = rect.area()
 ```
 
-### Mutating methods
+### Method definitions outside of the struct
 
-A receiver marked `mut` allows the method to modify the struct in place:
+In some occasion, one might have to define methods out the struct definition.
+This can be achieved with an `impl` block:
 
 ```tine
 impl Rectangle {
-    (mut r) grow(amount: int) {
-        r.width = r.width + amount
-        r.height = r.height + amount
+    static fn new(width: float, height: float) -> Rectangle {
+        Rectangle { width, height }
+    }
+
+    mut fn growBy(amout: float) {
+        .width = .width + amount
+        .height = .height + amount
+    }
+
+    fn area() -> float {
+        .width * .height
     }
 }
-
-let mut rect = Rectangle.new(25, 15)
-rect.grow(5)
 ```
