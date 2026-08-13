@@ -5,7 +5,7 @@ use std::{
 
 use tine_ast as ast;
 use tine_common::{diagnostics::DiagnosticKind, locations::Location};
-use tine_ir::{self as ir, Typed};
+use tine_ir as ir;
 use tine_symbols::symbols::*;
 use tine_types::{store::TypeStore, types};
 
@@ -262,16 +262,7 @@ impl TypeChecker {
         expected_return: types::TypeId,
     ) -> Option<ir::Block> {
         let body: ir::Block = self.visit_expression(*node?)?.into();
-
-        for ret in body.find_returns() {
-            let ty = ret.expression.as_ref().map_or(TypeStore::UNIT, |e| e.ty());
-            self.check_assigned_type(expected_return, ty, false, ret.loc);
-        }
-
-        if expected_return != TypeStore::UNIT {
-            self.check_assigned_type(expected_return, body.ty, false, body.loc);
-        }
-
+        self.check_function_body_type(&body, expected_return);
         Some(body)
     }
 

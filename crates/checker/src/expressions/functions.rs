@@ -155,17 +155,23 @@ impl TypeChecker {
         let body_must_be_block = hint.is_none() || return_annotation.is_some();
         let return_type = self.visit_return_type(return_annotation, hint);
         let body = self.visit_function_body(*body?, body_must_be_block)?;
+        self.check_function_body_type(&body, return_type);
+        Some((return_type, body))
+    }
 
+    pub fn check_function_body_type(&mut self, body: &ir::Block, return_type: types::TypeId) {
         for ret in body.find_returns() {
             let ty = ret.expression.as_ref().map_or(TypeStore::UNIT, |e| e.ty());
             self.check_assigned_type(return_type, ty, false, ret.loc);
         }
 
         if return_type != TypeStore::UNIT {
-            self.check_assigned_type(return_type, body.ty, false, body.loc);
+            let loc = match body.statements.last() {
+                Some(stmt) => stmt.loc(),
+                None => body.loc,
+            };
+            self.check_assigned_type(return_type, body.ty, false, loc);
         }
-
-        Some((return_type, body))
     }
 
     fn visit_return_type(
