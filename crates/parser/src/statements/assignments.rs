@@ -24,7 +24,7 @@ impl Parser<'_> {
             Some(expr) => Location::merge(expr.loc(), eq_loc),
             None => eq_loc,
         };
-        let assignee = self.expr_to_assignee(expr);
+        let assignee = expr.map(|e| self.expr_to_assignee(e));
         if assignee.is_none() {
             self.error(DiagnosticKind::MissingPattern, eq_loc);
         }
@@ -46,22 +46,66 @@ impl Parser<'_> {
         }))
     }
 
-    fn expr_to_assignee(&mut self, expr: Option<Expression>) -> Option<Assignee> {
-        match expr? {
-            Expression::Path(expr) => Some(Assignee::Member(expr)),
-            Expression::Unary(unary) if unary.operator == UnaryOperator::Star => {
-                match unary.operand.as_deref()? {
-                    Expression::Identifier(ident) => {
-                        Some(Assignee::Indirection(IndirectionAssignee {
-                            loc: unary.loc,
-                            identifier: ident.clone(),
-                        }))
-                    }
-                    expr => Some(self.expr_to_pattern(expr.clone()).into()),
-                }
-            }
-            expr => Some(self.expr_to_pattern(expr).into()),
+    fn expr_to_assignee(&mut self, expr: Expression) -> Assignee {
+        match expr {
+            Expression::Path(expr) => Assignee::Path(expr),
+            Expression::Unary(expr) => self.unary_expr_to_assignee(expr),
+            Expression::Struct(expr) => self.struct_expr_to_assignee(expr),
+            Expression::Tuple(expr) => self.tuple_expr_to_assignee(expr),
+            e => Assignee::Invalid(InvalidExpression { loc: e.loc() }),
         }
+    }
+
+    fn unary_expr_to_assignee(&mut self, expr: UnaryExpression) -> Assignee {
+        match expr.operator {
+            UnaryOperator::Star => Assignee::Indirection(IndirectionAssignee {
+                loc: expr.loc,
+                inner: expr
+                    .operand
+                    .map(|e| self.expr_to_assignee(*e))
+                    .map(Box::new),
+            }),
+            _ => Assignee::Invalid(InvalidExpression { loc: expr.loc }),
+        }
+    }
+    fn struct_expr_to_assignee(&mut self, expr: StructExpression) -> Assignee {
+        Assignee::Struct(StructAssignee {
+            loc: expr.loc,
+            constructor: expr.constructor,
+            fields: expr
+                .fields
+                .into_iter()
+                .map(|f| self.struct_expr_field_to_assignee_field(f))
+                .collect(),
+        })
+    }
+    fn struct_expr_field_to_assignee_field(
+        &mut self,
+        field: StructExprField,
+    ) -> StructAssigneeField {
+        let key = field.key.map(|k| match k {
+            StructExprFieldKey::MapKey(k) => {
+                StructAssigneeFieldKey::Invalid(InvalidExpression { loc: k.loc() })
+            }
+            StructExprFieldKey::Name(i) => StructAssigneeFieldKey::Identifier(i),
+        });
+        StructAssigneeField {
+            loc: field.loc,
+            key,
+            value: field.value.map(|v| self.expr_to_assignee(v)),
+        }
+    }
+
+    fn tuple_expr_to_assignee(&mut self, expr: TupleExpression) -> Assignee {
+        let elements = expr
+            .elements
+            .into_iter()
+            .map(|e| self.expr_to_assignee(e))
+            .collect();
+        Assignee::Tuple(TupleAssignee {
+            loc: expr.loc,
+            elements,
+        })
     }
 }
 
@@ -94,11 +138,21 @@ mod tests {
     }
 
     #[test]
+    fn parse_indirect_assignment() {
+        let stmt = parse_statement("*y = 42").expect("expected no errors");
+        let stmt = stmt.as_assignment().expect("expected an assignment");
+        let pattern = stmt.pattern.as_ref().expect("expected a valid assignee");
+        pattern
+            .as_indirection()
+            .expect("expected indirection assignee");
+    }
+
+    #[test]
     fn parse_member_assignment() {
         let stmt = parse_statement("x.y = 42").expect("expected no errors");
         let stmt = stmt.as_assignment().expect("expected an assignment");
         let pattern = stmt.pattern.as_ref().expect("expected a valid assignee");
-        pattern.as_member().expect("expected member assignee");
+        pattern.as_path().expect("expected path assignee");
     }
 
     #[test]

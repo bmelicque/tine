@@ -25,12 +25,12 @@ ir_enum!(Statement {
 #[derive(Debug, Clone)]
 pub struct Assignment {
     #[child]
-    pub pattern: Expression,
-    #[child]
     /// Should be either:
     /// - an identifier
     /// - a member expression
     /// - a indirection (`*` + identifier)
+    pub pattern: Expression,
+    #[child]
     pub value: Expression,
 }
 

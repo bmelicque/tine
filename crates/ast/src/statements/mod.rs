@@ -154,17 +154,48 @@ pub struct Assignment {
 }
 
 ast_enum!(Assignee {
-    Member(PathExpression),
-    Indirection(IndirectionAssignee),
+    Invalid(InvalidExpression),
 
-    Pattern(Pattern),
+    Path(PathExpression),
+    Indirection(IndirectionAssignee),
+    Struct(StructAssignee),
+    Tuple(TupleAssignee),
 });
+impl From<Identifier> for Assignee {
+    fn from(value: Identifier) -> Self {
+        Self::Path(value.into())
+    }
+}
+
+#[tree_struct(untyped)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndirectionAssignee {
+    pub inner: Option<Box<Assignee>>,
+}
+
+#[tree_struct(untyped)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructAssignee {
+    pub constructor: PathExpression,
+    pub fields: Vec<StructAssigneeField>,
+}
 
 #[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct IndirectionAssignee {
-    pub identifier: Identifier,
+pub struct TupleAssignee {
+    pub elements: Vec<Assignee>,
 }
+
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct StructAssigneeField {
+    pub key: Option<StructAssigneeFieldKey>,
+    pub value: Option<Assignee>,
+}
+ast_enum!(StructAssigneeFieldKey {
+    Identifier(Identifier),
+    Invalid(InvalidExpression),
+});
 
 #[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

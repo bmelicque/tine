@@ -242,6 +242,16 @@ pub struct MemberExpression {
     pub object: Option<Box<Expression>>,
     pub member: (Location, MemberSymbolId),
 }
+impl MemberExpression {
+    pub fn root_identifier(&self) -> Result<Option<&Identifier>, ()> {
+        match self.object.as_deref() {
+            Some(Expression::Identifier(i)) => Ok(Some(i)),
+            Some(Expression::Member(m)) => m.root_identifier(),
+            Some(_) => Err(()),
+            None => Ok(None),
+        }
+    }
+}
 
 #[tree_struct]
 #[derive(Debug, Clone)]

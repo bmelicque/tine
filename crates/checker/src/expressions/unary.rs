@@ -23,16 +23,10 @@ impl TypeChecker {
         let Some(operand) = node.operand.and_then(|o| self.visit_expression(*o)) else {
             return None;
         };
-        use types::Type::*;
-        let ty = match self.resolve(operand.ty()) {
-            Listener(l) => l.inner,
-            Signal(s) => s.inner,
-            Unknown => return None,
-            _ => {
-                let error = DiagnosticKind::NotDereferenceable {
-                    type_name: self.types.display(operand.ty()),
-                };
-                self.error(error, node.loc);
+        let ty = match self.deref_type(operand.ty()) {
+            Ok(ty) => ty?,
+            Err(e) => {
+                self.error(e, node.loc);
                 return None;
             }
         };
@@ -42,6 +36,21 @@ impl TypeChecker {
             operand: Box::new(operand),
             ty,
         })
+    }
+    pub fn deref_type(
+        &mut self,
+        ty: types::TypeId,
+    ) -> Result<Option<types::TypeId>, DiagnosticKind> {
+        use types::Type::*;
+        match self.resolve(ty) {
+            Listener(l) => Ok(Some(l.inner)),
+            Signal(s) => Ok(Some(s.inner)),
+            Unknown => Ok(None),
+            _ => {
+                let type_name = self.types.display(ty);
+                Err(DiagnosticKind::NotDereferenceable { type_name })
+            }
+        }
     }
 
     fn visit_negate_expresion(

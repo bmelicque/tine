@@ -1,159 +1,209 @@
+use std::collections::HashSet;
+
 use tine_ast as ast;
 use tine_common::{diagnostics::DiagnosticKind, locations::Locatable};
-use tine_ir::{self as ir, root_identifier, Typed};
-use tine_types::{store::TypeStore, types};
+use tine_ir::{self as ir, Typed};
+use tine_symbols::symbols::{MemberSymbolId, SymbolId};
+use tine_types::types;
 
-use crate::{patterns::lower_pattern, PathContext, TypeChecker};
+use crate::{substitutions::Substitutions, PathContext, TypeChecker};
+
+#[derive(Debug, Default, Clone, Copy)]
+struct Ctx {
+    indirected: bool,
+}
+impl Ctx {
+    fn to_indirected(&self) -> Self {
+        Self { indirected: true }
+    }
+}
 
 impl TypeChecker {
-    pub fn visit_assignment(&mut self, node: ast::Assignment) -> Vec<ir::Statement> {
+    pub fn visit_assignment(&mut self, node: ast::Assignment) -> Option<ir::Assignment> {
+        let assignee = node
+            .pattern
+            .and_then(|a| self.visit_assignee(a, Ctx::default()));
         let value = node.value.and_then(|v| self.visit_expression(v));
-        let Some(pattern) = node.pattern else {
-            return vec![];
+        let (assignee, value) = match (assignee, value) {
+            (Some(assignee), Some(value)) => (assignee, value),
+            _ => return None,
         };
-        let value_type = value.as_ref().map_or(TypeStore::UNKNOWN, |v| v.ty());
-        let assignee = self.visit_assignee(pattern, value_type);
-        let Some(value) = value else { return vec![] };
-        match assignee {
-            Ok(Some(assignee)) => {
-                vec![ir::Statement::Assignment(ir::Assignment {
-                    loc: node.loc,
-                    pattern: assignee,
-                    value,
-                })]
-            }
-            Ok(None) => vec![],
-            Err(pattern) => {
-                let mut stmts = Vec::new();
-                let loc = pattern.loc();
-
-                let id: ir::Expression = self.make_temp_variable(loc, &value).0.into();
-                stmts.push(ir::Statement::Assignment(ir::Assignment {
-                    loc,
-                    pattern: id.clone(),
-                    value,
-                }));
-
-                let pattern = self.visit_pattern(pattern, &id, false, false);
-                let Some(pattern) = pattern else {
-                    return vec![];
-                };
-                let lowered = lower_pattern(pattern, id);
-                if lowered.test.is_some() {
-                    self.error(DiagnosticKind::IrrefutablePatternExpected, loc);
-                    return vec![];
-                }
-                let decls = lowered
-                    .decls
-                    .into_iter()
-                    .map(Into::into)
-                    .collect::<Vec<_>>();
-                stmts.extend(decls);
-                stmts
-            }
-        }
-    }
-
-    fn visit_assignee(
-        &mut self,
-        assignee: ast::Assignee,
-        ty: types::TypeId,
-    ) -> Result<Option<ir::Expression>, ast::Pattern> {
-        match assignee {
-            ast::Assignee::Member(m) => Ok(self.visit_expr_assignee(m, ty)),
-            ast::Assignee::Indirection(i) => Ok(self.visit_indirect_assignee(i, ty)),
-            ast::Assignee::Pattern(ast::Pattern::Identifier(i)) => {
-                Ok(self.visit_identifier_assignee(i, ty))
-            }
-            ast::Assignee::Pattern(pattern) => Err(pattern),
-        }
-    }
-
-    /// Visit an assignee which is a pattern
-    fn visit_identifier_assignee(
-        &mut self,
-        identifier: ast::Identifier,
-        against: types::TypeId,
-    ) -> Option<ir::Expression> {
-        let identifier = self.visit_identifier(identifier)?;
-        let ty = self.symbol_type_id(identifier.symbol);
-        self.check_mutability(&identifier);
-
-        self.check_assigned_type(ty, against, false, identifier.loc);
-        Some(identifier.into())
-    }
-
-    fn visit_expr_assignee(
-        &mut self,
-        expr: ast::PathExpression,
-        against: types::TypeId,
-    ) -> Option<ir::Expression> {
-        let expression = self.visit_path_expression(expr, PathContext::Expr)?.into();
-        if let Some(root) = root_identifier(&expression) {
-            // visit expression adds a read that need to be converted to write
-            self.symbols
-                .get_symbol_mut(root.symbol)
-                .access()
-                .read_to_write(root.loc);
-
-            self.check_mutability(root);
-        }
-        self.check_assigned_type(against, expression.ty(), false, expression.loc());
-        Some(expression)
-    }
-
-    fn check_mutability(&mut self, id: &ir::Identifier) {
-        if !self.symbols.is_mutable(id.symbol) {
-            let name = self.symbol_name(id.symbol).to_string();
-            let error = DiagnosticKind::AssignmentToConstant { name };
-            self.error(error, id.loc);
-        }
-    }
-
-    fn visit_indirect_assignee(
-        &mut self,
-        node: ast::IndirectionAssignee,
-        against: types::TypeId,
-    ) -> Option<ir::Expression> {
-        let name = node.identifier.as_str();
-        let Some(symbol_id) = self.get_symbol_id(name) else {
-            let error = DiagnosticKind::CannotFindName {
-                name: name.to_string(),
+        if !self.can_be_assigned_to(value.ty(), assignee.ty(), false) {
+            let left_name = self.types.display(assignee.ty());
+            let right_name = self.types.display(value.ty());
+            let error = DiagnosticKind::MismatchedTypes {
+                left_name,
+                right_name,
             };
-            self.error(error, node.identifier.loc);
+            self.error(error, node.loc);
             return None;
-        };
-        self.symbols
-            .get_symbol_mut(symbol_id)
-            .access()
-            .write(node.identifier.loc);
-        let symbol_ty = self.symbol_type_id(symbol_id);
-        let ty = match self.resolve(symbol_ty).clone() {
-            types::Type::Signal(t) => {
-                self.check_assigned_type(t.inner, against, false, node.loc);
-                t.inner
-            }
-            types::Type::Listener(t) => {
-                self.check_assigned_type(t.inner, against, false, node.loc);
-                t.inner
-            }
+        }
+
+        Some(ir::Assignment {
+            loc: node.loc,
+            pattern: assignee,
+            value,
+        })
+    }
+
+    fn visit_assignee(&mut self, assignee: ast::Assignee, ctx: Ctx) -> Option<ir::Expression> {
+        use ast::Assignee::*;
+        match assignee {
+            Invalid(_) => None,
+            Path(a) => self.visit_path_assignee(a, ctx),
+            Indirection(a) => self.visit_indirection_assignee(a, ctx),
+            Struct(a) => self.visit_struct_assignee(a, ctx),
+            Tuple(a) => self.visit_tuple_assignee(a, ctx),
+        }
+    }
+
+    fn visit_path_assignee(
+        &mut self,
+        assignee: ast::PathExpression,
+        ctx: Ctx,
+    ) -> Option<ir::Expression> {
+        let assignee_loc = assignee.loc;
+        let expr = self.visit_path_expression(assignee, PathContext::Expr)?;
+        let (symbol, mutable) = match self.get_path_root(&expr) {
+            Ok(Some(ir::Identifier {
+                symbol: SymbolId::Variable(s),
+                ..
+            })) => (Some(*s), self.symbols.get(*s).mutable),
+            // `None` this is already reported as an error in `visit_path_expression`
+            Ok(None) => (None, self.mutable_this.unwrap_or(true)),
             _ => {
-                let error = DiagnosticKind::NotDereferenceable {
-                    type_name: self.types.display(symbol_ty),
-                };
-                self.error(error, node.loc);
+                self.error(DiagnosticKind::InvalidAssignTarget, expr.loc());
                 return None;
             }
         };
+        if !ctx.indirected && !mutable {
+            let error = match symbol {
+                Some(symbol) => {
+                    let name = self.symbol_name(symbol).to_string();
+                    DiagnosticKind::AssignmentToConstant { name }
+                }
+                None => DiagnosticKind::HostMutation,
+            };
+            self.error(error, assignee_loc);
+            return None;
+        }
+        Some(expr)
+    }
 
+    fn get_path_root<'a>(
+        &mut self,
+        assignee: &'a ir::Expression,
+    ) -> Result<Option<&'a ir::Identifier>, ()> {
+        use ir::Expression::*;
+        match assignee {
+            Identifier(i) => Ok(Some(i)),
+            Member(m) => m.root_identifier(),
+            _ => Err(()),
+        }
+    }
+
+    fn visit_indirection_assignee(
+        &mut self,
+        node: ast::IndirectionAssignee,
+        ctx: Ctx,
+    ) -> Option<ir::Expression> {
+        let operand = node
+            .inner
+            .and_then(|i| self.visit_assignee(*i, ctx.to_indirected()))?;
+        let ty = match self.deref_type(operand.ty()) {
+            Ok(ty) => ty?,
+            Err(e) => {
+                self.error(e, node.loc);
+                return None;
+            }
+        };
         Some(ir::Expression::Unary(ir::UnaryExpression {
             loc: node.loc,
             operator: ir::UnaryOperator::Star,
-            operand: Box::new(ir::Expression::Identifier(ir::Identifier {
-                loc: node.loc,
-                symbol: symbol_id,
-                ty: symbol_ty,
-            })),
+            operand: Box::new(operand),
+            ty,
+        }))
+    }
+
+    fn visit_struct_assignee(
+        &mut self,
+        node: ast::StructAssignee,
+        ctx: Ctx,
+    ) -> Option<ir::Expression> {
+        self.visit_struct_like(
+            node.loc,
+            node.constructor,
+            node.fields,
+            |t, f, m, e, s| t.visit_struct_assignee_field(f, m, e, s, ctx),
+            |this, field| {
+                if let Some(v) = field.value {
+                    this.visit_assignee(v, ctx);
+                }
+            },
+        )
+        .map(Into::into)
+    }
+
+    fn visit_struct_assignee_field(
+        &mut self,
+        field: ast::StructAssigneeField,
+        members: &[MemberSymbolId],
+        encountered_field_names: &mut HashSet<String>,
+        substitutions: &mut Substitutions,
+        ctx: Ctx,
+    ) -> Option<ir::StructLiteralField> {
+        let Some(ast::StructAssigneeFieldKey::Identifier(key)) = field.key else {
+            field.value.and_then(|v| self.visit_assignee(v, ctx));
+            return None;
+        };
+
+        let Some(&symbol) = members.iter().find(|&&f| self.symbol_name(f) == key.text) else {
+            let member = key.as_str().to_string();
+            let error = DiagnosticKind::UnknownMember { member };
+            self.error(error, key.loc);
+            return None;
+        };
+        if !self.is_visible(symbol.into()) {
+            let error = DiagnosticKind::FieldIsPrivate(key.text.clone());
+            self.error(error, field.loc);
+        }
+        encountered_field_names.insert(key.as_str().to_string());
+
+        let key_loc = key.loc;
+        let value = match field.value {
+            Some(v) => {
+                let loc = v.loc();
+                let got = self.visit_assignee(v, ctx)?;
+                substitutions.unify(self, self.symbol_type_id(symbol), got.ty(), loc);
+                got
+            }
+            None => self.visit_identifier(key).map(Into::into)?,
+        };
+
+        Some(ir::StructLiteralField {
+            loc: field.loc,
+            name: (key_loc, symbol),
+            value,
+        })
+    }
+
+    fn visit_tuple_assignee(
+        &mut self,
+        node: ast::TupleAssignee,
+        ctx: Ctx,
+    ) -> Option<ir::Expression> {
+        let elements = node
+            .elements
+            .into_iter()
+            .map(|a| self.visit_assignee(a, ctx))
+            .collect::<Option<Vec<_>>>()?;
+        let ty = self.intern(types::TupleType {
+            elements: elements.iter().map(|e| e.ty()).collect(),
+            ..Default::default()
+        });
+        Some(ir::Expression::Tuple(ir::TupleExpression {
+            loc: node.loc,
+            elements,
             ty,
         }))
     }
@@ -163,22 +213,18 @@ impl TypeChecker {
 mod tests {
     use tine_common::locations::Location;
     use tine_symbols::symbols::{VariableSymbol, VariableSymbolId};
+    use tine_types::store::TypeStore;
 
     use super::*;
 
     fn dummy_assignment() -> ast::Assignment {
         ast::Assignment {
             loc: Location::dummy(),
-            pattern: Some(ast::Assignee::Pattern(ast::Pattern::Identifier(
-                ast::Identifier {
-                    loc: Location::dummy(),
-                    text: "a".to_string(),
-                },
+            pattern: Some(ast::Identifier::new("a".into(), Location::dummy()).into()),
+            value: Some(ast::Expression::IntLiteral(ast::IntLiteral::new(
+                1,
+                Location::dummy(),
             ))),
-            value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
-                loc: Location::dummy(),
-                value: 1,
-            })),
         }
     }
 
@@ -230,8 +276,41 @@ mod tests {
         assert_eq!(checker.diagnostics.len(), 1);
         assert!(matches!(
             &checker.diagnostics[&0][0].kind,
-            DiagnosticKind::WrongType { .. }
-        ));
+            DiagnosticKind::MismatchedTypes { .. }
+        ),);
+    }
+
+    #[test]
+    fn visit_indirect_simple() {
+        let mut checker = TypeChecker::new();
+        let ty = checker.intern(types::SignalType {
+            inner: TypeStore::INTEGER,
+        });
+        let id = checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
+            name: "a".to_string(),
+            ty,
+            ..Default::default()
+        });
+        checker.current_scope().bind("a".to_string(), id.into());
+
+        checker.visit_assignment(ast::Assignment {
+            loc: Location::dummy(),
+            pattern: Some(ast::Assignee::Indirection(ast::IndirectionAssignee {
+                loc: Location::dummy(),
+                inner: Some(Box::new(
+                    ast::Identifier::new("a".into(), Location::dummy()).into(),
+                )),
+            })),
+            value: Some(ast::Expression::IntLiteral(ast::IntLiteral::new(
+                1,
+                Location::dummy(),
+            ))),
+        });
+        assert!(
+            checker.diagnostics.is_empty(),
+            "expected no diagnostics, got {:?}",
+            checker.diagnostics
+        );
     }
 
     #[test]

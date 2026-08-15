@@ -82,6 +82,8 @@ pub enum DiagnosticKind {
     ExpectedValueGotType,
     ExpectedVariantUnit,
     FieldIsPrivate(String),
+    HostMutation,
+    InvalidAssignTarget,
     InvalidCondition {
         type_name: String,
     },
@@ -224,6 +226,8 @@ impl Display for DiagnosticKind {
             Self::ExpectedValueGotType => write!(f, "expected a value but got a type"),
             Self::ExpectedVariantUnit => write!(f, "expected unit variant"),
             Self::FieldIsPrivate(s) => write!(f, "field `{}` is private", s),
+            Self::HostMutation => write!(f, "cannot mutate method host in a non-mut method"),
+            Self::InvalidAssignTarget => write!(f, "invalid assign target"),
             Self::InvalidCondition { type_name } => {
                 write!(
                     f,

@@ -15,7 +15,9 @@ use super::TypeChecker;
 impl TypeChecker {
     pub fn visit_statement(&mut self, node: ast::Statement) -> Vec<ir::Statement> {
         match node {
-            ast::Statement::Assignment(node) => self.visit_assignment(node),
+            ast::Statement::Assignment(node) => self
+                .visit_assignment(node)
+                .map_or(vec![], |a| vec![a.into()]),
             ast::Statement::Break(node) => self
                 .visit_break_statement(node)
                 .map_or(vec![], |s| vec![s.into()]),

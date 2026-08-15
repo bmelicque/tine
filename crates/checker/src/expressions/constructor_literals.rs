@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 use tine_ast as ast;
-use tine_common::{diagnostics::DiagnosticKind, locations::Locatable};
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+};
 use tine_ir as ir;
 use tine_symbols::symbols::*;
 
@@ -13,35 +16,58 @@ impl TypeChecker {
         &mut self,
         node: ast::StructExpression,
     ) -> Option<ir::StructExpression> {
-        let path = self.visit_path_expression(node.constructor, PathContext::Struct)?;
+        self.visit_struct_like(
+            node.loc,
+            node.constructor,
+            node.fields,
+            TypeChecker::visit_struct_field,
+            |this, field| {
+                if let Some(v) = field.value {
+                    this.visit_expression(v);
+                }
+            },
+        )
+    }
+
+    pub fn visit_struct_like<Field>(
+        &mut self,
+        loc: Location,
+        constructor: ast::PathExpression,
+        fields: Vec<Field>,
+        mut visit_field: impl FnMut(
+            &mut Self,
+            Field,
+            &[MemberSymbolId],
+            &mut HashSet<String>,
+            &mut Substitutions,
+        ) -> Option<ir::StructLiteralField>,
+        mut visit_field_on_error: impl FnMut(&mut Self, Field),
+    ) -> Option<ir::StructExpression> {
+        let path = self.visit_path_expression(constructor, PathContext::Struct)?;
         let ir::Expression::Identifier(ir::Identifier {
             ty,
             symbol: SymbolId::Struct(symbol),
             loc: constructor_loc,
         }) = path
         else {
-            node.fields
+            fields
                 .into_iter()
-                .filter_map(|f| f.value)
-                .for_each(|v| {
-                    self.visit_expression(v);
-                });
+                .for_each(|f| visit_field_on_error(self, f));
             self.error(DiagnosticKind::InvalidTypeConstructor, path.loc());
             return None;
         };
 
         let members = self.symbols.get(symbol).members.clone();
-
         let (struct_ty, mut sub) = self.unwrap_type(ty);
 
         let mut encountered = HashSet::new();
-        let fields = node
-            .fields
+        let fields = fields
             .into_iter()
-            .map(|field| self.visit_struct_field(field, &members, &mut encountered, &mut sub))
+            .map(|field| visit_field(self, field, &members, &mut encountered, &mut sub))
             .collect::<Vec<Option<_>>>()
             .into_iter()
             .collect::<Option<Vec<_>>>()?;
+
         let missing = members
             .into_iter()
             .map(|m| &self.symbols.get(m).name)
@@ -54,7 +80,7 @@ impl TypeChecker {
         let ty = sub.apply(&mut self.types, struct_ty);
 
         Some(ir::StructExpression {
-            loc: node.loc,
+            loc,
             constructor: (constructor_loc, symbol),
             fields,
             ty,
