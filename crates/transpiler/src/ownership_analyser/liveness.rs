@@ -267,6 +267,10 @@ fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
         | ir::Expression::StringLiteral(_) => {}
 
         ir::Expression::Unary(u) => visit_expr(&u.operand, ctx, out),
+        ir::Expression::Index(i) => match i.object.as_deref() {
+            Some(o) => visit_expr(o, ctx, out),
+            None => {}
+        },
         ir::Expression::Member(m) => match m.object.as_deref() {
             Some(o) => visit_expr(o, ctx, out),
             None => {}

@@ -68,6 +68,7 @@ impl CodeGenerator<'_, '_> {
             Function(f) => self.handle_function_expression(f).into(),
             Identifier(i) => self.handle_identifier(i).into(),
             If(i) => self.handle_if_expression(i),
+            Index(i) => self.handle_index_expression(i),
             IntLiteral(i) => ExpressionResult::from(swc::Number {
                 span: DUMMY_SP,
                 value: i.value as f64,
@@ -75,7 +76,7 @@ impl CodeGenerator<'_, '_> {
             }),
             IntrinsicCall(i) => self.handle_intrinsic_call(i),
             IntrinsicConstruct(i) => self.handle_intrinsic_construct(i),
-            Member(m) => self.member_expr_to_swc(m),
+            Member(m) => self.handle_member_expression(m),
             Method(m) => self.handle_method(m),
             StringLiteral(s) => self.string_literal_to_swc(s).into(),
             Struct(s) => self.handle_simple_struct(s),
@@ -222,6 +223,30 @@ impl CodeGenerator<'_, '_> {
         })
     }
 
+    fn handle_index_expression(&mut self, node: ir::IndexExpression) -> ExpressionResult {
+        let obj_result = self.handle_host(node.object);
+
+        let prop = swc::MemberProp::Computed(swc::ComputedPropName {
+            span: DUMMY_SP,
+            expr: Box::new(swc::Expr::Lit(swc::Lit::Num(swc::Number {
+                span: DUMMY_SP,
+                value: node.index.1 as f64,
+                raw: None,
+            }))),
+        });
+
+        let expr = swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(obj_result.expr),
+            prop,
+        };
+
+        ExpressionResult {
+            prelim_stmts: obj_result.prelim_stmts,
+            expr: expr.into(),
+        }
+    }
+
     fn handle_intrinsic_call(&mut self, node: ir::IntrinsicCall) -> ExpressionResult {
         let (prelim, args): (Vec<Vec<swc::Stmt>>, _) = node
             .args
@@ -248,21 +273,11 @@ impl CodeGenerator<'_, '_> {
         }
     }
 
-    pub fn member_expr_to_swc(&mut self, node: ir::MemberExpression) -> ExpressionResult {
+    pub fn handle_member_expression(&mut self, node: ir::MemberExpression) -> ExpressionResult {
         let obj_result = self.handle_host(node.object);
 
         let prop_name = &self.symbols.get(node.member.1).name;
-        let prop = match prop_name.parse::<usize>() {
-            Ok(int) => swc::MemberProp::Computed(swc::ComputedPropName {
-                span: DUMMY_SP,
-                expr: Box::new(swc::Expr::Lit(swc::Lit::Num(swc::Number {
-                    span: DUMMY_SP,
-                    value: int as f64,
-                    raw: None,
-                }))),
-            }),
-            Err(_) => swc::MemberProp::Ident(ident_from_str(&prop_name).into()),
-        };
+        let prop = swc::MemberProp::Ident(ident_from_str(&prop_name).into());
 
         let expr = swc::MemberExpr {
             span: DUMMY_SP,

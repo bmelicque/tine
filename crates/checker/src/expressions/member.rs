@@ -153,7 +153,7 @@ impl TypeChecker {
     pub fn visit_tuple_indexing(
         &mut self,
         expr: ast::MemberExpression,
-    ) -> Option<ir::MemberExpression> {
+    ) -> Option<ir::IndexExpression> {
         let Some(ast::MemberProp::Index(index)) = &expr.prop else {
             panic!();
         };
@@ -166,13 +166,6 @@ impl TypeChecker {
             self.error(DiagnosticKind::MissingExpression, expr.loc.nth_char(0));
             return None;
         };
-        let Some(root_symbol) = self.get_struct_symbol(object_ty).cloned() else {
-            let member = index.value.to_string();
-            let error = DiagnosticKind::UnknownMember { member };
-            self.error(error, index.loc);
-            return None;
-        };
-
         let types::Type::Tuple(ty) = self.resolve(object_ty) else {
             if object_ty != TypeStore::UNKNOWN {
                 let got = self.types.display(object_ty);
@@ -181,7 +174,7 @@ impl TypeChecker {
             }
             return None;
         };
-        let elements = &root_symbol.members;
+        let elements = &ty.elements;
 
         // check index is in range
         let value = index.value;
@@ -191,20 +184,16 @@ impl TypeChecker {
         }
         let value = value as usize;
         if value >= elements.len() {
-            self.error(
-                DiagnosticKind::UnknownMember {
-                    member: value.to_string(),
-                },
-                index.loc,
-            );
+            let member = value.to_string();
+            self.error(DiagnosticKind::UnknownMember { member }, index.loc);
             return None;
         }
 
-        Some(ir::MemberExpression {
+        Some(ir::IndexExpression {
             loc: expr.loc,
             object: object.map(Into::into),
             ty: ty.elements[value],
-            member: (index.loc, elements[value]),
+            index: (index.loc, value),
         })
     }
 
@@ -267,5 +256,33 @@ impl TypeChecker {
 
         symbol.concreteness() == 0
             || symbol.matches_substitutions(&SubstitutionTable::from(type_args))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn visit_tuple_index() {
+        let mut checker = TypeChecker::new();
+        let ty = checker.intern(types::TupleType {
+            params: vec![],
+            elements: vec![TypeStore::INTEGER, TypeStore::STRING],
+        });
+        checker.insert::<VariableSymbolId>(VariableSymbol {
+            name: "x".to_string(),
+            ty,
+            ..Default::default()
+        });
+        let node = ast::MemberExpression {
+            loc: Location::dummy(),
+            object: Some(Box::new(
+                ast::Identifier::new("x".into(), Location::dummy()).into(),
+            )),
+            prop: Some(ast::IntLiteral::new(1, Location::dummy()).into()),
+        };
+        checker.visit_member_expression(node);
+        assert!(checker.diagnostics.is_empty(), "{:#?}", checker.diagnostics);
     }
 }

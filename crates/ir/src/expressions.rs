@@ -21,6 +21,7 @@ ir_enum!(
         Function(FunctionExpression),
         Identifier(Identifier),
         If(IfExpression),
+        Index(IndexExpression),
         IntLiteral(IntLiteral),
         IntrinsicCall(IntrinsicCall),
         IntrinsicConstruct(IntrinsicConstruct),
@@ -208,6 +209,14 @@ pub struct IfExpression {
     pub consequent: Block,
     #[child]
     pub alternate: Option<Block>,
+}
+
+#[tree_struct]
+#[derive(Debug, Clone)]
+pub struct IndexExpression {
+    #[child]
+    pub object: Option<Box<Expression>>,
+    pub index: (Location, usize),
 }
 
 #[tree_struct(ty = TypeStore::INTEGER)]

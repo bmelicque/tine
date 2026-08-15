@@ -335,6 +335,17 @@ fn visit_expr<'a>(
             };
             out.0.insert(id.loc, action);
         }
+        ir::Expression::Index(i) => {
+            // Force the expression's semantics onto root identifier.
+            let ctx = if semantics.is_copy(i.ty) {
+                ctx.force_copying()
+            } else {
+                ctx
+            };
+            if let Some(o) = &i.object {
+                visit_expr(o, ctx, sites, aliases, semantics, out)
+            }
+        }
         ir::Expression::Member(m) => {
             // Force the expression's semantics onto root identifier.
             let ctx = if semantics.is_copy(m.ty) {

@@ -320,6 +320,15 @@ fn visit_expr(
             map.register(id.symbol.into());
             return vec![id.symbol.into()];
         }
+        ir::Expression::Index(i) => {
+            if checker.is_copy(i.ty) {
+                i.object.as_deref().map(|o| visit_expr(o, checker, map));
+                return vec![];
+            }
+            i.object
+                .as_deref()
+                .map_or(vec![], |o| visit_expr(o, checker, map))
+        }
         ir::Expression::Member(m) => {
             if checker.is_copy(m.ty) {
                 m.object.as_deref().map(|o| visit_expr(o, checker, map));
