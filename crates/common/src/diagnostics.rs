@@ -68,6 +68,7 @@ pub enum DiagnosticKind {
     ExpectedNumber {
         got: String,
     },
+    ExpectedStruct,
     ExpectedStructGotEnum,
     ExpectedStructLikeBody,
     ExpectedToken {
@@ -208,6 +209,7 @@ impl Display for DiagnosticKind {
             Self::ExpectedMapKey => write!(f, "expected map key but got an identifier"),
             Self::ExpectedMember => write!(f, "expected a member"),
             Self::ExpectedNumber { got } => write!(f, "expected number but got `{}`", got),
+            Self::ExpectedStruct => write!(f, "expected a struct"),
             Self::ExpectedStructGotEnum => write!(f, "expected a struct but found an enum"),
             Self::ExpectedStructLikeBody => {
                 write!(f, "expected struct-like body, got tuple-like body")

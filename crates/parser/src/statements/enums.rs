@@ -39,7 +39,7 @@ impl Parser<'_> {
     fn parse_enum_items(&mut self) -> Option<(Vec<EnumItem>, Location)> {
         self.eat_if(&[Token::LBrace])?;
         let items = self.parse_list(|p| p.parse_enum_item(), Token::Comma, Token::RBrace);
-        let end = self.expect(Token::LBrace);
+        let end = self.expect(Token::RBrace);
         let end = self.localize(end);
         Some((items, end))
     }
@@ -114,5 +114,16 @@ impl Parser<'_> {
         let is_public = self.eat_if(&[Token::Pub]).is_some();
         let ty = self.parse_type()?;
         Some((is_public, ty))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test_utils::parse_statement;
+
+    #[test]
+    fn parse_enum_definition() {
+        let stmt = parse_statement("enum Enum {}").expect("expected no errors");
+        stmt.as_enum().expect("expected enum definition");
     }
 }

@@ -28,14 +28,14 @@ pub enum PathContext {
     Struct,
 }
 
-pub(super) struct PathVisitor<'tc> {
+pub(crate) struct PathVisitor<'tc> {
     pub tc: &'tc mut TypeChecker,
     pub segments: VecDeque<ast::PathSegment>,
     pub first_generic_args: Option<Vec<types::TypeId>>,
     pub start_loc: Location,
 }
 impl<'a> PathVisitor<'a> {
-    fn init(
+    pub fn init(
         tc: &'a mut TypeChecker,
         mut segments: VecDeque<ast::PathSegment>,
     ) -> Option<(Self, SymbolId)> {
@@ -91,6 +91,7 @@ impl TypeChecker {
             Struct(s) => visit_struct_path(&mut visitor, s, ctx),
             Primitive(s) => visit_primitive_path(&mut visitor, s, ctx),
             Enum(s) => visit_enum_path(&mut visitor, s, ctx),
+            Variant(s) => visit_variant_path(&mut visitor, s, ctx),
 
             TypeAlias(s) => visit_type_alias_path(&mut visitor, s, ctx),
 
@@ -99,7 +100,7 @@ impl TypeChecker {
                 visitor.error(error, visitor.start_loc);
                 None
             }
-            Variant(_) | Member(_) | Method(_) => {
+            Member(_) | Method(_) => {
                 panic!("shouldn't be able to find those symbols here!")
             }
         }
@@ -151,6 +152,29 @@ fn visit_type_alias_path(
         Some(TypeSymbolId::Primitive(s)) => visit_primitive_path(visitor, s, ctx),
         None => visit_raw_type_path(visitor, sym, ctx),
     }
+}
+
+fn visit_variant_path(
+    visitor: &mut PathVisitor,
+    sym: VariantSymbolId,
+    ctx: PathContext,
+) -> Option<ir::Expression> {
+    assert_end!(visitor);
+    if ctx == PathContext::Struct {
+        visitor.error(DiagnosticKind::ExpectedStructGotEnum, visitor.start_loc);
+        return None;
+    }
+    visitor
+        .tc
+        .symbols
+        .get_mut(sym)
+        .access()
+        .read(visitor.start_loc);
+    Some(ir::Expression::Identifier(ir::Identifier {
+        loc: visitor.start_loc,
+        ty: visitor.tc.symbol_type_id(sym),
+        symbol: sym.into(),
+    }))
 }
 
 fn visit_raw_type_path(

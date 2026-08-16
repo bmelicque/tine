@@ -127,7 +127,7 @@ impl Parser<'_> {
         let is_block = self.maybe_is(|t| *t == Token::LBrace);
         let body = match (expect_block, is_block) {
             (true, true) => return Some(self.parse_block().into()),
-            (false, _) => self.parse_expression(),
+            (false, _) => self.parse_expression_with_block(),
             _ => None,
         };
 

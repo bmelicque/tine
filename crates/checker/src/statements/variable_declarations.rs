@@ -102,12 +102,10 @@ mod tests {
     fn test_variable_declaration() {
         let node = ast::VariableDeclaration {
             mutable: true,
-            pattern: Some(ast::Pattern::MutIdentifier(ast::MutIdentifierPattern {
+            pattern: Some(ast::Pattern::Identifier(ast::IdentifierPattern {
                 loc: Location::dummy(),
-                identifier: ast::Identifier {
-                    text: "a".to_string(),
-                    loc: Location::dummy(),
-                },
+                mutable: true,
+                identifier: ast::Identifier::new("a".to_string(), Location::dummy()),
             })),
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
@@ -133,14 +131,13 @@ mod tests {
     #[test]
     fn test_constant_declaration() {
         let node = ast::VariableDeclaration {
-            pattern: Some(ast::Pattern::Identifier(ast::Identifier {
-                loc: Location::dummy(),
-                text: "a".to_string(),
-            })),
-            value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
-                value: 1,
-                loc: Location::dummy(),
-            })),
+            pattern: Some(ast::Pattern::Identifier(
+                ast::Identifier::new("a".to_string(), Location::dummy()).into(),
+            )),
+            value: Some(ast::Expression::IntLiteral(ast::IntLiteral::new(
+                1,
+                Location::dummy(),
+            ))),
             ..Default::default()
         };
         let mut tc = visit_variable_declaration(node);
@@ -161,10 +158,9 @@ mod tests {
     #[test]
     fn test_dollar_declaration() {
         let node = ast::VariableDeclaration {
-            pattern: Some(ast::Pattern::Identifier(ast::Identifier {
-                loc: Location::dummy(),
-                text: "computed$".to_string(),
-            })),
+            pattern: Some(ast::Pattern::Identifier(
+                ast::Identifier::new("computed$".to_string(), Location::dummy()).into(),
+            )),
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral {
                 value: 1,
                 loc: Location::dummy(),

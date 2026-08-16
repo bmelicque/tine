@@ -27,7 +27,7 @@ impl Parser<'_> {
         };
 
         let op_range = self.expect(Token::Eq);
-        let value = self.parse_expression();
+        let value = self.parse_expression_with_block();
         if value.is_none() {
             self.error(
                 DiagnosticKind::MissingExpression,
@@ -89,8 +89,7 @@ mod tests {
     /// Returns the bound identifier's name, assuming a simple pattern.
     fn binding_name(pattern: &ast::Pattern) -> &str {
         match pattern {
-            ast::Pattern::Identifier(id) => id.as_str(),
-            ast::Pattern::MutIdentifier(id) => id.identifier.as_str(),
+            ast::Pattern::Identifier(id) => id.identifier.as_str(),
             other => panic!("expected a simple identifier pattern, got: {other:?}"),
         }
     }
@@ -98,8 +97,7 @@ mod tests {
     /// Returns whether the pattern was marked `mut`.
     fn pattern_is_mutable(pattern: &ast::Pattern) -> bool {
         match pattern {
-            ast::Pattern::Identifier(_) => false,
-            ast::Pattern::MutIdentifier(_) => true,
+            ast::Pattern::Identifier(i) => i.mutable,
             other => panic!("expected a simple identifier pattern, got: {other:?}"),
         }
     }

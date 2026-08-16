@@ -1,495 +1,368 @@
-use std::{collections::HashSet, sync::LazyLock};
+use std::collections::{HashMap, HashSet};
 
-use tine_common::locations::Location;
 use tine_ir as ir;
 use tine_symbols::symbols::*;
 use tine_types::store::TypeStore;
 
-use crate::{
-    patterns::{
-        ConstructorPattern, LiteralPattern, Pattern, PatternField, StructPattern, TuplePattern,
-    },
-    TypeChecker,
-};
+use crate::TypeChecker;
 
-static DEFAULT_STRUCT: LazyLock<StructPattern> = LazyLock::new(StructPattern::default);
-static DEFAULT_TUPLE: LazyLock<TuplePattern> = LazyLock::new(TuplePattern::default);
+pub struct UsefulnessChecker<'tc> {
+    tc: &'tc TypeChecker,
+    ctor_arity: HashMap<Ctor, usize>,
+    type_ctors: HashMap<TypeSymbolId, Option<Vec<Ctor>>>,
+}
+impl<'tc> UsefulnessChecker<'tc> {
+    pub fn new(tc: &'tc TypeChecker) -> Self {
+        Self {
+            tc,
+            ctor_arity: HashMap::new(),
+            type_ctors: HashMap::new(),
+        }
+    }
+}
 
-type Row<'p> = Vec<&'p Pattern>;
-type Matrix<'p> = Vec<Row<'p>>;
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct Ctor(TypeSymbolId, String);
 
-struct Specialization<'p> {
-    new_arms: Matrix<'p>,
-    new_query: Row<'p>,
+#[derive(Debug, Clone)]
+enum UsefulnessPattern {
+    Wildcard,
+    Ctor(Option<Ctor>, Vec<UsefulnessPattern>),
+}
+pub fn display_pattern(uc: &UsefulnessChecker, pattern: &UsefulnessPattern) -> String {
+    match pattern {
+        UsefulnessPattern::Wildcard => "_".to_string(),
+        UsefulnessPattern::Ctor(ctor, args) => {
+            let ctor = match ctor {
+                Some(ctor) => ctor.1.clone(),
+                None => "".to_string(),
+            };
+            let args = args
+                .into_iter()
+                .map(|a| display_pattern(uc, a))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{}({})", ctor, args)
+        }
+    }
+}
+
+fn to_useful(uc: &mut UsefulnessChecker, pattern: &ir::Pattern) -> UsefulnessPattern {
+    use ir::Pattern::*;
+    match pattern {
+        Boolean(b) => bool_to_useful(uc, b),
+        Float(f) => float_to_useful(uc, f),
+        Integer(i) => int_to_useful(uc, i),
+        String(s) => string_to_useful(uc, s),
+
+        Call(c) => call_to_useful(uc, c),
+        Identifier(_) => UsefulnessPattern::Wildcard,
+        Struct(s) => struct_to_useful(uc, s),
+        Tuple(t) => tuple_to_useful(uc, t),
+    }
+}
+fn bool_to_useful(uc: &mut UsefulnessChecker, pattern: &ir::BooleanLiteral) -> UsefulnessPattern {
+    let str = if pattern.value { "true" } else { "false" };
+    let ty = uc.tc.get_type_symbol_id(TypeStore::BOOLEAN).unwrap();
+    let ctor = Ctor(ty, str.into());
+    if uc.ctor_arity.get(&ctor).is_none() {
+        uc.ctor_arity.insert(ctor.clone(), 0);
+    }
+    if uc.type_ctors.get(&ty).is_none() {
+        uc.type_ctors.insert(
+            ty,
+            Some(vec![Ctor(ty, "true".into()), Ctor(ty, "false".into())]),
+        );
+    }
+    UsefulnessPattern::Ctor(Some(ctor), vec![])
+}
+fn float_to_useful(uc: &mut UsefulnessChecker, pattern: &ir::FloatLiteral) -> UsefulnessPattern {
+    let str = pattern.value.to_string();
+    let ty = uc.tc.get_type_symbol_id(TypeStore::FLOAT).unwrap();
+    let ctor = Ctor(ty, str.into());
+    if uc.ctor_arity.get(&ctor).is_none() {
+        uc.ctor_arity.insert(ctor.clone(), 0);
+    }
+    uc.type_ctors.insert(ty, None);
+    UsefulnessPattern::Ctor(Some(ctor), vec![])
+}
+fn int_to_useful(uc: &mut UsefulnessChecker, pattern: &ir::IntLiteral) -> UsefulnessPattern {
+    let str = pattern.value.to_string();
+    let ty = uc.tc.get_type_symbol_id(TypeStore::INTEGER).unwrap();
+    let ctor = Ctor(ty, str.into());
+    if uc.ctor_arity.get(&ctor).is_none() {
+        uc.ctor_arity.insert(ctor.clone(), 0);
+    }
+    uc.type_ctors.insert(ty, None);
+    UsefulnessPattern::Ctor(Some(ctor), vec![])
+}
+fn string_to_useful(uc: &mut UsefulnessChecker, pattern: &ir::StringLiteral) -> UsefulnessPattern {
+    let str = pattern.value.clone();
+    let ty = uc.tc.get_type_symbol_id(TypeStore::STRING).unwrap();
+    let ctor = Ctor(ty, str.into());
+    if uc.ctor_arity.get(&ctor).is_none() {
+        uc.ctor_arity.insert(ctor.clone(), 0);
+    }
+    uc.type_ctors.insert(ty, None);
+    UsefulnessPattern::Ctor(Some(ctor), vec![])
+}
+fn call_to_useful(uc: &mut UsefulnessChecker, pattern: &ir::CallPattern) -> UsefulnessPattern {
+    let variant = pattern.callee.1;
+    let name = uc.tc.symbol_name(variant).to_string();
+    let e = uc.tc.symbols.get(variant).owner;
+    let ctor = Ctor(e.into(), name);
+    if uc.ctor_arity.get(&ctor).is_none() {
+        let arity = uc.tc.symbols.get(variant).body.len();
+        uc.ctor_arity.insert(ctor.clone(), arity);
+    }
+    if uc.type_ctors.get(&ctor.0).is_none() {
+        let ctors = uc
+            .tc
+            .symbols
+            .get(e)
+            .variants
+            .iter()
+            .map(|v| Ctor(ctor.0, uc.tc.symbol_name(*v).to_string()))
+            .collect();
+        uc.type_ctors.insert(ctor.0, Some(ctors));
+    }
+    let arity = uc.ctor_arity[&ctor];
+    let args = (0..arity)
+        .into_iter()
+        .map(|i| call_arg_to_useful(uc, &pattern.arguments, i))
+        .collect();
+    UsefulnessPattern::Ctor(Some(ctor), args)
+}
+fn call_arg_to_useful(
+    uc: &mut UsefulnessChecker,
+    args: &Vec<ir::Pattern>,
+    i: usize,
+) -> UsefulnessPattern {
+    match args.get(i) {
+        Some(a) => to_useful(uc, a),
+        None => UsefulnessPattern::Wildcard,
+    }
+}
+
+fn struct_to_useful(uc: &mut UsefulnessChecker, pattern: &ir::StructPattern) -> UsefulnessPattern {
+    let members = &uc.tc.symbols.get(pattern.name.1).members;
+    let patterns = members
+        .iter()
+        .map(|m| get_struct_field_pattern(uc, *m, &pattern.fields))
+        .collect();
+    UsefulnessPattern::Ctor(None, patterns)
+}
+fn get_struct_field_pattern(
+    uc: &mut UsefulnessChecker,
+    member: MemberSymbolId,
+    fields: &[ir::StructPatternField],
+) -> UsefulnessPattern {
+    let name = uc.tc.symbol_name(member);
+    let field = fields
+        .into_iter()
+        .find(|f| uc.tc.symbol_name(f.identifier.symbol) == name);
+    let Some(field) = field else {
+        return UsefulnessPattern::Wildcard;
+    };
+    match &field.pattern {
+        Some(p) => to_useful(uc, p),
+        None => UsefulnessPattern::Wildcard,
+    }
+}
+
+fn tuple_to_useful(uc: &mut UsefulnessChecker, pattern: &ir::TuplePattern) -> UsefulnessPattern {
+    let elements = pattern.elements.iter().map(|e| to_useful(uc, e)).collect();
+    UsefulnessPattern::Ctor(None, elements)
+}
+
+type Row = Vec<UsefulnessPattern>;
+type Matrix = Vec<Row>;
+
+/// Specialize the matrix, ie keeps only rows compatible with constructor in first column.
+fn specialize(ctor: &Option<Ctor>, arity: usize, matrix: &Matrix) -> Matrix {
+    let mut out = Matrix::new();
+    for row in matrix {
+        match &row[0] {
+            UsefulnessPattern::Wildcard => {
+                let mut new_row = vec![UsefulnessPattern::Wildcard; arity];
+                new_row.extend_from_slice(&row[1..]);
+                out.push(new_row);
+            }
+            UsefulnessPattern::Ctor(c, args) if ctor == c => {
+                let mut new_row = args.clone();
+                new_row.extend_from_slice(&row[1..]);
+                out.push(new_row);
+            }
+            _ => { /* different constructor: drop row */ }
+        }
+    }
+    out
+}
+
+/// "default" matrix. Keeps only rows with a wildcard in column 1 and drops
+/// that column. Used when column 1's constructors don't cover the
+/// whole type, so a wildcard query might "fall through" via some other,
+/// unlisted constructor.
+fn default_matrix(matrix: &Matrix) -> Matrix {
+    matrix
+        .iter()
+        .filter(|row| matches!(row[0], UsefulnessPattern::Wildcard))
+        .map(|row| row[1..].to_vec())
+        .collect()
+}
+
+/// The constructors actually appearing in column 1, plus (if any appear)
+/// the full constructor set of their type, if it is a closed type.
+fn column_signature(
+    uc: &UsefulnessChecker,
+    matrix: &Matrix,
+) -> (HashSet<Option<Ctor>>, Option<Vec<Option<Ctor>>>) {
+    let mut present = HashSet::new();
+    for row in matrix {
+        if let UsefulnessPattern::Ctor(ctor, _) = &row[0] {
+            present.insert(ctor.clone());
+        }
+    }
+    let full = present
+        .iter()
+        .next()
+        .and_then(|c| constructor_signature(uc, c));
+    (present, full)
+}
+fn constructor_signature(uc: &UsefulnessChecker, c: &Option<Ctor>) -> Option<Vec<Option<Ctor>>> {
+    c.clone()
+        .map_or(Some(vec![None]), |c| some_constructor_signature(uc, c))
+}
+fn some_constructor_signature(uc: &UsefulnessChecker, c: Ctor) -> Option<Vec<Option<Ctor>>> {
+    uc.type_ctors[&c.0]
+        .clone()
+        .map(|ctors| ctors.into_iter().map(|c| Some(c)).collect())
+}
+
+/// The core algorithm. Returns every "witness" row demonstrating that
+/// `query` is useful against `matrix` -- i.e. value-vectors matched by
+/// `query` but by no row of `matrix`. An empty result means `query` is
+/// *not* useful (everything it covers is already covered).
+pub fn usefulness(
+    uc: &mut UsefulnessChecker,
+    matrix: &Matrix,
+    query: &[UsefulnessPattern],
+) -> Matrix {
+    // Rule 1: zero columns left.
+    if query.is_empty() {
+        return if matrix.is_empty() {
+            vec![vec![]]
+        } else {
+            vec![]
+        };
+    }
+
+    match &query[0] {
+        // Rule 2: query's first pattern is a concrete constructor.
+        UsefulnessPattern::Ctor(ctor, args) => ctor_usefulness(uc, ctor, args, matrix, query),
+
+        // Rule 3: query's first pattern is a wildcard.
+        UsefulnessPattern::Wildcard => wildcard_usefulness(uc, matrix, query),
+    }
+}
+fn ctor_usefulness(
+    uc: &mut UsefulnessChecker,
+    ctor: &Option<Ctor>,
+    args: &Vec<UsefulnessPattern>,
+    matrix: &Matrix,
+    query: &[UsefulnessPattern],
+) -> Matrix {
+    let arity = args.len();
+    let spec = specialize(ctor, arity, matrix);
+    let mut sub_query = args.clone();
+    sub_query.extend_from_slice(&query[1..]);
+    usefulness(uc, &spec, &sub_query)
+        .into_iter()
+        .map(|w| ctor_witness(ctor.clone(), arity, w))
+        .collect()
+}
+fn ctor_witness(ctor: Option<Ctor>, arity: usize, w: Vec<UsefulnessPattern>) -> Row {
+    let (head, tail) = w.split_at(arity);
+    let mut row = vec![UsefulnessPattern::Ctor(ctor, head.to_vec())];
+    row.extend_from_slice(tail);
+    row
+}
+
+fn wildcard_usefulness(
+    uc: &mut UsefulnessChecker,
+    matrix: &Matrix,
+    query: &[UsefulnessPattern],
+) -> Matrix {
+    let (present, full) = column_signature(uc, matrix);
+    let is_complete = match &full {
+        Some(all) => all.iter().all(|c| present.contains(c)),
+        None => false,
+    };
+
+    if is_complete {
+        wildcard_usefulness_on_complete_signature(uc, matrix, query, full.unwrap())
+    } else {
+        // Some constructor is missing from the matrix (or the type
+        // is open/infinite) -- the wildcard "escapes" through it, so
+        // only the already-wildcard rows are relevant.
+        let def = default_matrix(matrix);
+        usefulness(uc, &def, &query[1..])
+            .into_iter()
+            .map(|w| {
+                let mut row = vec![UsefulnessPattern::Wildcard];
+                row.extend_from_slice(&w);
+                row
+            })
+            .collect()
+    }
+}
+fn wildcard_usefulness_on_complete_signature(
+    uc: &mut UsefulnessChecker,
+    matrix: &Matrix,
+    query: &[UsefulnessPattern],
+    all: Vec<Option<Ctor>>,
+) -> Matrix {
+    // Every constructor of the type must be checked individually.
+    let mut results = Vec::new();
+    for c in &all {
+        let arity = match c {
+            Some(c) => uc.ctor_arity[c],
+            None => matrix
+                .iter()
+                .find_map(|row| match &row[0] {
+                    UsefulnessPattern::Ctor(head, args) if head == c => Some(args.len()),
+                    _ => None,
+                })
+                .expect("constructor is in signature so a representative row must exist"),
+        };
+        let spec = specialize(c, arity, matrix);
+        let mut sub_query = vec![UsefulnessPattern::Wildcard; arity];
+        sub_query.extend_from_slice(&query[1..]);
+        for w in usefulness(uc, &spec, &sub_query) {
+            let (head, tail) = w.split_at(arity);
+            let mut row = vec![UsefulnessPattern::Ctor(c.clone(), head.to_vec())];
+            row.extend_from_slice(tail);
+            results.push(row);
+        }
+    }
+    results
 }
 
 impl TypeChecker {
-    fn specialize_constructor<'p>(
-        &self,
-        arms: &Matrix<'p>,
-        query_head: &'p ConstructorPattern,
-        query_tail: &[&'p Pattern],
-    ) -> Specialization<'p> {
-        let expects_arg = match query_head.identifier.symbol {
-            SymbolId::Variant(s) => !self.symbols.get(s).body.is_empty(),
-            _ => panic!(),
-        };
-        let new_arms = arms
+    pub fn usefulness<'ir>(
+        &'ir self,
+        uc: &mut UsefulnessChecker,
+        matrix: &Vec<Vec<&'ir ir::Pattern>>,
+        query: &[ir::Pattern],
+    ) -> Matrix {
+        let matrix = matrix
             .into_iter()
-            .filter_map(|arm| {
-                let (head, tail) = arm.split_first()?;
-                head.as_constructor().map(|lit| (lit, tail))
-            })
-            .filter(|(head, _)| head.identifier.symbol == query_head.identifier.symbol)
-            .map(|(head, tail)| {
-                if expects_arg {
-                    let mut tail = tail.to_vec();
-                    tail.insert(0, head.arg.as_deref().unwrap_or(&Pattern::Wildcard));
-                    tail
-                } else {
-                    tail.to_vec()
-                }
-            })
+            .map(|row| row.iter().map(|p| to_useful(uc, p)).collect::<Vec<_>>())
             .collect();
-
-        let new_query = if expects_arg {
-            let mut tail = query_tail.to_vec();
-            tail.insert(0, query_head.arg.as_deref().unwrap_or(&Pattern::Wildcard));
-            tail
-        } else {
-            query_tail.to_vec()
-        };
-
-        Specialization {
-            new_arms,
-            new_query,
-        }
-    }
-
-    fn specialize_struct<'p>(
-        &self,
-        arms: &'p Matrix<'p>,
-        query_head: &'p StructPattern,
-        query_tail: &'p [&'p Pattern],
-    ) -> (Specialization<'p>, Vec<SymbolId>) {
-        let structs = get_structs(arms);
-        let all_keys = self.all_keys_from_structs(&structs, Some(query_head));
-
-        let new_arms = structs
+        let query = query
             .into_iter()
-            .map(|(st, tail)| unwrap_fields(&st.fields, tail, &all_keys))
-            .collect();
-        let new_query = unwrap_fields(&query_head.fields, query_tail, &all_keys);
-
-        let s = Specialization {
-            new_arms,
-            new_query,
-        };
-        (s, all_keys)
-    }
-    fn specialize_tuple<'p>(
-        &self,
-        arms: &'p Matrix<'p>,
-        query_head: &'p TuplePattern,
-        query_tail: &'p [&'p Pattern],
-    ) -> (Specialization<'p>, Vec<SymbolId>) {
-        let tuples = get_tuples(arms);
-        let all_keys = self.all_keys_from_tuples(&tuples, Some(query_head));
-
-        let new_arms = tuples
-            .into_iter()
-            .map(|(t, tail)| unwrap_fields(&t.items, tail, &all_keys))
-            .collect();
-        let new_query = unwrap_fields(&query_head.items, query_tail, &all_keys);
-
-        let s = Specialization {
-            new_arms,
-            new_query,
-        };
-        (s, all_keys)
-    }
-
-    /// Returns a list of patterns covered by the query that were not covered by
-    /// any arm.
-    pub fn usefulness(&self, arms: &Matrix, query: &[&Pattern]) -> Vec<Vec<Pattern>> {
-        let (head, tail) = query.split_first().unwrap();
-        match head {
-            Pattern::Literal(p) => self.literal_usefulness(arms, p, tail),
-            Pattern::Constructor(p) => self.constructor_usefulness(arms, p, tail),
-            Pattern::Struct(p) => self.struct_usefulness(arms, p, tail),
-            Pattern::Tuple(p) => self.tuple_usefulness(arms, p, tail),
-            Pattern::Identifier(_) | Pattern::Wildcard => self.wildcard_usefulness(arms, tail),
-        }
-    }
-
-    fn literal_usefulness(
-        &self,
-        arms: &Matrix,
-        query_head: &LiteralPattern,
-        query_tail: &[&Pattern],
-    ) -> Vec<Vec<Pattern>> {
-        let got = specialize_literal(arms, query_head, query_tail);
-        if self.usefulness(&got.new_arms, &got.new_query).is_empty() {
-            vec![vec![Pattern::Wildcard]]
-        } else {
-            vec![]
-        }
-    }
-
-    fn constructor_usefulness(
-        &self,
-        arms: &Matrix,
-        query_head: &ConstructorPattern,
-        query_tail: &[&Pattern],
-    ) -> Vec<Vec<Pattern>> {
-        let expects_arg = match query_head.identifier.symbol {
-            SymbolId::Variant(s) => !self.symbols.get(s).body.is_empty(),
-            _ => panic!(),
-        };
-        let s = self.specialize_constructor(arms, query_head, query_tail);
-        self.usefulness(&s.new_arms, &s.new_query)
-            .into_iter()
-            .map(|mut witness| {
-                let (arg, mut tail) = if expects_arg {
-                    let first = witness.remove(0);
-                    (Some(Box::new(first)), witness)
-                } else {
-                    (None, witness)
-                };
-                let pat = Pattern::Constructor(ConstructorPattern {
-                    identifier: query_head.identifier.clone(),
-                    arg,
-                });
-                tail.insert(0, pat);
-                tail
-            })
-            .collect()
-    }
-
-    fn struct_usefulness(
-        &self,
-        arms: &Matrix,
-        query_head: &StructPattern,
-        query_tail: &[&Pattern],
-    ) -> Vec<Vec<Pattern>> {
-        let (s, keys) = self.specialize_struct(arms, query_head, query_tail);
-        self.usefulness(&s.new_arms, &s.new_query)
-            .into_iter()
-            .map(|witness| {
-                let (fields, mut tail) = reconstruct_fields(witness, &keys);
-                let pat = StructPattern { fields };
-                tail.insert(0, pat.into());
-                tail
-            })
-            .collect()
-    }
-    fn tuple_usefulness(
-        &self,
-        arms: &Matrix,
-        query_head: &TuplePattern,
-        query_tail: &[&Pattern],
-    ) -> Vec<Vec<Pattern>> {
-        let (s, keys) = self.specialize_tuple(arms, query_head, query_tail);
-        self.usefulness(&s.new_arms, &s.new_query)
-            .into_iter()
-            .map(|witness| {
-                let (items, mut tail) = reconstruct_fields(witness, &keys);
-                let pat = TuplePattern { items };
-                tail.insert(0, pat.into());
-                tail
-            })
-            .collect()
-    }
-
-    fn wildcard_usefulness(&self, arms: &Matrix, query_tail: &[&Pattern]) -> Vec<Vec<Pattern>> {
-        // TODO: handle tuples and structs
-        let first = arms
-            .iter()
-            .map(|arm| arm[0])
-            .filter(|pat| !is_wildcard(pat))
-            .next();
-        let Some(first) = first else {
-            let arms = arms
-                .into_iter()
-                .map(|arm| arm[1..].to_vec())
-                .collect::<Vec<_>>();
-
-            return self.usefulness(&arms, query_tail);
-        };
-
-        match first {
-            Pattern::Identifier(_) | Pattern::Wildcard => unreachable!(),
-
-            Pattern::Literal(_) => self.wildcard_usefulness_literal(arms, query_tail),
-            Pattern::Constructor(c) => self.wildcard_usefulness_constructor(arms, c, query_tail),
-            Pattern::Struct(_) => self.wildcard_usefulness_struct(arms, query_tail),
-            Pattern::Tuple(_) => self.wildcard_usefulness_tuple(arms, query_tail),
-        }
-    }
-    fn wildcard_usefulness_literal(
-        &self,
-        arms: &Matrix,
-        query_tail: &[&Pattern],
-    ) -> Vec<Vec<Pattern>> {
-        let bools = arms
-            .into_iter()
-            .filter_map(|arm| arm.split_first())
-            .filter_map(|(head, tail)| Some((head.as_literal()?, tail)))
-            .filter_map(|(head, tail)| Some((head.as_bool()?, tail)))
+            .map(|q| to_useful(uc, q))
             .collect::<Vec<_>>();
-        if bools.is_empty() {
-            let arms = arms
-                .into_iter()
-                .map(|arm| arm[1..].to_vec())
-                .collect::<Vec<_>>();
-            return self.usefulness(&arms, query_tail);
-        }
-        let true_pat = LiteralPattern::Bool(ir::BooleanLiteral {
-            loc: Location::dummy(),
-            value: true,
-        });
-        let false_pat = LiteralPattern::Bool(ir::BooleanLiteral {
-            loc: Location::dummy(),
-            value: false,
-        });
-        vec![true_pat, false_pat]
-            .into_iter()
-            .flat_map(|pat| self.literal_usefulness(arms, &pat.into(), query_tail))
-            .collect()
+        usefulness(uc, &matrix, &query)
     }
-    fn wildcard_usefulness_constructor(
-        &self,
-        arms: &Matrix,
-        example: &ConstructorPattern,
-        query_tail: &[&Pattern],
-    ) -> Vec<Vec<Pattern>> {
-        let variant = example.identifier.symbol.as_variant().unwrap();
-        let owner = self.symbols.get(variant).owner;
-        let variants = &self.symbols.get(owner).variants;
-
-        variants
-            .into_iter()
-            .flat_map(|&symbol| {
-                let variant = self.symbols.get::<VariantSymbolId>(symbol);
-                let arg = if variant.body.is_empty() {
-                    None
-                } else {
-                    Some(Box::new(Pattern::Wildcard))
-                };
-                let identifier = ir::Identifier {
-                    loc: Location::dummy(),
-                    symbol: symbol.into(),
-                    ty: self.symbol_type_id(owner),
-                };
-                let pattern = ConstructorPattern { identifier, arg };
-                self.constructor_usefulness(arms, &pattern, query_tail)
-            })
-            .collect()
-    }
-    fn wildcard_usefulness_struct(
-        &self,
-        arms: &Matrix,
-        query_tail: &[&Pattern],
-    ) -> Vec<Vec<Pattern>> {
-        let query = self.get_struct_signature(arms);
-        self.struct_usefulness(arms, &query, query_tail)
-    }
-
-    fn get_struct_signature(&self, arms: &Matrix) -> StructPattern {
-        let structs = get_structs(arms);
-        let all_keys = self.all_keys_from_structs(&structs, None);
-        let fields = all_keys
-            .into_iter()
-            .map(|symbol| {
-                PatternField(
-                    ir::Identifier {
-                        loc: Location::dummy(),
-                        symbol,
-                        ty: self.symbol_type_id(symbol),
-                    },
-                    Pattern::Wildcard,
-                )
-            })
-            .collect();
-        StructPattern { fields }
-    }
-
-    fn all_keys_from_structs(
-        &self,
-        structs: &[(&StructPattern, &[&Pattern])],
-        additional: Option<&StructPattern>,
-    ) -> Vec<SymbolId> {
-        let all_keys = structs
-            .iter()
-            .map(|(head, _)| head)
-            .cloned()
-            .chain(additional)
-            .flat_map(|pat| &pat.fields)
-            .map(|field| field.0.symbol.clone())
-            .collect::<HashSet<_>>();
-        let mut all_keys = all_keys.into_iter().collect::<Vec<_>>();
-        all_keys.sort_by_key(|k| self.symbol_name(*k));
-        all_keys
-    }
-
-    fn wildcard_usefulness_tuple(
-        &self,
-        arms: &Matrix,
-        query_tail: &[&Pattern],
-    ) -> Vec<Vec<Pattern>> {
-        let query = self.get_tuple_signature(arms);
-        self.tuple_usefulness(arms, &query, query_tail)
-    }
-
-    fn get_tuple_signature(&self, arms: &Matrix) -> TuplePattern {
-        let tuples = get_tuples(arms);
-        let all_keys = self.all_keys_from_tuples(&tuples, None);
-        let items = all_keys
-            .into_iter()
-            .map(|symbol| {
-                PatternField(
-                    ir::Identifier {
-                        loc: Location::dummy(),
-                        symbol,
-                        ty: self.symbol_type_id(symbol),
-                    },
-                    Pattern::Wildcard,
-                )
-            })
-            .collect();
-        TuplePattern { items }
-    }
-
-    fn all_keys_from_tuples(
-        &self,
-        tuples: &[(&TuplePattern, &[&Pattern])],
-        additional: Option<&TuplePattern>,
-    ) -> Vec<SymbolId> {
-        let all_keys = tuples
-            .iter()
-            .map(|(head, _)| head)
-            .cloned()
-            .chain(additional)
-            .flat_map(|pat| &pat.items)
-            .map(|field| field.0.symbol.clone())
-            .collect::<HashSet<_>>();
-        let mut all_keys = all_keys.into_iter().collect::<Vec<_>>();
-        all_keys.sort_by_key(|k| self.symbol_name(*k));
-        all_keys
-    }
-}
-
-fn specialize_literal<'p>(
-    arms: &Matrix<'p>,
-    query_head: &'p LiteralPattern,
-    query_tail: &[&'p Pattern],
-) -> Specialization<'p> {
-    let literal_arms = arms.into_iter().filter_map(|arm| {
-        let (head, tail) = arm.split_first()?;
-        head.as_literal().map(|lit| (lit, tail))
-    });
-    let new_arms = match query_head {
-        LiteralPattern::Bool(q) => literal_arms
-            .filter_map(|(head, tail)| match head.as_bool() {
-                Some(b) if b.value == q.value => Some(tail.to_vec()),
-                _ => None,
-            })
-            .collect(),
-        LiteralPattern::Float(q) => literal_arms
-            .filter_map(|(head, tail)| match head.as_float() {
-                Some(f) if f.value == q.value => Some(tail.to_vec()),
-                _ => None,
-            })
-            .collect(),
-        LiteralPattern::Int(q) => literal_arms
-            .filter_map(|(head, tail)| match head.as_int() {
-                Some(i) if i.value == q.value => Some(tail.to_vec()),
-                _ => None,
-            })
-            .collect(),
-        LiteralPattern::String(q) => literal_arms
-            .filter_map(|(head, tail)| match head.as_string() {
-                Some(s) if s.value == q.value => Some(tail.to_vec()),
-                _ => None,
-            })
-            .collect(),
-    };
-
-    Specialization {
-        new_arms,
-        new_query: query_tail.to_vec(),
-    }
-}
-
-fn unwrap_fields<'p>(
-    fields: &'p [PatternField],
-    tail: &'p [&Pattern],
-    sorted_keys: &[SymbolId],
-) -> Vec<&'p Pattern> {
-    let mut arm: Vec<&Pattern> = sorted_keys
-        .iter()
-        .map(|k| {
-            fields
-                .iter()
-                .find(|f| f.0.symbol == *k)
-                .map_or(&Pattern::Wildcard, |f| &f.1)
-        })
-        .collect::<Vec<_>>();
-    arm.extend_from_slice(tail);
-    arm
-}
-
-/// Returns `(fields, witness_tail)`
-fn reconstruct_fields(
-    mut witness: Vec<Pattern>,
-    keys: &[SymbolId],
-) -> (Vec<PatternField>, Vec<Pattern>) {
-    let tail = witness.split_off(keys.len());
-    let fields = keys
-        .iter()
-        .zip(witness)
-        .map(|(key, pattern)| {
-            PatternField(
-                ir::Identifier {
-                    loc: Location::dummy(),
-                    symbol: *key,
-                    ty: TypeStore::UNKNOWN,
-                },
-                pattern,
-            )
-        })
-        .collect();
-    (fields, tail)
-}
-
-fn get_structs<'p>(arms: &'p Matrix) -> Vec<(&'p StructPattern, &'p [&'p Pattern])> {
-    arms.into_iter()
-        .filter_map(|arm| {
-            let (head, tail) = arm.split_first()?;
-            let head = match head {
-                Pattern::Struct(st) => st,
-                p if is_wildcard(p) => &DEFAULT_STRUCT,
-                _ => return None,
-            };
-            Some((head, tail))
-        })
-        .collect()
-}
-
-fn get_tuples<'p>(arms: &'p Matrix) -> Vec<(&'p TuplePattern, &'p [&'p Pattern])> {
-    arms.into_iter()
-        .filter_map(|arm| {
-            let (head, tail) = arm.split_first()?;
-            let head = match head {
-                Pattern::Tuple(st) => st,
-                p if is_wildcard(p) => &DEFAULT_TUPLE,
-                _ => return None,
-            };
-            Some((head, tail))
-        })
-        .collect()
-}
-
-fn is_wildcard(pat: &Pattern) -> bool {
-    matches!(pat, Pattern::Identifier(_) | Pattern::Wildcard)
 }

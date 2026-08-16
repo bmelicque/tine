@@ -11,7 +11,7 @@ pub(super) struct ExpressionTest<'parser> {
 #[cfg(test)]
 pub(super) fn parse_expression(src: &str) -> Result<ast::Expression, Vec<Diagnostic>> {
     let mut parser = Parser::new(0, src);
-    match parser.parse_expression() {
+    match parser.parse_expression_with_block() {
         Some(expr) => Ok(expr),
         _ => Err(parser.diagnostics),
     }
@@ -19,7 +19,7 @@ pub(super) fn parse_expression(src: &str) -> Result<ast::Expression, Vec<Diagnos
 
 pub(super) fn test_expression(test: ExpressionTest) {
     let mut parser = Parser::new(0, test.input);
-    let result = parser.parse_expression();
+    let result = parser.parse_expression_with_block();
     assert_eq!(result, Some(test.expected));
     assert_eq!(parser.diagnostics, test.diagnostics);
 }

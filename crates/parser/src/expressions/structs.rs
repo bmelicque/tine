@@ -33,7 +33,7 @@ impl Parser<'_> {
             });
         };
 
-        let value = self.parse_expression();
+        let value = self.parse_expression_with_block();
         if value.is_none() {
             let error = DiagnosticKind::MissingExpression;
             let error_loc = self.next_loc();
@@ -58,7 +58,7 @@ impl Parser<'_> {
             }
             Some((Ok(Token::LBracket), _)) => {
                 self.eat(&[Token::LBracket]);
-                let expr = self.parse_expression();
+                let expr = self.parse_expression_with_block();
                 if expr.is_none() {
                     let loc = self.next_loc();
                     self.error(DiagnosticKind::MissingExpression, loc);

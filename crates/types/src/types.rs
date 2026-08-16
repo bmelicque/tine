@@ -1,3 +1,5 @@
+use crate::store::TypeStore;
+
 pub type TypeId = u32;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -265,7 +267,14 @@ pub struct TupleType {
     pub params: Vec<TypeParam>,
     pub elements: Vec<TypeId>,
 }
-
+impl TupleType {
+    pub fn get(&self, index: usize) -> TypeId {
+        self.elements
+            .get(index)
+            .copied()
+            .unwrap_or(TypeStore::UNKNOWN)
+    }
+}
 impl Into<Type> for TupleType {
     fn into(self) -> Type {
         Type::Tuple(self)

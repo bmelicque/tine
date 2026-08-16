@@ -4,10 +4,10 @@ use tine_common::{
     locations::{Locatable, Location},
 };
 
-use crate::{tokens::Token, Parser};
+use crate::{tokens::Token, ExpressionCtx, Parser};
 
 impl Parser<'_> {
-    pub fn parse_postfix(&mut self) -> Option<Expression> {
+    pub fn parse_postfix(&mut self, ctx: ExpressionCtx) -> Option<Expression> {
         let mut expression = self.parse_atom();
         use Expression::*;
         use Token::*;
@@ -22,7 +22,7 @@ impl Parser<'_> {
                     // if expression started with params, it would be parsed as a tuple and not going through this branch
                     Some(self.parse_call_expression(expression.unwrap()).into())
                 }
-                LBrace => {
+                LBrace if ctx.braces() => {
                     let Some(Path(path)) = expression else {
                         break;
                     };
@@ -133,7 +133,11 @@ impl Parser<'_> {
 
     fn parse_call_expression(&mut self, callee: Expression) -> CallExpression {
         self.eat(&[Token::LParen]);
-        let args = self.parse_list(|p| p.parse_expression(), Token::Comma, Token::RParen);
+        let args = self.parse_list(
+            |p| p.parse_expression_with_block(),
+            Token::Comma,
+            Token::RParen,
+        );
         let end_range = match self.tokens.peek() {
             Some((Ok(Token::RParen), _)) => self.eat(&[Token::RParen]),
             _ => self.recover_at(&[Token::RParen]),
@@ -167,7 +171,11 @@ impl Parser<'_> {
             };
         };
         self.eat(&[Token::LParen]);
-        let args = self.parse_list(|p| p.parse_expression(), Token::Comma, Token::RParen);
+        let args = self.parse_list(
+            |p| p.parse_expression_with_block(),
+            Token::Comma,
+            Token::RParen,
+        );
         let end_range = match self.tokens.peek() {
             Some((Ok(Token::RParen), _)) => self.eat(&[Token::RParen]),
             _ => self.recover_at(&[Token::RParen]),
