@@ -1,12 +1,7 @@
 use tine_ast as ast;
-use tine_common::{
-    diagnostics::DiagnosticKind,
-    locations::{Locatable, Location},
-};
+use tine_common::{diagnostics::DiagnosticKind, locations::Locatable};
 use tine_ir::{self as ir, Typed};
 use tine_types::{store::TypeStore, types};
-
-use crate::patterns::lower_pattern;
 
 use super::TypeChecker;
 
@@ -40,11 +35,7 @@ impl TypeChecker {
         &mut self,
         node: ast::ForInExpression,
     ) -> Option<ir::ForInExpression> {
-        let pattern_loc = node
-            .pattern
-            .as_ref()
-            .map_or(Location::default(), |p| p.loc());
-        let Some((pattern, iterable, element)) = (|| {
+        let Some((pattern, iterable, _)) = (|| {
             let (iterable, element_type) = self.visit_for_in_iterable(*node.iterable?);
             let iterable = iterable?;
             let pattern = self.visit_pattern(node.pattern?, &iterable, true, false)?;
@@ -54,52 +45,17 @@ impl TypeChecker {
             return None;
         };
 
-        let lowered = lower_pattern(pattern, iterable.clone());
         self.with_scope(|self_| {
-            let element = self_.make_temp_variable_with_type(pattern_loc, &iterable, element);
-            let mut body = node.body.map(|b| self_.visit_block_expression(b))?;
-            body.statements.splice(
-                0..0,
-                lowered
-                    .decls
-                    .into_iter()
-                    .map(Into::into)
-                    .collect::<Vec<_>>(),
-            );
-
-            let guard = self_.make_guard(lowered.test, pattern_loc)?;
-            body.statements.insert(0, guard);
+            let body = node.body.map(|b| self_.visit_block_expression(b))?;
 
             Some(ir::ForInExpression {
                 loc: node.loc,
-                element: (pattern_loc, element),
+                element: pattern,
                 iterable: Box::new(iterable),
                 ty: self_.get_loop_type(&body),
                 body,
             })
         })
-    }
-
-    fn make_guard(&mut self, test: Option<ir::Expression>, loc: Location) -> Option<ir::Statement> {
-        let Some(test) = test else {
-            self.error(DiagnosticKind::RefutablePatternExpected, loc);
-            return None;
-        };
-
-        Some(ir::Statement::Expression(ir::Expression::If(
-            ir::IfExpression {
-                loc,
-                consequent: ir::Block::from(ir::Statement::Continue(ir::ContinueStatement { loc })),
-                condition: Box::new(ir::Expression::Unary(ir::UnaryExpression {
-                    loc,
-                    operator: ir::UnaryOperator::Bang,
-                    operand: Box::new(test),
-                    ty: TypeStore::BOOLEAN,
-                })),
-                alternate: None,
-                ty: TypeStore::UNIT,
-            },
-        )))
     }
 
     fn visit_for_in_iterable(

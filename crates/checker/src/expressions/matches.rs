@@ -4,29 +4,38 @@ use tine_common::{
     locations::{Locatable, Location},
 };
 use tine_ir::{self as ir, Typed};
+use tine_types::store::TypeStore;
 
 use crate::{
     exhaustiveness::{display_pattern, UsefulnessChecker},
-    patterns::{lower_pattern, Pattern},
     TypeChecker,
 };
 
 impl TypeChecker {
-    pub fn visit_match_expression(&mut self, node: ast::MatchExpression) -> Option<ir::Expression> {
+    pub fn visit_match_expression(
+        &mut self,
+        node: ast::MatchExpression,
+    ) -> Option<ir::MatchExpression> {
         let scrutinee = node.scrutinee.and_then(|s| self.visit_expression(*s));
         let arms = self.with_scope(|self_| self_.visit_match_arms(&scrutinee, node.arms))?;
         let scrutinee = scrutinee?;
 
-        self.check_match_arms(
+        self.check_exhaustiveness(
             arms.iter().map(|a| &a.0).collect::<Vec<_>>(),
             scrutinee.loc(),
         );
 
-        arms.into_iter()
-            .rev()
-            .fold(None, |alternate, (pattern, expr)| {
-                Some(match_arm_to_if_else(pattern, expr, alternate))
-            })
+        let ty = arms.first().map_or(TypeStore::UNKNOWN, |a| a.1.ty());
+        arms.iter()
+            .skip(1)
+            .for_each(|a| self.check_assigned_type(ty, a.1.ty(), false, a.1.loc()));
+
+        Some(ir::MatchExpression {
+            ty,
+            loc: node.loc,
+            scrutinee: Box::new(scrutinee),
+            arms,
+        })
     }
 
     fn visit_match_arms(
@@ -53,7 +62,7 @@ impl TypeChecker {
         })
     }
 
-    fn check_match_arms(&mut self, patterns: Vec<&ir::Pattern>, scrutinee_loc: Location) -> bool {
+    pub fn check_exhaustiveness(&mut self, patterns: Vec<&ir::Pattern>, loc: Location) -> bool {
         let matrix = patterns
             .into_iter()
             .map(|pat| vec![pat])
@@ -66,37 +75,9 @@ impl TypeChecker {
                 .map(|r| display_pattern(&mut uc, &r[0]))
                 .collect();
             let diag = DiagnosticKind::NonExhaustiveMatch { missing };
-            self.error(diag, scrutinee_loc);
+            self.error(diag, loc);
             return false;
         }
         true
-    }
-}
-
-fn match_arm_to_if_else(
-    pattern: Pattern,
-    body: ir::Expression,
-    alternate: Option<ir::Expression>,
-) -> ir::Expression {
-    let ty = body.ty();
-    let lowered = lower_pattern(pattern, body.clone());
-    let decls: Vec<ir::Statement> = lowered.decls.into_iter().map(Into::into).collect();
-    let mut block: ir::Block = body.into();
-    block.statements.splice(0..0, decls);
-
-    match alternate {
-        Some(alternate) => ir::Expression::If(ir::IfExpression {
-            loc: block.loc,
-            condition: Box::new(lowered.test.unwrap_or(ir::Expression::BooleanLiteral(
-                ir::BooleanLiteral {
-                    loc: block.loc,
-                    value: true,
-                },
-            ))),
-            consequent: block,
-            alternate: Some(alternate.into()),
-            ty,
-        }),
-        None => block.into(),
     }
 }

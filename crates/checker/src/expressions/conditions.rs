@@ -3,7 +3,7 @@ use tine_common::{diagnostics::DiagnosticKind, locations::Locatable};
 use tine_ir::{self as ir, Typed};
 use tine_types::{store::TypeStore, types};
 
-use crate::{patterns::lower_pattern, TypeChecker};
+use crate::TypeChecker;
 
 impl TypeChecker {
     pub fn visit_if_expression(&mut self, node: ast::IfExpression) -> Option<ir::IfExpression> {
@@ -56,50 +56,8 @@ impl TypeChecker {
         &mut self,
         node: ast::IfPatExpression,
     ) -> Option<ir::IfExpression> {
-        let (Some(pattern), Some(scrutinee)) = (node.pattern, node.scrutinee) else {
-            let node = ast::IfExpression {
-                loc: node.loc,
-                condition: None,
-                consequent: node.consequent,
-                alternate: node.alternate,
-            };
-            return self.visit_if_expression(node);
-        };
-        let value = self.visit_expression(*scrutinee)?;
-        let pattern_loc = pattern.loc();
-
-        let (test, consequent) = self.with_scope(|self_| {
-            let pattern = self_.visit_pattern(pattern, &value, true, false)?;
-            let lowered = lower_pattern(pattern, value);
-            let mut consequent = node.consequent.map(|c| self_.visit_block_expression(c));
-            if let Some(ref mut consequent) = consequent {
-                let decls: Vec<ir::Statement> = lowered.decls.into_iter().map(Into::into).collect();
-                consequent.statements.splice(0..0, decls);
-            }
-            Some((lowered.test, consequent))
-        })?;
-
-        let alternate = node
-            .alternate
-            .and_then(|a| self.visit_alternate(*a, consequent.as_ref().map(|b| b.ty)));
-
-        let Some(test) = test else {
-            self.error(DiagnosticKind::RefutablePatternExpected, pattern_loc);
-            return None;
-        };
-
-        let ty = self.get_if_type(
-            consequent.as_ref().map_or(TypeStore::UNKNOWN, |c| c.ty),
-            &alternate,
-        );
-
-        Some(ir::IfExpression {
-            loc: node.loc,
-            condition: Box::new(test),
-            consequent: consequent?,
-            alternate,
-            ty,
-        })
+        self.error(DiagnosticKind::NotImplemented, node.loc);
+        return None;
     }
 
     fn visit_alternate(
@@ -126,21 +84,6 @@ impl TypeChecker {
             }
         }
         Some(alternate)
-    }
-
-    fn get_if_type(
-        &mut self,
-        consequent: types::TypeId,
-        alternate: &Option<ir::Block>,
-    ) -> types::TypeId {
-        let Some(alternate) = alternate else {
-            return self.intern(types::OptionType { some: consequent });
-        };
-
-        match self.resolve(alternate.ty) {
-            types::Type::Option(_) => self.intern(types::OptionType { some: consequent }),
-            _ => consequent,
-        }
     }
 }
 

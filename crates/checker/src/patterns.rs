@@ -6,12 +6,8 @@ use tine_common::{
     locations::{Locatable, Location},
 };
 use tine_ir::{self as ir, Typed};
-use tine_macros::EnumFrom;
-use tine_symbols::{symbols::*, table::*};
-use tine_types::{
-    store::{display_type, TypeStore},
-    types,
-};
+use tine_symbols::symbols::*;
+use tine_types::{store::display_type, types};
 
 use crate::{
     expressions::expressions::{
@@ -20,279 +16,6 @@ use crate::{
     substitutions::Substitutions,
     PathContext, TypeChecker,
 };
-
-#[derive(Debug, Default)]
-pub struct LoweredPattern {
-    pub test: Option<ir::Expression>,
-    pub decls: Vec<ir::VariableDeclaration>,
-}
-impl LoweredPattern {
-    pub fn merge(a: Self, b: Self) -> Self {
-        let test = match (a.test, b.test) {
-            (Some(a), Some(b)) => Some(ir::Expression::Binary(ir::BinaryExpression {
-                loc: Location::merge(a.loc(), b.loc()),
-                left: Box::new(a),
-                right: Box::new(b),
-                op: ir::BinaryOperator::LAnd,
-                ty: TypeStore::BOOLEAN,
-            })),
-            (Some(a), None) => Some(a),
-            (None, Some(b)) => Some(b),
-            (None, None) => None,
-        };
-
-        let mut decls = a.decls;
-        decls.extend(b.decls);
-        LoweredPattern { test, decls }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Pattern {
-    Wildcard,
-    Identifier(IdentifierPattern),
-    Literal(LiteralPattern),
-
-    Constructor(ConstructorPattern),
-    Struct(StructPattern),
-    Tuple(TuplePattern),
-}
-
-pub fn display_pattern(pattern: &Pattern, symbols: &SymbolTable) -> String {
-    match pattern {
-        Pattern::Wildcard => "_".to_string(),
-        Pattern::Identifier(i) => i.name.to_string(),
-        Pattern::Constructor(c) => {
-            let name = symbols.get_symbol(c.identifier.symbol).name();
-            match &c.arg {
-                Some(arg) => format!("{}({})", name, display_pattern(&arg, symbols)),
-                None => name.to_string(),
-            }
-        }
-        Pattern::Literal(l) => match l {
-            LiteralPattern::Bool(l) => format!("{}", l.value),
-            LiteralPattern::Int(l) => format!("{}", l.value),
-            LiteralPattern::Float(l) => format!("{}", l.value),
-            LiteralPattern::String(l) => format!("\"{}\"", l.value),
-        },
-        Pattern::Struct(s) => {
-            let fields = s
-                .fields
-                .iter()
-                .map(|f| {
-                    format!(
-                        "{}: {}",
-                        symbols.get_symbol(f.0.symbol).name(),
-                        display_pattern(&f.1, symbols)
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            format!("{{{}}}", fields)
-        }
-        Pattern::Tuple(t) => {
-            let items = t
-                .items
-                .iter()
-                .map(|f| display_pattern(&f.1, symbols))
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            format!("({})", items)
-        }
-    }
-}
-
-pub fn lower_pattern(pattern: Pattern, value: ir::Expression) -> LoweredPattern {
-    match pattern {
-        Pattern::Literal(p) => lower_literal_pattern(p, value),
-        Pattern::Identifier(p) => lower_identifier_pattern(p, value),
-        Pattern::Wildcard => LoweredPattern::default(),
-        Pattern::Constructor(p) => lower_constructor_pattern(p, value),
-        Pattern::Struct(p) => lower_struct_pattern(p, value),
-        Pattern::Tuple(p) => lower_tuple_pattern(p, value),
-    }
-}
-fn lower_literal_pattern(pattern: LiteralPattern, value: ir::Expression) -> LoweredPattern {
-    let test = ir::Expression::Binary(ir::BinaryExpression {
-        loc: Location::merge(pattern.loc(), value.loc()),
-        left: Box::new(value),
-        right: Box::new(pattern.into()),
-        op: ir::BinaryOperator::EqEq,
-        ty: TypeStore::BOOLEAN,
-    });
-    LoweredPattern {
-        test: Some(test),
-        decls: vec![],
-    }
-}
-fn lower_identifier_pattern(pattern: IdentifierPattern, value: ir::Expression) -> LoweredPattern {
-    let decl = ir::VariableDeclaration {
-        loc: Location::merge(pattern.identifier.loc, value.loc()),
-        mutable: pattern.mut_kw,
-        symbol: pattern.identifier.symbol.as_variable().unwrap(),
-        value,
-    };
-
-    LoweredPattern {
-        test: None,
-        decls: vec![decl],
-    }
-}
-fn lower_constructor_pattern(pattern: ConstructorPattern, value: ir::Expression) -> LoweredPattern {
-    let test = Some(ir::Expression::TypeMatch(ir::TypeMatch {
-        loc: Location::merge(pattern.identifier.loc, value.loc()),
-        expr: Box::new(value.clone()),
-        variant: pattern.identifier.symbol.as_variant().unwrap(),
-    }));
-    let lowered = LoweredPattern {
-        test,
-        decls: vec![],
-    };
-    match pattern.arg {
-        Some(arg) => {
-            let arg = lower_pattern(*arg, value);
-            LoweredPattern::merge(lowered, arg)
-        }
-        None => lowered,
-    }
-}
-fn lower_struct_pattern(pattern: StructPattern, value: ir::Expression) -> LoweredPattern {
-    pattern
-        .fields
-        .into_iter()
-        .fold(LoweredPattern::default(), |acc, field| {
-            LoweredPattern::merge(acc, lower_pattern_field(field, value.clone()))
-        })
-}
-fn lower_tuple_pattern(pattern: TuplePattern, value: ir::Expression) -> LoweredPattern {
-    pattern
-        .items
-        .into_iter()
-        .fold(LoweredPattern::default(), |acc, item| {
-            LoweredPattern::merge(acc, lower_pattern_field(item, value.clone()))
-        })
-}
-fn lower_pattern_field(field: PatternField, value: ir::Expression) -> LoweredPattern {
-    let value = ir::Expression::Member(ir::MemberExpression {
-        loc: value.loc(),
-        object: Some(Box::new(value)),
-        member: (field.0.loc, field.0.symbol.as_member().unwrap()),
-        ty: TypeStore::UNKNOWN,
-    });
-    lower_pattern(field.1, value)
-}
-
-macro_rules! impl_pattern {
-    ($name:ident, $variant:ident, $as_name:ident) => {
-        impl From<$name> for Pattern {
-            fn from(p: $name) -> Self {
-                Self::$variant(p)
-            }
-        }
-
-        impl Pattern {
-            pub fn $as_name(&self) -> Option<&$name> {
-                match self {
-                    Self::$variant(p) => Some(p),
-                    _ => None,
-                }
-            }
-        }
-    };
-}
-
-#[derive(Debug, Clone)]
-pub struct IdentifierPattern {
-    pub pub_kw: bool,
-    pub mut_kw: bool,
-    pub name: String,
-    pub identifier: ir::Identifier,
-}
-impl_pattern!(IdentifierPattern, Identifier, as_identifier);
-
-#[derive(Debug, EnumFrom, Clone)]
-pub enum LiteralPattern {
-    Bool(ir::BooleanLiteral),
-    Int(ir::IntLiteral),
-    Float(ir::FloatLiteral),
-    String(ir::StringLiteral),
-}
-impl_pattern!(LiteralPattern, Literal, as_literal);
-
-impl From<LiteralPattern> for ir::Expression {
-    fn from(p: LiteralPattern) -> Self {
-        use ir::Expression::*;
-        use LiteralPattern::*;
-        match p {
-            Bool(b) => BooleanLiteral(b),
-            Int(i) => IntLiteral(i),
-            Float(f) => FloatLiteral(f),
-            String(s) => StringLiteral(s),
-        }
-    }
-}
-impl LiteralPattern {
-    pub fn loc(&self) -> Location {
-        match self {
-            Self::Bool(b) => b.loc,
-            Self::Int(i) => i.loc,
-            Self::Float(f) => f.loc,
-            Self::String(s) => s.loc,
-        }
-    }
-
-    pub fn as_bool(&self) -> Option<&ir::BooleanLiteral> {
-        match self {
-            Self::Bool(b) => Some(b),
-            _ => None,
-        }
-    }
-
-    pub fn as_float(&self) -> Option<&ir::FloatLiteral> {
-        match self {
-            Self::Float(f) => Some(f),
-            _ => None,
-        }
-    }
-
-    pub fn as_int(&self) -> Option<&ir::IntLiteral> {
-        match self {
-            Self::Int(i) => Some(i),
-            _ => None,
-        }
-    }
-
-    pub fn as_string(&self) -> Option<&ir::StringLiteral> {
-        match self {
-            Self::String(s) => Some(s),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct StructPattern {
-    pub fields: Vec<PatternField>,
-}
-impl_pattern!(StructPattern, Struct, as_struct);
-
-#[derive(Debug, Clone)]
-pub struct PatternField(pub ir::Identifier, pub Pattern);
-
-#[derive(Debug, Clone)]
-pub struct ConstructorPattern {
-    pub identifier: ir::Identifier,
-    pub arg: Option<Box<Pattern>>,
-}
-impl_pattern!(ConstructorPattern, Constructor, as_constructor);
-
-#[derive(Debug, Default, Clone)]
-pub struct TuplePattern {
-    pub items: Vec<PatternField>,
-}
-impl_pattern!(TuplePattern, Tuple, as_tuple);
 
 pub(super) struct PatternVisitor<'deps, 'tc> {
     pub(super) is_declaration: bool,
@@ -648,7 +371,7 @@ pub fn declare_variable(
     ty: types::TypeId,
     mutable: bool,
 ) -> Option<VariableSymbolId> {
-    visitor.tc.check_identifier_sanity(&identifier);
+    check_identifier_sanity(&mut visitor.tc, identifier);
     if mutable && visitor.is_public {
         visitor.tc.error(DiagnosticKind::PubMut, identifier.loc);
     }
@@ -688,6 +411,11 @@ pub fn declare_variable(
                 .bind(identifier.as_str().to_string(), symbol.into());
             Some(symbol)
         }
+    }
+}
+fn check_identifier_sanity(tc: &mut TypeChecker, identifier: &ast::Identifier) {
+    if identifier.as_str().contains("$") {
+        tc.error(DiagnosticKind::InvalidIdentifierDollar, identifier.loc);
     }
 }
 

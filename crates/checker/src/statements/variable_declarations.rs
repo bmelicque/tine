@@ -1,8 +1,8 @@
 use tine_ast as ast;
-use tine_common::{diagnostics::DiagnosticKind, locations::Locatable};
-use tine_ir::{self as ir, Typed};
+use tine_common::locations::Locatable;
+use tine_ir as ir;
 
-use crate::{patterns::lower_pattern, TypeChecker};
+use crate::TypeChecker;
 
 impl TypeChecker {
     pub fn visit_variable_declaration(
@@ -15,79 +15,25 @@ impl TypeChecker {
         let Some(pattern) = node.pattern else {
             return vec![];
         };
-        let loc = node.loc;
 
-        let (mut stmts, value) = self.make_temp_var_if_needed(&pattern, value);
-
-        let Some(pattern) = self.visit_pattern(pattern, &value, true, node.public) else {
+        let Some(pattern) = self.visit_pattern(pattern, &value, true, false) else {
             return vec![];
         };
 
-        let lowered = lower_pattern(pattern, value);
-        if lowered.test.is_some() {
-            self.error(DiagnosticKind::IrrefutablePatternExpected, loc);
+        if !self.check_exhaustiveness(vec![&pattern], pattern.loc()) {
             return vec![];
         }
-        stmts.extend(lowered.decls);
-        stmts
-    }
-
-    /// When lowering the pattern, if complex (ie it binds several variables),
-    /// then the original value needs to be placed in a temporary value, to
-    /// avoid unwanted computation.
-    ///
-    /// # Example
-    ///
-    /// ```tine
-    /// let User{ age, name } = fetchUser()
-    ///
-    /// // Bad
-    /// let age = fetchUser().age
-    /// let name = fetchUser().name
-    ///
-    /// // Good
-    /// let tmp = fetchUser()
-    /// let age = tmp.age
-    /// let name = tmp.name
-    /// ```
-    fn make_temp_var_if_needed(
-        &mut self,
-        pattern: &ast::Pattern,
-        value: ir::Expression,
-    ) -> (Vec<ir::VariableDeclaration>, ir::Expression) {
-        use ast::Pattern::*;
-        if !matches!(pattern, Struct(_) | Tuple(_)) {
-            return (vec![], value);
-        }
-
-        let symbol = self.make_temp_variable(value.loc(), &value).1;
-        let loc = value.loc();
-        let ty = value.ty();
-        let decl = ir::VariableDeclaration {
-            loc,
-            mutable: false,
-            symbol,
+        vec![ir::VariableDeclaration {
+            loc: node.loc,
+            pattern,
             value,
-        };
-        let id = ir::Identifier {
-            loc,
-            symbol: symbol.into(),
-            ty,
-        };
-
-        (vec![decl], id.into())
-    }
-
-    pub(crate) fn check_identifier_sanity(&mut self, identifier: &ast::Identifier) {
-        if identifier.as_str().contains("$") {
-            self.error(DiagnosticKind::InvalidIdentifierDollar, identifier.loc);
-        }
+        }]
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use tine_common::locations::Location;
+    use tine_common::{diagnostics::DiagnosticKind, locations::Location};
     use tine_types::store::TypeStore;
 
     use super::*;

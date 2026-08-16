@@ -22,10 +22,10 @@ impl<'tc> UsefulnessChecker<'tc> {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-struct Ctor(TypeSymbolId, String);
+pub struct Ctor(TypeSymbolId, String);
 
 #[derive(Debug, Clone)]
-enum UsefulnessPattern {
+pub enum UsefulnessPattern {
     Wildcard,
     Ctor(Option<Ctor>, Vec<UsefulnessPattern>),
 }
