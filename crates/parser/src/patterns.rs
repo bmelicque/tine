@@ -51,6 +51,14 @@ impl Parser<'_> {
         if path.segments.iter().any(|s| s.generic_args.is_some()) {
             return Pattern::Invalid(InvalidPattern { loc: path.loc });
         }
+        if path.segments.len() == 1 {
+            let mut path = path;
+            return Pattern::Identifier(IdentifierPattern {
+                loc: path.loc,
+                mutable: false,
+                identifier: path.segments.remove(0).ident,
+            });
+        }
         Pattern::Path(path)
     }
 

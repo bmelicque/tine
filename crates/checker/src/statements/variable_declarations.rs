@@ -16,7 +16,7 @@ impl TypeChecker {
             return vec![];
         };
 
-        let Some(pattern) = self.visit_pattern(pattern, &value, true, false) else {
+        let Some(pattern) = self.visit_pattern(pattern, &value, false) else {
             return vec![];
         };
 

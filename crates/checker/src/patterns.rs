@@ -18,7 +18,6 @@ use crate::{
 };
 
 pub(super) struct PatternVisitor<'deps, 'tc> {
-    pub(super) is_declaration: bool,
     pub(super) is_public: bool,
     /// All the dependencies of the expression the pattern is matched against
     pub(super) dependencies: &'deps [ir::Identifier],
@@ -50,15 +49,11 @@ fn visit_identifier_pattern(
     if let Some(call) = try_identifier_as_variant(&pattern, visitor, expected) {
         return Some(call);
     }
-    let identifier: ir::Identifier = if visitor.is_declaration {
-        let symbol = declare_variable(visitor, &pattern.identifier, expected, pattern.mutable)?;
-        ir::Identifier {
-            loc: pattern.loc(),
-            symbol: symbol.into(),
-            ty: expected,
-        }
-    } else {
-        visitor.tc.visit_identifier(pattern.identifier)?
+    let symbol = declare_variable(visitor, &pattern.identifier, expected, pattern.mutable)?;
+    let identifier = ir::Identifier {
+        loc: pattern.loc(),
+        symbol: symbol.into(),
+        ty: expected,
     };
 
     Some(identifier.into())
@@ -346,16 +341,12 @@ fn visit_pattern_field(
     let pattern = match field.pattern {
         Some(p) => visit_pattern(p, visitor, ty)?,
         None => {
-            if visitor.is_declaration {
-                let symbol = declare_variable(visitor, &identifier_ast, ty, false)?;
-                ir::Pattern::Identifier(ir::Identifier {
-                    loc: identifier_ast.loc(),
-                    symbol: symbol.into(),
-                    ty,
-                })
-            } else {
-                visitor.tc.visit_identifier(identifier_ast)?.into()
-            }
+            let symbol = declare_variable(visitor, &identifier_ast, ty, false)?;
+            ir::Pattern::Identifier(ir::Identifier {
+                loc: identifier_ast.loc(),
+                symbol: symbol.into(),
+                ty,
+            })
         }
     };
 
@@ -465,7 +456,6 @@ impl TypeChecker {
         &mut self,
         pattern: ast::Pattern,
         against: &ir::Expression,
-        is_declaration: bool,
         is_public: bool,
     ) -> Option<ir::Pattern> {
         let expected_type = against.ty();
@@ -473,7 +463,6 @@ impl TypeChecker {
         let mut visitor = PatternVisitor {
             tc: self,
             dependencies: &dependencies,
-            is_declaration,
             is_public,
         };
         visit_pattern(pattern, &mut visitor, expected_type)
