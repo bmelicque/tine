@@ -41,6 +41,12 @@ impl<'a> From<&'a Statement> for Node<'a> {
 }
 
 impl<'a> Node<'a> {
+    pub fn as_pattern(&self) -> Option<&'a Pattern> {
+        match self {
+            Node::Pattern(p) => Some(p),
+            _ => None,
+        }
+    }
     pub fn as_expression(&self) -> Option<&'a Expression> {
         match self {
             Node::Expr(e) => Some(e),

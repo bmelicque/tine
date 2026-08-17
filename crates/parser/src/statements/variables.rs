@@ -90,6 +90,7 @@ mod tests {
     fn binding_name(pattern: &ast::Pattern) -> &str {
         match pattern {
             ast::Pattern::Identifier(id) => id.identifier.as_str(),
+            ast::Pattern::Path(p) if p.segments.len() == 1 => p.segments[0].ident.as_str(),
             other => panic!("expected a simple identifier pattern, got: {other:?}"),
         }
     }
@@ -98,6 +99,7 @@ mod tests {
     fn pattern_is_mutable(pattern: &ast::Pattern) -> bool {
         match pattern {
             ast::Pattern::Identifier(i) => i.mutable,
+            ast::Pattern::Path(p) if p.segments.len() == 1 => false,
             other => panic!("expected a simple identifier pattern, got: {other:?}"),
         }
     }
@@ -129,7 +131,8 @@ mod tests {
         assert_eq!(binding_name(&pattern), "count");
         assert!(
             pattern_is_mutable(&pattern),
-            "`let mut` should mark the pattern mutable"
+            "`let mut` should mark the pattern mutable, found {:?}",
+            pattern
         );
 
         decl.value.expect("value should be present");

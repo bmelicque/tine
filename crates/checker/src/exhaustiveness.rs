@@ -164,10 +164,7 @@ fn get_struct_field_pattern(
     let Some(field) = field else {
         return UsefulnessPattern::Wildcard;
     };
-    match &field.pattern {
-        Some(p) => to_useful(uc, p),
-        None => UsefulnessPattern::Wildcard,
-    }
+    to_useful(uc, &field.pattern)
 }
 
 fn tuple_to_useful(uc: &mut UsefulnessChecker, pattern: &ir::TuplePattern) -> UsefulnessPattern {

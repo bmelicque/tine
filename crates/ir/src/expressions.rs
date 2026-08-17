@@ -164,7 +164,7 @@ pub struct ForExpression {
 #[tree_struct]
 #[derive(Debug, Clone)]
 pub struct ForInExpression {
-    pub element: Pattern,
+    pub element: Identifier,
     #[child]
     pub iterable: Box<Expression>,
     #[child]

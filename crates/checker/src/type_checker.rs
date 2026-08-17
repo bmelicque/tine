@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 
 use tine_common::{
     diagnostics::{Diagnostic, DiagnosticKind, DiagnosticLevel},
@@ -65,6 +68,26 @@ pub fn check_project(project: ProjectParser) -> CheckProjectResult {
     }
 }
 
+pub struct ScopeGuard<'tc> {
+    tc: &'tc mut TypeChecker,
+}
+impl Drop for ScopeGuard<'_> {
+    fn drop(&mut self) {
+        self.tc.scopes.pop();
+    }
+}
+impl Deref for ScopeGuard<'_> {
+    type Target = TypeChecker;
+    fn deref(&self) -> &Self::Target {
+        self.tc
+    }
+}
+impl DerefMut for ScopeGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.tc
+    }
+}
+
 pub struct ThisGuard<'a> {
     pub tc: &'a mut TypeChecker,
 }
@@ -81,6 +104,17 @@ pub struct MutableThisGuard<'a> {
 impl Drop for MutableThisGuard<'_> {
     fn drop(&mut self) {
         self.tc.mutable_this = self.previous;
+    }
+}
+impl Deref for MutableThisGuard<'_> {
+    type Target = TypeChecker;
+    fn deref(&self) -> &Self::Target {
+        &self.tc
+    }
+}
+impl DerefMut for MutableThisGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.tc
     }
 }
 
@@ -305,6 +339,10 @@ impl TypeChecker {
         let res = f(self);
         self.scopes.pop();
         res
+    }
+    pub fn with_local_scope(&mut self) -> ScopeGuard<'_> {
+        self.scopes.push(Scope::new());
+        ScopeGuard { tc: self }
     }
 
     pub fn with_this(&mut self, this: TypeSymbolId) -> ThisGuard<'_> {

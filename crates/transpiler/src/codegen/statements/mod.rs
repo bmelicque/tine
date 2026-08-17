@@ -1,12 +1,13 @@
 mod assignments;
 mod functions;
-mod types;
+mod matches;
+pub mod types;
 mod utils;
 
-use crate::codegen::expressions::ExpressionResult;
+use crate::{codegen::utils::create_bool, utils::is_declaration_mutable};
 
 use super::{utils::ident_from_str, CodeGenerator};
-use swc_common::{SyntaxContext, DUMMY_SP};
+use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 use tine_ir as ir;
 
@@ -18,10 +19,11 @@ impl CodeGenerator<'_, '_> {
             ir::Statement::Continue(_) => vec![swc::Stmt::Continue(swc::ContinueStmt::default())],
             ir::Statement::Enum(e) => vec![self.enum_def_to_swc(e).into()],
             ir::Statement::Expression(e) => match e {
-                ir::Expression::Block(block) => vec![self.block_to_swc_stmt(block).into()],
+                ir::Expression::Block(block) => vec![self.handle_block_stmt(block).into()],
                 ir::Expression::If(expr) => self.if_to_swc_stmt(expr),
                 ir::Expression::For(f) => self.for_to_swc_stmt(f),
                 ir::Expression::ForIn(f) => self.for_in_to_swc_stmt(f),
+                ir::Expression::Match(m) => self.handle_match_statement(m),
                 expr => self.handle_expression_statement(expr),
             },
             ir::Statement::Function(f) => {
@@ -37,7 +39,7 @@ impl CodeGenerator<'_, '_> {
         }
     }
 
-    pub fn block_to_swc_stmt(&mut self, node: ir::Block) -> swc::BlockStmt {
+    pub fn handle_block_stmt(&mut self, node: ir::Block) -> swc::BlockStmt {
         let stmts = node
             .statements
             .into_iter()
@@ -102,11 +104,11 @@ impl CodeGenerator<'_, '_> {
     pub fn if_to_swc_stmt(&mut self, node: ir::IfExpression) -> Vec<swc::Stmt> {
         let test_result = self.handle_expression(*node.condition);
         let mut stmts = test_result.prelim_stmts;
-        let block = self.block_to_swc_stmt(node.consequent);
+        let block = self.handle_block_stmt(node.consequent);
         let cons = Box::new(block.into());
         let alt = node
             .alternate
-            .map(|alt| self.block_to_swc_stmt(alt).into())
+            .map(|alt| self.handle_block_stmt(alt).into())
             .map(Box::new);
         stmts.push(swc::Stmt::If(swc::IfStmt {
             span: DUMMY_SP,
@@ -120,19 +122,10 @@ impl CodeGenerator<'_, '_> {
     pub fn for_to_swc_stmt(&mut self, node: ir::ForExpression) -> Vec<swc::Stmt> {
         let test_result = match node.condition {
             Some(condition) => self.handle_expression(*condition),
-            None => {
-                let expr = swc::Expr::Lit(swc::Lit::Bool(swc::Bool {
-                    span: DUMMY_SP,
-                    value: true,
-                }));
-                ExpressionResult {
-                    prelim_stmts: vec![],
-                    expr,
-                }
-            }
+            None => create_bool(true).into(),
         };
         let mut stmts = test_result.prelim_stmts;
-        let body = Box::new(self.block_to_swc_stmt(node.body).into());
+        let body = Box::new(self.handle_block_stmt(node.body).into());
         stmts.push(swc::Stmt::While(swc::WhileStmt {
             span: DUMMY_SP,
             test: Box::new(test_result.expr),
@@ -145,7 +138,7 @@ impl CodeGenerator<'_, '_> {
         let iterable_result = self.handle_expression(*node.iterable);
         let mut stmts = iterable_result.prelim_stmts;
 
-        let name = &self.symbols.get(node.element.1).name;
+        let name = self.symbol_name(node.element.symbol);
         stmts.push(swc::Stmt::ForOf(swc::ForOfStmt {
             left: swc::ForHead::VarDecl(Box::new(swc::VarDecl {
                 decls: vec![swc::VarDeclarator {
@@ -157,7 +150,7 @@ impl CodeGenerator<'_, '_> {
                 ..Default::default()
             })),
             right: Box::new(iterable_result.expr),
-            body: Box::new(self.block_to_swc_stmt(node.body).into()),
+            body: Box::new(self.handle_block_stmt(node.body).into()),
             ..Default::default()
         }));
 
@@ -192,7 +185,8 @@ impl CodeGenerator<'_, '_> {
         &mut self,
         node: ir::VariableDeclaration,
     ) -> (Vec<swc::Stmt>, swc::Decl) {
-        let kind = if node.mutable {
+        let mutable = is_declaration_mutable(&node, self.symbols);
+        let kind = if mutable {
             swc::VarDeclKind::Let
         } else {
             swc::VarDeclKind::Const
@@ -200,21 +194,17 @@ impl CodeGenerator<'_, '_> {
 
         let expr_result = self.handle_expression(node.value);
         let stmts = expr_result.prelim_stmts;
-
-        let expr = expr_result.expr;
-
-        let name = &self.symbols.get(node.symbol).name;
+        let pat_result = self.handle_pattern(node.pattern, swc::Expr::default());
+        debug_assert!(pat_result.test.is_none());
         let decl = swc::Decl::Var(Box::new(swc::VarDecl {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
             kind,
-            declare: false,
             decls: vec![swc::VarDeclarator {
                 span: DUMMY_SP,
-                name: swc::Pat::Ident(ident_from_str(name).into()),
-                init: Some(Box::new(expr)),
+                name: pat_result.decl.unwrap(),
+                init: Some(Box::new(expr_result.expr)),
                 definite: false,
             }],
+            ..Default::default()
         }));
 
         (stmts, decl)

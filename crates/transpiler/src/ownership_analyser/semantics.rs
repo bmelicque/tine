@@ -16,14 +16,10 @@ impl SemanticsChecker<'_, '_> {
 
     /// Check if the given type implements Copy semantics.
     pub fn is_copy(&self, ty: types::TypeId) -> bool {
+        use types::Type::*;
         let ty = self.types.get(ty);
         match ty {
-            types::Type::Boolean
-            | types::Type::Float
-            | types::Type::Integer
-            | types::Type::String
-            | types::Type::Signal(_)
-            | types::Type::Listener(_) => true,
+            Boolean | Float | Integer | String | Signal(_) | Listener(_) => true,
             _ => false,
         }
     }
@@ -33,11 +29,19 @@ impl SemanticsChecker<'_, '_> {
         matches!(ty, types::Type::Trait(_))
     }
 
+    pub fn symbols(&self) -> &SymbolTable {
+        &self.symbols
+    }
+
     pub fn get_symbol(&self, id: SymbolId) -> &dyn Symbol {
         self.symbols.get_symbol(id)
     }
 
     pub fn is_mutable_symbol(&self, id: SymbolId) -> bool {
         self.symbols.is_mutable(id)
+    }
+
+    pub fn is_immutable_symbol(&self, id: SymbolId) -> bool {
+        !self.symbols.is_mutable(id)
     }
 }

@@ -54,12 +54,10 @@ impl TypeChecker {
         scrutinee: Option<&ir::Expression>,
         arm: ast::MatchArm,
     ) -> Option<(ir::Pattern, ir::Expression)> {
-        self.with_scope(|self_| {
-            let pattern =
-                scrutinee.and_then(|s| self_.visit_pattern(*arm.pattern?, s, true, false));
-            let expression = arm.expression.and_then(|e| self_.visit_expression(*e));
-            Some((pattern?, expression?))
-        })
+        let mut self_ = self.with_local_scope();
+        let pattern = scrutinee.and_then(|s| self_.visit_pattern(*arm.pattern?, s, true, false));
+        let expression = arm.expression.and_then(|e| self_.visit_expression(*e));
+        Some((pattern?, expression?))
     }
 
     pub fn check_exhaustiveness(&mut self, patterns: Vec<&ir::Pattern>, loc: Location) -> bool {

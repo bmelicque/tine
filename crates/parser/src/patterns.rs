@@ -106,13 +106,36 @@ impl Parser<'_> {
             self.error(DiagnosticKind::InvalidPattern, path.loc());
             return Pattern::Invalid(InvalidPattern { loc: unary.loc });
         };
+
         match self.path_to_pattern(path) {
             Pattern::Identifier(mut identifier) => {
                 identifier.mutable = true;
                 identifier.loc = unary.loc;
                 identifier.into()
             }
+            Pattern::Path(path) if path.segments.len() == 1 => {
+                Pattern::Identifier(IdentifierPattern {
+                    loc: path.loc,
+                    mutable: true,
+                    identifier: path.segments[0].ident.clone(),
+                })
+            }
             p => p,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_mutable_binding() {
+        let mut parser = Parser::new(0, "mut x");
+        parser.with_mutable_binding(|parser| {
+            let pattern = parser.parse_pattern().expect("expected a pattern");
+            let ident = pattern.as_identifier().expect("expected an identifier");
+            assert!(ident.mutable)
+        })
     }
 }

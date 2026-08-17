@@ -328,10 +328,10 @@ fn visit_pattern_field(
     expected_members: &[MemberSymbolId],
     substitutions: &Substitutions,
 ) -> Option<ir::StructPatternField> {
-    let identifier = field.identifier.unwrap();
+    let identifier_ast = field.identifier.unwrap();
     let expected = expected_members
         .iter()
-        .find(|&m| visitor.tc.symbol_name(*m) == identifier.as_str());
+        .find(|&m| visitor.tc.symbol_name(*m) == identifier_ast.as_str());
     let Some(&expected) = expected else {
         visitor.tc.error(DiagnosticKind::InvalidMember, field.loc);
         return None;
@@ -339,13 +339,24 @@ fn visit_pattern_field(
     let ty = visitor.tc.symbol_type_id(expected);
     let ty = substitutions.apply(&mut visitor.tc.types, ty);
     let identifier = ir::Identifier {
-        loc: identifier.loc,
+        loc: identifier_ast.loc,
         symbol: expected.into(),
         ty,
     };
     let pattern = match field.pattern {
-        Some(p) => Some(visit_pattern(p, visitor, ty)?),
-        None => None,
+        Some(p) => visit_pattern(p, visitor, ty)?,
+        None => {
+            if visitor.is_declaration {
+                let symbol = declare_variable(visitor, &identifier_ast, ty, false)?;
+                ir::Pattern::Identifier(ir::Identifier {
+                    loc: identifier_ast.loc(),
+                    symbol: symbol.into(),
+                    ty,
+                })
+            } else {
+                visitor.tc.visit_identifier(identifier_ast)?.into()
+            }
+        }
     };
 
     Some(ir::StructPatternField {

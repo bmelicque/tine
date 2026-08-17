@@ -1,6 +1,7 @@
 use tine_ast as ast;
 use tine_common::{diagnostics::DiagnosticKind, locations::Locatable};
 use tine_ir::{self as ir, Typed};
+use tine_symbols::symbols::*;
 use tine_types::{store::TypeStore, types};
 
 use super::TypeChecker;
@@ -35,26 +36,43 @@ impl TypeChecker {
         &mut self,
         node: ast::ForInExpression,
     ) -> Option<ir::ForInExpression> {
-        let Some((pattern, iterable, _)) = (|| {
+        let Some((element, iterable, element_type)) = (|| {
             let (iterable, element_type) = self.visit_for_in_iterable(*node.iterable?);
             let iterable = iterable?;
-            let pattern = self.visit_pattern(node.pattern?, &iterable, true, false)?;
-            Some((pattern, iterable, element_type))
+            let element = match node.pattern? {
+                ast::Pattern::Identifier(i) => i.identifier,
+                ast::Pattern::Invalid(_) => return None,
+                p => {
+                    self.error(DiagnosticKind::NotImplemented, p.loc());
+                    return None;
+                }
+            };
+            Some((element, iterable, element_type))
         })() else {
             node.body.map(|b| self.visit_block_expression(b));
             return None;
         };
 
-        self.with_scope(|self_| {
-            let body = node.body.map(|b| self_.visit_block_expression(b))?;
+        let mut self_ = self.with_local_scope();
+        let symbol = self_.insert::<VariableSymbolId>(VariableSymbol {
+            name: element.as_str().to_string(),
+            ty: element_type,
+            defined_at: element.loc,
+            ..Default::default()
+        });
+        let element = ir::Identifier {
+            loc: element.loc,
+            ty: element_type,
+            symbol: symbol.into(),
+        };
+        let body = node.body.map(|b| self_.visit_block_expression(b))?;
 
-            Some(ir::ForInExpression {
-                loc: node.loc,
-                element: pattern,
-                iterable: Box::new(iterable),
-                ty: self_.get_loop_type(&body),
-                body,
-            })
+        Some(ir::ForInExpression {
+            loc: node.loc,
+            element,
+            iterable: Box::new(iterable),
+            ty: self_.get_loop_type(&body),
+            body,
         })
     }
 

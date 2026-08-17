@@ -1,9 +1,14 @@
-use crate::{Block, Expression, Node, Statement};
+use crate::{Block, Expression, Node, Pattern, Statement};
 
 pub trait PushNodes<'a> {
     fn push_nodes(&'a self, stack: &mut Vec<Node<'a>>);
 }
 
+impl<'a> PushNodes<'a> for Pattern {
+    fn push_nodes(&'a self, stack: &mut Vec<Node<'a>>) {
+        self.push_children(stack);
+    }
+}
 impl<'a> PushNodes<'a> for Expression {
     fn push_nodes(&'a self, stack: &mut Vec<Node<'a>>) {
         stack.push(self.into());

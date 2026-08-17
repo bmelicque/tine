@@ -191,21 +191,19 @@ impl TypeChecker {
         node: ast::MethodDefinition,
         symbol_id: MethodSymbolId,
     ) -> Option<ir::MethodDefinition> {
-        let tc = &mut self.with_this_mutability(node.mut_).tc;
-        let symbol = tc.symbols.get(symbol_id);
+        let mut self_ = self.with_this_mutability(node.mut_);
+        let mut self_ = self_.with_local_scope();
+        let symbol = self_.symbols.get(symbol_id);
         let ty_id = symbol.ty;
-        let ty = tc
+        let ty = self_
             .resolve(symbol.ty)
             .as_function()
             .expect("this should be a function!!")
             .clone();
 
-        let (params, body) = tc.with_scope(|self_| {
-            self_.handle_method_type_params(&ty.type_params, node.type_params);
-            let params = self_.handle_method_params(&ty.params, node.params);
-            let body = self_.handle_method_body(node.body, ty.return_type);
-            (params, body)
-        });
+        self_.handle_method_type_params(&ty.type_params, node.type_params);
+        let params = self_.handle_method_params(&ty.params, node.params);
+        let body = self_.handle_method_body(node.body, ty.return_type);
 
         Some(ir::MethodDefinition {
             ty: ty_id,

@@ -3,7 +3,9 @@ use tine_macros::tree_struct;
 use tine_symbols::symbols::*;
 use tine_types::store::TypeStore;
 
-use crate::{ir_enum, BooleanLiteral, FloatLiteral, Identifier, IntLiteral, StringLiteral, Typed};
+use crate::{
+    ir_enum, BooleanLiteral, FloatLiteral, Identifier, IntLiteral, PushNodes, StringLiteral, Typed,
+};
 
 ir_enum!(Pattern {
     Boolean(BooleanLiteral),
@@ -30,6 +32,7 @@ impl Pattern {
 #[derive(Debug, Clone)]
 pub struct CallPattern {
     pub callee: (Location, VariantSymbolId),
+    #[child]
     pub arguments: Vec<Pattern>,
 }
 
@@ -37,18 +40,26 @@ pub struct CallPattern {
 #[derive(Debug, Clone)]
 pub struct StructPattern {
     pub name: (Location, StructSymbolId),
+    #[child]
     pub fields: Vec<StructPatternField>,
 }
 
+#[tree_struct(untyped)]
 #[derive(Debug, Clone)]
 pub struct StructPatternField {
-    pub loc: Location,
     pub identifier: Identifier,
-    pub pattern: Option<Pattern>,
+    #[child]
+    pub pattern: Pattern,
+}
+impl<'a> PushNodes<'a> for StructPatternField {
+    fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
+        self.pattern.push_nodes(stack);
+    }
 }
 
 #[tree_struct]
 #[derive(Debug, Clone)]
 pub struct TuplePattern {
+    #[child]
     pub elements: Vec<Pattern>,
 }
