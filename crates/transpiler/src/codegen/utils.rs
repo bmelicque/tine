@@ -94,6 +94,19 @@ pub fn create_str(text: &str) -> swc::Expr {
         raw: None,
     }))
 }
+pub fn create_num(value: f64) -> swc::Expr {
+    swc::Expr::Lit(swc::Lit::Num(swc::Number {
+        span: DUMMY_SP,
+        value,
+        raw: None,
+    }))
+}
+pub fn create_bool(value: bool) -> swc::Expr {
+    swc::Expr::Lit(swc::Lit::Bool(swc::Bool {
+        span: DUMMY_SP,
+        value,
+    }))
+}
 
 pub fn create_block_stmt(stmts: Vec<swc::Stmt>) -> swc::BlockStmt {
     swc::BlockStmt {
@@ -240,6 +253,20 @@ pub fn member(object: swc::Expr, prop: &str) -> swc::MemberExpr {
         span: DUMMY_SP,
         obj: Box::new(object),
         prop: swc::MemberProp::Ident(ident_from_str(prop).into()),
+    }
+}
+pub fn index(object: swc::Expr, i: usize) -> swc::MemberExpr {
+    swc::MemberExpr {
+        span: DUMMY_SP,
+        obj: Box::new(object),
+        prop: swc::MemberProp::Computed(swc::ComputedPropName {
+            span: DUMMY_SP,
+            expr: Box::new(swc::Expr::Lit(swc::Lit::Num(swc::Number {
+                span: DUMMY_SP,
+                value: i as f64,
+                raw: None,
+            }))),
+        }),
     }
 }
 

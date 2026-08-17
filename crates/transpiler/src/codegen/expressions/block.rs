@@ -61,7 +61,7 @@ impl CodeGenerator<'_, '_> {
     fn block_to_extracted(&mut self, node: ir::Block) -> ExpressionResult {
         let temp = self.get_temp_id();
         let decl = ident_to_declaration(temp.clone());
-        let mut block = self.block_to_swc_stmt(node);
+        let mut block = self.handle_block_stmt(node);
         assign_block_last_expression(&mut block, temp.clone());
 
         ExpressionResult {

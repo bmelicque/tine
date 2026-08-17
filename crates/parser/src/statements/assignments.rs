@@ -8,7 +8,7 @@ use crate::{tokens::Token, Parser};
 
 impl Parser<'_> {
     pub fn parse_assignment(&mut self) -> Option<Statement> {
-        let expr = self.parse_expression();
+        let expr = self.parse_expression_with_block();
 
         let Some((Ok(Token::Eq), eq_range)) = self.tokens.peek() else {
             return expr.map(|e| {
@@ -29,7 +29,7 @@ impl Parser<'_> {
             self.error(DiagnosticKind::MissingPattern, eq_loc);
         }
 
-        let value = self.parse_expression();
+        let value = self.parse_expression_with_block();
         if value.is_none() {
             self.error(DiagnosticKind::MissingExpression, eq_loc.increment());
         }

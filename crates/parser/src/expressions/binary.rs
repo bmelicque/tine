@@ -4,7 +4,7 @@ use tine_common::{
     locations::{Locatable, Location},
 };
 
-use crate::{tokens::Token, Parser};
+use crate::{tokens::Token, ExpressionCtx, Parser};
 
 impl Parser<'_> {
     const LTR_BINARY_OPERATORS: [Token; 13] = [
@@ -23,18 +23,22 @@ impl Parser<'_> {
         Token::Ge,
     ];
 
-    pub fn parse_binary_expression(&mut self, min_precedence: u8) -> Option<ast::Expression> {
+    pub fn parse_binary_expression(
+        &mut self,
+        min_precedence: u8,
+        ctx: ExpressionCtx,
+    ) -> Option<ast::Expression> {
         if min_precedence == Token::StarStar.precedence() {
-            return self.parse_exponentiation();
+            return self.parse_exponentiation(ctx);
         }
-        let mut expression = self.parse_binary_expression(min_precedence + 1);
+        let mut expression = self.parse_binary_expression(min_precedence + 1, ctx);
         while let Some((Ok(token), op_range)) = self.tokens.peek().cloned() {
             if token.precedence() < min_precedence || !Self::LTR_BINARY_OPERATORS.contains(&token) {
                 break;
             }
             self.tokens.next(); // consume the operator
             let operator = token.to_string().into();
-            let right = self.parse_binary_expression(min_precedence + 1);
+            let right = self.parse_binary_expression(min_precedence + 1, ctx);
             if right.is_none() {
                 self.error(
                     DiagnosticKind::MissingExpression,
@@ -57,13 +61,13 @@ impl Parser<'_> {
         expression
     }
 
-    fn parse_exponentiation(&mut self) -> Option<ast::Expression> {
-        let lhs = self.parse_unary_expression();
+    fn parse_exponentiation(&mut self, ctx: ExpressionCtx) -> Option<ast::Expression> {
+        let lhs = self.parse_unary_expression(ctx);
         let Some((Ok(Token::StarStar), _)) = self.tokens.peek() else {
             return lhs;
         };
         let op_range = self.eat(&[Token::StarStar]);
-        let rhs = self.parse_exponentiation();
+        let rhs = self.parse_exponentiation(ctx);
         if rhs.is_none() {
             self.error(
                 DiagnosticKind::MissingExpression,

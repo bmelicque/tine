@@ -261,46 +261,49 @@ fn visit_block(block: &ir::Block, checker: &SemanticsChecker, map: &mut AliasMap
 }
 
 fn visit_stmt(stmt: &ir::Statement, checker: &SemanticsChecker, map: &mut AliasMap) {
+    use ir::Statement::*;
     match stmt {
-        ir::Statement::Variable(v) => {
+        Variable(v) => {
+            let new = visit_pattern(&v.pattern, checker);
             let roots = visit_expr(&v.value, checker, map);
-            let ty = checker.get_symbol(v.symbol.into()).ty();
-            if !v.mutable && !checker.is_copy(ty) {
-                map.register(v.symbol.into());
-                roots
-                    .into_iter()
-                    .filter(|root| !checker.is_mutable_symbol(*root))
-                    .for_each(|root| map.union(v.symbol.into(), root));
+            let roots = roots
+                .into_iter()
+                .filter(|root| !checker.is_mutable_symbol(*root))
+                .collect::<Vec<_>>();
+            for v in new {
+                let ty = checker.get_symbol(v.into()).ty();
+                let immutable = checker.is_immutable_symbol(v.into());
+                if immutable && !checker.is_copy(ty) {
+                    map.register(v.into());
+                    roots.iter().for_each(|root| map.union(v.into(), *root));
+                }
             }
         }
 
-        ir::Statement::Assignment(a) => {
+        Assignment(a) => {
             visit_expr(&a.value, checker, map);
         }
 
-        ir::Statement::Expression(e) => {
+        Expression(e) => {
             visit_expr(e, checker, map);
         }
-        ir::Statement::Return(r) => {
+        Return(r) => {
             if let Some(e) = &r.expression {
                 visit_expr(e, checker, map);
             }
         }
-        ir::Statement::Break(b) => {
+        Break(b) => {
             if let Some(e) = &b.expression {
                 visit_expr(e, checker, map);
             }
         }
-        ir::Statement::Function(f) => {
+        Function(f) => {
             visit_function_expression(&f.clone().into(), checker, map);
         }
-        ir::Statement::Method(m) => {
+        Method(m) => {
             visit_method(&m.clone().into(), checker, map);
         }
-        ir::Statement::Enum(_)
-        | ir::Statement::Struct(_)
-        | ir::Statement::Use(_)
-        | ir::Statement::Continue(_) => {}
+        Enum(_) | Struct(_) | Use(_) | Continue(_) => {}
     }
 }
 
@@ -311,8 +314,9 @@ fn visit_expr(
     checker: &SemanticsChecker,
     map: &mut AliasMap,
 ) -> Vec<SymbolId> {
+    use ir::Expression::*;
     match expr {
-        ir::Expression::Identifier(id) => {
+        Identifier(id) => {
             let ty = checker.get_symbol(id.symbol.into()).ty();
             if checker.is_mutable_symbol(id.symbol) || checker.is_copy(ty) {
                 return vec![];
@@ -320,7 +324,7 @@ fn visit_expr(
             map.register(id.symbol.into());
             return vec![id.symbol.into()];
         }
-        ir::Expression::Index(i) => {
+        Index(i) => {
             if checker.is_copy(i.ty) {
                 i.object.as_deref().map(|o| visit_expr(o, checker, map));
                 return vec![];
@@ -329,7 +333,7 @@ fn visit_expr(
                 .as_deref()
                 .map_or(vec![], |o| visit_expr(o, checker, map))
         }
-        ir::Expression::Member(m) => {
+        Member(m) => {
             if checker.is_copy(m.ty) {
                 m.object.as_deref().map(|o| visit_expr(o, checker, map));
                 return vec![];
@@ -338,20 +342,20 @@ fn visit_expr(
                 .as_deref()
                 .map_or(vec![], |o| visit_expr(o, checker, map))
         }
-        ir::Expression::Method(m) => {
+        Method(m) => {
             m.host.as_deref().map(|h| visit_expr(h, checker, map));
             vec![]
         }
 
-        ir::Expression::IntrinsicCall(_)
-        | ir::Expression::IntrinsicConstruct(_)
-        | ir::Expression::BooleanLiteral(_)
-        | ir::Expression::FloatLiteral(_)
-        | ir::Expression::IntLiteral(_)
-        | ir::Expression::StringLiteral(_) => vec![],
+        IntrinsicCall(_)
+        | IntrinsicConstruct(_)
+        | BooleanLiteral(_)
+        | FloatLiteral(_)
+        | IntLiteral(_)
+        | StringLiteral(_) => vec![],
 
         // --- Non-forwarding expressions (produce a fresh value) ---
-        ir::Expression::Unary(u) => match u.operator {
+        Unary(u) => match u.operator {
             // Behavior could change with new operators.
             ir::UnaryOperator::Bang | ir::UnaryOperator::Minus | ir::UnaryOperator::Star => {
                 visit_expr(&u.operand, checker, map);
@@ -359,7 +363,7 @@ fn visit_expr(
             }
             ir::UnaryOperator::Mut => unreachable!(),
         },
-        ir::Expression::Binary(b) => match b.op {
+        Binary(b) => match b.op {
             // Behavior could change with new operators.
             ir::BinaryOperator::Add
             | ir::BinaryOperator::Div
@@ -380,29 +384,29 @@ fn visit_expr(
                 vec![]
             }
         },
-        ir::Expression::TypeMatch(t) => {
+        TypeMatch(t) => {
             visit_expr(&t.expr, checker, map);
             vec![]
         }
 
         // --- These produce a new JS object that could be linked to an
         //     identifier used in the expression ---
-        ir::Expression::Array(a) => a
+        Array(a) => a
             .elements
             .iter()
             .flat_map(|e| visit_expr(e, checker, map))
             .collect(),
-        ir::Expression::Tuple(t) => t
+        Tuple(t) => t
             .elements
             .iter()
             .flat_map(|e| visit_expr(e, checker, map))
             .collect(),
-        ir::Expression::Struct(s) => s
+        Struct(s) => s
             .fields
             .iter()
             .flat_map(|f| visit_expr(&f.value, checker, map))
             .collect(),
-        ir::Expression::Element(e) => e
+        Element(e) => e
             .attributes
             .iter()
             .map(|a| &a.value)
@@ -410,8 +414,8 @@ fn visit_expr(
             .flat_map(|e| visit_expr(e, checker, map))
             .collect(),
 
-        ir::Expression::Block(b) => visit_block(b, checker, map),
-        ir::Expression::Call(c) => {
+        Block(b) => visit_block(b, checker, map),
+        Call(c) => {
             let chart = map.alias_signature(&c.callee, checker).cloned();
             match chart {
                 Some(chart) => c
@@ -430,7 +434,7 @@ fn visit_expr(
                     .collect::<Vec<_>>(),
             }
         }
-        ir::Expression::If(i) => {
+        If(i) => {
             let mut cons = visit_block(&i.consequent, checker, map);
             let alt = i
                 .alternate
@@ -439,25 +443,36 @@ fn visit_expr(
             cons.extend(alt);
             cons
         }
-        ir::Expression::For(f) => {
+        Match(m) => {
+            let arms = m.arms.iter().map(|a| &a.1);
+            std::iter::once(&*m.scrutinee)
+                .chain(arms)
+                .flat_map(|e| visit_expr(e, checker, map))
+                .collect()
+        }
+        For(f) => {
             if let Some(cond) = &f.condition {
                 visit_expr(cond, checker, map);
             }
             visit_loop_body(&f.body, checker, map)
         }
-        ir::Expression::ForIn(f) => {
+        ForIn(f) => {
             let iterable = visit_expr(&f.iterable, checker, map);
 
-            let ty = checker.get_symbol(f.element.1.into()).ty();
-            if !checker.is_copy(ty) {
-                map.register(f.element.1.into());
-                iterable
-                    .iter()
-                    .for_each(|sym| map.union(f.element.1.into(), *sym));
+            let roots = iterable
+                .into_iter()
+                .filter(|root| !checker.is_mutable_symbol(*root))
+                .collect::<Vec<_>>();
+            let v = f.element.symbol;
+            let ty = checker.get_symbol(v).ty();
+            let immutable = checker.is_immutable_symbol(v);
+            if immutable && !checker.is_copy(ty) {
+                map.register(v);
+                roots.iter().for_each(|root| map.union(v.into(), *root));
             }
             visit_loop_body(&f.body, checker, map)
         }
-        ir::Expression::Function(f) => visit_function_expression(f, checker, map),
+        Function(f) => visit_function_expression(f, checker, map),
     }
 }
 
@@ -523,4 +538,36 @@ fn visit_method(
     }
 
     vec![]
+}
+
+fn visit_pattern(pattern: &ir::Pattern, checker: &SemanticsChecker) -> Vec<SymbolId> {
+    use ir::Pattern::*;
+    match pattern {
+        Boolean(_) | Float(_) | Integer(_) | String(_) => vec![],
+
+        Call(c) => c
+            .arguments
+            .iter()
+            .flat_map(|a| visit_pattern(a, checker))
+            .collect(),
+        Identifier(i) => visit_identifier_pattern(i, checker),
+        Struct(s) => s
+            .fields
+            .iter()
+            .flat_map(|f| visit_pattern(&f.pattern, checker))
+            .collect(),
+        Tuple(t) => t
+            .elements
+            .iter()
+            .flat_map(|e| visit_pattern(e, checker))
+            .collect(),
+    }
+}
+
+fn visit_identifier_pattern(i: &ir::Identifier, checker: &SemanticsChecker) -> Vec<SymbolId> {
+    checker
+        .is_immutable_symbol(i.symbol)
+        .then(|| i.symbol)
+        .into_iter()
+        .collect()
 }

@@ -18,6 +18,8 @@ use tine_ir as ir;
 use tine_symbols::table::SymbolTable;
 use tine_types::store::TypeStore;
 
+use crate::utils::is_declaration_mutable;
+
 use super::alias::AliasMap;
 use super::liveness::UseSites;
 use super::semantics::SemanticsChecker;
@@ -265,7 +267,7 @@ fn visit_stmt(
 ) {
     match stmt {
         ir::Statement::Variable(v) => {
-            let binding = if v.mutable {
+            let binding = if is_declaration_mutable(v, semantics.symbols()) {
                 Binding::Mutable(v.loc)
             } else {
                 Binding::Immutable(v.loc)
@@ -502,6 +504,19 @@ fn visit_expr<'a>(
                 visit_block_expr(alt, ctx, sites, aliases, semantics, out);
             }
         }
+        ir::Expression::Match(expr) => {
+            visit_expr(
+                &expr.scrutinee,
+                ctx.enter_non_binding(),
+                sites,
+                aliases,
+                semantics,
+                out,
+            );
+            for arm in &expr.arms {
+                visit_expr(&arm.1, ctx, sites, aliases, semantics, out);
+            }
+        }
 
         ir::Expression::For(ir::ForExpression {
             condition, body, ..
@@ -519,16 +534,12 @@ fn visit_expr<'a>(
             );
         }
 
-        ir::Expression::ForIn(ir::ForInExpression {
-            iterable,
-            element,
-            body,
-            ..
-        }) => {
+        ir::Expression::ForIn(ir::ForInExpression { iterable, body, .. }) => {
             visit_expr(iterable, ctx.clone(), sites, aliases, semantics, out);
             // The element binding is a fresh value each iteration: always
             // borrowed, never moved out of the loop.
-            out.0.insert(element.0, OwnershipAction::Borrow);
+            // FIXME:
+            // out.0.insert(element.0, OwnershipAction::Borrow);
             visit_block(
                 body,
                 ctx.enter_loop(ctx.binding),

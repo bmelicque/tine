@@ -7,7 +7,11 @@ impl Parser<'_> {
     pub fn parse_array(&mut self) -> ast::ArrayExpression {
         let start_range = self.eat(&[Token::LBracket]);
 
-        let elements = self.parse_list(|p| p.parse_expression(), Token::Comma, Token::RBracket);
+        let elements = self.parse_list(
+            |p| p.parse_expression_with_block(),
+            Token::Comma,
+            Token::RBracket,
+        );
 
         let end_range = match self.tokens.peek() {
             Some((Ok(Token::RBracket), r)) => r.clone(),

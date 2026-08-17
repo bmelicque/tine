@@ -20,7 +20,7 @@ impl TypeChecker {
         }
         let owner_id: EnumSymbolId = self.insert(EnumSymbol {
             name: name.text.clone(),
-            defined_at: node.loc,
+            defined_at: name.loc,
             ..Default::default()
         });
         let Some(items) = node.items else {

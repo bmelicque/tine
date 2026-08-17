@@ -4,13 +4,13 @@ use tine_common::{
     locations::{Locatable, Location},
 };
 
-use crate::{tokens::Token, Parser};
+use crate::{tokens::Token, ExpressionCtx, Parser};
 
 const UNARY_OPERATORS: [Token; 3] = [Token::Bang, Token::Minus, Token::Star];
 const EXTENDED_UNARY_OPERATORS: [Token; 4] = [Token::Bang, Token::Minus, Token::Mut, Token::Star];
 
 impl Parser<'_> {
-    pub fn parse_unary_expression(&mut self) -> Option<ast::Expression> {
+    pub fn parse_unary_expression(&mut self, ctx: ExpressionCtx) -> Option<ast::Expression> {
         let operators: &[Token] = if self.in_mutable_binding {
             &EXTENDED_UNARY_OPERATORS
         } else {
@@ -19,7 +19,7 @@ impl Parser<'_> {
         match self.tokens.peek().cloned() {
             Some((Ok(token), op_range)) if operators.contains(&token) => {
                 self.tokens.next(); // consume the operator
-                let expr = self.parse_unary_expression();
+                let expr = self.parse_unary_expression(ctx);
                 if expr.is_none() {
                     self.error(
                         DiagnosticKind::MissingExpression,
@@ -36,7 +36,7 @@ impl Parser<'_> {
                     operand: expr.map(|e| Box::new(e)),
                 }))
             }
-            _ => self.parse_postfix(),
+            _ => self.parse_postfix(ctx),
         }
     }
 }

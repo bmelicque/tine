@@ -146,7 +146,7 @@ impl Parser<'_> {
                 })
             }
             Token::LBrace => {
-                let expression = self.parse_expression();
+                let expression = self.parse_expression_with_block();
                 if expression.is_none() {
                     let loc = self.next_loc();
                     self.error(DiagnosticKind::MissingExpression, loc);
@@ -194,7 +194,7 @@ impl Parser<'_> {
                 Token::LBrace => {
                     self.tokens.next(); // eat '{'
 
-                    let expression = self.parse_expression();
+                    let expression = self.parse_expression_with_block();
                     if expression.is_none() {
                         let loc = self.next_loc();
                         self.error(DiagnosticKind::MissingExpression, loc);

@@ -4,7 +4,7 @@ use tine_macros::tree_struct;
 use tine_symbols::symbols::*;
 use tine_types::store::TypeStore;
 
-use crate::{ir_enum, PushNodes, Statement, Typed};
+use crate::{ir_enum, Pattern, PushNodes, Statement, Typed};
 
 ir_enum!(
     @typed
@@ -25,6 +25,7 @@ ir_enum!(
         IntLiteral(IntLiteral),
         IntrinsicCall(IntrinsicCall),
         IntrinsicConstruct(IntrinsicConstruct),
+        Match(MatchExpression),
         Member(MemberExpression),
         Method(MethodExpression),
         StringLiteral(StringLiteral),
@@ -163,7 +164,7 @@ pub struct ForExpression {
 #[tree_struct]
 #[derive(Debug, Clone)]
 pub struct ForInExpression {
-    pub element: (Location, VariableSymbolId),
+    pub element: Identifier,
     #[child]
     pub iterable: Box<Expression>,
     #[child]
@@ -242,6 +243,14 @@ pub struct IntrinsicCall {
 pub struct IntrinsicConstruct {
     pub constructor: StructSymbolId,
     pub fields: Vec<StructLiteralField>,
+}
+
+#[tree_struct]
+#[derive(Debug, Clone)]
+pub struct MatchExpression {
+    #[child]
+    pub scrutinee: Box<Expression>,
+    pub arms: Vec<(Pattern, Expression)>,
 }
 
 #[tree_struct]

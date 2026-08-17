@@ -5,7 +5,7 @@ use tine_common::{
 use tine_macros::{tree_struct, EnumFrom};
 use tine_symbols::symbols::*;
 
-use crate::{ir_enum, Block, Expression, FunctionExpression, Typed};
+use crate::{ir_enum, Block, Expression, FunctionExpression, Pattern, Typed};
 
 ir_enum!(Statement {
     Assignment(Assignment),
@@ -114,8 +114,7 @@ pub struct UseDeclaration {
 #[tree_struct(untyped)]
 #[derive(Debug, Clone)]
 pub struct VariableDeclaration {
-    pub mutable: bool,
-    pub symbol: VariableSymbolId,
+    pub pattern: Pattern,
     #[child]
     pub value: Expression,
 }

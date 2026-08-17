@@ -37,16 +37,6 @@ pub struct UseSite {
     pub is_mutated: bool,
 }
 
-impl UseSite {
-    /// A fresh use-site at the declaration of a variable.
-    fn declaration(loc: Location) -> Self {
-        Self {
-            loc,
-            ..Default::default()
-        }
-    }
-}
-
 /// The result of the analysis.
 ///
 /// Contains all the `UseSite`s for any given variable.
@@ -247,128 +237,81 @@ fn visit_stmt(stmt: &ir::Statement, ctx: Ctx, out: &mut UseSites) {
 }
 
 fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
+    use ir::Expression::*;
     match expr {
         // Leaf: record the use-site
-        ir::Expression::Identifier(id) => {
-            let in_loop = ctx.loop_captures(id.symbol);
-            let in_closure = ctx.closure_captures(id.symbol);
-            out.0.entry(id.symbol.clone()).or_default().push(UseSite {
-                loc: id.loc,
-                in_loop,
-                in_closure,
-                is_external: ctx.in_param,
-                is_mutated: ctx.assignment_lhs || ctx.in_callee,
-            });
+        Identifier(id) => visit_identifier(id, ctx, out),
+
+        BooleanLiteral(_) | FloatLiteral(_) | IntLiteral(_) | StringLiteral(_) => {}
+
+        Unary(u) => visit_expr(&u.operand, ctx, out),
+        Index(i) => visit_maybe_boxed_expr(&i.object, ctx, out),
+        Member(m) => visit_maybe_boxed_expr(&m.object, ctx, out),
+        Method(m) => {
+            visit_maybe_boxed_expr(&m.host, ctx, out);
+            visit_expr_list(&m.args, ctx, out);
         }
-
-        ir::Expression::BooleanLiteral(_)
-        | ir::Expression::FloatLiteral(_)
-        | ir::Expression::IntLiteral(_)
-        | ir::Expression::StringLiteral(_) => {}
-
-        ir::Expression::Unary(u) => visit_expr(&u.operand, ctx, out),
-        ir::Expression::Index(i) => match i.object.as_deref() {
-            Some(o) => visit_expr(o, ctx, out),
-            None => {}
-        },
-        ir::Expression::Member(m) => match m.object.as_deref() {
-            Some(o) => visit_expr(o, ctx, out),
-            None => {}
-        },
-        ir::Expression::Method(m) => match m.host.as_deref() {
-            Some(o) => visit_expr(o, ctx, out),
-            None => {}
-        },
-        ir::Expression::Binary(b) => {
+        Binary(b) => {
             visit_expr(&b.left, ctx, out);
             visit_expr(&b.right, ctx, out);
         }
-        ir::Expression::Block(b) => visit_block(b, ctx, out),
+        Block(b) => visit_block(b, ctx, out),
 
-        ir::Expression::Array(a) => {
-            for e in &a.elements {
-                visit_expr(e, ctx, out);
-            }
-        }
-        ir::Expression::Tuple(t) => {
-            for e in &t.elements {
-                visit_expr(e, ctx, out);
-            }
-        }
-        ir::Expression::Struct(s) => {
+        Array(a) => visit_expr_list(&a.elements, ctx, out),
+        Tuple(t) => visit_expr_list(&t.elements, ctx, out),
+        Struct(s) => {
             for field in &s.fields {
                 visit_expr(&field.value, ctx, out);
             }
         }
 
-        ir::Expression::IntrinsicCall(c) => {
-            c.args.iter().for_each(|a| visit_expr(a, ctx, out));
-        }
-        ir::Expression::IntrinsicConstruct(c) => {
+        IntrinsicCall(c) => visit_expr_list(&c.args, ctx, out),
+        IntrinsicConstruct(c) => {
             c.fields.iter().for_each(|f| visit_expr(&f.value, ctx, out));
         }
-        ir::Expression::Call(c) => {
+        Call(c) => {
             visit_expr(&c.callee, ctx.enter_callee(), out);
-            for arg in &c.args {
-                visit_expr(arg, ctx, out);
-            }
+            visit_expr_list(&c.args, ctx, out);
         }
 
-        ir::Expression::If(ir::IfExpression {
-            condition,
-            consequent,
-            alternate,
-            ..
-        }) => {
-            visit_expr(condition, ctx, out);
-            visit_block(consequent, ctx, out);
-            if let Some(alt) = alternate {
+        If(i) => {
+            visit_expr(&i.condition, ctx, out);
+            visit_block(&i.consequent, ctx, out);
+            if let Some(alt) = &i.alternate {
                 visit_block(alt, ctx, out);
             }
         }
-
-        ir::Expression::For(ir::ForExpression {
-            condition,
-            body,
-            loc,
-            ..
-        }) => {
-            if let Some(cond) = condition {
-                visit_expr(cond, ctx.enter_loop(*loc), out);
+        Match(m) => {
+            visit_expr(&m.scrutinee, ctx, out);
+            for arm in &m.arms {
+                visit_pattern(&arm.0, ctx, out);
+                visit_expr(&arm.1, ctx, out);
             }
-            visit_block(body, ctx.enter_loop(*loc), out);
-        }
-        ir::Expression::ForIn(ir::ForInExpression {
-            iterable,
-            element,
-            body,
-            loc,
-            ..
-        }) => {
-            // The iterable is evaluated once, outside the loop.
-            visit_expr(iterable, ctx, out);
-            // The element binding is freshly introduced each iteration;
-            out.0
-                .entry(element.1.into())
-                .or_default()
-                .push(UseSite::declaration(element.0));
-            visit_block(body, ctx.enter_loop(*loc), out);
         }
 
-        ir::Expression::Function(ir::FunctionExpression {
-            body, loc, params, ..
-        }) => {
-            for param in params {
+        For(f) => {
+            if let Some(cond) = &f.condition {
+                visit_expr(cond, ctx.enter_loop(f.loc), out);
+            }
+            visit_block(&f.body, ctx.enter_loop(f.loc), out);
+        }
+        ForIn(f) => {
+            visit_expr(&f.iterable, ctx, out);
+            visit_block(&f.body, ctx.enter_loop(f.loc), out);
+        }
+
+        Function(f) => {
+            for param in &f.params {
                 out.0.entry(param.1.into()).or_default().push(UseSite {
                     loc: param.0,
                     is_external: true,
                     ..Default::default()
                 })
             }
-            visit_block(body, ctx.enter_closure(*loc), out);
+            visit_block(&f.body, ctx.enter_closure(f.loc), out);
         }
 
-        ir::Expression::Element(e) => {
+        Element(e) => {
             for attr in &e.attributes {
                 visit_expr(&attr.value, ctx, out);
             }
@@ -377,6 +320,45 @@ fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
             }
         }
 
-        ir::Expression::TypeMatch(t) => visit_expr(&t.expr, ctx, out),
+        TypeMatch(t) => visit_expr(&t.expr, ctx, out),
     }
+}
+fn visit_maybe_boxed_expr(expr: &Option<Box<ir::Expression>>, ctx: Ctx, out: &mut UseSites) {
+    match expr.as_deref() {
+        Some(o) => visit_expr(o, ctx, out),
+        None => {}
+    }
+}
+fn visit_expr_list(list: &[ir::Expression], ctx: Ctx, out: &mut UseSites) {
+    list.into_iter().for_each(|e| visit_expr(e, ctx, out));
+}
+
+fn visit_pattern(pattern: &ir::Pattern, ctx: Ctx, out: &mut UseSites) {
+    use ir::Pattern::*;
+    match pattern {
+        Boolean(_) | Float(_) | Integer(_) | String(_) => {}
+        Call(c) => c.arguments.iter().for_each(|a| {
+            visit_pattern(a, ctx, out);
+        }),
+        Identifier(id) => visit_identifier(id, ctx, out),
+        Struct(st) => st
+            .fields
+            .iter()
+            .for_each(|f| visit_pattern(&f.pattern, ctx, out)),
+        Tuple(t) => t.elements.iter().for_each(|a| {
+            visit_pattern(a, ctx, out);
+        }),
+    }
+}
+
+fn visit_identifier(id: &ir::Identifier, ctx: Ctx, out: &mut UseSites) {
+    let in_loop = ctx.loop_captures(id.symbol);
+    let in_closure = ctx.closure_captures(id.symbol);
+    out.0.entry(id.symbol.clone()).or_default().push(UseSite {
+        loc: id.loc,
+        in_loop,
+        in_closure,
+        is_external: ctx.in_param,
+        is_mutated: ctx.assignment_lhs || ctx.in_callee,
+    });
 }

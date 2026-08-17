@@ -7,7 +7,11 @@ mod utils;
 
 use super::{utils::ident_from_str, CodeGenerator};
 use crate::{
-    codegen::utils::{create_block_stmt, create_str, internal_construct, internal_method_call},
+    codegen::{
+        expressions::utils::{assign_if_last_expressions, ident_to_declaration},
+        statements::types::enums::TAG_SYMBOL,
+        utils::{create_block_stmt, create_str, internal_construct, internal_method_call},
+    },
     ownership_analyser::OwnershipAction,
 };
 use swc_common::DUMMY_SP;
@@ -51,34 +55,24 @@ impl CodeGenerator<'_, '_> {
         match node {
             Array(a) => self.handle_array(a.elements),
             Binary(b) => self.handle_binary_expression(b),
-            BooleanLiteral(b) => ExpressionResult::from(swc::Bool {
-                span: DUMMY_SP,
-                value: b.value,
-            }),
+            BooleanLiteral(b) => ExpressionResult::from(self.handle_boolean_literal(b)),
             Block(b) => self.handle_block(b),
             Call(c) => self.handle_call(c),
             Element(e) => self.handle_element_expression(e),
-            FloatLiteral(f) => ExpressionResult::from(swc::Number {
-                span: DUMMY_SP,
-                value: f.value,
-                raw: None,
-            }),
+            FloatLiteral(f) => ExpressionResult::from(self.handle_float_literal(f)),
             For(f) => self.handle_for_expression(f),
             ForIn(f) => self.handle_for_in_expression(f),
             Function(f) => self.handle_function_expression(f).into(),
             Identifier(i) => self.handle_identifier(i).into(),
             If(i) => self.handle_if_expression(i),
             Index(i) => self.handle_index_expression(i),
-            IntLiteral(i) => ExpressionResult::from(swc::Number {
-                span: DUMMY_SP,
-                value: i.value as f64,
-                raw: None,
-            }),
+            IntLiteral(i) => ExpressionResult::from(self.handle_int_literal(i)),
             IntrinsicCall(i) => self.handle_intrinsic_call(i),
             IntrinsicConstruct(i) => self.handle_intrinsic_construct(i),
+            Match(m) => self.handle_match_expression(m),
             Member(m) => self.handle_member_expression(m),
             Method(m) => self.handle_method(m),
-            StringLiteral(s) => self.string_literal_to_swc(s).into(),
+            StringLiteral(s) => self.handle_string_literal(s).into(),
             Struct(s) => self.handle_simple_struct(s),
             Unary(u) => self.handle_unary_expression(u),
             Tuple(t) => self.handle_array(t.elements),
@@ -97,6 +91,13 @@ impl CodeGenerator<'_, '_> {
             elems: elems.into_iter().map(|e| Some(e.into())).collect(),
         });
         ExpressionResult { prelim_stmts, expr }
+    }
+
+    pub fn handle_boolean_literal(&mut self, b: ir::BooleanLiteral) -> swc::Expr {
+        swc::Expr::from(swc::Bool {
+            span: DUMMY_SP,
+            value: b.value,
+        })
     }
 
     pub fn handle_call(&mut self, node: ir::CallExpression) -> ExpressionResult {
@@ -130,6 +131,14 @@ impl CodeGenerator<'_, '_> {
         ExpressionResult { prelim_stmts, expr }
     }
 
+    pub fn handle_float_literal(&mut self, node: ir::FloatLiteral) -> swc::Expr {
+        swc::Expr::from(swc::Number {
+            span: DUMMY_SP,
+            value: node.value,
+            raw: None,
+        })
+    }
+
     fn handle_for_expression(&mut self, node: ir::ForExpression) -> ExpressionResult {
         let temp = self.get_temp_id();
         self.with_break_target(temp.clone(), |self_| ExpressionResult {
@@ -154,6 +163,21 @@ impl CodeGenerator<'_, '_> {
             params: swc_params,
             body: Box::new(swc_body),
             ..Default::default()
+        }
+    }
+
+    fn handle_match_expression(&mut self, node: ir::MatchExpression) -> ExpressionResult {
+        let temp = self.get_temp_id();
+        let decl = ident_to_declaration(temp.clone());
+        let mut stmts = self.handle_match_statement(node);
+        match stmts.last_mut() {
+            Some(swc::Stmt::If(i)) => assign_if_last_expressions(i, temp.clone()),
+            _ => panic!(),
+        }
+        stmts.insert(0, decl);
+        ExpressionResult {
+            prelim_stmts: stmts,
+            expr: temp.into(),
         }
     }
 
@@ -201,6 +225,14 @@ impl CodeGenerator<'_, '_> {
                 ..Default::default()
             }),
         }
+    }
+
+    pub fn handle_int_literal(&mut self, node: ir::IntLiteral) -> swc::Expr {
+        swc::Expr::from(swc::Number {
+            span: DUMMY_SP,
+            value: node.value as f64,
+            raw: None,
+        })
     }
 
     /// ```js
@@ -341,7 +373,7 @@ impl CodeGenerator<'_, '_> {
         }
     }
 
-    fn string_literal_to_swc(&mut self, node: ir::StringLiteral) -> swc::Str {
+    pub fn handle_string_literal(&mut self, node: ir::StringLiteral) -> swc::Str {
         swc::Str {
             span: DUMMY_SP,
             value: node.value.into(),
@@ -407,7 +439,7 @@ impl CodeGenerator<'_, '_> {
             left: Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
                 obj: Box::new(obj_result.expr),
-                prop: swc::MemberProp::Ident(ident_from_str("$tag").into()),
+                prop: swc::MemberProp::Ident(ident_from_str(TAG_SYMBOL).into()),
             })),
             right: Box::new(create_str(variant_name)),
         };

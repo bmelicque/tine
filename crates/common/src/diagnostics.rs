@@ -68,6 +68,7 @@ pub enum DiagnosticKind {
     ExpectedNumber {
         got: String,
     },
+    ExpectedStruct,
     ExpectedStructGotEnum,
     ExpectedStructLikeBody,
     ExpectedToken {
@@ -131,6 +132,7 @@ pub enum DiagnosticKind {
     NotDereferenceable {
         type_name: String,
     },
+    NotImplemented,
     NotIterable {
         type_name: String,
     },
@@ -208,6 +210,7 @@ impl Display for DiagnosticKind {
             Self::ExpectedMapKey => write!(f, "expected map key but got an identifier"),
             Self::ExpectedMember => write!(f, "expected a member"),
             Self::ExpectedNumber { got } => write!(f, "expected number but got `{}`", got),
+            Self::ExpectedStruct => write!(f, "expected a struct"),
             Self::ExpectedStructGotEnum => write!(f, "expected a struct but found an enum"),
             Self::ExpectedStructLikeBody => {
                 write!(f, "expected struct-like body, got tuple-like body")
@@ -302,6 +305,7 @@ impl Display for DiagnosticKind {
             Self::NotDereferenceable { type_name } => {
                 write!(f, "type `{}` cannot be dereferenced", type_name)
             }
+            Self::NotImplemented => write!(f, "feature not implemented yet"),
             Self::NotIterable { type_name } => {
                 write!(f, "type `{}` cannot be iterated over", type_name)
             }

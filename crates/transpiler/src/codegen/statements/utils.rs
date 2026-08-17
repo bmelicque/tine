@@ -15,3 +15,16 @@ pub fn declare_const(name: &str, value: swc::Expr) -> swc::Decl {
         ..Default::default()
     }))
 }
+
+pub fn declare_pat(name: swc::Pat, value: swc::Expr) -> swc::Decl {
+    swc::Decl::Var(Box::new(swc::VarDecl {
+        kind: swc::VarDeclKind::Const,
+        decls: vec![swc::VarDeclarator {
+            span: DUMMY_SP,
+            name,
+            init: Some(Box::new(value)),
+            definite: false,
+        }],
+        ..Default::default()
+    }))
+}

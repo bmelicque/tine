@@ -73,7 +73,7 @@ impl CodeGenerator<'_, '_> {
 
         swc::Function {
             params,
-            body: Some(self.block_to_swc_stmt(body)),
+            body: Some(self.handle_block_stmt(body)),
             ..Default::default()
         }
     }

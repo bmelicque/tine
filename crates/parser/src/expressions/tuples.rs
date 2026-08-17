@@ -9,7 +9,7 @@ impl Parser<'_> {
         };
 
         let expressions = self.parse_list(
-            |parser| parser.parse_expression(),
+            |parser| parser.parse_expression_with_block(),
             Token::Comma,
             Token::RParen,
         );

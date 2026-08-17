@@ -10,6 +10,7 @@ use crate::codegen::{
 };
 
 const SRC_NAME: &str = "src";
+pub const TAG_SYMBOL: &str = "$tag";
 
 impl CodeGenerator<'_, '_> {
     /// eg.
@@ -134,7 +135,7 @@ impl CodeGenerator<'_, '_> {
         // `$.$tag = ID`
         stmts.push(member_assignment(
             ident_from_str("$").into(),
-            ident_from_str("$tag"),
+            ident_from_str(TAG_SYMBOL),
             ident_from_str(&id.to_string()).into(),
         ));
         for member in members {
@@ -177,7 +178,7 @@ impl CodeGenerator<'_, '_> {
         let discriminant = swc::MemberExpr {
             span: DUMMY_SP,
             obj: Box::new(swc::Expr::This(swc::ThisExpr { span: DUMMY_SP })),
-            prop: swc::MemberProp::Ident(ident_from_str("$tag").into()),
+            prop: swc::MemberProp::Ident(ident_from_str(TAG_SYMBOL).into()),
         };
 
         let cases = variants
@@ -273,7 +274,10 @@ impl CodeGenerator<'_, '_> {
     }
 
     fn make_enum_setter_same_tag(&mut self, variants: &[VariantSymbolId]) -> swc::SwitchStmt {
-        let discriminant = member(swc::Expr::This(swc::ThisExpr { span: DUMMY_SP }), "$tag");
+        let discriminant = member(
+            swc::Expr::This(swc::ThisExpr { span: DUMMY_SP }),
+            TAG_SYMBOL,
+        );
 
         let cases = variants
             .iter()
@@ -317,7 +321,10 @@ impl CodeGenerator<'_, '_> {
     }
 
     fn make_variants_cleaners(&mut self, variants: &[VariantSymbolId]) -> swc::SwitchStmt {
-        let discriminant = member(swc::Expr::This(swc::ThisExpr { span: DUMMY_SP }), "$tag");
+        let discriminant = member(
+            swc::Expr::This(swc::ThisExpr { span: DUMMY_SP }),
+            TAG_SYMBOL,
+        );
         let cases = variants
             .iter()
             .enumerate()
@@ -384,8 +391,11 @@ impl CodeGenerator<'_, '_> {
 
 /// `this.$tag === src.$tag`
 fn tags_test() -> swc::BinExpr {
-    let this_tag = member(swc::Expr::This(swc::ThisExpr { span: DUMMY_SP }), "$tag");
-    let src_tag = member(ident_from_str(SRC_NAME).into(), "$tag");
+    let this_tag = member(
+        swc::Expr::This(swc::ThisExpr { span: DUMMY_SP }),
+        TAG_SYMBOL,
+    );
+    let src_tag = member(ident_from_str(SRC_NAME).into(), TAG_SYMBOL);
     swc::BinExpr {
         span: DUMMY_SP,
         op: swc::BinaryOp::EqEqEq,

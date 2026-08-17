@@ -21,6 +21,24 @@ use tine_common::{
 use crate::{graph::ModuleId, tokens::Token};
 use logos::{Logos, SpannedIter};
 
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ExpressionCtx {
+    no_braces: bool,
+}
+impl ExpressionCtx {
+    pub fn braces(&self) -> bool {
+        !self.no_braces
+    }
+
+    pub fn with_braces() -> Self {
+        Self { no_braces: false }
+    }
+
+    pub fn without_braces() -> Self {
+        Self { no_braces: true }
+    }
+}
+
 pub struct Parser<'src> {
     module: ModuleId,
     src: &'src str,

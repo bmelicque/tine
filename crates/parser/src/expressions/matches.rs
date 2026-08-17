@@ -17,21 +17,18 @@ impl Parser<'_> {
             self.error(DiagnosticKind::MissingExpression, loc);
         }
 
-        match self.tokens.peek() {
-            Some((Ok(Token::LBrace), _)) => {}
-            _ => {
-                let error_loc = self.next_loc();
-                self.error(DiagnosticKind::MissingBody, error_loc);
-                let loc = match &scrutinee {
-                    Some(expr) => Location::merge(start_loc, expr.loc()),
-                    None => start_loc,
-                };
-                return ast::MatchExpression {
-                    loc,
-                    scrutinee: scrutinee.map(|s| Box::new(s)),
-                    arms: None,
-                };
-            }
+        if self.eat_if(&[Token::LBrace]).is_none() {
+            let error_loc = self.next_loc();
+            self.error(DiagnosticKind::MissingBody, error_loc);
+            let loc = match &scrutinee {
+                Some(expr) => Location::merge(start_loc, expr.loc()),
+                None => start_loc,
+            };
+            return ast::MatchExpression {
+                loc,
+                scrutinee: scrutinee.map(|s| Box::new(s)),
+                arms: None,
+            };
         }
 
         self.tokens.next(); // eat the { token
@@ -78,7 +75,7 @@ impl Parser<'_> {
         let arrow_loc = self.localize(arrow_range);
         self.tokens.next();
 
-        let expression = self.parse_expression();
+        let expression = self.parse_expression_with_block();
 
         let loc = match (&pattern, &expression) {
             (Some(p), Some(e)) => Location::merge(p.loc(), e.loc()),
@@ -92,5 +89,28 @@ impl Parser<'_> {
             pattern: pattern.map(|p| Box::new(p)),
             expression: expression.map(|e| Box::new(e)),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{test_utils::parse_statement, Parser};
+
+    #[test]
+    fn parse_match_expression() {
+        let stmt = parse_statement("match e {}").expect("expected no errors");
+        let expr = stmt.as_expression().expect("expected expression statement");
+        expr.expression
+            .as_match()
+            .expect("expected match expression");
+    }
+
+    #[test]
+    fn parse_match_arm() {
+        let mut parser = Parser::new(0, "Ok => 0");
+        let arm = parser.parse_match_arm().expect("expected a match arm");
+        assert!(parser.diagnostics.is_empty());
+        arm.pattern.expect("expected a pattern");
+        arm.expression.expect("expected an expression");
     }
 }

@@ -27,7 +27,7 @@ impl Parser<'_> {
         };
 
         let op_range = self.expect(Token::Eq);
-        let value = self.parse_expression();
+        let value = self.parse_expression_with_block();
         if value.is_none() {
             self.error(
                 DiagnosticKind::MissingExpression,
@@ -89,8 +89,8 @@ mod tests {
     /// Returns the bound identifier's name, assuming a simple pattern.
     fn binding_name(pattern: &ast::Pattern) -> &str {
         match pattern {
-            ast::Pattern::Identifier(id) => id.as_str(),
-            ast::Pattern::MutIdentifier(id) => id.identifier.as_str(),
+            ast::Pattern::Identifier(id) => id.identifier.as_str(),
+            ast::Pattern::Path(p) if p.segments.len() == 1 => p.segments[0].ident.as_str(),
             other => panic!("expected a simple identifier pattern, got: {other:?}"),
         }
     }
@@ -98,8 +98,8 @@ mod tests {
     /// Returns whether the pattern was marked `mut`.
     fn pattern_is_mutable(pattern: &ast::Pattern) -> bool {
         match pattern {
-            ast::Pattern::Identifier(_) => false,
-            ast::Pattern::MutIdentifier(_) => true,
+            ast::Pattern::Identifier(i) => i.mutable,
+            ast::Pattern::Path(p) if p.segments.len() == 1 => false,
             other => panic!("expected a simple identifier pattern, got: {other:?}"),
         }
     }
@@ -131,7 +131,8 @@ mod tests {
         assert_eq!(binding_name(&pattern), "count");
         assert!(
             pattern_is_mutable(&pattern),
-            "`let mut` should mark the pattern mutable"
+            "`let mut` should mark the pattern mutable, found {:?}",
+            pattern
         );
 
         decl.value.expect("value should be present");
