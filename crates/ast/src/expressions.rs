@@ -358,6 +358,11 @@ pub struct StructExpression {
 pub struct PathExpression {
     pub segments: Vec<PathSegment>,
 }
+impl PathExpression {
+    pub fn len(&self) -> usize {
+        self.segments.len()
+    }
+}
 impl From<Vec<PathSegment>> for PathExpression {
     fn from(segments: Vec<PathSegment>) -> Self {
         let first_loc = segments.first().unwrap().loc;

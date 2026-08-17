@@ -79,6 +79,14 @@ pub enum TypeSymbolId {
     Enum(EnumSymbolId),
     Primitive(PrimitiveTypeSymbolId),
 }
+impl TypeSymbolId {
+    pub fn as_enum(&self) -> Option<EnumSymbolId> {
+        match self {
+            Self::Enum(e) => Some(*e),
+            _ => None,
+        }
+    }
+}
 impl Default for TypeSymbolId {
     fn default() -> Self {
         Self::Struct(StructSymbolId::default())

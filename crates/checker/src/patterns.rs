@@ -75,6 +75,12 @@ fn try_identifier_as_variant(
         .variants
         .iter()
         .find(|variant| visitor.tc.symbol_name(**variant) == pattern.identifier.as_str())?;
+    visitor
+        .tc
+        .symbols
+        .get_mut(variant)
+        .access()
+        .read(pattern.loc);
     Some(ir::Pattern::Call(ir::CallPattern {
         ty: expected,
         loc,
@@ -197,7 +203,7 @@ fn visit_call_pattern(
     visitor: &mut PatternVisitor,
     expected: types::TypeId,
 ) -> Option<ir::CallPattern> {
-    let (callee, symbol) = visit_call_pattern_callee(visitor, pattern.path)?;
+    let (callee, symbol) = visit_pattern_callee(visitor, pattern.path, expected)?;
     let (expected, sub) = visitor.tc.unwrap_type(expected);
     if expected != visitor.tc.symbol_type_id(symbol) {
         visitor
@@ -214,11 +220,60 @@ fn visit_call_pattern(
         arguments,
     })
 }
-fn visit_call_pattern_callee(
+fn visit_pattern_callee(
     visitor: &mut PatternVisitor,
     ctor: ast::PathExpression,
+    expected: types::TypeId,
 ) -> Option<(ir::Identifier, VariantSymbolId)> {
-    let path = visitor.tc.visit_path_expression(ctor, PathContext::Call);
+    match ctor.len() {
+        0 => unreachable!(),
+        1 => visit_unit_length_callee(visitor, ctor, expected),
+        _ => visit_general_length_callee(visitor, ctor),
+    }
+}
+fn visit_unit_length_callee(
+    visitor: &mut PatternVisitor,
+    mut path: ast::PathExpression,
+    expected: types::TypeId,
+) -> Option<(ir::Identifier, VariantSymbolId)> {
+    debug_assert_eq!(path.len(), 1);
+    let segment = path.segments.remove(0);
+    let e = visitor.tc.get_type_symbol_id(expected)?.as_enum()?;
+    let expected_name = segment.ident.as_str();
+    let variant = visitor
+        .tc
+        .symbols
+        .get(e)
+        .variants
+        .iter()
+        .find(|variant| visitor.tc.symbol_name(**variant) == expected_name)
+        .copied();
+    let Some(variant) = variant else {
+        let variant = expected_name.to_string();
+        let enum_name = visitor.tc.symbol_name(e).to_string();
+        let error = DiagnosticKind::UnknownVariant { variant, enum_name };
+        visitor.tc.error(error, segment.loc);
+        return None;
+    };
+    visitor
+        .tc
+        .symbols
+        .get_mut(variant)
+        .access()
+        .read(segment.loc);
+    let ident = ir::Identifier {
+        loc: segment.loc,
+        ty: visitor.tc.symbol_type_id(e),
+        symbol: variant.into(),
+    };
+    Some((ident, variant))
+}
+fn visit_general_length_callee(
+    visitor: &mut PatternVisitor,
+    path: ast::PathExpression,
+) -> Option<(ir::Identifier, VariantSymbolId)> {
+    debug_assert!(path.len() >= 2);
+    let path = visitor.tc.visit_path_expression(path, PathContext::Call);
     let Some(ir::Expression::Identifier(ir::Identifier {
         symbol: SymbolId::Variant(symbol),
         loc: constructor_loc,

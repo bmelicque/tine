@@ -41,6 +41,9 @@ impl TypeChecker {
             let ty = self_.get_enum_type(&variants, params.to_vec());
             self_.symbols.get_mut(owner_id).ty = ty;
             self_.types.add_alias(ty, name.text);
+            variants.iter().for_each(|v| {
+                self_.symbols.get_mut(*v).ty = ty;
+            });
             let methods = self_.infer_method_symbols(
                 &method_nodes,
                 owner_id.into(),
@@ -77,11 +80,9 @@ impl TypeChecker {
         let body = variant
             .body
             .map_or(vec![], |body| self.visit_variant_body(body, owner.into()));
-        let ty = self.symbol_type_id(owner);
 
         Some(self.symbols.insert(VariantSymbol {
             name: ident.text,
-            ty,
             owner,
             body,
             defined_at: variant.loc,
