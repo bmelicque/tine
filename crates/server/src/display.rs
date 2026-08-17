@@ -29,10 +29,7 @@ impl Backend {
                     display_raw_type(&self.types(), s.ty)
                 )
             }
-            Enum(s) => {
-                let s = symbols.get(s);
-                format!("enum {} {}", s.name, display_raw_type(&self.types(), s.ty))
-            }
+            Enum(s) => self.display_enum_symbol(s),
             Variable(s) => {
                 let s = symbols.get(s);
                 let operator = if s.mutable { "let mut" } else { "let" };
@@ -58,6 +55,60 @@ impl Backend {
                 format!("{}.{}", owner_name, s.name)
             }
         }
+    }
+
+    fn display_enum_symbol(&self, symbol: EnumSymbolId) -> String {
+        let symbols = self.symbols.read().unwrap();
+        let symbol = symbols.get(symbol);
+
+        let name = &symbol.name;
+        let ty = symbol.ty;
+        let type_params = self.display_enum_type_params(ty);
+        let variants = symbol
+            .variants
+            .iter()
+            .map(|v| self.display_variant(*v))
+            .map(|t| format!("    {t}"))
+            .collect::<Vec<_>>();
+        match variants.len() {
+            0 => format!("enum {}{}{{}}", name, type_params),
+            _ => format!(
+                "enum {}{}{{\n{}\n}}",
+                name,
+                type_params,
+                variants.join("\n")
+            ),
+        }
+    }
+    fn display_enum_type_params(&self, ty: TypeId) -> String {
+        let store = self.types();
+        let Type::Enum(e) = store.get(ty) else {
+            panic!("expected function type")
+        };
+        if e.params.is_empty() {
+            return String::new();
+        }
+        let params = e
+            .params
+            .iter()
+            .map(|ty| ty.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("<{}>", params)
+    }
+    fn display_variant(&self, symbol: VariantSymbolId) -> String {
+        let symbols = self.symbols.read().unwrap();
+        let variant = symbols.get(symbol);
+        let args = variant
+            .body
+            .iter()
+            .map(|a| display_type(&self.types(), symbols.get(*a).ty))
+            .collect::<Vec<_>>();
+        let name = variant.name.clone();
+        if args.is_empty() {
+            return name;
+        }
+        format!("{}({})", name, args.join(", "))
     }
 
     fn display_function_symbol(&self, symbol: FunctionSymbolId) -> String {
@@ -130,7 +181,7 @@ impl Backend {
         let Type::Function(f) = store.get(ty) else {
             panic!("expected function type")
         };
-        if f.params.is_empty() {
+        if f.type_params.is_empty() {
             return String::new();
         }
         format!(

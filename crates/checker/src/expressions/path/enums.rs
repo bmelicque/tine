@@ -27,7 +27,15 @@ fn visit_enum_path_in_expr(visitor: &mut PathVisitor, sym: EnumSymbolId) -> Opti
         return None;
     };
     match find_enum_variant(visitor, sym, &variant_segment) {
-        Ok(v) => v,
+        Ok(v) => {
+            if let Some((_, len)) = v {
+                if len > 0 {
+                    visitor.error(DiagnosticKind::ExpectedValueGotType, visitor.start_loc);
+                    return None;
+                }
+            }
+            v.map(|v| v.0)
+        }
         Err(()) => {
             let symbol = visitor.tc.symbols.get(sym);
             let enum_name = symbol.name.clone();
@@ -48,7 +56,13 @@ fn visit_enum_path_in_call(visitor: &mut PathVisitor, sym: EnumSymbolId) -> Opti
     };
 
     if let Ok(expr) = find_enum_variant(visitor, sym, &next_segment) {
-        return expr;
+        if let Some((_, len)) = expr {
+            if len == 0 {
+                visitor.error(DiagnosticKind::ExpectedTypeGotValue, visitor.start_loc);
+                return None;
+            }
+        }
+        return expr.map(|e| e.0);
     }
 
     visit_static_method_path(visitor, sym.into(), &next_segment)
@@ -58,7 +72,7 @@ fn find_enum_variant(
     visitor: &mut PathVisitor,
     sym: EnumSymbolId,
     segment: &PathSegment,
-) -> Result<Option<ir::Expression>, ()> {
+) -> Result<Option<(ir::Expression, usize)>, ()> {
     let symbol = visitor.tc.symbols.get(sym);
     let variant = symbol
         .variants
@@ -77,18 +91,17 @@ fn find_enum_variant(
         visitor.error(DiagnosticKind::UnknownMember { member }, extra.loc);
         return Ok(None);
     }
-    let variant_symbol = visitor.tc.symbols.get(variant);
-    if variant_symbol.body.len() > 0 {
-        visitor.error(DiagnosticKind::ExpectedValueGotType, visitor.start_loc);
-        return Ok(None);
-    }
+    visitor.tc.symbols.get_mut(variant).access.read(segment.loc);
+    let variant_symbol = visitor.tc.symbols.get(variant).clone();
+
     let ty = visitor.tc.symbol_type_id(sym);
     let ty = get_host_type(visitor, ty);
-    Ok(Some(ir::Expression::Identifier(ir::Identifier {
+    let id = ir::Expression::Identifier(ir::Identifier {
         ty,
         loc: segment.loc,
         symbol: variant.into(),
-    })))
+    });
+    Ok(Some((id, variant_symbol.body.len())))
 }
 
 fn visit_enum_path_in_struct(visitor: &mut PathVisitor) -> Option<ir::Expression> {

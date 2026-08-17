@@ -98,6 +98,24 @@ impl TypeChecker {
             bail!("");
         };
 
+        if let Some(v) = try_callee_as_variant(&callee) {
+            let variant = self.symbols.get(v);
+            let e = self.symbols.get(variant.owner);
+            let type_params = self.resolve(e.ty).as_enum().unwrap().params.clone();
+            let params = variant
+                .body
+                .iter()
+                .map(|m| self.symbol_type_id(*m))
+                .collect();
+            let f = types::FunctionType {
+                type_params,
+                params,
+                return_type: variant.ty,
+            };
+            self.intern(f.clone());
+            return Ok((callee, f));
+        }
+
         match self.resolve(callee.ty()) {
             types::Type::Function(t) => Ok((callee, t)),
             types::Type::Unknown => Err(anyhow!("")),
@@ -235,5 +253,15 @@ impl TypeChecker {
             args: vec![arg.into(), dependency_array.into()],
             ty: return_type,
         })
+    }
+}
+
+fn try_callee_as_variant(callee: &ir::Expression) -> Option<VariantSymbolId> {
+    let ir::Expression::Identifier(i) = callee else {
+        return None;
+    };
+    match i.symbol {
+        SymbolId::Variant(v) => Some(v),
+        _ => None,
     }
 }
