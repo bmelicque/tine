@@ -35,10 +35,20 @@ Each variant of the same enum can carry completely different data — `Circle` h
 `match` compares a value against a series of patterns, running the code for whichever one applies. Variant patterns can bind the data they carry to a name:
 
 ```tine
-fn area(shape: Shape): float {
+fn area(shape: Shape) -> float {
     match shape {
-        Circle(radius) => PI * radius * radius,
-        Rectangle(width, height) => width * height,
+        Circle(radius) => PI * radius * radius
+        Rectangle(width, height) => width * height
+    }
+}
+
+// or...
+impl Shape {
+    fn area() -> float {
+        match . {
+            Circle(radius) => PI * radius * radius
+            Rectangle(width, height) => width * height
+        }
     }
 }
 ```
@@ -50,7 +60,7 @@ Like `if`/`else` and `for`, `match` is an expression — the example above works
 The compiler checks that a `match` covers every possible variant. Leaving one out is a compile error, not a runtime surprise:
 
 ```tine
-fn area(shape: Shape): float {
+fn area(shape: Shape) -> float {
     match shape {
         Circle(radius) => PI * radius * radius,
         // compiler error because `Rectangle` is not covered
@@ -80,7 +90,7 @@ fn isCircle(shape: Shape): bool {
 ```tine
 let numbers = [1, 2, 3]
 
-let defaultFirst = numbers.get(0) {
+let defaultFirst = match numbers.get(0) {
     Some(value) => value,
     None => 0,
 }
