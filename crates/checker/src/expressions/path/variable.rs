@@ -63,6 +63,10 @@ fn visit_chain_segment(
         }));
     }
 
+    let member = member_name.to_string();
+    let error = DiagnosticKind::UnknownMember { member };
+    visitor.error(error, segment.loc);
+
     None
 }
 
