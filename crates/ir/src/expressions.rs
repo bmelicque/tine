@@ -30,6 +30,7 @@ ir_enum!(
         Method(MethodExpression),
         StringLiteral(StringLiteral),
         Struct(StructExpression),
+        This(ThisExpression),
         Tuple(TupleExpression),
         TypeMatch(TypeMatch),
         Unary(UnaryExpression),
@@ -312,6 +313,10 @@ impl<'a> PushNodes<'a> for StructLiteralField {
         self.push_children(stack);
     }
 }
+
+#[tree_struct]
+#[derive(Debug, Clone)]
+pub struct ThisExpression {}
 
 #[tree_struct]
 #[derive(Debug, Clone)]

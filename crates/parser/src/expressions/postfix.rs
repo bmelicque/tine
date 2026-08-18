@@ -94,7 +94,9 @@ impl Parser<'_> {
                 .parse_call_expression_with_type_args(object, loc)
                 .into(),
             _ => {
-                self.error(DiagnosticKind::InvalidMember, loc.increment());
+                if object.is_some() {
+                    self.error(DiagnosticKind::InvalidMember, loc.increment());
+                }
                 Expression::Member(MemberExpression {
                     loc,
                     object: object.map(|o| Box::new(o)),
@@ -207,6 +209,14 @@ mod tests {
         assert_eq!(path.segments[0].ident.as_str(), "object");
         assert!(path.segments[1].generic_args.is_none());
         assert_eq!(path.segments[1].ident.as_str(), "field");
+    }
+
+    #[test]
+    fn parse_single_dot() {
+        let expr = parse_expression(".").expect("expected no errors");
+        let member = expr.as_member().expect("expected a path");
+        assert!(member.object.is_none());
+        assert!(member.prop.is_none());
     }
 
     #[test]

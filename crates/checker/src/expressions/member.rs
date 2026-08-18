@@ -14,14 +14,25 @@ impl TypeChecker {
         &mut self,
         expr: ast::MemberExpression,
     ) -> Option<ir::Expression> {
-        let Some(member) = &expr.prop else {
-            expr.object.and_then(|o| self.visit_expression(*o));
+        use ast::MemberProp::*;
+        match (&expr.object, &expr.prop) {
+            (_, Some(FieldName(_))) => self.visit_field_access(expr),
+            (_, Some(Index(_))) => self.visit_tuple_indexing(expr).map(Into::into),
+            (None, None) => match self.this_type() {
+                Some(ty) => Some(ir::Expression::This(ir::ThisExpression {
+                    loc: expr.loc,
+                    ty,
+                })),
+                None => {
+                    self.error(DiagnosticKind::MissingExpression, expr.loc);
+                    None
+                }
+            },
             // missing member already reported during parsing phase
-            return None;
-        };
-        match member {
-            ast::MemberProp::FieldName(_) => self.visit_field_access(expr),
-            ast::MemberProp::Index(_) => self.visit_tuple_indexing(expr).map(Into::into),
+            (Some(o), None) => {
+                self.visit_expression(*o.to_owned());
+                None
+            }
         }
     }
 

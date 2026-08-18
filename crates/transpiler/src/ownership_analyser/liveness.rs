@@ -242,7 +242,7 @@ fn visit_expr(expr: &ir::Expression, ctx: Ctx, out: &mut UseSites) {
         // Leaf: record the use-site
         Identifier(id) => visit_identifier(id, ctx, out),
 
-        BooleanLiteral(_) | FloatLiteral(_) | IntLiteral(_) | StringLiteral(_) => {}
+        BooleanLiteral(_) | FloatLiteral(_) | IntLiteral(_) | StringLiteral(_) | This(_) => {}
 
         Unary(u) => visit_expr(&u.operand, ctx, out),
         Index(i) => visit_maybe_boxed_expr(&i.object, ctx, out),

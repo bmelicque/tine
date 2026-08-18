@@ -75,6 +75,7 @@ impl CodeGenerator<'_, '_> {
             StringLiteral(s) => self.handle_string_literal(s).into(),
             Struct(s) => self.handle_simple_struct(s),
             Unary(u) => self.handle_unary_expression(u),
+            This(_) => swc::Expr::This(swc::ThisExpr { span: DUMMY_SP }).into(),
             Tuple(t) => self.handle_array(t.elements),
             TypeMatch(t) => self.handle_type_match(t),
         }

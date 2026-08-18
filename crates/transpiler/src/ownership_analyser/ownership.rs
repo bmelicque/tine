@@ -371,7 +371,8 @@ fn visit_expr<'a>(
         | ir::Expression::BooleanLiteral(_)
         | ir::Expression::FloatLiteral(_)
         | ir::Expression::IntLiteral(_)
-        | ir::Expression::StringLiteral(_) => {}
+        | ir::Expression::StringLiteral(_)
+        | ir::Expression::This(_) => {}
 
         ir::Expression::Unary(u) => match u.operator {
             // Behavior could change with new operators.

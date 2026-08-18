@@ -346,6 +346,7 @@ fn visit_expr(
             m.host.as_deref().map(|h| visit_expr(h, checker, map));
             vec![]
         }
+        This(_) => vec![],
 
         IntrinsicCall(_)
         | IntrinsicConstruct(_)
