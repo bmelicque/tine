@@ -132,6 +132,7 @@ pub enum DiagnosticKind {
     NotDereferenceable {
         type_name: String,
     },
+    NotEquatable(String),
     NotImplemented,
     NotIterable {
         type_name: String,
@@ -305,6 +306,7 @@ impl Display for DiagnosticKind {
             Self::NotDereferenceable { type_name } => {
                 write!(f, "type `{}` cannot be dereferenced", type_name)
             }
+            Self::NotEquatable(name) => write!(f, "type `{name}` cannot be comared with either `==` nor `!=`"),
             Self::NotImplemented => write!(f, "feature not implemented yet"),
             Self::NotIterable { type_name } => {
                 write!(f, "type `{}` cannot be iterated over", type_name)

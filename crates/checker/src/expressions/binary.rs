@@ -104,13 +104,26 @@ impl TypeChecker {
         if left.ty() == TypeStore::UNKNOWN || right.ty() == TypeStore::UNKNOWN {
             return;
         }
-        let allow_comparison = left.ty() == right.ty() && self.is_equatable(left.ty());
+        let left_to_right = self.can_expr_be_assigned_to(right.ty(), left);
+        let right_to_left = self.can_expr_be_assigned_to(left.ty(), right);
+        let allow_comparison = left_to_right && right_to_left;
         if !allow_comparison {
             let error = DiagnosticKind::MismatchedTypes {
                 left_name: self.types.display(left.ty()),
                 right_name: self.types.display(right.ty()),
             };
             self.error(error, node_loc);
+            return;
+        }
+        if !self.is_equatable(left.ty()) {
+            let ty = self.types.display(left.ty());
+            let error = DiagnosticKind::NotEquatable(ty);
+            self.error(error, left.loc());
+        }
+        if !self.is_equatable(right.ty()) {
+            let ty = self.types.display(right.ty());
+            let error = DiagnosticKind::NotEquatable(ty);
+            self.error(error, right.loc());
         }
     }
 

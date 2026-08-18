@@ -1,5 +1,5 @@
 use tine_ast::PathSegment;
-use tine_common::diagnostics::DiagnosticKind;
+use tine_common::{diagnostics::DiagnosticKind, locations::Location};
 use tine_ir as ir;
 use tine_symbols::symbols::EnumSymbolId;
 
@@ -98,7 +98,7 @@ fn find_enum_variant(
     let ty = get_host_type(visitor, ty);
     let id = ir::Expression::Identifier(ir::Identifier {
         ty,
-        loc: segment.loc,
+        loc: Location::merge(visitor.start_loc, segment.loc),
         symbol: variant.into(),
     });
     Ok(Some((id, variant_symbol.body.len())))

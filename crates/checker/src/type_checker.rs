@@ -9,7 +9,7 @@ use tine_common::{
     module_path::{ModuleId, ModulePath},
     sources::Source,
 };
-use tine_ir as ir;
+use tine_ir::{self as ir, Typed};
 use tine_parser::ProjectParser;
 use tine_symbols::{symbols::*, table::*};
 use tine_types::{store::TypeStore, types};
@@ -329,6 +329,14 @@ impl TypeChecker {
             (e, Ref(a)) if e.is_generic() => a.inner == expected_id,
             (_, _) => actual == expected,
         }
+    }
+    pub fn can_expr_be_assigned_to(
+        &mut self,
+        expected: types::TypeId,
+        got: &ir::Expression,
+    ) -> bool {
+        let got_immutable = self.is_mutable(&got) == Some(false);
+        self.can_be_assigned_to(got.ty(), expected, got_immutable)
     }
 
     pub fn with_scope<F, T>(&mut self, f: F) -> T
