@@ -71,6 +71,11 @@ pub fn check_project(project: ProjectParser) -> CheckProjectResult {
 pub struct ScopeGuard<'tc> {
     tc: &'tc mut TypeChecker,
 }
+impl<'tc> ScopeGuard<'tc> {
+    pub fn new(tc: &'tc mut TypeChecker) -> Self {
+        Self { tc }
+    }
+}
 impl Drop for ScopeGuard<'_> {
     fn drop(&mut self) {
         self.tc.scopes.pop();
@@ -94,6 +99,17 @@ pub struct ThisGuard<'a> {
 impl Drop for ThisGuard<'_> {
     fn drop(&mut self) {
         self.tc.this.pop();
+    }
+}
+impl Deref for ThisGuard<'_> {
+    type Target = TypeChecker;
+    fn deref(&self) -> &Self::Target {
+        &self.tc
+    }
+}
+impl DerefMut for ThisGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.tc
     }
 }
 
@@ -127,7 +143,7 @@ pub struct TypeChecker {
     /// the project.
     pub symbols: SymbolTable,
     pub(crate) scopes: Vec<Scope>,
-    pub(crate) this: Vec<TypeSymbolId>,
+    pub(crate) this: Vec<types::TypeId>,
     pub(crate) mutable_this: Option<bool>,
 
     pub(super) loader: Box<dyn ModuleLoader>,
@@ -353,12 +369,12 @@ impl TypeChecker {
         ScopeGuard { tc: self }
     }
 
-    pub fn with_this(&mut self, this: TypeSymbolId) -> ThisGuard<'_> {
+    pub fn with_this(&mut self, this: types::TypeId) -> ThisGuard<'_> {
         self.this.push(this);
         ThisGuard { tc: self }
     }
     pub(crate) fn this_type(&self) -> Option<types::TypeId> {
-        self.this.last().map(|t| self.symbol_type_id(*t))
+        self.this.last().map(|t| *t)
     }
 
     pub fn with_this_mutability(&mut self, mutable: bool) -> MutableThisGuard<'_> {

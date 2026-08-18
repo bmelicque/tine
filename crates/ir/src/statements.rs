@@ -102,6 +102,11 @@ pub struct ReturnStatement {
 pub struct StructDefinition {
     pub symbol: StructSymbolId,
 }
+impl StructDefinition {
+    pub fn new(symbol: StructSymbolId, loc: Location) -> Self {
+        Self { loc, symbol }
+    }
+}
 
 #[tree_struct(untyped)]
 #[derive(Debug, Clone)]

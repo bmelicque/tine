@@ -6,9 +6,39 @@ use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_types::types;
 
-use crate::TypeChecker;
+use crate::{
+    type_checker::{Scope, ScopeGuard},
+    TypeChecker,
+};
 
 impl TypeChecker {
+    /// Create a local scope containing the given type params, then run the
+    /// `visit` function inside that scope.
+    pub fn with_type_params2(
+        &mut self,
+        params: &Option<Vec<ast::Identifier>>,
+    ) -> (ScopeGuard<'_>, Vec<types::TypeParam>) {
+        self.scopes.push(Scope::new());
+        let params = match &params {
+            Some(params) => params,
+            None => &vec![],
+        };
+        let mut param_types = Vec::new();
+        for param in params {
+            let ty = self.add_type_param(param.text.clone());
+            let id = self.symbols.insert::<TypeAliasSymbolId>(TypeAliasSymbol {
+                name: param.text.clone(),
+                ty: ty.id,
+                defined_at: param.loc,
+                ..Default::default()
+            });
+            self.current_scope().bind(param.text.clone(), id.into());
+            self.types.add_alias(ty.id, param.text.clone());
+            param_types.push(ty);
+        }
+        (ScopeGuard::new(self), param_types)
+    }
+
     /// Create a local scope containing the given type params, then run the
     /// `visit` function inside that scope.
     pub fn with_type_params<F, R>(

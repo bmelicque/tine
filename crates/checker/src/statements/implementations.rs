@@ -34,7 +34,7 @@ impl TypeChecker {
         let Some((host, actual_type)) = self.visit_impl_host(node.implemented_type) else {
             return vec![];
         };
-        let tc = &mut self.with_this(host).tc;
+        let mut tc = self.with_this(actual_type);
 
         let substitutions = tc.get_host_substitutions(host, actual_type);
 

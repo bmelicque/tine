@@ -30,36 +30,33 @@ impl TypeChecker {
             };
             return vec![def.into()];
         };
-        let tc = &mut self.with_this(owner_id.into()).tc;
+        let (mut self_, type_params) = self.with_type_params2(&node.params);
 
         let (variants, method_nodes) = split_enum_body(items);
-        let (methods, _) = tc.with_type_params(&node.params, |self_, params| {
-            let variants = variants
-                .into_iter()
-                .filter_map(|v| self_.visit_enum_variant(v, owner_id))
-                .collect::<Vec<_>>();
-            let ty = self_.get_enum_type(&variants, params.to_vec());
-            self_.symbols.get_mut(owner_id).ty = ty;
-            self_.types.add_alias(ty, name.text);
-            variants.iter().for_each(|v| {
-                self_.symbols.get_mut(*v).ty = ty;
-            });
-            let methods = self_.infer_method_symbols(
-                &method_nodes,
-                owner_id.into(),
-                &SubstitutionTable::new(),
-            );
-            let symbol = self_.symbols.get_mut(owner_id);
-            symbol.variants = variants.clone();
-            symbol.methods.extend(methods.values().copied());
-            methods
+
+        let variants = variants
+            .into_iter()
+            .filter_map(|v| self_.visit_enum_variant(v, owner_id))
+            .collect::<Vec<_>>();
+        let ty = self_.get_enum_type(&variants, type_params.to_vec());
+        let mut self_ = self_.with_this(ty);
+        self_.symbols.get_mut(owner_id).ty = ty;
+        self_.types.add_alias(ty, name.text);
+        variants.iter().for_each(|v| {
+            self_.symbols.get_mut(*v).ty = ty;
         });
+
+        let methods =
+            self_.infer_method_symbols(&method_nodes, owner_id.into(), &SubstitutionTable::new());
+        let symbol = self_.symbols.get_mut(owner_id);
+        symbol.variants = variants.clone();
+        symbol.methods.extend(methods.values().copied());
 
         let def = ir::EnumDefinition {
             loc: node.loc,
             symbol: owner_id.into(),
         };
-        let mut stmts: Vec<ir::Statement> = tc
+        let mut stmts: Vec<ir::Statement> = self_
             .visit_methods(&method_nodes, methods)
             .into_iter()
             .map(Into::into)
