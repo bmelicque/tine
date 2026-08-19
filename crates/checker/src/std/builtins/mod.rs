@@ -15,6 +15,7 @@ impl TypeChecker {
         self.option_builtin();
         self.array_builtin();
         self.map_builtin();
+        self.element_builtin();
         self.eq_trait();
         self.hash_trait();
     }
@@ -104,7 +105,7 @@ impl TypeChecker {
             ..Default::default()
         });
 
-        let map_symbol = self.symbols.insert::<StructSymbolId>(StructSymbol {
+        let map_symbol = self.insert::<StructSymbolId>(StructSymbol {
             name: "Map".into(),
             public: true,
             ty: map_type,
@@ -129,6 +130,15 @@ impl TypeChecker {
             &["key"],
             TypeStore::BOOLEAN,
         );
+    }
+
+    fn element_builtin(&mut self) {
+        self.insert::<StructSymbolId>(StructSymbol {
+            name: "Element".into(),
+            public: true,
+            ty: TypeStore::ELEMENT,
+            ..Default::default()
+        });
     }
 
     fn eq_trait(&mut self) {

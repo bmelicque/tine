@@ -88,10 +88,7 @@ impl Parser<'_> {
 
     fn parse_attribute(&mut self) -> Option<Attribute> {
         let result = self.better_expect(
-            |t| match t {
-                Token::Ident(ident) => Some(ident.to_owned()),
-                _ => None,
-            },
+            |t| t.text().map(|t| t.to_string()),
             &[Token::Newline, Token::Gt, Token::TagClose],
         );
         let (name, name_range) = match result {
@@ -390,5 +387,11 @@ mod tests {
             })),
             diagnostics: vec![],
         });
+    }
+
+    #[test]
+    fn parse_kw_attribute() {
+        let mut parser = Parser::new(0, "type=\"text\"");
+        parser.parse_attribute().expect("expected an attribute");
     }
 }

@@ -305,6 +305,34 @@ impl Token {
         }
     }
 
+    pub fn text(&self) -> Option<&str> {
+        match self {
+            Token::Ident(s) => Some(s),
+
+            Token::Break => Some("break"),
+            Token::Continue => Some("continue"),
+            Token::Else => Some("else"),
+            Token::Enum => Some("enum"),
+            Token::Fn => Some("fn"),
+            Token::For => Some("for"),
+            Token::If => Some("if"),
+            Token::Impl => Some("impl"),
+            Token::In => Some("in"),
+            Token::Let => Some("let"),
+            Token::Match => Some("match"),
+            Token::Mut => Some("mut"),
+            Token::Pub => Some("pub"),
+            Token::Return => Some("return"),
+            Token::Static => Some("static"),
+            Token::Struct => Some("struct"),
+            Token::Trait => Some("trait"),
+            Token::Type => Some("type"),
+            Token::Use => Some("use"),
+
+            _ => None,
+        }
+    }
+
     pub fn precedence(&self) -> u8 {
         match self {
             Token::PipePipe => 1,
