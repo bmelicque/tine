@@ -397,6 +397,16 @@ impl TypeChecker {
                 kind,
             });
     }
+    pub fn errors(&mut self, kinds: Vec<DiagnosticKind>, loc: Location) {
+        let diags = self.diagnostics.entry(self.current_module).or_default();
+        for kind in kinds {
+            diags.push(Diagnostic {
+                level: DiagnosticLevel::Error,
+                loc,
+                kind,
+            });
+        }
+    }
 
     pub(crate) fn cancel_diag<F>(&mut self, predicate: F)
     where

@@ -39,6 +39,7 @@ impl TypeChecker {
             self.check_arguments(node.args, &callee_type.params, &mut substitutions, node.loc);
 
         let ty = substitutions.apply(&mut self.types, callee_type.return_type);
+        self.errors(substitutions.produce_diagnostics(&self.types), node.loc);
 
         match callee {
             ir::Expression::Method(mut m) => {
@@ -75,6 +76,7 @@ impl TypeChecker {
             .collect::<Vec<_>>();
         let args = self.check_arguments(args, &params, &mut sub, loc);
         let ty = sub.apply(&mut self.types, constructor);
+        self.errors(sub.produce_diagnostics(&self.types), variant_loc);
         Some(ir::Expression::Call(ir::CallExpression {
             ty,
             loc,

@@ -78,6 +78,7 @@ impl TypeChecker {
             self.error(DiagnosticKind::MissingMembers(missing), constructor_loc);
         }
         let ty = sub.apply(&mut self.types, struct_ty);
+        self.errors(sub.produce_diagnostics(&self.types), loc);
 
         Some(ir::StructExpression {
             loc,

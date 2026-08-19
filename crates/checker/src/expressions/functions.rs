@@ -47,6 +47,7 @@ impl TypeChecker {
             return_type,
         });
         let ty = sub.apply(&mut self.types, ty);
+        self.errors(sub.produce_diagnostics(&self.types), node.loc);
 
         let name = match node.name {
             Some(id) => {

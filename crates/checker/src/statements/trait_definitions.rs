@@ -64,6 +64,7 @@ impl TypeChecker {
                 let return_type = node
                     .return_annotation
                     .map_or(TypeStore::UNIT, |ann| self_.visit_type(ann));
+                self_.errors(sub.produce_diagnostics(&self_.types), node.loc);
                 (params, return_type)
             });
 
