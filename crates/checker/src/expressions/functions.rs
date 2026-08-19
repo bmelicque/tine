@@ -7,7 +7,7 @@ use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_types::{store::TypeStore, types};
 
-use crate::TypeChecker;
+use crate::{substitutions::Substitutions, TypeChecker};
 
 struct FunctionResult {
     pub params: Vec<(Location, VariableSymbolId)>,
@@ -22,10 +22,12 @@ impl TypeChecker {
         docs: Option<String>,
         type_hint: Option<&types::FunctionType>,
     ) -> Option<ir::FunctionExpression> {
+        let mut sub = Substitutions::new();
         let (result, type_params) = self.with_type_params(&node.type_params, |s, _| {
-            let params = s.visit_function_params(node.params, type_hint);
+            // TODO: handle generic type_hint
+            let params = s.visit_function_params(node.params, type_hint, &mut sub);
             let (return_type, body) =
-                s.visit_function_return_body(node.return_type, node.body, type_hint)?;
+                s.visit_function_return_body(node.return_type, node.body, type_hint, &mut sub)?;
             let params = params?;
             Some(FunctionResult {
                 params,
@@ -44,6 +46,7 @@ impl TypeChecker {
             params: params.iter().map(|p| self.symbol_type_id(p.1)).collect(),
             return_type,
         });
+        let ty = sub.apply(&mut self.types, ty);
 
         let name = match node.name {
             Some(id) => {
@@ -77,22 +80,28 @@ impl TypeChecker {
         &mut self,
         node: Option<ast::FunctionParams>,
         hint: Option<&types::FunctionType>,
+        sub: &mut Substitutions,
     ) -> Option<Vec<(Location, VariableSymbolId)>> {
         let node = node?;
         let Some(hint) = hint else {
             return node
                 .params
                 .into_iter()
-                .map(|p| Some((p.loc, self.visit_function_param(p, None)?)))
+                .map(|p| Some((p.loc, self.visit_function_param(p, None, sub)?)))
                 .collect::<Option<Vec<_>>>();
         };
 
-        self.report_extra_parameters(&node.params, hint, node.loc());
+        self.report_extra_parameters(&node.params, hint, node.loc(), sub);
 
         node.params
             .into_iter()
             .zip(&hint.params)
-            .map(|(param, &hint)| Some((param.loc, self.visit_function_param(param, Some(hint))?)))
+            .map(|(param, &hint)| {
+                Some((
+                    param.loc,
+                    self.visit_function_param(param, Some(hint), sub)?,
+                ))
+            })
             .collect::<Option<Vec<_>>>()
     }
 
@@ -101,6 +110,7 @@ impl TypeChecker {
         params: &[ast::FunctionParam],
         hint: &types::FunctionType,
         error_loc: Location,
+        sub: &mut Substitutions,
     ) {
         if hint.params.len() == params.len() {
             return;
@@ -112,7 +122,7 @@ impl TypeChecker {
         params
             .iter()
             .skip(hint.params.len())
-            .map(|p| self.visit_function_param(p.clone(), Some(TypeStore::UNKNOWN)))
+            .map(|p| self.visit_function_param(p.clone(), Some(TypeStore::UNKNOWN), sub))
             .for_each(drop);
     }
 
@@ -120,13 +130,15 @@ impl TypeChecker {
         &mut self,
         node: ast::FunctionParam,
         hint: Option<types::TypeId>,
+        sub: &mut Substitutions,
     ) -> Option<VariableSymbolId> {
         let name = node.name?;
         let ty = match (hint, node.type_annotation) {
             (Some(hint), Some(ty)) => {
+                let loc = ty.loc();
                 let ty = self.visit_type(ty);
-                self.check_assigned_type(hint, ty, true, node.loc);
-                hint
+                self.try_unify(ty, hint, sub, loc);
+                ty
             }
             (Some(hint), None) => hint,
             (None, Some(ty)) => self.visit_type(ty),
@@ -151,11 +163,15 @@ impl TypeChecker {
         return_annotation: Option<ast::Type>,
         body: Option<Box<ast::Expression>>,
         hint: Option<&types::FunctionType>,
+        sub: &mut Substitutions,
     ) -> Option<(types::TypeId, ir::Block)> {
         let body_must_be_block = hint.is_none() || return_annotation.is_some();
-        let return_type = self.visit_return_type(return_annotation, hint);
+        let return_type = self.visit_return_type(return_annotation, hint, sub);
         let body = self.visit_function_body(*body?, body_must_be_block)?;
-        self.check_function_body_type(&body, return_type);
+        match hint {
+            Some(_) => self.check_callback_body_type(&body, return_type, sub),
+            None => self.check_function_body_type(&body, return_type),
+        }
         Some((return_type, body))
     }
 
@@ -173,11 +189,48 @@ impl TypeChecker {
             self.check_assigned_type(return_type, body.ty, false, loc);
         }
     }
+    pub fn check_callback_body_type(
+        &mut self,
+        body: &ir::Block,
+        return_type: types::TypeId,
+        sub: &mut Substitutions,
+    ) {
+        for ret in body.find_returns() {
+            let ty = ret.expression.as_ref().map_or(TypeStore::UNIT, |e| e.ty());
+            self.try_unify(ty, return_type, sub, ret.loc);
+        }
+
+        if return_type != TypeStore::UNIT {
+            let loc = match body.statements.last() {
+                Some(stmt) => stmt.loc(),
+                None => body.loc,
+            };
+            self.try_unify(body.ty, return_type, sub, loc);
+        }
+    }
+
+    fn try_unify(
+        &mut self,
+        ty: types::TypeId,
+        hint: types::TypeId,
+        sub: &mut Substitutions,
+        loc: Location,
+    ) {
+        match self.resolve(hint) {
+            types::Type::Param(p) => {
+                sub.unify(self, p.id, ty, loc);
+            }
+            _ => {
+                self.check_assigned_type(hint, ty, true, loc);
+            }
+        }
+    }
 
     fn visit_return_type(
         &mut self,
         return_type: Option<ast::Type>,
         hint: Option<&types::FunctionType>,
+        sub: &mut Substitutions,
     ) -> types::TypeId {
         let Some(hint) = hint else {
             return return_type.map_or(TypeStore::UNIT, |ty| self.visit_type(ty));
@@ -185,9 +238,9 @@ impl TypeChecker {
         if let Some(return_type) = return_type {
             let return_loc = return_type.loc();
             let ty = self.visit_type(return_type);
-            self.check_assigned_type(hint.return_type, ty, false, return_loc);
+            self.try_unify(ty, hint.return_type, sub, return_loc);
         }
-        hint.return_type
+        sub.apply(&mut self.types, hint.return_type)
     }
 
     fn visit_function_body(

@@ -3,7 +3,7 @@ use tine_common::diagnostics::DiagnosticKind;
 use tine_symbols::symbols::*;
 use tine_types::{store::TypeStore, types};
 
-use crate::TypeChecker;
+use crate::{substitutions::Substitutions, TypeChecker};
 
 impl TypeChecker {
     pub(crate) fn visit_trait_definition(&mut self, node: ast::TraitDefinition) {
@@ -59,7 +59,8 @@ impl TypeChecker {
 
         let ((params, return_type), type_params) =
             self.with_type_params(&type_params, |self_, _| {
-                let params = self_.visit_function_params(node.params, None);
+                let mut sub = Substitutions::new();
+                let params = self_.visit_function_params(node.params, None, &mut sub);
                 let return_type = node
                     .return_annotation
                     .map_or(TypeStore::UNIT, |ann| self_.visit_type(ann));
