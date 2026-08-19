@@ -13,7 +13,6 @@ pub enum Type {
     Integer,
     Param(TypeParam), // Represents a generic type parameter
     Listener(ListenerType),
-    Option(OptionType),
     Ref(TypeRef),
     Result(ResultType),
     SelfType, // Represents the current type in a method context
@@ -156,17 +155,6 @@ pub struct GenericDef {
 impl Into<Type> for GenericDef {
     fn into(self) -> Type {
         Type::Generic(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct OptionType {
-    pub some: TypeId,
-}
-
-impl Into<Type> for OptionType {
-    fn into(self) -> Type {
-        Type::Option(self)
     }
 }
 

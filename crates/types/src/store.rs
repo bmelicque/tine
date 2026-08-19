@@ -154,9 +154,6 @@ pub fn display_raw_type(store: &TypeStore, ty: TypeId) -> String {
             format!("@{}", display_type(store, t.inner))
         }
         Type::Integer => "int".into(),
-        Type::Option(t) => {
-            format!("?{}", display_type(store, t.some))
-        }
         Type::Param(t) => t.name.clone(),
         Type::Ref(t) => {
             if t.inner == TypeStore::ARRAY {
@@ -234,37 +231,6 @@ mod tests {
         assert_eq!(store.get(TypeStore::STRING), &Type::String);
         assert_eq!(store.get(TypeStore::INTEGER), &Type::Integer);
         assert_eq!(store.get(TypeStore::FLOAT), &Type::Float);
-    }
-
-    #[test]
-    fn test_add_type() {
-        let mut store = TypeStore::new();
-        let t = Type::Option(OptionType {
-            some: TypeStore::FLOAT,
-        });
-        let id = store.add(t.clone());
-        assert_eq!(store.get(id), &t);
-    }
-
-    #[test]
-    fn test_add_duplicate_type() {
-        let mut store = TypeStore::new();
-        let t = Type::Option(OptionType {
-            some: TypeStore::FLOAT,
-        });
-        let id1 = store.add(t.clone());
-        let id2 = store.add(t);
-        assert_eq!(id1, id2);
-    }
-
-    #[test]
-    fn test_find_id() {
-        let mut store = TypeStore::new();
-        let t = Type::Option(OptionType {
-            some: TypeStore::FLOAT,
-        });
-        let id = store.add(t.clone());
-        assert_eq!(store.find_id(&t), Some(id));
     }
 
     #[test]

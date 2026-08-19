@@ -12,6 +12,7 @@ impl TypeChecker {
         self.primitive_builtin("bool", TypeStore::BOOLEAN);
         self.primitive_builtin("str", TypeStore::STRING);
         self.to_string_builtin(&["int", "float"]);
+        self.option_builtin();
         self.array_builtin();
         self.map_builtin();
         self.eq_trait();
@@ -38,6 +39,60 @@ impl TypeChecker {
         }
     }
 
+    fn option_builtin(&mut self) {
+        let param = self.make_type_param("T");
+        let param_id = param.id;
+        let type_params = vec![param];
+        let enum_id = self.insert::<EnumSymbolId>(EnumSymbol {
+            name: "Option".into(),
+            public: true,
+            ..Default::default()
+        });
+        let none = self.insert::<VariantSymbolId>(VariantSymbol {
+            name: "None".into(),
+            owner: enum_id,
+            body: vec![],
+            ..Default::default()
+        });
+        let some_arg = self.insert::<MemberSymbolId>(MemberSymbol {
+            name: format!("_0"),
+            public: true,
+            owner: enum_id.into(),
+            ty: param_id,
+            ..Default::default()
+        });
+        let some = self.insert::<VariantSymbolId>(VariantSymbol {
+            name: "Some".into(),
+            owner: enum_id,
+            body: vec![some_arg],
+            ..Default::default()
+        });
+        self.attach_variant_symbols(enum_id, vec![none, some], type_params);
+
+        self.add_method(enum_id, "isSome", vec![], &[], TypeStore::BOOLEAN);
+        self.add_method(enum_id, "isNone", vec![], &[], TypeStore::BOOLEAN);
+        self.add_method(enum_id, "default", vec![param_id], &["default"], param_id);
+
+        let map_type_param = self.make_type_param("U");
+        let map_type = self.intern(types::FunctionType {
+            type_params: vec![],
+            params: vec![param_id],
+            return_type: map_type_param.id,
+        });
+        self.add_method(enum_id, "map", vec![map_type], &["f"], map_type_param.id);
+    }
+    pub fn option_type(&mut self, some: types::TypeId) -> types::TypeId {
+        let option = self
+            .symbols
+            .find::<EnumSymbolId, _>(|e| &e.name == "Option")
+            .unwrap()
+            .ty;
+        self.intern(types::TypeRef {
+            inner: option,
+            args: vec![some],
+        })
+    }
+
     fn map_builtin(&mut self) {
         let key_param = self.make_type_param("K");
         let key_id = key_param.id;
@@ -56,7 +111,7 @@ impl TypeChecker {
             ..Default::default()
         });
 
-        let return_type = self.intern(types::OptionType { some: value_id });
+        let return_type = self.option_type(value_id);
         self.add_method(map_symbol, "get", vec![key_id], &["key"], return_type);
 
         self.add_method(

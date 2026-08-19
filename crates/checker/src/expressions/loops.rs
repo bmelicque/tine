@@ -113,7 +113,7 @@ impl TypeChecker {
             self.check_assigned_type(ty, curr, got_immutable, stmt.loc);
         }
 
-        self.intern(types::OptionType { some: ty })
+        self.option_type(ty)
     }
 
     fn break_type(&mut self, stmt: &ir::BreakStatement) -> types::TypeId {

@@ -38,18 +38,11 @@ impl TypeChecker {
             .into_iter()
             .filter_map(|v| self_.visit_enum_variant(v, owner_id))
             .collect::<Vec<_>>();
-        let ty = self_.get_enum_type(&variants, type_params.to_vec());
+        let ty = self_.attach_variant_symbols(owner_id, variants, type_params.to_vec());
         let mut self_ = self_.with_this(ty);
-        self_.symbols.get_mut(owner_id).ty = ty;
-        self_.types.add_alias(ty, name.text);
-        variants.iter().for_each(|v| {
-            self_.symbols.get_mut(*v).ty = ty;
-        });
-
         let methods =
             self_.infer_method_symbols(&method_nodes, owner_id.into(), &SubstitutionTable::new());
         let symbol = self_.symbols.get_mut(owner_id);
-        symbol.variants = variants.clone();
         symbol.methods.extend(methods.values().copied());
 
         let def = ir::EnumDefinition {
@@ -118,7 +111,25 @@ impl TypeChecker {
         })
     }
 
-    fn get_enum_type(
+    pub fn attach_variant_symbols(
+        &mut self,
+        e: EnumSymbolId,
+        variants: Vec<VariantSymbolId>,
+        type_params: Vec<types::TypeParam>,
+    ) -> types::TypeId {
+        let ty = self.get_enum_type(&variants, type_params);
+        let name = self.symbol_name(e).to_string();
+        self.types.add_alias(ty, name);
+        variants.iter().for_each(|v| {
+            self.symbols.get_mut(*v).ty = ty;
+        });
+        let symbol = self.symbols.get_mut(e);
+        symbol.ty = ty;
+        symbol.variants = variants;
+        ty
+    }
+
+    pub fn get_enum_type(
         &mut self,
         variants: &[VariantSymbolId],
         params: Vec<types::TypeParam>,

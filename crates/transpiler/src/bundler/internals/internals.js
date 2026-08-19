@@ -32,6 +32,22 @@ export class Option {
 		}
 		return $;
 	}
+
+	isSome() {
+		return this.$tag === 1;
+	}
+
+	isNone() {
+		return this.$tag === 0;
+	}
+
+	default(value) {
+		return this.$tag === 1 ? this._0 : value;
+	}
+
+	map(f) {
+		return this.$tag === 1 ? Option.Some(f(this._0)) : Option.None();
+	}
 }
 
 export class Result {

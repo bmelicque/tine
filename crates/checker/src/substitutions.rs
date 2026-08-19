@@ -99,9 +99,6 @@ impl Substitutions {
             (Listener(e), Listener(a)) => {
                 self.unify(tc, e.inner, a.inner, loc);
             }
-            (Option(e), Option(a)) => {
-                self.unify(tc, e.some, a.some, loc);
-            }
             (Result(e), Result(a)) => {
                 self.unify(tc, e.ok, a.ok, loc);
                 match (&e.error, &a.error) {
@@ -161,10 +158,6 @@ impl Substitutions {
             Listener(mut l) => {
                 l.inner = self.apply(store, l.inner);
                 store.add(l)
-            }
-            Option(mut o) => {
-                o.some = self.apply(store, o.some);
-                store.add(o)
             }
             Param(p) => *self.table.get(&p).unwrap_or(&to),
             Ref(_) => panic!("already resolved"),

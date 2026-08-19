@@ -19,7 +19,7 @@ impl TypeChecker {
             };
             (Some(alternate), ty?)
         } else {
-            (None, self.intern(types::OptionType { some: ty? }))
+            (None, self.option_type(ty?))
         };
 
         let Some(condition) = condition else {
@@ -147,12 +147,7 @@ mod tests {
         };
         let (ty, mut checker) = visit_if_expression(node);
         assert_eq!(checker.diagnostics.len(), 0);
-        assert_eq!(
-            ty,
-            checker.types.add(types::Type::Option(types::OptionType {
-                some: TypeStore::INTEGER
-            }))
-        );
+        assert_eq!(ty, checker.option_type(TypeStore::INTEGER));
     }
 
     #[test]

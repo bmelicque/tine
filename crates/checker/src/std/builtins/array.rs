@@ -14,9 +14,7 @@ impl TypeChecker {
 
         self.add_method(array_symbol, "length", vec![], &[], TypeStore::INTEGER);
 
-        let return_type = self.intern(OptionType {
-            some: TypeStore::ARRAY_PARAM,
-        });
+        let return_type = self.option_type(TypeStore::ARRAY_PARAM);
         self.add_method(
             array_symbol,
             "get",

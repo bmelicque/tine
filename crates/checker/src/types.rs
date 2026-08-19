@@ -111,7 +111,7 @@ impl TypeChecker {
         let some = node
             .base
             .map_or(TypeStore::DYNAMIC, |t| self.visit_type(*t));
-        self.intern(types::OptionType { some })
+        self.option_type(some)
     }
 
     pub fn visit_result_type(&mut self, node: ast::ResultType) -> types::TypeId {
@@ -290,13 +290,7 @@ mod tests {
         };
 
         let result = checker.visit_option_type(option_type);
-        let result = checker.resolve(result);
-        assert_eq!(
-            result,
-            Type::Option(types::OptionType {
-                some: TypeStore::INTEGER
-            })
-        );
+        assert_eq!(result, checker.option_type(TypeStore::INTEGER));
     }
 
     #[test]
