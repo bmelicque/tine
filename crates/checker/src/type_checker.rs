@@ -398,6 +398,9 @@ impl TypeChecker {
             });
     }
     pub fn errors(&mut self, kinds: Vec<DiagnosticKind>, loc: Location) {
+        if kinds.is_empty() {
+            return;
+        };
         let diags = self.diagnostics.entry(self.current_module).or_default();
         for kind in kinds {
             diags.push(Diagnostic {
