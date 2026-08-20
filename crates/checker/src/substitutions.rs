@@ -160,7 +160,10 @@ impl Substitutions {
                 store.add(l)
             }
             Param(p) => *self.table.get(&p).unwrap_or(&to),
-            Ref(_) => panic!("already resolved"),
+            Ref(mut r) => {
+                r.args = r.args.into_iter().map(|a| self.apply(store, a)).collect();
+                store.add(r)
+            }
             Result(mut r) => {
                 r.ok = self.apply(store, r.ok);
                 match &r.error {

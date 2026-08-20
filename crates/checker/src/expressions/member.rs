@@ -216,8 +216,13 @@ impl TypeChecker {
     }
 
     fn get_object_ty(&self, object: &Option<ir::Expression>) -> Option<types::TypeId> {
+        use types::Type::*;
         match object {
-            Some(o) => Some(o.ty()),
+            Some(o) => match self.resolve(o.ty()) {
+                Signal(t) => Some(t.inner),
+                Listener(t) => Some(t.inner),
+                _ => Some(o.ty()),
+            },
             None => self.this_type(),
         }
     }

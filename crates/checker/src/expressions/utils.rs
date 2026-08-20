@@ -22,6 +22,7 @@ impl TypeChecker {
     where
         F: FnMut(&MethodSymbol) -> bool,
     {
+        let host = self.deref_type(host);
         let (host, sub) = self.unwrap_type(host);
         let type_symbol = self.get_type_symbol_id(host)?;
         let methods = self.symbol_methods(type_symbol);
@@ -36,6 +37,13 @@ impl TypeChecker {
         Some((method, ty))
     }
 
+    pub fn deref_type(&self, ty: types::TypeId) -> types::TypeId {
+        match self.resolve(ty) {
+            types::Type::Signal(t) => t.inner,
+            types::Type::Listener(t) => t.inner,
+            _ => ty,
+        }
+    }
     pub fn unwrap_type(&self, ty: types::TypeId) -> (types::TypeId, Substitutions) {
         let (host, generic_args) = match self.resolve(ty) {
             types::Type::Ref(r) => (r.inner, r.args),

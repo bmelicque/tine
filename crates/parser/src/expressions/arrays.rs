@@ -13,10 +13,7 @@ impl Parser<'_> {
             Token::RBracket,
         );
 
-        let end_range = match self.tokens.peek() {
-            Some((Ok(Token::RBracket), r)) => r.clone(),
-            _ => self.recover_at(&[Token::RBracket]),
-        };
+        let end_range = self.expect(Token::RBracket);
 
         ast::ArrayExpression {
             loc: Location::merge(self.localize(start_range), self.localize(end_range)),

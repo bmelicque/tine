@@ -23,7 +23,7 @@ impl TypeChecker {
         let Some(operand) = node.operand.and_then(|o| self.visit_expression(*o)) else {
             return None;
         };
-        let ty = match self.deref_type(operand.ty()) {
+        let ty = match self.try_deref_type(operand.ty()) {
             Ok(ty) => ty?,
             Err(e) => {
                 self.error(e, node.loc);
@@ -37,7 +37,7 @@ impl TypeChecker {
             ty,
         })
     }
-    pub fn deref_type(
+    pub fn try_deref_type(
         &mut self,
         ty: types::TypeId,
     ) -> Result<Option<types::TypeId>, DiagnosticKind> {

@@ -36,10 +36,7 @@ fn visit_chain_segment(
     host: ir::Expression,
     segment: ast::PathSegment,
 ) -> Option<ir::Expression> {
-    let (host_ty, generic_args) = match visitor.tc.resolve(host.ty()) {
-        types::Type::Ref(r) => (r.inner, r.args),
-        _ => (host.ty(), vec![]),
-    };
+    let (host_ty, generic_args) = deref_host_ty(visitor, host.ty());
     let member_name = segment.ident.as_str();
     let variable_prop = find_variable_prop(&mut visitor.tc, host_ty, &generic_args, member_name);
     if let Some((sym, ty)) = variable_prop {
@@ -68,6 +65,20 @@ fn visit_chain_segment(
     visitor.error(error, segment.loc);
 
     None
+}
+fn deref_host_ty(
+    visitor: &mut PathVisitor,
+    host: types::TypeId,
+) -> (types::TypeId, Vec<types::TypeId>) {
+    let deref = match visitor.tc.resolve(host) {
+        types::Type::Signal(s) => s.inner,
+        types::Type::Listener(l) => l.inner,
+        _ => host,
+    };
+    match visitor.tc.resolve(deref) {
+        types::Type::Ref(r) => (r.inner, r.args),
+        _ => (deref, vec![]),
+    }
 }
 
 fn find_variable_prop(

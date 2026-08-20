@@ -110,7 +110,7 @@ impl TypeChecker {
         let operand = node
             .inner
             .and_then(|i| self.visit_assignee(*i, ctx.to_indirected()))?;
-        let ty = match self.deref_type(operand.ty()) {
+        let ty = match self.try_deref_type(operand.ty()) {
             Ok(ty) => ty?,
             Err(e) => {
                 self.error(e, node.loc);
