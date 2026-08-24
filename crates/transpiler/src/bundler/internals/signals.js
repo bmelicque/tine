@@ -154,6 +154,7 @@ export class Listener extends Reactive {
 		this.deps = deps;
 		let depth = 0;
 		for (const dep of deps) {
+			if (!(dep instanceof Reactive)) continue;
 			if (dep.depth >= depth) depth = dep.depth + 1;
 			dep.addChild(this);
 		}

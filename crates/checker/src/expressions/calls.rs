@@ -14,11 +14,8 @@ const COMPUTED_ARG_COUNT: usize = 1;
 
 impl TypeChecker {
     pub fn visit_call_expression(&mut self, node: ast::CallExpression) -> Option<ir::Expression> {
-        match node.callee.as_deref() {
-            Some(ast::Expression::Identifier(id)) if id.as_str() == "computed$" => {
-                return self.visit_call_to_computed(node).map(Into::into);
-            }
-            _ => {}
+        if is_computed_call(node.callee.as_deref()) {
+            return self.visit_call_to_computed(node).map(Into::into);
         }
 
         let Ok((callee, callee_type)) = self.resolve_callee(node.callee) else {
@@ -255,6 +252,15 @@ impl TypeChecker {
             args: vec![arg.into(), dependency_array.into()],
             ty: return_type,
         })
+    }
+}
+
+fn is_computed_call(node: Option<&ast::Expression>) -> bool {
+    use ast::Expression::*;
+    match node {
+        Some(Identifier(id)) => id.as_str() == "computed$",
+        Some(Path(path)) => path.len() == 1 && path.segments[0].ident.as_str() == "computed$",
+        _ => false,
     }
 }
 
