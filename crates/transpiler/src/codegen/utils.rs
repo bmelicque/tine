@@ -270,6 +270,14 @@ pub fn index(object: swc::Expr, i: usize) -> swc::MemberExpr {
     }
 }
 
+pub fn call(callee: swc::Expr, args: Vec<swc::Expr>) -> swc::CallExpr {
+    swc::CallExpr {
+        callee: swc::Callee::Expr(Box::new(callee)),
+        args: args.into_iter().map(Into::into).collect(),
+        ..Default::default()
+    }
+}
+
 pub fn option(value: swc::Expr) -> swc::Expr {
     let callee = swc::Callee::Expr(Box::new(
         member(member(ident_from_str("$").into(), "Option").into(), "$from").into(),

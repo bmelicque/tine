@@ -327,9 +327,10 @@ fn visit_expr<'a>(
     semantics: &'a SemanticsChecker<'a, 'a>,
     out: &mut OwnershipMap,
 ) {
+    use ir::Expression::*;
     match expr {
         // --- The core annotation site ---
-        ir::Expression::Identifier(id) => {
+        Identifier(id) => {
             let action = if ctx.forced_copy || semantics.is_copy(id.ty) {
                 OwnershipAction::Copy
             } else {
@@ -337,7 +338,7 @@ fn visit_expr<'a>(
             };
             out.0.insert(id.loc, action);
         }
-        ir::Expression::Index(i) => {
+        Index(i) => {
             // Force the expression's semantics onto root identifier.
             let ctx = if semantics.is_copy(i.ty) {
                 ctx.force_copying()
@@ -348,7 +349,7 @@ fn visit_expr<'a>(
                 visit_expr(o, ctx, sites, aliases, semantics, out)
             }
         }
-        ir::Expression::Member(m) => {
+        Member(m) => {
             // Force the expression's semantics onto root identifier.
             let ctx = if semantics.is_copy(m.ty) {
                 ctx.force_copying()
@@ -359,22 +360,32 @@ fn visit_expr<'a>(
                 visit_expr(o, ctx, sites, aliases, semantics, out)
             }
         }
-        ir::Expression::Method(m) => {
+        Method(m) => {
             let mutable = semantics.is_mutable_symbol(m.method.1.into());
+            for arg in &m.args {
+                visit_expr(
+                    arg,
+                    ctx.enter_binding(Binding::Immutable(arg.loc())),
+                    sites,
+                    aliases,
+                    semantics,
+                    out,
+                );
+            }
             if let Some(o) = &m.host {
                 visit_expr(o, ctx.enter_method(mutable), sites, aliases, semantics, out)
             }
         }
 
-        ir::Expression::IntrinsicCall(_)
-        | ir::Expression::IntrinsicConstruct(_)
-        | ir::Expression::BooleanLiteral(_)
-        | ir::Expression::FloatLiteral(_)
-        | ir::Expression::IntLiteral(_)
-        | ir::Expression::StringLiteral(_)
-        | ir::Expression::This(_) => {}
+        IntrinsicCall(_)
+        | IntrinsicConstruct(_)
+        | BooleanLiteral(_)
+        | FloatLiteral(_)
+        | IntLiteral(_)
+        | StringLiteral(_)
+        | This(_) => {}
 
-        ir::Expression::Unary(u) => match u.operator {
+        Unary(u) => match u.operator {
             // Behavior could change with new operators.
             ir::UnaryOperator::Bang | ir::UnaryOperator::Minus | ir::UnaryOperator::Star => {
                 visit_expr(
@@ -388,7 +399,7 @@ fn visit_expr<'a>(
             }
             ir::UnaryOperator::Mut => unreachable!(),
         },
-        ir::Expression::Binary(b) => match b.op {
+        Binary(b) => match b.op {
             // Behavior could change with new operators.
             ir::BinaryOperator::Add
             | ir::BinaryOperator::Div
@@ -422,7 +433,7 @@ fn visit_expr<'a>(
                 );
             }
         },
-        ir::Expression::TypeMatch(t) => {
+        TypeMatch(t) => {
             visit_expr(
                 &t.expr,
                 ctx.enter_non_binding(),
@@ -433,22 +444,22 @@ fn visit_expr<'a>(
             );
         }
 
-        ir::Expression::Array(a) => {
+        Array(a) => {
             for e in &a.elements {
                 visit_expr(e, ctx, sites, aliases, semantics, out);
             }
         }
-        ir::Expression::Tuple(t) => {
+        Tuple(t) => {
             for e in &t.elements {
                 visit_expr(e, ctx, sites, aliases, semantics, out);
             }
         }
-        ir::Expression::Struct(s) => {
+        Struct(s) => {
             for field in &s.fields {
                 visit_expr(&field.value, ctx, sites, aliases, semantics, out);
             }
         }
-        ir::Expression::Element(e) => {
+        Element(e) => {
             for attr in &e.attributes {
                 visit_expr(&attr.value, ctx, sites, aliases, semantics, out);
             }
@@ -457,9 +468,9 @@ fn visit_expr<'a>(
             }
         }
 
-        ir::Expression::Block(b) => visit_block_expr(b, ctx, sites, aliases, semantics, out),
+        Block(b) => visit_block_expr(b, ctx, sites, aliases, semantics, out),
 
-        ir::Expression::Call(c) => {
+        Call(c) => {
             visit_expr(&c.callee, ctx, sites, aliases, semantics, out);
             let signature = aliases.alias_signature(&c.callee, semantics).cloned();
 
@@ -486,7 +497,7 @@ fn visit_expr<'a>(
             }
         }
 
-        ir::Expression::If(ir::IfExpression {
+        If(ir::IfExpression {
             condition,
             consequent,
             alternate,
@@ -505,7 +516,7 @@ fn visit_expr<'a>(
                 visit_block_expr(alt, ctx, sites, aliases, semantics, out);
             }
         }
-        ir::Expression::Match(expr) => {
+        Match(expr) => {
             visit_expr(
                 &expr.scrutinee,
                 ctx.enter_non_binding(),
@@ -519,7 +530,7 @@ fn visit_expr<'a>(
             }
         }
 
-        ir::Expression::For(ir::ForExpression {
+        For(ir::ForExpression {
             condition, body, ..
         }) => {
             if let Some(cond) = condition {
@@ -535,7 +546,7 @@ fn visit_expr<'a>(
             );
         }
 
-        ir::Expression::ForIn(ir::ForInExpression { iterable, body, .. }) => {
+        ForIn(ir::ForInExpression { iterable, body, .. }) => {
             visit_expr(iterable, ctx.clone(), sites, aliases, semantics, out);
             // The element binding is a fresh value each iteration: always
             // borrowed, never moved out of the loop.
@@ -551,7 +562,7 @@ fn visit_expr<'a>(
             );
         }
 
-        ir::Expression::Function(ir::FunctionExpression { body, .. }) => {
+        Function(ir::FunctionExpression { body, .. }) => {
             visit_block(body, ctx, sites, aliases, semantics, out);
         }
     }

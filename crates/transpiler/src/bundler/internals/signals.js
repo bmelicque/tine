@@ -227,8 +227,18 @@ export class ReactiveNode extends Listener {
 		this.node = this.toNode();
 	}
 
+	static toNode(value) {
+		if (value instanceof Node) return value;
+		if (Array.isArray(value)) {
+			const fragment = document.createDocumentFragment();
+			for (let child of value) fragment.appendChild(ReactiveNode.toNode(child));
+			return fragment;
+		}
+		return new Text(String(value ?? ""))
+	}
+
 	toNode() {
-		const node = this.value instanceof Node ? this.value : new Text(String(this.value ?? ""));
+		const node = ReactiveNode.toNode(this.value);
 		// This prevents the ReactiveNode from being garbage collected
 		// while the associated node is still in the DOM
 		node[ReactiveNode.signalKey] = this;

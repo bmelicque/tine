@@ -19,7 +19,7 @@ impl SemanticsChecker<'_, '_> {
         use types::Type::*;
         let ty = self.types.get(ty);
         match ty {
-            Boolean | Float | Integer | String | Signal(_) | Listener(_) => true,
+            Boolean | Float | Integer | String | Signal(_) | Listener(_) | Function(_) => true,
             _ => false,
         }
     }

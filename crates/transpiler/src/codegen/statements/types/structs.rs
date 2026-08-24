@@ -11,19 +11,10 @@ impl CodeGenerator<'_, '_> {
     pub(crate) fn struct_def_to_swc(&mut self, node: ir::StructDefinition) -> swc::ClassDecl {
         let members = &self.symbols.get(node.symbol).members;
 
+        let constructor = self.struct_fields_to_swc_constructor(members);
         let get = self.make_struct_getter(members);
         let set = self.make_setter(members);
-
-        let can_be_constructed = members
-            .iter()
-            .find(|s| !self.symbols.get(**s).public)
-            .is_none();
-        let mut body = if can_be_constructed {
-            let constructor = self.struct_fields_to_swc_constructor(members);
-            vec![constructor.into(), get.into(), set.into()]
-        } else {
-            vec![get.into(), set.into()]
-        };
+        let mut body = vec![constructor.into(), get.into(), set.into()];
 
         let methods = &self.symbols.get(node.symbol).methods;
         let child_classes = self.generate_concrete_classes(methods);

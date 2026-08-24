@@ -1,0 +1,37 @@
+use dom.render
+use signals.{state, computed$}
+
+let mut nextId = 0
+
+// This comment should become documentation for Todo type
+struct Todo {
+    id:   int
+    task: str
+    done: bool
+}
+
+let defaultTodo = Todo {
+    id:   nextId,
+    task: "Add more todos",
+    done: false
+}
+
+let todos = state([defaultTodo])
+
+fn renderTodo(todo: Todo) -> Element {
+    <div>
+        <input type="checkbox" checked={todo.done} />
+        <span class="task">{todo.task}</span>
+    </div>
+}
+
+let list = computed$(todos.map(renderTodo))
+
+let todoForm = {
+    let input = state("")
+    <div>
+        <input value={input} />
+    </div>
+}
+
+render("body", <div>{list}</div>)

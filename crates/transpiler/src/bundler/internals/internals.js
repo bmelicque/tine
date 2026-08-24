@@ -119,6 +119,7 @@ export function createElement(tag, attributes, children) {
 	for (const [key, value] of Object.entries(attributes)) {
 		if (key.startsWith("on")) element.addEventListener(key.slice(2), value);
 		// TODO: reactive attributes
+		else if (typeof value === "boolean") element[key] = value;
 		else element.setAttribute(key, value ?? "");
 	}
 	if (children) {

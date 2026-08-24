@@ -168,11 +168,12 @@ impl TypeChecker {
     ) -> Option<(types::TypeId, ir::Block)> {
         let body_must_be_block = hint.is_none() || return_annotation.is_some();
         let return_type = self.visit_return_type(return_annotation, hint, sub);
-        let body = self.visit_function_body(*body?, body_must_be_block)?;
+        let mut body = self.visit_function_body(*body?, body_must_be_block)?;
         match hint {
             Some(_) => self.check_callback_body_type(&body, return_type, sub),
             None => self.check_function_body_type(&body, return_type),
         }
+        return_last(&mut body);
         Some((return_type, body))
     }
 
@@ -256,6 +257,20 @@ impl TypeChecker {
         }
         Some(body.into())
     }
+}
+
+fn return_last(body: &mut ir::Block) {
+    let Some(last) = body.statements.pop() else {
+        return;
+    };
+    let last = match last {
+        ir::Statement::Expression(e) => ir::Statement::Return(ir::ReturnStatement {
+            loc: e.loc(),
+            expression: Some(Box::new(e)),
+        }),
+        _ => last,
+    };
+    body.statements.push(last);
 }
 
 #[cfg(test)]

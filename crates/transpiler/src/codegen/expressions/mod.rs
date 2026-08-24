@@ -10,7 +10,9 @@ use crate::{
     codegen::{
         expressions::utils::{assign_if_last_expressions, ident_to_declaration},
         statements::types::enums::TAG_SYMBOL,
-        utils::{create_block_stmt, create_str, internal_construct, internal_method_call},
+        utils::{
+            call, create_block_stmt, create_str, internal_construct, internal_method_call, member,
+        },
     },
     ownership_analyser::OwnershipAction,
 };
@@ -18,7 +20,7 @@ use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
 use tine_checker::substitutions::Substitutions;
 use tine_common::locations::Location;
-use tine_ir as ir;
+use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_types::types;
 
@@ -364,12 +366,20 @@ impl CodeGenerator<'_, '_> {
     }
 
     fn handle_host(&mut self, node: Option<Box<ir::Expression>>) -> ExpressionResult {
-        if let Some(node) = node {
-            return self.handle_expression(*node);
-        }
-        let expr = swc::Expr::This(swc::ThisExpr { span: DUMMY_SP });
+        let Some(node) = node else {
+            return ExpressionResult {
+                prelim_stmts: vec![],
+                expr: swc::Expr::This(swc::ThisExpr { span: DUMMY_SP }),
+            };
+        };
+        let is_reactive = self.resolve(node.ty()).is_reactive();
+        let result = self.handle_expression(*node);
+        let expr = match is_reactive {
+            true => call(member(result.expr, "$get").into(), vec![]).into(),
+            false => result.expr,
+        };
         ExpressionResult {
-            prelim_stmts: vec![],
+            prelim_stmts: result.prelim_stmts,
             expr,
         }
     }
