@@ -151,7 +151,7 @@ pub fn display_raw_type(store: &TypeStore, ty: TypeId) -> String {
         }
         Type::Generic(_) => "generic".into(),
         Type::Listener(t) => {
-            format!("@{}", display_type(store, t.inner))
+            format!("Computed<{}>", display_type(store, t.inner))
         }
         Type::Integer => "int".into(),
         Type::Param(t) => t.name.clone(),

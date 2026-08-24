@@ -55,14 +55,17 @@ fn reset() {
 
 fn register_computed_symbol(tc: &mut TypeChecker) -> FunctionSymbolId {
     let param_type = tc.add_type_param("Type".to_string());
-    let derived_type = tc.intern_unique(types::FunctionType {
+    let return_type = tc.intern(types::ListenerType {
+        inner: param_type.id,
+    });
+    let computed_type = tc.intern_unique(types::FunctionType {
         params: vec![param_type.id],
-        return_type: param_type.id,
+        return_type,
         type_params: vec![param_type],
     });
     tc.symbols.insert::<FunctionSymbolId>(FunctionSymbol {
         name: "computed$".to_string(),
-        ty: derived_type,
+        ty: computed_type,
         param_names: vec!["expression".to_string()],
         docs: Some(
             r#"Creates a derived reactive variable from the given expression.

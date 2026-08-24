@@ -10,11 +10,13 @@ use tine_types::types;
 
 use crate::{substitutions::Substitutions, TypeChecker};
 
+const COMPUTED_ARG_COUNT: usize = 1;
+
 impl TypeChecker {
     pub fn visit_call_expression(&mut self, node: ast::CallExpression) -> Option<ir::Expression> {
         match node.callee.as_deref() {
             Some(ast::Expression::Identifier(id)) if id.as_str() == "computed$" => {
-                return self.visit_derived_call(node).map(Into::into);
+                return self.visit_call_to_computed(node).map(Into::into);
             }
             _ => {}
         }
@@ -193,23 +195,21 @@ impl TypeChecker {
         Some(f)
     }
 
-    fn visit_derived_call(&mut self, node: ast::CallExpression) -> Option<ir::CallExpression> {
+    fn visit_call_to_computed(&mut self, node: ast::CallExpression) -> Option<ir::CallExpression> {
         let callee = node.callee.and_then(|e| self.visit_expression(*e))?;
 
-        if node.args.len() != 1 {
-            let error = DiagnosticKind::ArgumentCountMismatch {
-                expected: 1,
-                got: node.args.len(),
-            };
+        if node.args.len() != COMPUTED_ARG_COUNT {
+            let expected = COMPUTED_ARG_COUNT;
+            let got = node.args.len();
+            let error = DiagnosticKind::ArgumentCountMismatch { expected, got };
             self.error(error, node.loc);
             return None;
         }
 
-        let arg = match node.args.into_iter().next() {
-            Some(e) => self.visit_expression(e)?,
-            // caught by length check above
-            None => unreachable!(),
-        };
+        // Unwrapping is safe because length has been check above.
+        let arg = node.args.into_iter().next().unwrap();
+        let arg = self.visit_expression(arg)?;
+
         let deps = self
             .dependencies(&arg)
             .filter(|dep| self.symbol_type(dep.symbol).is_reactive())
