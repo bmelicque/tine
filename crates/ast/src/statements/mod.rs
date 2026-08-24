@@ -15,6 +15,7 @@ pub use implementations::*;
 ast_enum!(Statement {
     Assignment(Assignment),
     Break(BreakStatement),
+    Comment(Comment),
     Continue(ContinueStatement),
     Enum(EnumDefinition),
     Expression(ExpressionStatement),
@@ -203,6 +204,10 @@ pub struct BreakStatement {
     #[child]
     pub value: Option<Box<Expression>>,
 }
+
+#[tree_struct(untyped)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Comment {}
 
 #[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

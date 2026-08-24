@@ -77,6 +77,10 @@ impl<'src> Parser<'src> {
             }
 
             match self.tokens.peek() {
+                Some((Ok(Token::LineComment(_)), _)) => {
+                    let comment: ast::Statement = self.parse_comment().into();
+                    items.push(comment.into());
+                }
                 Some((Ok(Token::Newline), _)) => {
                     self.tokens.next();
                 }

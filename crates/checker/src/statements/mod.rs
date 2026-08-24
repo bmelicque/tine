@@ -21,6 +21,7 @@ impl TypeChecker {
             ast::Statement::Break(node) => self
                 .visit_break_statement(node)
                 .map_or(vec![], |s| vec![s.into()]),
+            ast::Statement::Comment(_) => vec![],
             ast::Statement::Continue(node) => {
                 vec![ir::Statement::Continue(ir::ContinueStatement {
                     loc: node.loc,

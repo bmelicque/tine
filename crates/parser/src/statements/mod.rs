@@ -44,6 +44,16 @@ impl Parser<'_> {
         }
     }
 
+    pub fn parse_comment(&mut self) -> ast::Comment {
+        let mut loc = None;
+        while let Some((Ok(Token::LineComment(_)), _)) = self.tokens.peek() {
+            let range = self.tokens.next().unwrap().1;
+            let chunk = self.localize(range);
+            loc = loc.map_or(Some(chunk), |prev| Some(Location::merge(prev, chunk)));
+        }
+        ast::Comment { loc: loc.unwrap() }
+    }
+
     fn parse_docs(&mut self, start: usize) -> ast::Docs {
         let mut text = String::new();
         let mut end = start;
