@@ -4,7 +4,7 @@ use tine_ir as ir;
 
 use crate::codegen::{
     expressions::ExpressionResult,
-    utils::{create_str, ident_from_str, internal_method_call},
+    utils::{create_str, internal_method_call, unsafe_ident_from_str},
     CodeGenerator,
 };
 
@@ -32,7 +32,7 @@ impl CodeGenerator<'_, '_> {
             .zip(attribute_names)
             .map(|(value, name)| {
                 swc::PropOrSpread::Prop(Box::new(swc::Prop::KeyValue(swc::KeyValueProp {
-                    key: swc::PropName::Ident(ident_from_str(&name).into()),
+                    key: swc::PropName::Ident(unsafe_ident_from_str(&name).into()),
                     value: Box::new(value),
                 })))
             })

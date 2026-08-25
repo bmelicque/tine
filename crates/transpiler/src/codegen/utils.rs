@@ -86,6 +86,14 @@ pub fn ident_from_str(name: &str) -> swc::Ident {
         optional: false,
     }
 }
+pub fn unsafe_ident_from_str(name: &str) -> swc::Ident {
+    swc::Ident {
+        sym: name.into(),
+        span: DUMMY_SP,
+        ctxt: SyntaxContext::empty(),
+        optional: false,
+    }
+}
 
 pub fn create_str(text: &str) -> swc::Expr {
     swc::Expr::Lit(swc::Lit::Str(swc::Str {

@@ -18,10 +18,19 @@ let defaultTodo = Todo {
 
 let todos = state([defaultTodo])
 
+fn removeTodo(id: int) {
+    *todos = todos.filter(fn(todo) todo.id != id)
+}
+
 fn renderTodo(todo: Todo) -> Element {
-    <div>
-        <input type="checkbox" checked={todo.done} />
-        <span class="task">{todo.task}</span>
+    fn removeSelf() {
+        removeTodo(todo.id)
+    }
+
+    <div class="todo">
+        <input class="todo-done" type="checkbox" checked={todo.done} />
+        <span class="todo-text">{todo.task}</span>
+        <button class="todo-delete" onclick={removeSelf}> × </button>
     </div>
 }
 
@@ -32,9 +41,7 @@ let todoForm = {
     let disabled = computed$(*input == "")
 
     fn validate() {
-        if *input == "" {
-            return
-        }
+        if *input == "" { return }
         nextId = nextId + 1
         todos.push(Todo {
             id:   nextId,
@@ -44,15 +51,18 @@ let todoForm = {
         *input = ""
     }
 
-    <div>
-        <input value={input} />
+    <div id="todo-form">
+        <input class="todo-input" value={input} placeholder="Write something to do" />
         <button onclick={validate} disabled={disabled}>Ajouter</button>
     </div>
 }
 
-let app = <div>
-    {list}
+let app = <div id="app">
+    <h1>Things to do</h1>
     {todoForm}
+    <div class="todo-list">
+        {list}
+    </div>
 </div>
 
 render("body", app)
