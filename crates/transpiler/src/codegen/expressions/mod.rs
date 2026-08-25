@@ -259,7 +259,7 @@ impl CodeGenerator<'_, '_> {
     }
 
     fn handle_index_expression(&mut self, node: ir::IndexExpression) -> ExpressionResult {
-        let obj_result = self.handle_host(node.object);
+        let obj_result = self.handle_host(node.object, false);
 
         let prop = swc::MemberProp::Computed(swc::ComputedPropName {
             span: DUMMY_SP,
@@ -309,7 +309,7 @@ impl CodeGenerator<'_, '_> {
     }
 
     pub fn handle_member_expression(&mut self, node: ir::MemberExpression) -> ExpressionResult {
-        let obj_result = self.handle_host(node.object);
+        let obj_result = self.handle_host(node.object, false);
 
         let prop_name = &self.symbols.get(node.member.1).name;
         let prop = swc::MemberProp::Ident(ident_from_str(&prop_name).into());
@@ -333,7 +333,8 @@ impl CodeGenerator<'_, '_> {
 
         let should_clone = self.method_ownership(&node) == OwnershipAction::Clone;
 
-        let obj_result = self.handle_host(node.host);
+        let is_mutating = self.symbols.get(node.method.1).is_mutating();
+        let obj_result = self.handle_host(node.host, is_mutating);
         let method_name = &self.symbols.get(node.method.1).name;
         let prop = swc::MemberProp::Ident(ident_from_str(&method_name).into());
         let callee = swc::MemberExpr {
@@ -365,7 +366,7 @@ impl CodeGenerator<'_, '_> {
         ExpressionResult { prelim_stmts, expr }
     }
 
-    fn handle_host(&mut self, node: Option<Box<ir::Expression>>) -> ExpressionResult {
+    fn handle_host(&mut self, node: Option<Box<ir::Expression>>, mutate: bool) -> ExpressionResult {
         let Some(node) = node else {
             return ExpressionResult {
                 prelim_stmts: vec![],
@@ -375,7 +376,11 @@ impl CodeGenerator<'_, '_> {
         let is_reactive = self.resolve(node.ty()).is_reactive();
         let result = self.handle_expression(*node);
         let expr = match is_reactive {
-            true => call(member(result.expr, "$get").into(), vec![]).into(),
+            true => call(
+                member(result.expr, if mutate { "$getMut" } else { "$get" }).into(),
+                vec![],
+            )
+            .into(),
             false => result.expr,
         };
         ExpressionResult {

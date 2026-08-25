@@ -29,8 +29,24 @@ let list = computed$(todos.map(renderTodo))
 
 let todoForm = {
     let input = state("")
+    let disabled = computed$(*input == "")
+
+    fn validate() {
+        if *input == "" {
+            return
+        }
+        nextId = nextId + 1
+        todos.push(Todo {
+            id:   nextId,
+            task: *input,
+            done: false,
+        })
+        *input = ""
+    }
+
     <div>
         <input value={input} />
+        <button onclick={validate} disabled={disabled}>Ajouter</button>
     </div>
 }
 

@@ -60,6 +60,10 @@ pub fn bundle_entry(
                         bools: false,
                         conditionals: false,
                         sequences: 0,
+                        if_return: false,
+                        collapse_vars: false,
+                        reduce_vars: false,
+                        side_effects: false,
                         ..Default::default()
                     }),
                     mangle: None,

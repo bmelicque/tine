@@ -114,7 +114,7 @@ export class Reactive {
 	}
 
 	toDOMNode() {
-		return this instanceof ReactiveNode ? this : new ReactiveNode([this], () => this.$get());
+		return this instanceof ListenerNode ? this : new ListenerNode([this], () => this.$get());
 	}
 }
 
@@ -130,6 +130,11 @@ export class Signal extends Reactive {
 	}
 
 	$get() {
+		return this.value;
+	}
+
+	$getMut() {
+		this.setupTreeUpdate();
 		return this.value;
 	}
 
@@ -219,61 +224,93 @@ export class WritableComputed extends Listener {
 /**
  * Reactive DOM node
  */
-export class ReactiveNode extends Listener {
+export class ListenerNode extends Listener {
 	static signalKey = Symbol();
 
-	constructor(deps, getter) {
-		super(deps, getter);
+	constructor(signal) {
+		super([signal], () => signal.$get());
 		this.node = this.toNode();
 	}
 
-	static toNode(value) {
-		if (value instanceof Node) return value;
-		if (Array.isArray(value)) {
-			const fragment = document.createDocumentFragment();
-			for (let child of value) fragment.appendChild(ReactiveNode.toNode(child));
-			return fragment;
-		}
-		return new Text(String(value ?? ""))
-	}
-
 	toNode() {
-		const node = ReactiveNode.toNode(this.value);
+		const node = toNode(this.value);
 		// This prevents the ReactiveNode from being garbage collected
 		// while the associated node is still in the DOM
-		node[ReactiveNode.signalKey] = this;
+		node[ListenerNode.signalKey] = this;
 		return node;
+	}
+
+	attach(element) {
+		element.appendChild(this.node);
 	}
 
 	update() {
 		if (!dirty.has(this) || !this.compute()) return;
-		for (const child of this.iterateChildren()) stale.add(child);
 		const newNode = this.toNode();
 		this.node.parentNode.replaceChild(newNode, this.node);
 		this.node = newNode;
 	}
 }
 
-/**
- * One-way reactive node attribute.
- */
-export class ReactiveAttr extends Listener {
+
+export class ListenerNodeList extends Listener {
 	static signalKey = Symbol();
 
-	constructor(signal, name) {
-		super([signal], () => signal.$get());
-		const attr = document.createAttribute(name);
-		attr.value = String(this.value ?? "");
-		// This prevents the ReactiveAttr from being garbage collected
-		// while the associated node is still in the DOM
-		attr[ReactiveAttr.signalKey] = this;
-		this.attr = attr;
+	constructor(list) {
+		super([list], () => list.$get());
+		this.start = new Comment();
+		this.end = new Comment();
+		this.end[ListenerNodeList.signalKey] = this;
+	}
+
+	attach(element) {
+		const fragment = document.createDocumentFragment();
+		fragment.appendChild(this.start);
+		for (let child of this.value) appendChild(fragment, child);
+		fragment.appendChild(this.end);
+		element.appendChild(fragment);
+		this.end[ListenerNodeList.signalKey] = this;
+	}
+
+	clear() {
+		let remove = false;
+		for (const node of [...this.end.parentNode.childNodes]) {
+			if (node === this.end) break;
+			if (remove) node.remove();
+			if (node === this.start) remove = true;
+		}
+	}
+
+	populate() {
+		const fragment = document.createDocumentFragment();
+		fragment.appendChild(this.start);
+		for (let child of this.value) appendChild(fragment, child);
+		this.end.parentNode.insertBefore(fragment, this.end);
 	}
 
 	update() {
 		if (!dirty.has(this) || !this.compute()) return;
-		for (const child of this.iterateChildren()) stale.add(child);
-		this.attr.value = String(this.value ?? "");
+		this.clear();
+		this.populate();
+	}
+}
+
+/**
+ * One-way reactive node attribute.
+ */
+export class ListenerAttr extends Listener {
+	constructor(signal, element, name) {
+		super([signal], () => signal.$get());
+		this.element = element;
+		this.name = name;
+		this.symbol = Symbol();
+		element[this.symbol] = this;
+		element[name] = String(signal.$get()) || "";
+	}
+
+	update() {
+		if (!dirty.has(this) || !this.compute()) return;
+		setAttribute(this.element, this.name, this.value);
 	}
 }
 
@@ -292,14 +329,12 @@ export class BoundAttr extends Listener {
 	constructor(state, element, name) {
 		super([state], () => state.$get());
 		this.state = state;
-		const attr = document.createAttribute(name);
-		attr.value = state.$get();
-		this.attr = attr;
-		// This prevents the BoundAttr from being garbage collected
-		// while the associated node is still in the DOM
-		attr[BoundAttr.signalKey] = this;
-		element.setAttributeNode(attr);
-		switch (this.attr.name) {
+		this.element = element;
+		this.name = name;
+		this.symbol = Symbol();
+		element[this.symbol] = this;
+		setAttribute(element, name, state.$get());
+		switch (name) {
 			case "value":
 				element.addEventListener("input", (e) => this.listener(e));
 			// Missing break here to also update "value" on "change"
@@ -313,14 +348,47 @@ export class BoundAttr extends Listener {
 	}
 
 	listener(event) {
-		this.state.$set(event.currentTarget[this.attr.name]);
+		this.state.$set(event.currentTarget[this.name]);
 	}
 
 	update() {
 		if (!dirty.has(this) || !this.compute()) return;
-		for (const child of this.iterateChildren()) stale.add(child);
-		if (this.attr.value !== this.value) this.attr.value = String(this.value ?? "");
+		setAttribute(this.element, this.name, this.value);
 	}
+}
+
+function setAttribute(element, key, value) {
+	const resolved = typeof value === "boolean" ? value : value ?? "";
+	element[key] = resolved;
+}
+
+export function toNode(value) {
+	if (value instanceof Reactive) {
+		if (Array.isArray(value.$get())) return new ListenerNodeList(value);
+		else return new ListenerNode(value);
+	}
+	if (Array.isArray(value)) {
+		const fragment = document.createDocumentFragment();
+		for (let child of value) fragment.appendChild(toNode(child));
+		return fragment;
+	}
+	if (value instanceof Node) return value;
+	return new Text(String(value) || "");
+}
+export function appendChild(parentNode, child) {
+	if (child instanceof Reactive) {
+		const reactive = Array.isArray(child.$get()) ? new ListenerNodeList(child) : new ListenerNode(child);
+		reactive.attach(parentNode);
+		return;
+	}
+	if (Array.isArray(child)) {
+		const fragment = document.createDocumentFragment();
+		for (let child of child) appendChild(fragment, child);
+		parentNode.appendChild(fragment);
+		return;
+	}
+	const node = child instanceof Node ? child : new Text(String(child) || "");
+	parentNode.appendChild(node);
 }
 
 export function state(initialValue) {
