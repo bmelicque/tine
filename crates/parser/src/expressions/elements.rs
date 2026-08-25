@@ -179,16 +179,16 @@ impl Parser<'_> {
     fn parse_children(&mut self) -> Vec<ElementChild> {
         let mut children = Vec::new();
 
-        while let Some((Ok(token), _)) = self.tokens.peek().cloned() {
+        while let Some((token, _)) = self.tokens.peek().cloned() {
             match token {
-                Token::LtSlash => break,
+                Ok(Token::LtSlash) => break,
 
-                Token::Lt => {
+                Ok(Token::Lt) => {
                     children.push(self.parse_element_expression().into());
                 }
 
                 // Expression child: { expr }
-                Token::LBrace => {
+                Ok(Token::LBrace) => {
                     self.tokens.next(); // eat '{'
 
                     let expression = self.parse_expression_with_block();
@@ -209,7 +209,7 @@ impl Parser<'_> {
                     }
                 }
 
-                Token::Newline => {
+                Ok(Token::Newline) => {
                     self.tokens.next();
                 }
 
@@ -387,6 +387,12 @@ mod tests {
             })),
             diagnostics: vec![],
         });
+    }
+
+    #[test]
+    fn parse_element_with_non_standard_text() {
+        let mut parser = Parser::new(0, "<tag>×</tag>");
+        parser.parse_element_expression();
     }
 
     #[test]
