@@ -1,4 +1,4 @@
-import { Reactive } from "signals";
+import { BoundAttr, Reactive, ReactiveAttr, Signal } from "signals";
 
 export class Option {
 	static None() {
@@ -118,7 +118,11 @@ export function createElement(tag, attributes, children) {
 	const element = document.createElement(tag);
 	for (const [key, value] of Object.entries(attributes)) {
 		if (key.startsWith("on")) element.addEventListener(key.slice(2), value);
-		// TODO: reactive attributes
+		else if (value instanceof Reactive) {
+			const isBound = (key === "value" || key === "checked" || key === "open") && value instanceof Signal;
+			if (isBound) new BoundAttr(value, element, key);
+			else element.setAttributeNode(new ReactiveAttr(value, key));
+		}
 		else if (typeof value === "boolean") element[key] = value;
 		else element.setAttribute(key, value ?? "");
 	}

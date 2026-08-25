@@ -34,4 +34,9 @@ let todoForm = {
     </div>
 }
 
-render("body", <div>{list}</div>)
+let app = <div>
+    {list}
+    {todoForm}
+</div>
+
+render("body", app)

@@ -254,6 +254,75 @@ export class ReactiveNode extends Listener {
 	}
 }
 
+/**
+ * One-way reactive node attribute.
+ */
+export class ReactiveAttr extends Listener {
+	static signalKey = Symbol();
+
+	constructor(signal, name) {
+		super([signal], () => signal.$get());
+		const attr = document.createAttribute(name);
+		attr.value = String(this.value ?? "");
+		// This prevents the ReactiveAttr from being garbage collected
+		// while the associated node is still in the DOM
+		attr[ReactiveAttr.signalKey] = this;
+		this.attr = attr;
+	}
+
+	update() {
+		if (!dirty.has(this) || !this.compute()) return;
+		for (const child of this.iterateChildren()) stale.add(child);
+		this.attr.value = String(this.value ?? "");
+	}
+}
+
+/**
+ * Two-way bound node attribute
+ * 
+ * @example
+ * ```tine
+ * <input type="text" value={state} />
+ * ```
+ *
+ */
+export class BoundAttr extends Listener {
+	static signalKey = Symbol();
+
+	constructor(state, element, name) {
+		super([state], () => state.$get());
+		this.state = state;
+		const attr = document.createAttribute(name);
+		attr.value = state.$get();
+		this.attr = attr;
+		// This prevents the BoundAttr from being garbage collected
+		// while the associated node is still in the DOM
+		attr[BoundAttr.signalKey] = this;
+		element.setAttributeNode(attr);
+		switch (this.attr.name) {
+			case "value":
+				element.addEventListener("input", (e) => this.listener(e));
+			// Missing break here to also update "value" on "change"
+			case "checked":
+				element.addEventListener("change", (e) => this.listener(e));
+				break;
+			case "open":
+				element.addEventListener("toggle", (e) => this.listener(e));
+				break
+		}
+	}
+
+	listener(event) {
+		this.state.$set(event.currentTarget[this.attr.name]);
+	}
+
+	update() {
+		if (!dirty.has(this) || !this.compute()) return;
+		for (const child of this.iterateChildren()) stale.add(child);
+		if (this.attr.value !== this.value) this.attr.value = String(this.value ?? "");
+	}
+}
+
 export function state(initialValue) {
 	return new Signal(initialValue);
 }
