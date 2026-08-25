@@ -112,6 +112,7 @@ pub enum DiagnosticKind {
     },
     MissingArguments,
     MissingBody,
+    MissingCloseTag,
     MissingConsequent,
     MissingExpression,
     MissingMembers(Vec<String>),
@@ -286,6 +287,7 @@ impl Display for DiagnosticKind {
             }
             Self::MissingArguments => write!(f, "expected call arguments"),
             Self::MissingBody => write!(f, "expected function body"),
+            Self::MissingCloseTag => write!(f, "missing close tag"),
             Self::MissingConsequent => write!(f, "expected consequent"),
             Self::MissingExpression => write!(f, "expected expression"),
             Self::MissingMembers(m) => write!(f, "missing members {}", list(&m.into_iter().map(|s| format!("`{}`", s)).collect::<Vec<_>>())),

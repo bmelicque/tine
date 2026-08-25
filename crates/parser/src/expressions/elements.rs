@@ -1,5 +1,8 @@
 use tine_ast::*;
-use tine_common::{diagnostics::DiagnosticKind, locations::Location};
+use tine_common::{
+    diagnostics::DiagnosticKind,
+    locations::{Locatable, Location},
+};
 
 use crate::{tokens::Token, Parser};
 
@@ -29,17 +32,27 @@ impl Parser<'_> {
         }
 
         let children = self.parse_children();
-        let (end_tag, end_loc) = self.parse_end_tag();
-        if end_tag != tag_name {
-            self.error(
-                DiagnosticKind::MismatchedTags {
-                    open: tag_name.clone(),
-                    close: end_tag.clone(),
-                },
-                end_loc,
-            )
+        let end = self.maybe_parse_end_tag();
+        if end.is_none() {
+            let error_loc = self.next_loc();
+            self.error(DiagnosticKind::MissingCloseTag, error_loc);
         }
-        let loc = Location::merge(start_loc, end_loc);
+        match end.as_ref() {
+            Some((end_name, end_loc)) if *end_name != tag_name => {
+                let open = tag_name.clone();
+                let close = end_name.clone();
+                let kind = DiagnosticKind::MismatchedTags { open, close };
+                self.error(kind, *end_loc);
+            }
+            _ => {}
+        }
+        let loc = if let Some(end) = end {
+            Location::merge(start_loc, end.1)
+        } else if let Some(last) = children.last() {
+            Location::merge(start_loc, last.loc())
+        } else {
+            start_loc
+        };
         ElementExpression::Element(Element {
             loc,
             tag_name,
@@ -242,9 +255,8 @@ impl Parser<'_> {
         TextNode { loc, text }
     }
 
-    fn parse_end_tag(&mut self) -> (String, Location) {
-        let start_range = self.eat(&[Token::LtSlash]);
-        let start_loc = self.localize(start_range);
+    fn maybe_parse_end_tag(&mut self) -> Option<(String, Location)> {
+        let (_, start_loc) = self.maybe_eat(|t| (*t == Token::LtSlash).then_some(()))?;
 
         let result = self.better_expect(
             |t| match t {
@@ -274,7 +286,7 @@ impl Parser<'_> {
             Err(range) => self.localize(range).decrement(),
         };
 
-        (tag_name, Location::merge(start_loc, end_loc))
+        Some((tag_name, Location::merge(start_loc, end_loc)))
     }
 }
 
