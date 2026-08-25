@@ -19,6 +19,7 @@ impl TypeChecker {
             return vec![];
         }
         let owner_id: EnumSymbolId = self.insert(EnumSymbol {
+            docs: node.docs.map(|d| d.text),
             name: name.text.clone(),
             defined_at: name.loc,
             ..Default::default()
@@ -72,6 +73,7 @@ impl TypeChecker {
             .map_or(vec![], |body| self.visit_variant_body(body, owner.into()));
 
         Some(self.symbols.insert(VariantSymbol {
+            docs: variant.docs.map(|d| d.text),
             name: ident.text,
             owner,
             body,

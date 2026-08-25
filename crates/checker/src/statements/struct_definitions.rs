@@ -19,6 +19,7 @@ impl TypeChecker {
             return vec![];
         }
         let owner_id: StructSymbolId = self.insert(StructSymbol {
+            docs: node.docs.map(|d| d.text),
             name: name.text.clone(),
             defined_at: name.loc,
             ..Default::default()
@@ -66,6 +67,7 @@ impl TypeChecker {
         let ty = self.visit_type(field.definition?);
         let name = field.name?;
         Some(self.symbols.insert(MemberSymbol {
+            docs: field.docs.map(|d| d.text),
             name: name.text,
             public: field.public,
             ty,
