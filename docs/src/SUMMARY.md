@@ -10,6 +10,7 @@
 - [Functions](./guide/functions.md)
 - [Using structs to group related data](./guide/structs.md)
 - [Enums and pattern matching](./guide/enums.md)
+- [Generics](./guide/generics.md)
 - [Defining shared behavior with traits](./guide/traits.md)
 - [Reactivity with signals](./guide/signals.md)
 - [Rendering to the DOM](./guide/dom.md)
