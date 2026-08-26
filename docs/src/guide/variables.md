@@ -2,8 +2,6 @@
 
 ✅ Stable
 
-_🚧 : behavior when mixing int and float operands is not yet finalized._
-
 ## Declaring a variable
 
 In Tine, variables are declared with `let`. Bindings are immutable by default, but can be made mutable with `mut`.
@@ -35,6 +33,8 @@ let age = 30
 let price = 19.99
 let greeting = "Hello, Tine!"
 ```
+
+> Note: `int` can actually be mixed with `float`, or be used where `float` is expected. In that case, an `int` is automatically promoted to a `float`.
 
 ## Value semantics by default
 

@@ -48,40 +48,9 @@ impl TypeChecker {
     ) {
         use ast::BinaryOperator::*;
         match operator {
-            Add => {
-                let left_is_ok = VALID_ADD_TYPES.contains(&left.ty());
-                let right_is_ok = VALID_ADD_TYPES.contains(&right.ty());
-                if !left_is_ok && left.ty() != TypeStore::UNKNOWN {
-                    self.push_binary_error(operator, left.ty(), left.loc());
-                };
-                if !right_is_ok && right.ty() != TypeStore::UNKNOWN {
-                    self.push_binary_error(operator, right.ty(), right.loc());
-                };
-                if left_is_ok && right_is_ok && left.ty() != right.ty() {
-                    let error = DiagnosticKind::MismatchedTypes {
-                        left_name: self.types.display(left.ty()),
-                        right_name: self.types.display(right.ty()),
-                    };
-                    self.error(error, node_loc);
-                };
-            }
+            Add => self.validate_add_operands(left, right),
             Sub | Mul | Div | Mod | Pow | Geq | Grt | Leq | Less => {
-                let left_is_num = left.ty() == TypeStore::INTEGER || left.ty() == TypeStore::FLOAT;
-                let right_is_num =
-                    right.ty() == TypeStore::INTEGER || right.ty() == TypeStore::FLOAT;
-                if left.ty() != TypeStore::UNKNOWN && !left_is_num {
-                    self.push_binary_error(operator, left.ty(), left.loc());
-                };
-                if right.ty() != TypeStore::UNKNOWN && !right_is_num {
-                    self.push_binary_error(operator, right.ty(), right.loc());
-                };
-                if left_is_num && right_is_num && left.ty() != right.ty() {
-                    let error = DiagnosticKind::MismatchedTypes {
-                        left_name: self.types.display(left.ty()),
-                        right_name: self.types.display(right.ty()),
-                    };
-                    self.error(error, node_loc);
-                };
+                self.validate_numeric_operands(left, right, operator)
             }
             EqEq | Neq => self.validate_eq_operands(left, right, node_loc),
             LAnd | LOr => {
@@ -92,6 +61,46 @@ impl TypeChecker {
                     self.push_binary_error(operator, right.ty(), right.loc());
                 };
             }
+        };
+    }
+
+    pub fn validate_add_operands(&mut self, left: &ir::Expression, right: &ir::Expression) {
+        let left_is_ok = VALID_ADD_TYPES.contains(&left.ty());
+        let right_is_ok = VALID_ADD_TYPES.contains(&right.ty());
+        if !left_is_ok && left.ty() != TypeStore::UNKNOWN {
+            self.push_binary_error(ir::BinaryOperator::Add, left.ty(), left.loc());
+        };
+        if !right_is_ok && right.ty() != TypeStore::UNKNOWN {
+            self.push_binary_error(ir::BinaryOperator::Add, right.ty(), right.loc());
+        };
+        if !left_is_ok || !right_is_ok {
+            return;
+        }
+
+        if left.ty() != right.ty() && !(is_numeric(left.ty()) && is_numeric(right.ty())) {
+            let left_name = self.types.display(left.ty());
+            let right_name = self.types.display(right.ty());
+            let error = DiagnosticKind::MismatchedTypes {
+                left_name,
+                right_name,
+            };
+            self.error(error, Location::merge(left.loc(), right.loc()));
+        };
+    }
+
+    pub fn validate_numeric_operands(
+        &mut self,
+        left: &ir::Expression,
+        right: &ir::Expression,
+        operator: ir::BinaryOperator,
+    ) {
+        let left_is_num = left.ty() == TypeStore::INTEGER || left.ty() == TypeStore::FLOAT;
+        let right_is_num = right.ty() == TypeStore::INTEGER || right.ty() == TypeStore::FLOAT;
+        if left.ty() != TypeStore::UNKNOWN && !left_is_num {
+            self.push_binary_error(operator, left.ty(), left.loc());
+        };
+        if right.ty() != TypeStore::UNKNOWN && !right_is_num {
+            self.push_binary_error(operator, right.ty(), right.loc());
         };
     }
 
@@ -147,12 +156,16 @@ impl TypeChecker {
     }
 }
 
+fn is_numeric(ty: TypeId) -> bool {
+    ty == TypeStore::INTEGER || ty == TypeStore::FLOAT
+}
+
 fn get_binary_expression_type(op: ast::BinaryOperator, left: TypeId, right: TypeId) -> TypeId {
     match op {
         ast::BinaryOperator::Add => match (left, right) {
             (TypeStore::STRING, TypeStore::STRING) => TypeStore::STRING,
             (TypeStore::INTEGER, TypeStore::INTEGER) => TypeStore::INTEGER,
-            (TypeStore::FLOAT, TypeStore::FLOAT) => TypeStore::FLOAT,
+            (t, u) if is_numeric(t) && is_numeric(u) => TypeStore::FLOAT,
             _ => TypeStore::UNKNOWN,
         },
         ast::BinaryOperator::Sub
@@ -161,7 +174,7 @@ fn get_binary_expression_type(op: ast::BinaryOperator, left: TypeId, right: Type
         | ast::BinaryOperator::Mod
         | ast::BinaryOperator::Pow => match (left, right) {
             (TypeStore::INTEGER, TypeStore::INTEGER) => TypeStore::INTEGER,
-            (TypeStore::FLOAT, TypeStore::FLOAT) => TypeStore::FLOAT,
+            (t, u) if is_numeric(t) && is_numeric(u) => TypeStore::FLOAT,
             _ => TypeStore::UNKNOWN,
         },
         ast::BinaryOperator::EqEq
@@ -209,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_arithmetic_expression() {
+    fn test_mixed_arithmetic_expression() {
         let (ty, errors) = visit_binary_expression(ast::BinaryExpression {
             loc: Location::dummy(),
             operator: ast::BinaryOperator::Add,
@@ -222,12 +235,8 @@ mod tests {
                 loc: Location::dummy(),
             }))),
         });
-        assert_eq!(ty, TypeStore::UNKNOWN);
-        assert_eq!(errors.len(), 1);
-        assert!(matches!(
-            errors[0].kind,
-            DiagnosticKind::MismatchedTypes { .. }
-        ));
+        assert_eq!(ty, TypeStore::FLOAT);
+        assert!(errors.is_empty());
     }
 
     #[test]

@@ -343,6 +343,7 @@ impl TypeChecker {
             (Unknown, _) | (_, Unknown) => true,
             (Trait(t), _) => self.implements_trait(got, &t.clone(), got_immutable),
             (e, Ref(a)) if e.is_generic() => a.inner == expected_id,
+            (Float, Integer) => true,
             (_, _) => actual == expected,
         }
     }
