@@ -45,8 +45,6 @@ let sum = add(1, 2)
 
 ## Function expressions and callbacks
 
-🚧 _unstable: still pondering over callback syntax_
-
 Functions are first class citizens in Tine, so you can assign them to variables and pass them around. In that case, you don't need to name the function.
 
 ```tine

@@ -10,13 +10,13 @@ In Tine, variables are declared with `let`. Bindings are immutable by default, b
 
 ```tine
 let name = "Ada"
-// name = "Jane" // error because `name` is immutable
+name = "Jane" // compiler error because `name` is immutable
 
 let mut count = 0
 count = count + 1 // ok
 ```
 
-There is no explicit type annotation syntax (at least for now). Tine always infers the type from the assigned value.
+There is no explicit type annotation syntax (for now). Tine always infers the type from the assigned value.
 
 ## Primitive types
 

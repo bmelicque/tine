@@ -11,13 +11,13 @@ let ints = [1, 2, 3]
 let names = ["Ada", "Grace", "Barbara"]
 ```
 
-Arrays are homogeneous: every element must share the same type. For a fixed-length collection that mixes types, see tuples.
+Arrays are homogeneous: every element must share the same type. For a fixed-length collection that mixes types, see [Tuples](./collections.md#tuples).
 
 Arrays are dynamically sized: elements can be added or removed after creation.
 
 ### Reading elements
 
-Tine has no `array[index]` syntax. Instead, reading an element goes through `get`, which returns an `Option<T>` rather than panicking on an out-of-bounds index:
+Tine has no `array[index]` syntax. Instead, reading an element goes through `get`, which returns an `Option<T>` (see [Options](./enums.md#option)) rather than panicking on an out-of-bounds index:
 
 ```tine
 let numbers = [1, 2, 3]

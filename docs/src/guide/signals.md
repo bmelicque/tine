@@ -2,7 +2,7 @@
 
 🚧 Unstable
 
-_`computed`'s exact syntax is still being reconsidered — the expression form shown here may become a callback form instead._
+_`computed$`'s exact syntax is still being reconsidered — the expression form shown here may become a callback form instead._
 
 ## Creating a signal
 

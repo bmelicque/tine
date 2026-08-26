@@ -72,7 +72,7 @@ firstUser.id = 0 // `secondUser`'s id has not changed
 
 ## Defining behavior with methods
 
-Methods are just like functions, except they are defined in the context of some struct (or [enum], see later). This is a nice way to group data and the associated behavior.
+Methods are just like functions, except they are defined in the context of some struct (or [enum](./enums.md), see later). This is a nice way to group data and the associated behavior.
 
 Let's take a look at the following example:
 
