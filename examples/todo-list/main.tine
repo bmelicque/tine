@@ -42,7 +42,7 @@ let todoForm = {
 
     fn validate() {
         if *input == "" { return }
-        nextId = nextId + 1
+        nextId += 1
         todos.push(Todo {
             id:   nextId,
             task: *input,

@@ -1,6 +1,6 @@
 use crate::codegen::{
     expressions::ExpressionResult,
-    utils::{ident_from_str, is_handled_by_ref},
+    utils::{assign, call, ident_from_str, is_handled_by_ref, member},
     CodeGenerator,
 };
 use swc_common::DUMMY_SP;
@@ -19,14 +19,15 @@ impl CodeGenerator<'_, '_> {
     }
 
     pub fn handle_assignment_as_expr(&mut self, node: ir::Assignment) -> ExpressionResult {
-        match &node.pattern {
-            ir::Expression::Identifier(_) if is_handled_by_ref(&node.pattern) => {
-                self.handle_method_assign(node.pattern, node.value)
+        match node.pattern {
+            ir::Expression::Identifier(p) => {
+                self.handle_raw_assign(p.into(), node.operator, node.value)
             }
-            ir::Expression::Identifier(_) => self.handle_raw_assign(node.pattern, node.value),
-            ir::Expression::Member(_) => self.handle_raw_assign(node.pattern, node.value),
+            ir::Expression::Member(p) => {
+                self.handle_raw_assign(p.into(), node.operator, node.value)
+            }
             ir::Expression::Unary(u) if u.operator == ir::UnaryOperator::Star => {
-                self.handle_method_assign(*u.operand.clone(), node.value)
+                self.handle_indirect_assign(*u.operand, node.operator, node.value)
             }
             _ => unimplemented!(),
         }
@@ -35,6 +36,7 @@ impl CodeGenerator<'_, '_> {
     fn handle_raw_assign(
         &mut self,
         assign_target: ir::Expression,
+        operator: ir::AssignOperator,
         value: ir::Expression,
     ) -> ExpressionResult {
         let is_current_this = self.is_current_this(&assign_target);
@@ -68,6 +70,7 @@ impl CodeGenerator<'_, '_> {
                 _ => unreachable!(),
             };
             swc::Expr::Assign(swc::AssignExpr {
+                op: handle_assign_op(operator),
                 left: assign_target.into(),
                 right: Box::new(value_result.expr),
                 ..Default::default()
@@ -77,31 +80,33 @@ impl CodeGenerator<'_, '_> {
         ExpressionResult { prelim_stmts, expr }
     }
 
-    fn handle_method_assign(
+    fn handle_indirect_assign(
         &mut self,
-        assign_target: ir::Expression,
+        assignee: ir::Expression,
+        operator: ir::AssignOperator,
         value: ir::Expression,
     ) -> ExpressionResult {
         let value_result = self.handle_expression(value);
 
         let assign_target = if value_result.prelim_stmts.len() > 0 {
-            let result = self.handle_expression(assign_target);
+            let result = self.handle_expression(assignee);
             self.to_extracted(result)
         } else {
-            self.handle_expression(assign_target)
+            self.handle_expression(assignee)
         };
 
         let prelim_stmts = vec![assign_target.prelim_stmts, value_result.prelim_stmts].concat();
 
-        let expr = swc::Expr::Call(swc::CallExpr {
-            callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
-                span: DUMMY_SP,
-                obj: Box::new(assign_target.expr),
-                prop: swc::MemberProp::Ident(ident_from_str("$set").into()),
-            }))),
-            args: vec![value_result.expr.into()],
-            ..Default::default()
-        });
+        // `signal.setupTreeUpdate().value <OP> <VALUE>`
+        let expr = swc::Expr::Assign(assign(
+            member(
+                call(member(assign_target.expr, "setupTreeUpdate").into(), vec![]).into(),
+                "value",
+            )
+            .into(),
+            handle_assign_op(operator),
+            value_result.expr,
+        ));
 
         ExpressionResult { prelim_stmts, expr }
     }
@@ -121,6 +126,17 @@ impl CodeGenerator<'_, '_> {
             })
         }
         result
+    }
+}
+
+fn handle_assign_op(op: ir::AssignOperator) -> swc::AssignOp {
+    match op {
+        ir::AssignOperator::Assign => swc::AssignOp::Assign,
+        ir::AssignOperator::AddAssign => swc::AssignOp::AddAssign,
+        ir::AssignOperator::SubAssign => swc::AssignOp::SubAssign,
+        ir::AssignOperator::MulAssign => swc::AssignOp::MulAssign,
+        ir::AssignOperator::DivAssign => swc::AssignOp::DivAssign,
+        ir::AssignOperator::ModAssign => swc::AssignOp::ModAssign,
     }
 }
 

@@ -146,6 +146,7 @@ export class Signal extends Reactive {
 	setupTreeUpdate() {
 		for (const child of this.iterateChildren()) child.dirty();
 		scheduler.schedule();
+		return this;
 	}
 }
 

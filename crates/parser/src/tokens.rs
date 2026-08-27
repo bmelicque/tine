@@ -93,16 +93,26 @@ pub enum Token {
     Dollar,
     #[token("=")]
     Eq,
+    #[token("+=")]
+    PlusEq,
     #[token("+")]
     Plus,
+    #[token("-=")]
+    MinusEq,
     #[token("-")]
     Minus,
+    #[token("*=")]
+    StarEq,
     #[token("**")]
     StarStar,
     #[token("*")]
     Star,
+    #[token("/=")]
+    SlashEq,
     #[token("/")]
     Slash,
+    #[token("%=")]
+    ModEq,
     #[token("%")]
     Mod,
     #[token("?")]
@@ -280,11 +290,16 @@ impl Token {
             Token::Bang => "!".to_string(),
             Token::Dollar => "$".to_string(),
             Token::Eq => "=".to_string(),
+            Token::PlusEq => "+=".to_string(),
             Token::Plus => "+".to_string(),
+            Token::MinusEq => "-=".to_string(),
             Token::Minus => "-".to_string(),
             Token::StarStar => "**".to_string(),
+            Token::StarEq => "*=".to_string(),
             Token::Star => "*".to_string(),
+            Token::SlashEq => "/=".to_string(),
             Token::Slash => "/".to_string(),
+            Token::ModEq => "%=".to_string(),
             Token::Mod => "%".to_string(),
             Token::QMark => "?".to_string(),
             Token::Hash => "#".to_string(),

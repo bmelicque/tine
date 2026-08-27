@@ -4,7 +4,7 @@ use tine_ast as ast;
 use tine_common::{diagnostics::DiagnosticKind, locations::Locatable};
 use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::{MemberSymbolId, SymbolId};
-use tine_types::types;
+use tine_types::{store::TypeStore, types};
 
 use crate::{substitutions::Substitutions, PathContext, TypeChecker};
 
@@ -39,9 +39,14 @@ impl TypeChecker {
             return None;
         }
 
+        if node.operator != ir::AssignOperator::Assign {
+            self.validate_assign_operands(&assignee, node.operator);
+        }
+
         Some(ir::Assignment {
             loc: node.loc,
             pattern: assignee,
+            operator: node.operator,
             value,
         })
     }
@@ -207,6 +212,21 @@ impl TypeChecker {
             ty,
         }))
     }
+
+    fn validate_assign_operands(&mut self, assignee: &ir::Expression, op: ir::AssignOperator) {
+        if op == ir::AssignOperator::Assign {
+            return;
+        }
+        let valid = [TypeStore::UNKNOWN, TypeStore::FLOAT, TypeStore::INTEGER];
+
+        if !valid.contains(&assignee.ty()) {
+            let error = DiagnosticKind::InvalidTypeForOperator {
+                operator: op.to_string(),
+                type_name: self.types.display(assignee.ty()),
+            };
+            self.error(error, assignee.loc());
+        }
+    }
 }
 
 #[cfg(test)]
@@ -221,6 +241,7 @@ mod tests {
         ast::Assignment {
             loc: Location::dummy(),
             pattern: Some(ast::Identifier::new("a".into(), Location::dummy()).into()),
+            operator: ast::AssignOperator::Assign,
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral::new(
                 1,
                 Location::dummy(),
@@ -266,7 +287,7 @@ mod tests {
         let mut checker = TypeChecker::new();
         let id = checker.symbols.insert::<VariableSymbolId>(VariableSymbol {
             name: "a".to_string(),
-            ty: TypeStore::FLOAT,
+            ty: TypeStore::STRING,
             mutable: true,
             ..Default::default()
         });
@@ -301,6 +322,7 @@ mod tests {
                     ast::Identifier::new("a".into(), Location::dummy()).into(),
                 )),
             })),
+            operator: ast::AssignOperator::Assign,
             value: Some(ast::Expression::IntLiteral(ast::IntLiteral::new(
                 1,
                 Location::dummy(),

@@ -53,6 +53,7 @@ fn hash_combine_assignment(field_name: &str, at: Location) -> Statement {
     Statement::Assignment(Assignment {
         loc: at,
         pattern: Some(Assignee::Path(Identifier::new("h".to_string(), at).into())),
+        operator: AssignOperator::Assign,
         value: Some(call.into()),
     })
 }

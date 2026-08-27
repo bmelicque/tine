@@ -286,6 +286,20 @@ pub fn call(callee: swc::Expr, args: Vec<swc::Expr>) -> swc::CallExpr {
     }
 }
 
+pub fn assign(lhs: swc::Expr, op: swc::AssignOp, rhs: swc::Expr) -> swc::AssignExpr {
+    let assign_target = match lhs {
+        swc::Expr::Ident(i) => swc::SimpleAssignTarget::Ident(i.into()),
+        swc::Expr::Member(m) => swc::SimpleAssignTarget::Member(m),
+        _ => unreachable!(),
+    };
+    swc::AssignExpr {
+        span: DUMMY_SP,
+        op,
+        left: assign_target.into(),
+        right: Box::new(rhs),
+    }
+}
+
 pub fn option(value: swc::Expr) -> swc::Expr {
     let callee = swc::Callee::Expr(Box::new(
         member(member(ident_from_str("$").into(), "Option").into(), "$from").into(),

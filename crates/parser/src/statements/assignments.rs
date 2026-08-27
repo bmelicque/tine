@@ -10,40 +10,44 @@ impl Parser<'_> {
     pub fn parse_assignment(&mut self) -> Option<Statement> {
         let expr = self.parse_expression_with_block();
 
-        let Some((Ok(Token::Eq), eq_range)) = self.tokens.peek() else {
+        let Some((operator, op_loc)) = self.maybe_parse_assign_operator() else {
             return expr.map(|e| {
                 Statement::Expression(ExpressionStatement {
                     expression: Box::new(e),
                 })
             });
         };
-        let eq_range = eq_range.clone();
-        let eq_loc = self.localize(eq_range);
-        self.tokens.next(); // consume the '=' token
-        let loc = match &expr {
-            Some(expr) => Location::merge(expr.loc(), eq_loc),
-            None => eq_loc,
-        };
+
         let assignee = expr.map(|e| self.expr_to_assignee(e));
         if assignee.is_none() {
-            self.error(DiagnosticKind::MissingPattern, eq_loc);
+            self.error(DiagnosticKind::MissingPattern, op_loc);
         }
 
         let value = self.parse_expression_with_block();
         if value.is_none() {
-            self.error(DiagnosticKind::MissingExpression, eq_loc.increment());
+            self.error(DiagnosticKind::MissingExpression, op_loc.increment());
         }
 
-        let loc = match &value {
-            Some(value) => Location::merge(loc, value.loc()),
-            None => loc,
-        };
+        let loc = assignment_loc(&assignee, op_loc, &value);
 
         Some(Statement::Assignment(Assignment {
             loc,
             pattern: assignee,
+            operator,
             value,
         }))
+    }
+
+    fn maybe_parse_assign_operator(&mut self) -> Option<(AssignOperator, Location)> {
+        self.maybe_eat(|t| match *t {
+            Token::Eq => Some(AssignOperator::Assign),
+            Token::PlusEq => Some(AssignOperator::AddAssign),
+            Token::MinusEq => Some(AssignOperator::SubAssign),
+            Token::StarEq => Some(AssignOperator::MulAssign),
+            Token::SlashEq => Some(AssignOperator::DivAssign),
+            Token::ModEq => Some(AssignOperator::ModAssign),
+            _ => None,
+        })
     }
 
     fn expr_to_assignee(&mut self, expr: Expression) -> Assignee {
@@ -107,6 +111,16 @@ impl Parser<'_> {
             elements,
         })
     }
+}
+
+fn assignment_loc(
+    assignee: &Option<Assignee>,
+    op_loc: Location,
+    value: &Option<Expression>,
+) -> Location {
+    let start = assignee.as_ref().map_or(op_loc, |a| a.loc());
+    let end = value.as_ref().map_or(op_loc, |v| v.loc());
+    Location::merge(start, end)
 }
 
 #[cfg(test)]

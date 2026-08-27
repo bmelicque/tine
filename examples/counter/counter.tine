@@ -5,7 +5,7 @@ let counter = state(0)
 let suffix = computed$(if *counter != 1 { "s" } else { "" })
 
 fn increment() {
-    *counter = *counter + 1
+    *counter += 1
 }
 
 let app = <div id="app">

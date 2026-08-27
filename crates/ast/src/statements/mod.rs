@@ -1,9 +1,14 @@
 mod implementations;
 
+use std::fmt;
 use tine_common::locations::{Locatable, Location};
 use tine_macros::tree_struct;
 
-use crate::{nodes::ast_enum, walk::PushNodes, InvalidExpression, PathExpression};
+use crate::{
+    nodes::{ast_enum, operator_enum},
+    walk::PushNodes,
+    InvalidExpression, PathExpression,
+};
 
 use super::{
     expressions::{Expression, FunctionExpression, FunctionParams, Identifier},
@@ -150,9 +155,19 @@ pub struct VariantBody {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Assignment {
     pub pattern: Option<Assignee>,
+    pub operator: AssignOperator,
     #[child]
     pub value: Option<Expression>,
 }
+
+operator_enum!(AssignOperator {
+    Assign => "=",
+    AddAssign => "+=",
+    SubAssign => "-=",
+    MulAssign => "*=",
+    DivAssign => "/=",
+    ModAssign => "%=",
+});
 
 ast_enum!(Assignee {
     Invalid(InvalidExpression),

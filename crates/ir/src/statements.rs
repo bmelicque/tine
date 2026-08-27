@@ -1,3 +1,4 @@
+use tine_ast as ast;
 use tine_common::{
     locations::{Locatable, Location},
     module_path::{ModuleId, ModulePath},
@@ -21,6 +22,8 @@ ir_enum!(Statement {
     Variable(VariableDeclaration),
 });
 
+pub type AssignOperator = ast::AssignOperator;
+
 #[tree_struct(untyped)]
 #[derive(Debug, Clone)]
 pub struct Assignment {
@@ -30,6 +33,7 @@ pub struct Assignment {
     /// - a member expression
     /// - a indirection (`*` + identifier)
     pub pattern: Expression,
+    pub operator: AssignOperator,
     #[child]
     pub value: Expression,
 }
