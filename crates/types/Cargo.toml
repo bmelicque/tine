@@ -1,0 +1,8 @@
+[package]
+name = "tine_types"
+version.workspace = true
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+tine_common = { path = "../common" }

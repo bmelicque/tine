@@ -1,8 +1,10 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use swc_common::{SyntaxContext, DUMMY_SP};
 use swc_ecma_ast as swc;
 
-use tine_core::ast;
+use tine_ir::{self as ir, Typed};
+use tine_symbols::symbols::*;
+use tine_types::{store::TypeStore, types};
 
 use super::CodeGenerator;
 
@@ -76,9 +78,17 @@ fn safe_identifier(name: &str) -> String {
     }
 }
 
-pub fn create_ident(name: &str) -> swc::Ident {
+pub fn ident_from_str(name: &str) -> swc::Ident {
     swc::Ident {
         sym: safe_identifier(name).into(),
+        span: DUMMY_SP,
+        ctxt: SyntaxContext::empty(),
+        optional: false,
+    }
+}
+pub fn unsafe_ident_from_str(name: &str) -> swc::Ident {
+    swc::Ident {
+        sym: name.into(),
         span: DUMMY_SP,
         ctxt: SyntaxContext::empty(),
         optional: false,
@@ -92,12 +102,17 @@ pub fn create_str(text: &str) -> swc::Expr {
         raw: None,
     }))
 }
-
-pub fn create_number(value: f64) -> swc::Expr {
+pub fn create_num(value: f64) -> swc::Expr {
     swc::Expr::Lit(swc::Lit::Num(swc::Number {
         span: DUMMY_SP,
-        value: value,
+        value,
         raw: None,
+    }))
+}
+pub fn create_bool(value: bool) -> swc::Expr {
+    swc::Expr::Lit(swc::Lit::Bool(swc::Bool {
+        span: DUMMY_SP,
+        value,
     }))
 }
 
@@ -109,21 +124,25 @@ pub fn create_block_stmt(stmts: Vec<swc::Stmt>) -> swc::BlockStmt {
     }
 }
 
-pub fn can_be_inlined(node: &ast::Statement) -> bool {
+pub fn can_be_inlined(node: &ir::Statement) -> bool {
     match node {
-        ast::Statement::Expression(e) => match e.expression.as_ref() {
-            ast::Expression::Block(b) => can_block_be_inlined(b),
-            ast::Expression::If(i) => can_ifexpr_be_inlined(i),
-            ast::Expression::IfDecl(_) => false,
-            ast::Expression::Loop(_) => false,
-            ast::Expression::Match(_) => false,
-            _ => true,
-        },
+        ir::Statement::Assignment(a) => can_expression_be_inlined(&a.value),
+        ir::Statement::Expression(e) => can_expression_be_inlined(e),
         _ => false,
     }
 }
 
-pub fn can_block_be_inlined(block: &ast::BlockExpression) -> bool {
+pub fn can_expression_be_inlined(node: &ir::Expression) -> bool {
+    match node {
+        ir::Expression::Block(b) => can_block_be_inlined(b),
+        ir::Expression::If(i) => can_ifexpr_be_inlined(i),
+        ir::Expression::For(_) => false,
+        ir::Expression::ForIn(_) => false,
+        _ => true,
+    }
+}
+
+pub fn can_block_be_inlined(block: &ir::Block) -> bool {
     block
         .statements
         .iter()
@@ -131,18 +150,29 @@ pub fn can_block_be_inlined(block: &ast::BlockExpression) -> bool {
         .is_none()
 }
 
-pub fn can_ifexpr_be_inlined(expr: &ast::IfExpression) -> bool {
-    if !can_block_be_inlined(expr.consequent.as_ref().unwrap()) {
+pub fn can_ifexpr_be_inlined(expr: &ir::IfExpression) -> bool {
+    if !can_block_be_inlined(&expr.consequent) {
         return false;
     }
-    let Some(ref alt) = expr.alternate else {
-        return true;
-    };
-    match alt.as_ref() {
-        ast::Alternate::Block(b) => can_block_be_inlined(b),
-        ast::Alternate::If(i) => can_ifexpr_be_inlined(i),
-        ast::Alternate::IfDecl(_) => false,
+    match &expr.alternate {
+        Some(alt) => can_block_be_inlined(alt),
+        None => true,
     }
+}
+
+pub fn is_primitive(ty: types::TypeId) -> bool {
+    match ty {
+        TypeStore::BOOLEAN
+        | TypeStore::FLOAT
+        | TypeStore::INTEGER
+        | TypeStore::STRING
+        | TypeStore::UNIT => true,
+        _ => false,
+    }
+}
+
+pub fn is_handled_by_ref(node: &ir::Expression) -> bool {
+    !is_primitive(node.ty())
 }
 
 pub fn undefined() -> swc::Expr {
@@ -154,55 +184,130 @@ pub fn undefined() -> swc::Expr {
     })
 }
 
-pub fn true_lit() -> swc::Expr {
-    swc::Expr::Lit(swc::Lit::Bool(swc::Bool {
-        span: DUMMY_SP,
-        value: true,
-    }))
+pub fn internal_method_call(name: &str, args: Vec<swc::ExprOrSpread>) -> swc::CallExpr {
+    swc::CallExpr {
+        callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(swc::Expr::Ident(ident_from_str("$"))),
+            prop: swc::MemberProp::Ident(ident_from_str(name).into()),
+        }))),
+        args,
+        ..Default::default()
+    }
+}
+// TODO: fields
+pub fn internal_construct(name: &str) -> swc::Expr {
+    swc::Expr::New(swc::NewExpr {
+        callee: Box::new(swc::Expr::Member(swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(swc::Expr::Ident(ident_from_str("$"))),
+            prop: swc::MemberProp::Ident(ident_from_str(name).into()),
+        })),
+        ..Default::default()
+    })
 }
 
-impl CodeGenerator<'_> {
-    pub fn into_option(&mut self, identifier: &String) -> swc::Stmt {
-        // identifier !== undefined ? new __Option("Some", identifier) : new __Option("None")
+impl CodeGenerator<'_, '_> {
+    pub fn none(&mut self) -> swc::NewExpr {
+        let args = vec![swc::ExprOrSpread {
+            spread: None,
+            expr: Box::new(create_str("None")),
+        }];
 
-        let test = Box::new(swc::Expr::Bin(swc::BinExpr {
+        swc::NewExpr {
             span: DUMMY_SP,
-            op: swc::BinaryOp::NotEqEq,
-            left: Box::new(create_ident(&identifier).into()),
-            right: Box::new(undefined()),
-        }));
-
-        let cons = Box::new(self.some(create_ident(&identifier).into()).into());
-        let alt = Box::new(self.none().into());
-        let expr = Box::new(swc::Expr::Cond(swc::CondExpr {
-            span: DUMMY_SP,
-            test,
-            cons,
-            alt,
-        }));
-
-        swc::Stmt::Expr(swc::ExprStmt {
-            span: DUMMY_SP,
-            expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
+            ctxt: SyntaxContext::empty(),
+            callee: Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
-                op: swc::AssignOp::Assign,
-                left: swc::AssignTarget::Simple(swc::SimpleAssignTarget::Ident(
-                    swc::BindingIdent {
-                        id: create_ident(&identifier),
-                        type_ann: None,
-                    },
-                )),
-                right: expr,
+                obj: Box::new(swc::Expr::Ident(ident_from_str("$"))),
+                prop: swc::MemberProp::Ident(ident_from_str("Option").into()),
             })),
-        })
+            args: Some(args),
+            type_args: None,
+        }
+    }
+
+    pub fn generate_constructor_name(
+        &self,
+        constructor_id: SymbolId,
+        ty_args: &HashMap<types::TypeParam, types::TypeId>,
+    ) -> swc::Expr {
+        let name = self.symbols.get_symbol(constructor_id).name();
+        let ty = ident_from_str(name);
+        match ty_args.len() {
+            0 => ty.into(),
+            _ => member(
+                ty.into(),
+                &args_to_string(&ty_args.iter().map(|(_, ty)| *ty).collect::<Vec<_>>()),
+            )
+            .into(),
+        }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum AssignTo {
-    None,
-    /// `{ value }` becomes `{ identifier = value }`
-    Last(String),
-    /// `{ break value }` becomes `{ identifier = value; break }`
-    Break(String),
+/// Convert a `Vec<TypeId>` into a unique `String` that will not collide with
+/// user-defined names
+pub fn args_to_string(args: &[types::TypeId]) -> String {
+    let str = args
+        .into_iter()
+        .map(|a| a.to_string())
+        .collect::<Vec<_>>()
+        .join("_");
+    format!("${}", str)
+}
+
+pub fn member(object: swc::Expr, prop: &str) -> swc::MemberExpr {
+    swc::MemberExpr {
+        span: DUMMY_SP,
+        obj: Box::new(object),
+        prop: swc::MemberProp::Ident(ident_from_str(prop).into()),
+    }
+}
+pub fn index(object: swc::Expr, i: usize) -> swc::MemberExpr {
+    swc::MemberExpr {
+        span: DUMMY_SP,
+        obj: Box::new(object),
+        prop: swc::MemberProp::Computed(swc::ComputedPropName {
+            span: DUMMY_SP,
+            expr: Box::new(swc::Expr::Lit(swc::Lit::Num(swc::Number {
+                span: DUMMY_SP,
+                value: i as f64,
+                raw: None,
+            }))),
+        }),
+    }
+}
+
+pub fn call(callee: swc::Expr, args: Vec<swc::Expr>) -> swc::CallExpr {
+    swc::CallExpr {
+        callee: swc::Callee::Expr(Box::new(callee)),
+        args: args.into_iter().map(Into::into).collect(),
+        ..Default::default()
+    }
+}
+
+pub fn assign(lhs: swc::Expr, op: swc::AssignOp, rhs: swc::Expr) -> swc::AssignExpr {
+    let assign_target = match lhs {
+        swc::Expr::Ident(i) => swc::SimpleAssignTarget::Ident(i.into()),
+        swc::Expr::Member(m) => swc::SimpleAssignTarget::Member(m),
+        _ => unreachable!(),
+    };
+    swc::AssignExpr {
+        span: DUMMY_SP,
+        op,
+        left: assign_target.into(),
+        right: Box::new(rhs),
+    }
+}
+
+pub fn option(value: swc::Expr) -> swc::Expr {
+    let callee = swc::Callee::Expr(Box::new(
+        member(member(ident_from_str("$").into(), "Option").into(), "$from").into(),
+    ));
+
+    swc::Expr::Call(swc::CallExpr {
+        callee,
+        args: vec![value.into()],
+        ..Default::default()
+    })
 }

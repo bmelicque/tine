@@ -1,0 +1,116 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use tine_ast as ast;
+use tine_common::locations::Location;
+use tine_ir::{self as ir, Typed};
+use tine_symbols::symbols::*;
+use tine_types::types;
+
+use crate::{
+    type_checker::{Scope, ScopeGuard},
+    TypeChecker,
+};
+
+impl TypeChecker {
+    /// Create a local scope containing the given type params, then run the
+    /// `visit` function inside that scope.
+    pub fn with_type_params2(
+        &mut self,
+        params: &Option<Vec<ast::Identifier>>,
+    ) -> (ScopeGuard<'_>, Vec<types::TypeParam>) {
+        self.scopes.push(Scope::new());
+        let params = match &params {
+            Some(params) => params,
+            None => &vec![],
+        };
+        let mut param_types = Vec::new();
+        for param in params {
+            let ty = self.add_type_param(param.text.clone());
+            let id = self.symbols.insert::<TypeAliasSymbolId>(TypeAliasSymbol {
+                name: param.text.clone(),
+                ty: ty.id,
+                defined_at: param.loc,
+                ..Default::default()
+            });
+            self.current_scope().bind(param.text.clone(), id.into());
+            self.types.add_alias(ty.id, param.text.clone());
+            param_types.push(ty);
+        }
+        (ScopeGuard::new(self), param_types)
+    }
+
+    /// Create a local scope containing the given type params, then run the
+    /// `visit` function inside that scope.
+    pub fn with_type_params<F, R>(
+        &mut self,
+        params: &Option<Vec<ast::Identifier>>,
+        visit: F,
+    ) -> (R, Vec<types::TypeParam>)
+    where
+        F: FnOnce(&mut Self, &[types::TypeParam]) -> R,
+    {
+        let params = match &params {
+            Some(params) => params,
+            None => &vec![],
+        };
+        self.with_scope(|checker| {
+            let mut param_types = Vec::new();
+            for param in params {
+                let ty = checker.add_type_param(param.text.clone());
+                // FIXME: spans
+                let id = checker
+                    .symbols
+                    .insert::<TypeAliasSymbolId>(TypeAliasSymbol {
+                        name: param.text.clone(),
+                        ty: ty.id,
+                        defined_at: param.loc,
+                        ..Default::default()
+                    });
+                checker.current_scope().bind(param.text.clone(), id.into());
+                checker.types.add_alias(ty.id, param.text.clone());
+                param_types.push(ty);
+            }
+            (visit(checker, &param_types), param_types)
+        })
+    }
+
+    pub fn make_temp_variable(
+        &mut self,
+        at: Location,
+        value: &ir::Expression,
+    ) -> (ir::Identifier, VariableSymbolId) {
+        let ty = value.ty();
+        let symbol = self.make_temp_variable_with_type(at, value, ty);
+        let node = ir::Identifier {
+            loc: at,
+            symbol: symbol.into(),
+            ty,
+        };
+        (node, symbol)
+    }
+    pub fn make_temp_variable_with_type(
+        &mut self,
+        at: Location,
+        value: &ir::Expression,
+        ty: types::TypeId,
+    ) -> VariableSymbolId {
+        let name = format!("${}", generate_id());
+        let dependencies = self
+            .dependencies(value)
+            .filter_map(|i| i.symbol.as_variable())
+            .collect();
+        self.symbols.insert::<VariableSymbolId>(VariableSymbol {
+            name,
+            ty,
+            defined_at: at,
+            dependencies,
+            ..Default::default()
+        })
+    }
+}
+
+static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+fn generate_id() -> usize {
+    COUNTER.fetch_add(1, Ordering::Relaxed)
+}

@@ -1,11 +1,17 @@
 [package]
 name = "tine_cli"
-version = "0.0.1"
+version.workspace = true
 edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
 clap = { version = "4", features = ["derive"] }
 
-tine_core = { path = "../core" }
+tine_common = { path = "../common" }
+tine_parser = { path = "../parser" }
+tine_checker = { path = "../checker" }
 tine_transpiler = { path = "../transpiler" }
+
+[[bin]]
+name= "tine"
+path = "src/main.rs"

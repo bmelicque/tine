@@ -1,14 +1,14 @@
 use dom.render
-use signals.{state, derived$}
+use signals.{state, computed$}
 
-const counter = state(0)
-const suffix = derived$(if *counter != 1 { "s" } else { "" })
+let counter = state(0)
+let suffix = computed$(if *counter != 1 { "s" } else { "" })
 
 fn increment() {
-    *counter = *counter + 1
+    *counter += 1
 }
 
-const app = <div id="app">
+let app = <div id="app">
     <h1>A 'counter' example</h1>
     <button onclick={increment}>Click me!</button>
     <p>You clicked the button {counter} time{suffix}</p>

@@ -1,38 +1,61 @@
-use super::sort::Scope;
-use crate::codegen::utils::create_ident;
+use crate::{
+    codegen::{utils::ident_from_str, wellknown::WellknownSymbols},
+    ownership_analyser::{analyse_program, OwnershipAction, OwnershipMap},
+};
 use swc_common::{sync::Lrc, SourceMap, DUMMY_SP};
 use swc_ecma_ast as swc;
-use tine_core::{types, Location, ModuleId, ModulePath, Session, SymbolRef};
+use tine_common::module_path::ModulePath;
+use tine_ir as ir;
+use tine_symbols::{symbols::*, table::SymbolTable};
+use tine_types::{store::TypeStore, types};
 
-pub struct CodeGenerator<'sess> {
-    scope: Scope,
+pub struct CodeGenerator<'ty, 'sym> {
     _source_map: Lrc<SourceMap>,
-    current_block: Vec<Vec<swc::Stmt>>,
 
-    session: &'sess Session,
-    pub(crate) module: ModuleId,
+    pub types: &'ty TypeStore,
+    pub symbols: &'sym SymbolTable,
+    pub(super) wellknown: WellknownSymbols,
+    ownership: OwnershipMap,
+    pub(super) name: ModulePath,
+    /// Should the `break` statements be converted to `return` statements.
+    /// This is used when generating `for` and `for ... in` expressions, which are translated to IIFEs.
+    next_temp_id: usize,
+
+    // Used when replacing `break X` by `TARGET = X; break`
+    pub(crate) break_target: Option<swc::Ident>,
+
+    pub(crate) this_stack: Vec<VariableSymbolId>,
 }
 
-impl CodeGenerator<'_> {
-    pub fn new<'sess>(session: &'sess Session, module: ModuleId) -> CodeGenerator<'sess> {
+impl CodeGenerator<'_, '_> {
+    pub fn new<'ty, 'sym>(
+        name: ModulePath,
+        types: &'ty TypeStore,
+        symbols: &'sym SymbolTable,
+    ) -> CodeGenerator<'ty, 'sym> {
+        let mut wellknown = WellknownSymbols::default();
+        wellknown.init(symbols);
         CodeGenerator {
-            session,
-            module,
-            scope: Scope::new(),
             _source_map: Lrc::new(SourceMap::new(Default::default())),
-            current_block: vec![],
+
+            types,
+            symbols,
+            wellknown,
+            ownership: OwnershipMap::default(),
+            name,
+            next_temp_id: 0,
+            break_target: None,
+            this_stack: vec![],
         }
     }
 
-    pub fn program_to_swc_module(&mut self) -> swc::Module {
-        let node = self.session.get_ast(self.module);
-        self.enter_block();
-        let items: Vec<swc::ModuleItem> = self.with_scope(|s| {
-            node.items
-                .iter()
-                .flat_map(|item| s.item_to_swc(item))
-                .collect()
-        });
+    pub fn program_to_swc_module(&mut self, ir: ir::Program) -> swc::Module {
+        self.ownership = analyse_program(&ir, self.types, self.symbols);
+        let items: Vec<swc::ModuleItem> = ir
+            .statements
+            .into_iter()
+            .flat_map(|item| self.item_to_swc(item))
+            .collect();
 
         let internals_import =
             swc::ModuleItem::ModuleDecl(swc::ModuleDecl::Import(swc::ImportDecl {
@@ -40,12 +63,12 @@ impl CodeGenerator<'_> {
                 specifiers: vec![swc::ImportSpecifier::Namespace(
                     swc_ecma_ast::ImportStarAsSpecifier {
                         span: DUMMY_SP,
-                        local: create_ident("__"),
+                        local: ident_from_str("$"),
                     },
                 )],
                 src: Box::new(swc::Str {
                     span: DUMMY_SP,
-                    value: "internals".into(),
+                    value: "$internals".into(),
                     raw: None,
                 }),
                 type_only: false,
@@ -64,64 +87,57 @@ impl CodeGenerator<'_> {
         }
     }
 
-    pub fn get_filename(&self) -> &ModulePath {
-        let module = self.session.read_module(self.module);
-        &module.name
+    pub(super) fn symbol_name<I>(&self, id: I) -> &str
+    where
+        I: Into<SymbolId>,
+    {
+        self.symbols.get_symbol(id.into()).name()
     }
 
-    pub fn enter_block(&mut self) {
-        self.push_scope();
-        self.current_block.push(Vec::<swc::Stmt>::new());
-    }
-    pub fn exit_block(&mut self) -> Vec<swc::Stmt> {
-        self.drop_scope();
-        self.current_block.pop().unwrap()
-    }
-    pub fn push_to_block(&mut self, stmt: swc::Stmt) {
-        self.current_block.last_mut().unwrap().push(stmt);
+    pub(super) fn symbol_type_id<I>(&self, id: I) -> types::TypeId
+    where
+        I: Into<SymbolId>,
+    {
+        self.symbols.get_symbol(id.into()).ty()
     }
 
-    pub fn add_to_scope(&mut self, name: String, fields: Vec<String>) {
-        self.scope.register(name, fields);
-    }
-    pub fn push_scope(&mut self) {
-        self.scope.enter();
-    }
-    pub fn drop_scope(&mut self) {
-        self.scope.exit();
-    }
-    pub fn with_scope<F, T>(&mut self, predicate: F) -> T
+    pub(crate) fn with_break_target<F, T>(&mut self, target: swc::Ident, callback: F) -> T
     where
         F: FnOnce(&mut Self) -> T,
     {
-        self.scope.enter();
-        let res = predicate(self);
-        self.scope.exit();
-        res
-    }
-    pub fn find(&self, name: &String) -> Option<&Vec<String>> {
-        self.scope.find(name)
+        let mem = self.break_target.clone();
+        self.break_target = Some(target);
+        let ret = callback(self);
+        self.break_target = mem;
+        ret
     }
 
-    pub fn find_symbol(&self, loc: Location) -> Option<SymbolRef> {
-        self.session
-            .symbols()
-            .iter()
-            .find(|s| s.uses().into_iter().find(|&l| l == loc).is_some())
-            .cloned()
+    pub(crate) fn get_temp_id(&mut self) -> swc::Ident {
+        let ident = ident_from_str(&format!("$_{}", self.next_temp_id));
+        self.next_temp_id += 1;
+        ident
     }
 
-    pub fn get_reactive_dependencies(&self, loc: Location) -> Vec<SymbolRef> {
-        let Some(deps) = self.session.get_dependencies(loc) else {
-            return vec![];
-        };
-        deps.iter()
-            .filter(|dep| self.session.get_type(dep.borrow().get_type()).is_reactive())
-            .cloned()
-            .collect()
+    pub(crate) fn resolve(&self, ty: types::TypeId) -> &types::Type {
+        self.types.get(ty)
     }
 
-    pub fn get_type_at(&self, loc: Location) -> Option<types::Type> {
-        self.session.get_type_at(loc)
+    pub(crate) fn is_current_this(&self, expr: &ir::Expression) -> bool {
+        match expr {
+            ir::Expression::Identifier(id) => {
+                Some(id.symbol) == self.this_stack.last().copied().map(Into::into)
+            }
+            _ => false,
+        }
+    }
+
+    pub(crate) fn identifier_ownership(&self, id: &ir::Identifier) -> OwnershipAction {
+        self.ownership.action_for(id.loc, OwnershipAction::Clone)
+    }
+    pub(crate) fn call_ownership(&self, call: &ir::CallExpression) -> OwnershipAction {
+        self.ownership.action_for(call.loc, OwnershipAction::Move)
+    }
+    pub(crate) fn method_ownership(&self, call: &ir::MethodExpression) -> OwnershipAction {
+        self.ownership.action_for(call.loc, OwnershipAction::Move)
     }
 }

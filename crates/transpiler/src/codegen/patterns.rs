@@ -1,307 +1,213 @@
 use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
+use tine_ir as ir;
+use tine_symbols::symbols::VariantSymbolId;
 
-use tine_core::{ast, Location, Span};
-
-use super::{
-    utils::{create_ident, true_lit},
+use crate::codegen::{
+    statements::types::enums::TAG_SYMBOL,
+    utils::{create_num, ident_from_str, index, member},
     CodeGenerator,
 };
 
-impl CodeGenerator<'_> {
-    /// Used to build a destructuring expression, like the `{ name }` part of `const { name } = user;`
-    pub fn pattern_to_swc(&mut self, node: &ast::Pattern) -> swc::Pat {
-        match node {
-            ast::Pattern::Invalid { .. } => panic!(),
-            ast::Pattern::Identifier(pattern) => self.identifier_pattern_to_swc(pattern),
-            ast::Pattern::Literal(pattern) => {
-                // TODO: this is probably useless (investigate)
-                swc::Pat::Expr(self.literal_pattern_to_swc(pattern).into())
-            }
-            ast::Pattern::Constructor(pattern) => match &pattern.body {
-                Some(ast::ConstructorPatternBody::Struct(pattern)) => {
-                    self.struct_pattern_to_swc(&pattern.fields).into()
-                }
-                Some(ast::ConstructorPatternBody::Tuple(pattern)) => {
-                    self.tuple_pattern_to_swc(pattern).into()
-                }
-                None => swc::Pat::Ident(create_ident("__").into()),
-            },
-            ast::Pattern::Tuple(pattern) => self.tuple_pattern_to_swc(pattern).into(),
-        }
-    }
+pub struct PatternResult {
+    pub test: Option<swc::Expr>,
+    pub decl: Option<swc::Pat>,
+}
 
-    pub fn identifier_pattern_to_swc(&mut self, node: &ast::IdentifierPattern) -> swc::Pat {
-        swc::Pat::Ident(swc::BindingIdent {
-            id: create_ident(node.as_str()),
-            type_ann: None,
-        })
-    }
-
-    fn literal_pattern_to_swc(&mut self, node: &ast::LiteralPattern) -> swc::Lit {
-        match node {
-            ast::LiteralPattern::Boolean(b) => swc::Lit::Bool(swc::Bool {
-                span: DUMMY_SP,
-                value: b.value,
-            }),
-            ast::LiteralPattern::Float(n) => swc::Lit::Num(swc::Number {
-                span: DUMMY_SP,
-                value: *n.value,
-                raw: None,
-            }),
-            ast::LiteralPattern::Integer(n) => swc::Lit::Num(swc::Number {
-                span: DUMMY_SP,
-                value: n.value as f64,
-                raw: None,
-            }),
-            ast::LiteralPattern::String(s) => swc::Lit::Str(swc::Str {
-                span: DUMMY_SP,
-                value: s.as_str().into(),
-                raw: None,
-            }),
-        }
-    }
-
-    pub fn struct_pattern_to_swc(
-        &mut self,
-        fields: &Vec<ast::StructPatternField>,
-    ) -> swc::ObjectPat {
-        swc::ObjectPat {
-            span: DUMMY_SP,
-            props: fields
-                .into_iter()
-                .filter(|field| match field.pattern {
-                    Some(ast::Pattern::Literal(_)) => false,
-                    _ => true,
-                })
-                .map(|field| self.struct_pattern_field_to_swc(field))
-                .collect(),
-            optional: false,
-            type_ann: None,
-        }
-    }
-
-    fn struct_pattern_field_to_swc(
-        &mut self,
-        node: &ast::StructPatternField,
-    ) -> swc::ObjectPatProp {
-        let key = create_ident(node.identifier.as_ref().unwrap().as_str());
-        match &node.pattern {
-            Some(pattern) => swc::KeyValuePatProp {
-                key: key.into(),
-                value: Box::new(self.pattern_to_swc(pattern)),
-            }
-            .into(),
-            None => swc::AssignPatProp {
-                span: DUMMY_SP,
-                key: key.into(),
-                value: None,
-            }
-            .into(),
-        }
-    }
-
-    pub fn tuple_pattern_to_swc(&mut self, node: &ast::TuplePattern) -> swc::ArrayPat {
-        swc::ArrayPat {
-            span: DUMMY_SP,
-            elems: node
-                .elements
-                .iter()
-                .filter(|element| !element.is_refutable())
-                .map(|element| Some(self.pattern_to_swc(element)))
-                .collect(),
-            optional: false,
-            type_ann: None,
-        }
-    }
-
-    /// Create the JS test expression that will validate if the pattern is matched.
-    /// Also provide needed JS declarations, resulting from said test.
-    ///
-    /// For example: `if const (0, value) = tuple { ... }` will:
-    /// - check that `tuple[0] === 0`
-    /// - declare `const value = tuple[0]`
-    /// For a result being: `if (tuple[0] === 0) { let value = tuple[0]; ... }`
-    pub fn pattern_to_swc_test(
-        &mut self,
-        pattern: &ast::Pattern,
-        against: &ast::Expression,
-    ) -> swc::Expr {
+impl CodeGenerator<'_, '_> {
+    /// `against` should be clonable! no calls, because they might end up evaluated twice.
+    pub fn handle_pattern(&mut self, pattern: ir::Pattern, against: swc::Expr) -> PatternResult {
+        use ir::Pattern::*;
         match pattern {
-            ast::Pattern::Invalid { .. } => panic!(),
-            ast::Pattern::Identifier(_) => true_lit(),
-            ast::Pattern::Literal(l) => self.literal_pattern_to_swc_test(l, against),
-            ast::Pattern::Tuple(t) => self.tuple_pattern_to_swc_test(t, against),
-            ast::Pattern::Constructor(c) => match &c.constructor {
-                ast::Constructor::Variant(variant) => {
-                    self.variant_pattern_to_swc_test(c, variant, against)
-                }
-                _ => match &c.body {
-                    Some(ast::ConstructorPatternBody::Struct(s)) => {
-                        self.struct_pattern_to_swc_test(&s.fields, against)
-                    }
-                    Some(ast::ConstructorPatternBody::Tuple(t)) => {
-                        self.tuple_pattern_to_swc_test(t, against)
-                    }
-                    None => true_lit(),
-                },
-            },
+            Boolean(p) => self.handle_boolean_pattern(p, against),
+            Float(p) => self.handle_float_pattern(p, against),
+            Integer(p) => self.handle_int_pattern(p, against),
+            String(p) => self.handle_string_pattern(p, against),
+
+            Call(p) => self.handle_call_pattern(p, against),
+            Identifier(p) => self.handle_identifier_pattern(p),
+            Struct(p) => self.handle_struct_pattern(p, against),
+            Tuple(p) => self.handle_tuple_pattern(p, against),
         }
     }
 
-    fn literal_pattern_to_swc_test(
+    fn handle_primitive_pattern(
         &mut self,
-        pattern: &ast::LiteralPattern,
-        against: &ast::Expression,
-    ) -> swc::Expr {
-        swc::Expr::Bin(swc::BinExpr {
+        pattern: swc::Expr,
+        against: swc::Expr,
+    ) -> PatternResult {
+        let test = Some(swc::Expr::Bin(swc::BinExpr {
             span: DUMMY_SP,
             op: swc::BinaryOp::EqEqEq,
-            left: Box::new(self.expr_to_swc(against)),
-            right: Box::new(self.literal_pattern_to_swc(pattern).into()),
-        })
+            left: Box::new(against),
+            right: Box::new(pattern),
+        }));
+        PatternResult { test, decl: None }
+    }
+    fn handle_boolean_pattern(
+        &mut self,
+        pattern: ir::BooleanLiteral,
+        against: swc::Expr,
+    ) -> PatternResult {
+        let right = self.handle_boolean_literal(pattern);
+        self.handle_primitive_pattern(right, against)
+    }
+    fn handle_float_pattern(
+        &mut self,
+        pattern: ir::FloatLiteral,
+        against: swc::Expr,
+    ) -> PatternResult {
+        let right = self.handle_float_literal(pattern);
+        self.handle_primitive_pattern(right, against)
+    }
+    fn handle_int_pattern(&mut self, pattern: ir::IntLiteral, against: swc::Expr) -> PatternResult {
+        let right = self.handle_int_literal(pattern);
+        self.handle_primitive_pattern(right, against)
+    }
+    fn handle_string_pattern(
+        &mut self,
+        pattern: ir::StringLiteral,
+        against: swc::Expr,
+    ) -> PatternResult {
+        let right = self.handle_string_literal(pattern).into();
+        self.handle_primitive_pattern(right, against)
     }
 
-    fn struct_pattern_to_swc_test(
+    fn handle_call_pattern(
         &mut self,
-        fields: &Vec<ast::StructPatternField>,
-        against: &ast::Expression,
-    ) -> swc::Expr {
-        let tests: Vec<swc::Expr> = fields
-            .iter()
-            .filter(|field| field.pattern.is_some())
-            .map(|field| {
-                let against = ast::MemberExpression {
-                    loc: against.loc(),
-                    object: Some(Box::new(against.clone())),
-                    prop: Some(ast::MemberProp::FieldName(
-                        field.identifier.as_ref().unwrap().clone(),
-                    )),
-                };
-                self.pattern_to_swc_test(&field.pattern.as_ref().unwrap(), &against.into())
-            })
-            .collect();
-        let Some(test) = tests.first() else {
-            return true_lit();
-        };
-        let mut test = test.clone();
-        for t in tests.into_iter().skip(1) {
-            test = swc::Expr::Bin(swc::BinExpr {
-                span: DUMMY_SP,
-                op: swc::BinaryOp::LogicalAnd,
-                left: Box::new(test),
-                right: Box::new(t),
-            });
-        }
-        test
-    }
-
-    fn tuple_pattern_to_swc_test(
-        &mut self,
-        pattern: &ast::TuplePattern,
-        against: &ast::Expression,
-    ) -> swc::Expr {
-        self.tuple_to_swc_test_helper(pattern, |i| {
-            ast::MemberExpression {
-                loc: against.loc(),
-                object: Some(Box::new(against.clone())),
-                prop: Some(ast::MemberProp::Index(ast::IntLiteral {
-                    loc: against.loc(),
-                    value: i as i64,
-                })),
-            }
-            .into()
-        })
-    }
-
-    fn variant_pattern_to_swc_test(
-        &mut self,
-        pattern: &ast::ConstructorPattern,
-        variant: &ast::VariantConstructor,
-        against: &ast::Expression,
-    ) -> swc::Expr {
-        // TODO: new Enum(name, ...) => ty.__ === name
-        let tag_test = swc::Expr::Bin(swc::BinExpr {
-            span: DUMMY_SP,
-            op: swc::BinaryOp::EqEqEq,
-            left: Box::new(swc::Expr::Member(swc::MemberExpr {
-                span: DUMMY_SP,
-                obj: Box::new(self.expr_to_swc(against)),
-                prop: swc::MemberProp::Ident(create_ident("__").into()),
-            })),
-            right: Box::new(swc::Expr::Lit(swc::Lit::Str(swc::Str {
-                span: DUMMY_SP,
-                value: variant.variant_name.as_ref().unwrap().as_str().into(),
-                raw: None,
-            }))),
-        });
-
-        let Some(ref body) = pattern.body else {
-            return tag_test;
-        };
-
-        let body_test = match body {
-            ast::ConstructorPatternBody::Struct(st) => {
-                self.struct_pattern_to_swc_test(&st.fields, against)
-            }
-            ast::ConstructorPatternBody::Tuple(tuple) => {
-                self.tuple_variant_to_swc_test(&tuple, against)
-            }
-        };
-
-        swc::Expr::Bin(swc::BinExpr {
-            span: DUMMY_SP,
-            op: swc::BinaryOp::LogicalAnd,
-            left: Box::new(tag_test),
-            right: Box::new(body_test),
-        })
-    }
-
-    fn tuple_variant_to_swc_test(
-        &mut self,
-        pattern: &ast::TuplePattern,
-        against: &ast::Expression,
-    ) -> swc::Expr {
-        let module = self.module;
-        self.tuple_to_swc_test_helper(pattern, |i| {
-            let id = format!("_{}", i);
-            let leaked_id: &'static str = Box::leak(id.into_boxed_str());
-            ast::MemberExpression {
-                loc: against.loc(),
-                object: Some(Box::new(against.clone())),
-                prop: Some(ast::MemberProp::FieldName(ast::Identifier {
-                    loc: Location::new(module, Span::new(0, leaked_id.len() as u32)),
-                    text: leaked_id.to_string(),
-                })),
-            }
-            .into()
-        })
-    }
-
-    fn tuple_to_swc_test_helper(
-        &mut self,
-        pattern: &ast::TuplePattern,
-        mut get_sub_against: impl FnMut(usize) -> ast::Expression,
-    ) -> swc::Expr {
-        let tests: Vec<swc::Expr> = pattern
-            .elements
-            .iter()
+        pattern: ir::CallPattern,
+        against: swc::Expr,
+    ) -> PatternResult {
+        let (mut tests, decls): (Vec<_>, Vec<_>) = pattern
+            .arguments
+            .into_iter()
             .enumerate()
-            .filter(|(_, el)| !el.is_identifier())
-            .map(|(i, el)| self.pattern_to_swc_test(el, &get_sub_against(i)))
-            .collect();
-        let Some(test) = tests.first() else {
-            return true_lit();
-        };
-        let mut test = test.clone();
-        for t in tests.into_iter().skip(1) {
-            test = swc::Expr::Bin(swc::BinExpr {
-                span: DUMMY_SP,
-                op: swc::BinaryOp::LogicalAnd,
-                left: Box::new(test),
-                right: Box::new(t),
-            });
-        }
-        test
+            .map(|(i, e)| self.handle_pattern(e, member(against.clone(), &format!("_{i}")).into()))
+            .map(|r| (r.test, r.decl))
+            .unzip();
+
+        let variant = self.get_variant_id(pattern.callee.1);
+        let variant_test = swc::Expr::Bin(swc::BinExpr {
+            span: DUMMY_SP,
+            op: swc::BinaryOp::EqEqEq,
+            left: Box::new(member(against, TAG_SYMBOL).into()),
+            right: Box::new(create_num(variant as f64)),
+        });
+        tests.insert(0, Some(variant_test));
+
+        let test = merge_tests(tests);
+        let decl = decls
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+            .map(pats_to_call_body)
+            .map(Into::into);
+
+        PatternResult { test, decl }
+    }
+    fn get_variant_id(&self, variant: VariantSymbolId) -> usize {
+        let owner = self.symbols.get(variant).owner;
+        let variants = &self.symbols.get(owner).variants;
+        variants.iter().position(|&v| v == variant).unwrap()
+    }
+
+    fn handle_identifier_pattern(&mut self, pattern: ir::Identifier) -> PatternResult {
+        let test = None;
+        let name = self.symbols.get_symbol(pattern.symbol).name();
+        let decl = Some(ident_from_str(name).into());
+        PatternResult { test, decl }
+    }
+
+    fn handle_struct_pattern(
+        &mut self,
+        pattern: ir::StructPattern,
+        against: swc::Expr,
+    ) -> PatternResult {
+        let (tests, fields): (Vec<_>, Vec<_>) = pattern
+            .fields
+            .into_iter()
+            .map(|field| self.handle_struct_pattern_field(field, against.clone()))
+            .unzip();
+        let test = merge_tests(tests);
+        let decl = fields
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+            .map(|props| swc::Pat::Object(props_to_object(props)));
+        PatternResult { test, decl }
+    }
+    fn handle_struct_pattern_field(
+        &mut self,
+        field: ir::StructPatternField,
+        against_object: swc::Expr,
+    ) -> (Option<swc::Expr>, Option<swc::ObjectPatProp>) {
+        let name = self.symbol_name(field.identifier.symbol).to_owned();
+        let pat = self.handle_pattern(field.pattern, member(against_object, &name).into());
+        let prop = pat.decl.map(|value| key_value(&name, value).into());
+        (pat.test, prop)
+    }
+
+    fn handle_tuple_pattern(
+        &mut self,
+        pattern: ir::TuplePattern,
+        against: swc::Expr,
+    ) -> PatternResult {
+        let (tests, decls): (Vec<_>, Vec<_>) = pattern
+            .elements
+            .into_iter()
+            .enumerate()
+            .map(|(i, e)| self.handle_pattern(e, index(against.clone(), i).into()))
+            .map(|r| (r.test, r.decl))
+            .unzip();
+
+        let test = merge_tests(tests);
+        let decl = decls
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+            .map(|pats| swc::Pat::Array(pats_to_array(pats)));
+        PatternResult { test, decl }
+    }
+}
+
+fn merge_tests(tests: Vec<Option<swc::Expr>>) -> Option<swc::Expr> {
+    tests.into_iter().flatten().reduce(land)
+}
+fn land(left: swc::Expr, right: swc::Expr) -> swc::Expr {
+    swc::Expr::Bin(swc::BinExpr {
+        span: DUMMY_SP,
+        op: swc::BinaryOp::LogicalAnd,
+        left: Box::new(left),
+        right: Box::new(right),
+    })
+}
+
+fn key_value(key: &str, value: swc::Pat) -> swc::KeyValuePatProp {
+    swc::KeyValuePatProp {
+        key: swc::PropName::Ident(ident_from_str(key).into()),
+        value: Box::new(value),
+    }
+}
+
+fn pats_to_call_body(pats: Vec<swc::Pat>) -> swc::ObjectPat {
+    let props = pats
+        .into_iter()
+        .enumerate()
+        .map(|(i, p)| key_value(&format!("_{i}"), p).into())
+        .collect::<Vec<_>>();
+    props_to_object(props)
+}
+
+fn props_to_object(props: Vec<swc::ObjectPatProp>) -> swc::ObjectPat {
+    swc::ObjectPat {
+        span: DUMMY_SP,
+        props,
+        optional: false,
+        type_ann: None,
+    }
+}
+fn pats_to_array(pats: Vec<swc::Pat>) -> swc::ArrayPat {
+    swc::ArrayPat {
+        span: DUMMY_SP,
+        elems: pats.into_iter().map(Some).collect(),
+        optional: false,
+        type_ann: None,
     }
 }

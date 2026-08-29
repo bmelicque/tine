@@ -1,4 +1,4 @@
-import * as __ from "internals";
+import * as __ from "$internals";
 
 /**
  * Insert an Element within the first node that matches the given CSS selector

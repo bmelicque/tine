@@ -1,54 +1,33 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
-use tine_core::{
-    types::{FunctionType, GenericType, Type, TypeId},
-    ModuleId, Source, SymbolData, SymbolKind, SymbolRef, TypeSymbolKind,
-};
-use tower_lsp::lsp_types::{SemanticToken, SemanticTokenModifier, SemanticTokenType};
+use tine_common::{module_path::ModuleId, sources::Source};
+use tine_symbols::symbols::*;
+use tine_types::types::{Type, TypeId};
+use tower_lsp::lsp_types::{SemanticToken, SemanticTokenType};
 
 use crate::Backend;
 
-#[derive(Debug, Clone)]
-pub struct ServerSymbol(pub(crate) Arc<SymbolData>);
-
-impl From<SymbolRef> for ServerSymbol {
-    fn from(value: SymbolRef) -> Self {
-        ServerSymbol(Arc::new(value.borrow().clone()))
-    }
-}
-impl From<&SymbolRef> for ServerSymbol {
-    fn from(value: &SymbolRef) -> Self {
-        ServerSymbol(Arc::new(value.borrow().clone()))
-    }
-}
-
 impl Backend {
     pub fn tokens_to_semantic(&self, id: ModuleId, src: &Source) -> Vec<SemanticToken> {
+        let symbols = self.symbols();
         let mut data = Vec::new();
         let mut map = HashMap::new();
-        let symbols = self.session.read().unwrap().symbols();
-        for symbol in &symbols {
-            let symbol = ServerSymbol::from(symbol);
-            map.insert(symbol.0.defined_at.span(), symbol.clone());
+        for symbol_id in symbols.all_ids() {
+            let symbol = symbols.get_symbol(symbol_id);
+            let defined_at = symbol.defined_at();
+            if defined_at.module() == id {
+                map.insert(symbol.defined_at().span(), symbol_id);
+            }
             symbol
-                .0
-                .access
                 .uses()
                 .filter(|l| l.module() == id)
                 .map(|l| l.span())
                 .for_each(|s| {
-                    map.insert(s, symbol.clone());
+                    map.insert(s, symbol_id);
                 });
         }
         let mut tokens = map.into_iter().collect::<Vec<_>>();
         tokens.sort_by_key(|(span, _)| *span);
-
-        let readonly_index = self
-            .semantic_legend
-            .token_modifiers
-            .iter()
-            .position(|m| *m == SemanticTokenModifier::READONLY)
-            .unwrap();
 
         let mut prev_line = 0;
         let mut prev_col = 0;
@@ -71,25 +50,31 @@ impl Backend {
                 continue;
             };
 
-            let type_name = match symbol.0.kind {
-                SymbolKind::Type { .. } => SemanticTokenType::TYPE,
-                SymbolKind::Value { .. } => {
-                    if let Type::Function(_) = self.get_type(symbol.0.ty) {
+            let type_name = match symbol {
+                SymbolId::Enum(_)
+                | SymbolId::Primitive(_)
+                | SymbolId::TypeAlias(_)
+                | SymbolId::Struct(_) => SemanticTokenType::TYPE,
+                SymbolId::Variable(s) => {
+                    let ty = symbols.get(s).ty;
+                    if let Type::Function(_) = self.get_type(ty) {
                         SemanticTokenType::FUNCTION
                     } else {
                         SemanticTokenType::VARIABLE
                     }
                 }
-                SymbolKind::Member { .. } => {
-                    if let Type::Function(_) = self.get_type(symbol.0.ty) {
+                SymbolId::Member(s) => {
+                    let ty = symbols.get(s).ty;
+                    if let Type::Function(_) = self.get_type(ty) {
                         SemanticTokenType::METHOD
                     } else {
                         SemanticTokenType::PROPERTY
                     }
                 }
-                SymbolKind::Function { .. } => SemanticTokenType::FUNCTION,
-                SymbolKind::Method { .. } => SemanticTokenType::METHOD,
-                SymbolKind::Constructor { .. } => SemanticTokenType::ENUM_MEMBER,
+                SymbolId::Function(_) => SemanticTokenType::FUNCTION,
+                SymbolId::Method(_) => SemanticTokenType::METHOD,
+                SymbolId::Trait(_) => SemanticTokenType::INTERFACE,
+                SymbolId::Variant(_) => SemanticTokenType::ENUM_MEMBER,
             };
             let token_type_index = self
                 .semantic_legend
@@ -98,18 +83,12 @@ impl Backend {
                 .position(|s| *s == type_name)
                 .unwrap_or(0); // fallback
 
-            let modifier_mask = if !symbol.0.is_mutable() {
-                1 << readonly_index
-            } else {
-                0
-            };
-
             data.push(SemanticToken {
                 delta_line: delta_line as u32,
                 delta_start: delta_start as u32,
                 length: length as u32,
                 token_type: token_type_index as u32,
-                token_modifiers_bitset: modifier_mask,
+                token_modifiers_bitset: 0,
             });
 
             prev_line = start_line;
@@ -120,117 +99,7 @@ impl Backend {
     }
 
     fn get_type(&self, id: TypeId) -> Type {
-        let session = self.session.read().unwrap();
-        let type_store = session.types();
+        let type_store = self.types();
         type_store.get(id).clone()
-    }
-
-    pub fn display_signature(&self, symbol: &ServerSymbol) -> String {
-        let session = self.session.read().unwrap();
-        let name = &symbol.0.name;
-        let ty = symbol.0.ty;
-        match &symbol.0.kind {
-            SymbolKind::Function { param_names } => {
-                eprintln!("function symbol");
-                let params = self.display_function_params(ty, param_names);
-                eprintln!("got params: {}", &params);
-                let ty = session.types().get(ty).to_owned();
-                eprintln!("got type: {:?}", ty);
-                let return_type = match ty {
-                    Type::Function(FunctionType {
-                        ref return_type, ..
-                    }) => *return_type,
-                    Type::Generic(GenericType { ref definition, .. }) => {
-                        let definition = session.types().get(*definition).to_owned();
-                        match definition {
-                            Type::Function(FunctionType {
-                                ref return_type, ..
-                            }) => *return_type,
-                            _ => panic!(),
-                        }
-                    }
-                    _ => panic!(),
-                };
-                eprintln!("got return type id");
-                let ty = session.types().get(return_type).to_owned();
-                eprintln!("got return type");
-                match ty {
-                    Type::Unit => format!("fn {}({})", name, params),
-                    _ => format!(
-                        "fn {}({}) {}",
-                        name,
-                        params,
-                        session.types().display_type(return_type)
-                    ),
-                }
-            }
-            SymbolKind::Type { kind, .. } => {
-                let ty = session.types().display_raw_type(ty);
-                match kind {
-                    TypeSymbolKind::Alias => format!("type {} = {}", name, ty),
-                    TypeSymbolKind::Enum => format!("enum {} {}", name, ty),
-                    TypeSymbolKind::Struct => format!("struct {} {}", name, ty),
-                }
-            }
-            SymbolKind::Value { mutable } => {
-                let ty = session.types().display_type(ty);
-                let operator = if *mutable { "var" } else { "const" };
-                format!("{} {} {}", operator, name, ty)
-            }
-            SymbolKind::Member { owner } => {
-                let owner_name = &owner.borrow().name;
-                let member_name = name;
-                let displayed_type = session.types().display_type(ty);
-                format!("{}.{} {}", owner_name, member_name, displayed_type)
-            }
-            SymbolKind::Method { owner, param_names } => {
-                let owner_name = &owner.borrow().name;
-                let method_name = name;
-                let params = self.display_function_params(ty, param_names);
-                let return_type = match session.types().get(ty) {
-                    Type::Function(FunctionType {
-                        ref return_type, ..
-                    }) => *return_type,
-                    _ => panic!(),
-                };
-                match session.types().get(return_type) {
-                    Type::Unit => format!("fn {}.{}({})", owner_name, method_name, params),
-                    _ => format!(
-                        "fn {}.{}({}) {}",
-                        owner_name,
-                        method_name,
-                        params,
-                        session.types().display_type(return_type)
-                    ),
-                }
-            }
-            SymbolKind::Constructor { owner } => {
-                let owner_name = &owner.borrow().name;
-                // TODO: FIXME:
-                format!("{}.{}", owner_name, name)
-            }
-        }
-    }
-
-    fn display_function_params(&self, ty: TypeId, names: &Vec<String>) -> String {
-        let session = self.session.read().unwrap();
-        let store = session.types();
-        let f = match store.get(ty) {
-            Type::Function(f) => f,
-            Type::Generic(g) => match store.get(g.definition) {
-                Type::Function(f) => f,
-                _ => panic!("expected function type"),
-            },
-            _ => panic!("expected function type"),
-        };
-        f.params
-            .iter()
-            .zip(names)
-            .map(|(ty, name)| {
-                let ty = store.display_type(*ty);
-                format!("{} {}", name, ty)
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
     }
 }

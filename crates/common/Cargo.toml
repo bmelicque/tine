@@ -1,0 +1,8 @@
+[package]
+name = "tine_common"
+version.workspace = true
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+tine_macros = { path = "../macros" }

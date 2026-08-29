@@ -3,22 +3,22 @@
     "name": "Tine",
     "patterns": [
         {
+            "include": "#keywords"
+        },
+        {
+            "include": "#functions"
+        },
+        {
             "include": "#xml-element"
         },
         {
             "include": "#xml-children"
         },
         {
-            "include": "#keywords"
-        },
-        {
             "include": "#types"
         },
         {
             "include": "#booleans"
-        },
-        {
-            "include": "#functions"
         },
         {
             "include": "#identifiers"
@@ -94,22 +94,6 @@
             "match": "(?<=>).*?(?=<\/)",
             "name": "text.tine"
         },
-        "keywords": {
-            "patterns": [
-                {
-                    "name": "keyword.control.tine",
-                    "match": "\\b(if|else|for|in|return|break|continue|match|use)\\b"
-                },
-                {
-                    "name": "keyword.declaration.variable.tine",
-                    "match": "\\b(const|var)\\b"
-                },
-                {
-                    "name": "keyword.declaration.function.tine",
-                    "match": "\\b(fn)\\b"
-                }
-            ]
-        },
         "types": {
             "patterns": [
                 {
@@ -129,12 +113,25 @@
         "functions": {
             "patterns": [
                 {
-                    "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*:(:|=)\\s*(?=\\(.*?\\)\\s*=>)",
-                    "captures": {
+                    "begin": "(?<=\\bfn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+                    "beginCaptures": {
                         "1": {
                             "name": "entity.name.function.tine"
                         }
-                    }
+                    },
+                    "end": "(?=\\()",
+                    "patterns": [
+                        {
+                            "begin": "<",
+                            "end": ">",
+                            "patterns": [
+                                {
+                                    "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b",
+                                    "name": "entity.name.type.tine"
+                                }
+                            ]
+                        }
+                    ]
                 },
                 {
                     "match": "\\b([a-zA-Z_][a-zA-Z0-9_$]*)\\s*(?=\\()",
@@ -143,6 +140,30 @@
                             "name": "entity.name.function.call.tine"
                         }
                     }
+                }
+            ]
+        },
+        "keywords": {
+            "patterns": [
+                {
+                    "name": "keyword.control.tine",
+                    "match": "\\b(if|else|for|in|return|break|continue|match|use)\\b"
+                },
+                {
+                    "name": "keyword.declaration.variable.tine",
+                    "match": "\\b(let|mut)\\b"
+                },
+                {
+                    "name": "keyword.declaration.type.tine",
+                    "match": "\\b(struct|enum)\\b"
+                },
+                {
+                    "name": "keyword.declaration.function.tine",
+                    "match": "\\b(fn|impl|static)\\b"
+                },
+                {
+                    "name": "keyword.modifier.visibility.tine",
+                    "match": "\\b(pub)\\b"
                 }
             ]
         },

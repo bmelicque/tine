@@ -1,0 +1,8 @@
+[book]
+title = "The Tine Programming Language"
+authors = ["bmelicque"]
+language = "en"
+
+[output.html]
+additional-js = ["theme/highlight-tine.js"]
+git-repository-url = "https://github.com/bmelicque/tine"

@@ -2,13 +2,19 @@
   "name": "vscode-extension",
   "displayName": "Tine",
   "description": "VS Code support for Tine",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "publisher": "bmelicque",
   "engines": {
     "vscode": "^1.105.0"
   },
   "main": "./out/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "tine.restartServer",
+        "title": "Tine: Restart Language Server"
+      }
+    ],
     "languages": [
       {
         "id": "tine",

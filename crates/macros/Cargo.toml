@@ -1,0 +1,13 @@
+[package]
+name = "tine_macros"
+version.workspace = true
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"
+convert_case = "0.7"

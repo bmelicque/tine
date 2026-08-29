@@ -1,314 +1,498 @@
-mod calls;
+mod binary;
+mod block;
+mod dom;
 mod ifs;
-mod member;
 mod unary;
+mod utils;
 
-use super::{
-    utils::{create_ident, undefined},
-    CodeGenerator,
+use super::{utils::ident_from_str, CodeGenerator};
+use crate::{
+    codegen::{
+        expressions::utils::{assign_if_last_expressions, ident_to_declaration},
+        statements::types::enums::TAG_SYMBOL,
+        utils::{
+            call, create_block_stmt, create_str, internal_construct, internal_method_call, member,
+        },
+    },
+    ownership_analyser::OwnershipAction,
 };
-use crate::codegen::utils::{can_block_be_inlined, create_block_stmt, create_number, AssignTo};
-use rand::{distr::Alphanumeric, Rng};
-use swc_common::{SyntaxContext, DUMMY_SP};
+use swc_common::DUMMY_SP;
 use swc_ecma_ast as swc;
-use tine_core::{ast, types};
+use tine_checker::substitutions::Substitutions;
+use tine_common::locations::Location;
+use tine_ir::{self as ir, Typed};
+use tine_symbols::symbols::*;
+use tine_types::types;
 
-impl CodeGenerator<'_> {
-    pub fn expr_to_swc(&mut self, node: &ast::Expression) -> swc::Expr {
+pub struct ExpressionResult {
+    /// All the the statements needed to be ran before actually evaluating the expression
+    pub prelim_stmts: Vec<swc::Stmt>,
+    /// The actual expression
+    pub expr: swc::Expr,
+}
+impl ExpressionResult {
+    pub fn map<F>(mut self, f: F) -> Self
+    where
+        F: FnOnce(swc::Expr) -> swc::Expr,
+    {
+        self.expr = f(self.expr);
+        self
+    }
+}
+impl<T> From<T> for ExpressionResult
+where
+    T: Into<swc::Expr>,
+{
+    fn from(value: T) -> Self {
+        Self {
+            prelim_stmts: vec![],
+            expr: value.into(),
+        }
+    }
+}
+
+impl CodeGenerator<'_, '_> {
+    pub fn handle_expression(&mut self, node: ir::Expression) -> ExpressionResult {
+        use ir::Expression::*;
         match node {
-            ast::Expression::Array(node) => self.array_to_swc(node).into(),
-            ast::Expression::Binary(node) => self.binary_expression_to_swc_expr(node),
-            ast::Expression::BooleanLiteral(node) => swc::Lit::Bool(swc::Bool {
-                span: DUMMY_SP,
-                value: node.value,
-            })
-            .into(),
-            ast::Expression::Block(node) => self.block_expr_to_swc(node).into(),
-            ast::Expression::Call(node) => self.call_expr_to_swc(node).into(),
-            ast::Expression::ConstructorLiteral(node) => self.constructor_literal_to_swc_expr(node),
-            ast::Expression::Element(node) => self.element_expression_to_swc(node),
-            ast::Expression::FloatLiteral(node) => swc::Expr::Lit(swc::Lit::Num(swc::Number {
-                span: DUMMY_SP,
-                value: *node.value,
-                raw: None,
-            })),
-            ast::Expression::Function(node) => self.function_expression_to_swc(node).into(),
-            ast::Expression::Identifier(node) => self.ident_to_swc(node).into(),
-            ast::Expression::If(node) => self.if_to_swc_expr(node).into(),
-            ast::Expression::IfDecl(node) => self.if_decl_to_swc_expr(node).into(),
-            ast::Expression::Invalid(_) => {
-                unreachable!("Invalid input should've been detected during analysis phase")
-            }
-            ast::Expression::IntLiteral(node) => swc::Expr::Lit(swc::Lit::Num(swc::Number {
-                span: DUMMY_SP,
-                value: node.value as f64,
-                raw: None,
-            })),
-            ast::Expression::Loop(node) => self.loop_to_swc_expr(node).into(),
-            ast::Expression::Match(node) => self.match_to_swc_expr(node).into(),
-            ast::Expression::Member(node) => self.member_expr_to_swc(node).into(),
-            ast::Expression::Unary(node) => self.unary_expression_to_swc_expr(node),
-            ast::Expression::StringLiteral(node) => swc::Lit::Str(swc::Str {
-                span: DUMMY_SP,
-                value: node.as_str().into(),
-                raw: None,
-            })
-            .into(),
-            ast::Expression::Tuple(node) => self.tuple_to_swc(node).into(),
+            Array(a) => self.handle_array(a.elements),
+            Binary(b) => self.handle_binary_expression(b),
+            BooleanLiteral(b) => ExpressionResult::from(self.handle_boolean_literal(b)),
+            Block(b) => self.handle_block(b),
+            Call(c) => self.handle_call(c),
+            Element(e) => self.handle_element_expression(e),
+            FloatLiteral(f) => ExpressionResult::from(self.handle_float_literal(f)),
+            For(f) => self.handle_for_expression(f),
+            ForIn(f) => self.handle_for_in_expression(f),
+            Function(f) => self.handle_function_expression(f).into(),
+            Identifier(i) => self.handle_identifier(i).into(),
+            If(i) => self.handle_if_expression(i),
+            Index(i) => self.handle_index_expression(i),
+            IntLiteral(i) => ExpressionResult::from(self.handle_int_literal(i)),
+            IntrinsicCall(i) => self.handle_intrinsic_call(i),
+            IntrinsicConstruct(i) => self.handle_intrinsic_construct(i),
+            Match(m) => self.handle_match_expression(m),
+            Member(m) => self.handle_member_expression(m),
+            Method(m) => self.handle_method(m),
+            StringLiteral(s) => self.handle_string_literal(s).into(),
+            Struct(s) => self.handle_simple_struct(s),
+            Unary(u) => self.handle_unary_expression(u),
+            This(_) => swc::Expr::This(swc::ThisExpr { span: DUMMY_SP }).into(),
+            Tuple(t) => self.handle_array(t.elements),
+            TypeMatch(t) => self.handle_type_match(t),
         }
     }
 
-    pub fn array_to_swc(&mut self, node: &ast::ArrayExpression) -> swc::ArrayLit {
-        let elems = node
-            .elements
-            .iter()
-            .map(|node| Some(self.expr_to_swc(node).into()))
+    pub fn handle_array(&mut self, elements: Vec<ir::Expression>) -> ExpressionResult {
+        let elements = elements
+            .into_iter()
+            .map(|e| self.handle_expression(e))
             .collect::<Vec<_>>();
-        swc::ArrayLit {
+        let (prelim_stmts, elems) = self.extract_necessary(elements);
+        let expr = swc::Expr::Array(swc::ArrayLit {
             span: DUMMY_SP,
-            elems,
-        }
-    }
-
-    fn binary_expression_to_swc_expr(&mut self, node: &ast::BinaryExpression) -> swc::Expr {
-        let left_expr = self.expr_to_swc(node.left.as_ref().unwrap());
-        let right_expr = self.expr_to_swc(node.right.as_ref().unwrap());
-
-        let op = match node.operator {
-            ast::BinaryOperator::Add => swc::BinaryOp::Add,
-            ast::BinaryOperator::Div => swc::BinaryOp::Div,
-            ast::BinaryOperator::EqEq => swc::BinaryOp::EqEqEq,
-            ast::BinaryOperator::Geq => swc::BinaryOp::GtEq,
-            ast::BinaryOperator::Grt => swc::BinaryOp::Gt,
-            ast::BinaryOperator::LAnd => swc::BinaryOp::LogicalAnd,
-            ast::BinaryOperator::LOr => swc::BinaryOp::LogicalOr,
-            ast::BinaryOperator::Leq => swc::BinaryOp::LtEq,
-            ast::BinaryOperator::Less => swc::BinaryOp::Lt,
-            ast::BinaryOperator::Mod => swc::BinaryOp::Mod,
-            ast::BinaryOperator::Mul => swc::BinaryOp::Mul,
-            ast::BinaryOperator::Neq => swc::BinaryOp::NotEqEq,
-            ast::BinaryOperator::Pow => swc::BinaryOp::Exp,
-            ast::BinaryOperator::Sub => swc::BinaryOp::Sub,
-        };
-
-        let mut expr = swc::Expr::Bin(swc::BinExpr {
-            span: DUMMY_SP,
-            op,
-            left: Box::new(left_expr),
-            right: Box::new(right_expr),
+            elems: elems.into_iter().map(|e| Some(e.into())).collect(),
         });
-        if self.get_type_at(node.loc) == Some(types::Type::Integer) {
-            expr = swc::Expr::Bin(swc::BinExpr {
-                span: DUMMY_SP,
-                op: swc::BinaryOp::BitOr,
-                left: Box::new(expr),
-                right: Box::new(swc::Expr::Lit(swc::Lit::Num(swc::Number {
-                    span: DUMMY_SP,
-                    value: 0.,
-                    raw: None,
-                }))),
-            });
-        }
-        expr
+        ExpressionResult { prelim_stmts, expr }
     }
 
-    fn block_expr_to_swc(&mut self, node: &ast::BlockExpression) -> swc::Expr {
-        if node.statements.len() == 0 {
-            undefined()
-        } else if can_block_be_inlined(node) {
-            self.block_to_swc_inlined(node).into()
-        } else {
-            self.block_to_swc_extracted(node).into()
-        }
-    }
-
-    fn block_to_swc_inlined(&mut self, node: &ast::BlockExpression) -> swc::Expr {
-        if node.statements.len() == 1 {
-            let ast::Statement::Expression(ref expr) = node.statements[0] else {
-                panic!()
-            };
-            return self.expr_to_swc(&expr.expression);
-        }
-
-        let exprs = node
-            .statements
-            .iter()
-            .map(|stmt| {
-                let ast::Statement::Expression(expr) = stmt else {
-                    panic!()
-                };
-                Box::new(self.expr_to_swc(&expr.expression))
-            })
-            .collect();
-
-        swc::Expr::Seq(swc::SeqExpr {
+    pub fn handle_boolean_literal(&mut self, b: ir::BooleanLiteral) -> swc::Expr {
+        swc::Expr::from(swc::Bool {
             span: DUMMY_SP,
-            exprs,
+            value: b.value,
         })
     }
 
-    /// Extract a block from the current expression.
-    /// For example:
-    ///
-    /// ```
-    /// 42 + {
-    ///     x := ...
-    ///     x + 1
-    /// }
-    /// ```
-    ///
-    /// into:
-    ///
-    /// ```js
-    /// let __cq6s81c68qzzej5i;
-    /// {
-    ///     let x = ...
-    ///     __cq6s81c68qzzej5i = x + 1;
-    /// }
-    /// 42 + __cq6s81c68qzzej5i;
-    /// ```
-    fn block_to_swc_extracted(&mut self, node: &ast::BlockExpression) -> swc::Ident {
-        let len = node.statements.len();
-        assert!(len > 0);
+    pub fn handle_call(&mut self, node: ir::CallExpression) -> ExpressionResult {
+        let should_clone = self.call_ownership(&node) == OwnershipAction::Clone;
+        let mut callee_result = self.handle_expression(*node.callee);
+        let args_results = node
+            .args
+            .into_iter()
+            .map(|a| self.handle_expression(a))
+            .collect::<Vec<_>>();
+        let (prelim_stmts, args) = self.extract_necessary(args_results);
+        if !prelim_stmts.is_empty() {
+            callee_result = self.to_extracted(callee_result);
+        }
+        let prelim_stmts = vec![callee_result.prelim_stmts, prelim_stmts].concat();
+        let callee = callee_result.expr;
 
-        let id = self.add_temp_var_to_current_block();
-        self.enter_block();
-        let block = self.block_to_swc_stmt(node, AssignTo::Last(id.clone()));
-        self.exit_block();
-        self.push_to_block(block.into());
-        create_ident(&id)
+        let mut expr = swc::Expr::Call(swc::CallExpr {
+            callee: swc::Callee::Expr(Box::new(callee)),
+            args: args.into_iter().map(Into::into).collect(),
+            ..Default::default()
+        });
+        if should_clone {
+            expr = swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(expr),
+                prop: swc::MemberProp::Ident(ident_from_str("$clone").into()),
+            });
+        }
+
+        ExpressionResult { prelim_stmts, expr }
     }
 
-    fn function_expression_to_swc(&mut self, node: &ast::FunctionExpression) -> swc::ArrowExpr {
-        let swc_params = self.function_params_to_swc(&node.params);
-        let swc_body = self.function_body_to_swc(&node.body);
+    pub fn handle_float_literal(&mut self, node: ir::FloatLiteral) -> swc::Expr {
+        swc::Expr::from(swc::Number {
+            span: DUMMY_SP,
+            value: node.value,
+            raw: None,
+        })
+    }
+
+    fn handle_for_expression(&mut self, node: ir::ForExpression) -> ExpressionResult {
+        let temp = self.get_temp_id();
+        self.with_break_target(temp.clone(), |self_| ExpressionResult {
+            prelim_stmts: self_.for_to_swc_stmt(node),
+            expr: temp.into(),
+        })
+    }
+
+    fn handle_for_in_expression(&mut self, node: ir::ForInExpression) -> ExpressionResult {
+        let temp = self.get_temp_id();
+        self.with_break_target(temp.clone(), |self_| ExpressionResult {
+            prelim_stmts: self_.for_in_to_swc_stmt(node),
+            expr: temp.into(),
+        })
+    }
+
+    fn handle_function_expression(&mut self, node: ir::FunctionExpression) -> swc::ArrowExpr {
+        let swc_params = self.function_params_to_swc(node.params);
+        let swc_body = self.function_body_to_swc(node.body);
 
         swc::ArrowExpr {
-            span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
             params: swc_params,
             body: Box::new(swc_body),
-            is_async: false,
-            is_generator: false,
-            type_params: None,
-            return_type: None,
+            ..Default::default()
         }
     }
 
-    pub fn function_params_to_swc(&mut self, params: &Vec<ast::FunctionParam>) -> Vec<swc::Pat> {
+    fn handle_match_expression(&mut self, node: ir::MatchExpression) -> ExpressionResult {
+        let temp = self.get_temp_id();
+        let decl = ident_to_declaration(temp.clone());
+        let mut stmts = self.handle_match_statement(node);
+        match stmts.last_mut() {
+            Some(swc::Stmt::If(i)) => assign_if_last_expressions(i, temp.clone()),
+            _ => panic!(),
+        }
+        stmts.insert(0, decl);
+        ExpressionResult {
+            prelim_stmts: stmts,
+            expr: temp.into(),
+        }
+    }
+
+    pub fn function_params_to_swc(
+        &mut self,
+        params: Vec<(Location, VariableSymbolId)>,
+    ) -> Vec<swc::Pat> {
         params
             .into_iter()
             .map(|param| {
+                let name = &self.symbols.get(param.1).name;
                 swc::Pat::Ident(swc::BindingIdent {
-                    id: create_ident(param.name.as_str()),
+                    id: ident_from_str(name),
                     type_ann: None,
                 })
             })
             .collect()
     }
 
-    pub fn function_body_to_swc(&mut self, body: &ast::BlockExpression) -> swc::BlockStmtOrExpr {
+    pub fn function_body_to_swc(&mut self, body: ir::Block) -> swc::BlockStmtOrExpr {
         let stmts = body
             .statements
-            .iter()
+            .into_iter()
             .flat_map(|stmt| self.stmt_to_swc(stmt))
             .collect();
 
         swc::BlockStmtOrExpr::BlockStmt(create_block_stmt(stmts))
     }
 
-    /// Create code for identifiers.
-    /// Identifiers that have references are declared wrapped in an array (like `let identifier = [value]`), so their reads are generated like `identifier[0]`
-    pub fn ident_to_swc(&mut self, node: &ast::Identifier) -> swc::Expr {
-        let info = self.find_symbol(node.loc).unwrap();
-
-        if info.borrow().has_ref() {
-            swc::Expr::Member(swc::MemberExpr {
-                span: DUMMY_SP,
-                obj: Box::new(create_ident(node.as_str()).into()),
-                prop: swc::MemberProp::Computed(swc::ComputedPropName {
+    pub fn handle_identifier(&mut self, node: ir::Identifier) -> swc::Expr {
+        if let SymbolId::Variant(v) = node.symbol {
+            return self.handle_variant_construct(v);
+        }
+        let name = self.symbols.get_symbol(node.symbol).name();
+        match self.identifier_ownership(&node) {
+            OwnershipAction::Borrow | OwnershipAction::Copy | OwnershipAction::Move => {
+                swc::Expr::Ident(ident_from_str(name))
+            }
+            OwnershipAction::Clone => swc::Expr::Call(swc::CallExpr {
+                callee: swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
                     span: DUMMY_SP,
-                    expr: Box::new(create_number(0.0)),
-                }),
-            })
-        } else {
-            swc::Expr::Ident(create_ident(node.as_str()))
+                    obj: Box::new(ident_from_str(name).into()),
+                    prop: swc::MemberProp::Ident(ident_from_str("$clone").into()),
+                }))),
+                ..Default::default()
+            }),
         }
     }
 
-    fn loop_to_swc_expr(&mut self, node: &ast::Loop) -> swc::Expr {
-        let id = self.add_temp_var_to_current_block();
-        self.enter_block();
-        let loop_stmt = self.loop_to_swc_stmt(node, AssignTo::Break(id.clone()));
-        self.exit_block();
-        self.push_to_block(loop_stmt.into());
-        let option = self.into_option(&id);
-        self.push_to_block(option);
-        create_ident(&id).into()
+    pub fn handle_int_literal(&mut self, node: ir::IntLiteral) -> swc::Expr {
+        swc::Expr::from(swc::Number {
+            span: DUMMY_SP,
+            value: node.value as f64,
+            raw: None,
+        })
     }
 
-    fn match_to_swc_expr(&mut self, node: &ast::MatchExpression) -> swc::Expr {
-        let id = self.add_temp_var_to_current_block();
-        self.enter_block();
-        let stmt = self.match_to_swc_stmt(node, AssignTo::Last(id.clone()));
-        self.exit_block();
-        self.push_to_block(stmt.into());
-        create_ident(&id).into()
+    /// ```js
+    /// Enum.Variant()
+    /// ```
+    fn handle_variant_construct(&mut self, v: VariantSymbolId) -> swc::Expr {
+        let variant = self.symbols.get(v);
+        let enum_ = variant.owner;
+        let enum_name = self.symbol_name(enum_);
+        let variant_name = &variant.name;
+        let callee = swc::Callee::Expr(Box::new(swc::Expr::Member(swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(ident_from_str(enum_name).into()),
+            prop: swc::MemberProp::Ident(ident_from_str(variant_name).into()),
+        })));
+
+        swc::Expr::Call(swc::CallExpr {
+            callee,
+            ..Default::default()
+        })
     }
 
-    fn tuple_to_swc(&mut self, node: &ast::TupleExpression) -> swc::ArrayLit {
-        let elems = node
-            .elements
-            .iter()
-            .map(|node| Some(self.expr_to_swc(node).into()))
+    fn handle_index_expression(&mut self, node: ir::IndexExpression) -> ExpressionResult {
+        let obj_result = self.handle_host(node.object, false);
+
+        let prop = swc::MemberProp::Computed(swc::ComputedPropName {
+            span: DUMMY_SP,
+            expr: Box::new(swc::Expr::Lit(swc::Lit::Num(swc::Number {
+                span: DUMMY_SP,
+                value: node.index.1 as f64,
+                raw: None,
+            }))),
+        });
+
+        let expr = swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(obj_result.expr),
+            prop,
+        };
+
+        ExpressionResult {
+            prelim_stmts: obj_result.prelim_stmts,
+            expr: expr.into(),
+        }
+    }
+
+    fn handle_intrinsic_call(&mut self, node: ir::IntrinsicCall) -> ExpressionResult {
+        let (prelim, args): (Vec<Vec<swc::Stmt>>, _) = node
+            .args
+            .into_iter()
+            .map(|a| self.handle_expression(a))
+            .map(|r| (r.prelim_stmts, r.expr.into()))
+            .unzip();
+        let name = self.symbol_name(node.callee);
+        let prelim = prelim.into_iter().flatten().collect();
+        let call = internal_method_call(name, args);
+        ExpressionResult {
+            prelim_stmts: prelim,
+            expr: call.into(),
+        }
+    }
+
+    fn handle_intrinsic_construct(&mut self, node: ir::IntrinsicConstruct) -> ExpressionResult {
+        // FIXME: handle arguments
+        let name = self.symbol_name(node.constructor);
+        let call = internal_construct(name);
+        ExpressionResult {
+            prelim_stmts: vec![],
+            expr: call.into(),
+        }
+    }
+
+    pub fn handle_member_expression(&mut self, node: ir::MemberExpression) -> ExpressionResult {
+        let obj_result = self.handle_host(node.object, false);
+
+        let prop_name = &self.symbols.get(node.member.1).name;
+        let prop = swc::MemberProp::Ident(ident_from_str(&prop_name).into());
+
+        let expr = swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(obj_result.expr),
+            prop,
+        };
+
+        ExpressionResult {
+            prelim_stmts: obj_result.prelim_stmts,
+            expr: expr.into(),
+        }
+    }
+
+    pub fn handle_method(&mut self, node: ir::MethodExpression) -> ExpressionResult {
+        if let Some(known) = self.wellknown.methods.get(&node.method.1) {
+            return known(self, node);
+        }
+
+        let should_clone = self.method_ownership(&node) == OwnershipAction::Clone;
+
+        let is_mutating = self.symbols.get(node.method.1).is_mutating();
+        let obj_result = self.handle_host(node.host, is_mutating);
+        let method_name = &self.symbols.get(node.method.1).name;
+        let prop = swc::MemberProp::Ident(ident_from_str(&method_name).into());
+        let callee = swc::MemberExpr {
+            span: DUMMY_SP,
+            obj: Box::new(obj_result.expr),
+            prop,
+        };
+
+        let args_results = node
+            .args
+            .into_iter()
+            .map(|a| self.handle_expression(a))
             .collect::<Vec<_>>();
-        swc::ArrayLit {
-            span: DUMMY_SP,
-            elems,
+        let (prelim_stmts, args) = self.extract_necessary(args_results);
+
+        let mut expr = swc::Expr::Call(swc::CallExpr {
+            callee: swc::Callee::Expr(Box::new(callee.into())),
+            args: args.into_iter().map(Into::into).collect(),
+            ..Default::default()
+        });
+        if should_clone {
+            expr = swc::Expr::Member(swc::MemberExpr {
+                span: DUMMY_SP,
+                obj: Box::new(expr),
+                prop: swc::MemberProp::Ident(ident_from_str("$clone").into()),
+            });
+        }
+
+        ExpressionResult { prelim_stmts, expr }
+    }
+
+    fn handle_host(&mut self, node: Option<Box<ir::Expression>>, mutate: bool) -> ExpressionResult {
+        let Some(node) = node else {
+            return ExpressionResult {
+                prelim_stmts: vec![],
+                expr: swc::Expr::This(swc::ThisExpr { span: DUMMY_SP }),
+            };
+        };
+        let is_reactive = self.resolve(node.ty()).is_reactive();
+        let result = self.handle_expression(*node);
+        let expr = match is_reactive {
+            true => call(
+                member(result.expr, if mutate { "$getMut" } else { "$get" }).into(),
+                vec![],
+            )
+            .into(),
+            false => result.expr,
+        };
+        ExpressionResult {
+            prelim_stmts: result.prelim_stmts,
+            expr,
         }
     }
 
-    pub fn add_temp_var_to_current_block(&mut self) -> String {
-        let id = "__".to_string()
-            + rand::rng()
-                .sample_iter(&Alphanumeric)
-                .take(16)
-                .map(char::from)
-                .collect::<String>()
-                .as_str();
-
-        self.push_to_block(swc::Stmt::Decl(swc::Decl::Var(Box::new(swc::VarDecl {
+    pub fn handle_string_literal(&mut self, node: ir::StringLiteral) -> swc::Str {
+        swc::Str {
             span: DUMMY_SP,
-            ctxt: SyntaxContext::empty(),
-            kind: swc::VarDeclKind::Let,
-            declare: false,
-            decls: vec![swc::VarDeclarator {
-                span: DUMMY_SP,
-                name: swc::Pat::Ident(swc::BindingIdent {
-                    id: create_ident(&id),
-                    type_ann: None,
-                }),
-                init: Some(Box::new(undefined())),
-                definite: false,
-            }],
-        }))));
-        id
+            value: node.value.into(),
+            raw: None,
+        }
     }
 
-    pub fn assignment_expression(&mut self, to: &str, expr: swc::Expr) -> swc::ExprStmt {
-        swc::ExprStmt {
+    fn handle_simple_struct(&mut self, node: ir::StructExpression) -> ExpressionResult {
+        let constructor_name = self.make_constructor(node.ty, node.constructor.1.into());
+        let expected_members = &self.symbols.get(node.constructor.1).members;
+        let (prelim_stmts, args) = self.handle_struct_like_body(node, expected_members);
+        let expr = swc::Expr::New(swc::NewExpr {
+            callee: Box::new(constructor_name),
+            args: Some(args.into_iter().map(Into::into).collect()),
+            ..Default::default()
+        });
+
+        ExpressionResult { prelim_stmts, expr }
+    }
+
+    fn handle_struct_like_body(
+        &mut self,
+        node: ir::StructExpression,
+        expected: &[MemberSymbolId],
+    ) -> (Vec<swc::Stmt>, Vec<swc::Expr>) {
+        let mut order = expected
+            .into_iter()
+            .map(|s| {
+                let name = self.symbol_name(*s);
+                node.fields
+                    .iter()
+                    .enumerate()
+                    .find(|(_, f)| &self.symbols.get(f.name.1).name == name)
+                    .unwrap()
+                    .0
+            })
+            .collect::<Vec<_>>();
+
+        let results = node
+            .fields
+            .into_iter()
+            .map(|field| self.handle_expression(field.value))
+            .collect::<Vec<_>>();
+        let (prelim, mut args) = self.extract_all(results);
+
+        for i in 0..args.len() {
+            while order[i] != i {
+                let next = order[i];
+                args.swap(i, next);
+                order.swap(i, next);
+            }
+        }
+        (prelim, args)
+    }
+
+    fn handle_type_match(&mut self, node: ir::TypeMatch) -> ExpressionResult {
+        let obj_result = self.handle_expression(*node.expr);
+
+        let variant_name = &self.symbols.get(node.variant).name;
+        let expr = swc::BinExpr {
             span: DUMMY_SP,
-            expr: Box::new(swc::Expr::Assign(swc::AssignExpr {
+            op: swc::BinaryOp::EqEqEq,
+            left: Box::new(swc::Expr::Member(swc::MemberExpr {
                 span: DUMMY_SP,
-                op: swc::AssignOp::Assign,
-                left: swc::AssignTarget::Simple(swc::SimpleAssignTarget::Ident(
-                    swc::BindingIdent {
-                        id: create_ident(to),
-                        type_ann: None,
-                    },
-                )),
-                right: Box::new(expr),
+                obj: Box::new(obj_result.expr),
+                prop: swc::MemberProp::Ident(ident_from_str(TAG_SYMBOL).into()),
             })),
+            right: Box::new(create_str(variant_name)),
+        };
+
+        ExpressionResult {
+            prelim_stmts: obj_result.prelim_stmts,
+            expr: expr.into(),
+        }
+    }
+
+    fn make_constructor(&self, expr_ty: types::TypeId, constructor: TypeSymbolId) -> swc::Expr {
+        let type_args = match self.types.get(expr_ty) {
+            types::Type::Ref(r) => &r.args,
+            _ => &vec![],
+        };
+        let constructor_type = self.symbol_type_id(constructor);
+        let params = match self.types.get(constructor_type).as_params() {
+            Some(p) => p.to_vec(),
+            None => vec![],
+        };
+        let ty_args = Substitutions::with_initial(&params, type_args).into();
+
+        let methods = match constructor {
+            TypeSymbolId::Enum(s) => &self.symbols.get(s).methods,
+            TypeSymbolId::Struct(s) => &self.symbols.get(s).methods,
+            _ => panic!(),
+        };
+
+        let concrete_exists = methods
+            .into_iter()
+            .any(|m| self.symbols.get(*m).owner_args == ty_args);
+
+        if concrete_exists {
+            self.generate_constructor_name(constructor.into(), &ty_args)
+        } else {
+            let name = self.symbol_name(constructor);
+            swc::Expr::Ident(ident_from_str(name))
         }
     }
 }

@@ -6,7 +6,7 @@ use swc_ecma_codegen::Node;
 use swc_ecma_minifier::{optimize, option::MinifyOptions};
 use swc_ecma_transforms::resolver;
 use swc_ecma_visit::VisitMutWith;
-use tine_core::ModulePath;
+use tine_common::module_path::ModulePath;
 
 use crate::bundler::{SwcLoader, SwcResolver};
 
@@ -60,6 +60,10 @@ pub fn bundle_entry(
                         bools: false,
                         conditionals: false,
                         sequences: 0,
+                        if_return: false,
+                        collapse_vars: false,
+                        reduce_vars: false,
+                        side_effects: false,
                         ..Default::default()
                     }),
                     mangle: None,

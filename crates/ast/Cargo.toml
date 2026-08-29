@@ -1,0 +1,11 @@
+[package]
+name = "tine_ast"
+version.workspace = true
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+paste = "1.0.15"
+ordered-float = "5.0.0"
+tine_common = { path = "../common" }
+tine_macros = { path = "../macros" }

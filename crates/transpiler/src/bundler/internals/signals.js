@@ -96,6 +96,10 @@ export class Reactive {
 	children = new Set();
 	registry = new FinalizationRegistry((ref) => this.children.delete(ref));
 
+	$clone() {
+		return this;
+	}
+
 	addChild(computed) {
 		const ref = new WeakRef(computed);
 		this.children.add(ref);
@@ -109,9 +113,9 @@ export class Reactive {
 		}
 	}
 
-    toDOMNode() {
-        return this instanceof ReactiveNode ? this : new ReactiveNode([this], () => this.get());
-    }
+	toDOMNode() {
+		return this instanceof ListenerNode ? this : new ListenerNode([this], () => this.$get());
+	}
 }
 
 /**
@@ -125,11 +129,16 @@ export class Signal extends Reactive {
 		this.value = value;
 	}
 
-	get() {
+	$get() {
 		return this.value;
 	}
 
-	set(value) {
+	$getMut() {
+		this.setupTreeUpdate();
+		return this.value;
+	}
+
+	$set(value) {
 		this.value = value;
 		this.setupTreeUpdate();
 	}
@@ -137,6 +146,7 @@ export class Signal extends Reactive {
 	setupTreeUpdate() {
 		for (const child of this.iterateChildren()) child.dirty();
 		scheduler.schedule();
+		return this;
 	}
 }
 
@@ -150,6 +160,7 @@ export class Listener extends Reactive {
 		this.deps = deps;
 		let depth = 0;
 		for (const dep of deps) {
+			if (!(dep instanceof Reactive)) continue;
 			if (dep.depth >= depth) depth = dep.depth + 1;
 			dep.addChild(this);
 		}
@@ -168,7 +179,7 @@ export class Listener extends Reactive {
 		return this.value !== old;
 	}
 
-	get() {
+	$get() {
 		if (dirty.has(this)) this.compute();
 		return this.value;
 	}
@@ -195,7 +206,7 @@ export class WritableComputed extends Listener {
 	/**
 	 * Example setter for `&obj.value`:
 	 * ```
-	 * (newValue) => { obj.get().value = newValue }
+	 * (newValue) => { obj.$get().value = newValue }
 	 * ```
 	 */
 	constructor(deps, getter, setter) {
@@ -203,7 +214,7 @@ export class WritableComputed extends Listener {
 		this.setter = setter;
 	}
 
-	set(value) {
+	$set(value) {
 		this.setter(value);
 		this.value = value;
 		const rootState = this.deps[0];
@@ -214,35 +225,177 @@ export class WritableComputed extends Listener {
 /**
  * Reactive DOM node
  */
-export class ReactiveNode extends Listener {
+export class ListenerNode extends Listener {
 	static signalKey = Symbol();
 
-	constructor(deps, getter) {
-		super(deps, getter);
+	constructor(signal) {
+		super([signal], () => signal.$get());
 		this.node = this.toNode();
 	}
 
 	toNode() {
-		const node = this.value instanceof Node ? this.value : new Text(String(this.value ?? ""));
+		const node = toNode(this.value);
 		// This prevents the ReactiveNode from being garbage collected
 		// while the associated node is still in the DOM
-		node[ReactiveNode.signalKey] = this;
+		node[ListenerNode.signalKey] = this;
 		return node;
+	}
+
+	attach(element) {
+		element.appendChild(this.node);
 	}
 
 	update() {
 		if (!dirty.has(this) || !this.compute()) return;
-		for (const child of this.iterateChildren()) stale.add(child);
 		const newNode = this.toNode();
 		this.node.parentNode.replaceChild(newNode, this.node);
 		this.node = newNode;
 	}
 }
 
-export function state(initialValue) {
-    return new Signal(initialValue);
+
+export class ListenerNodeList extends Listener {
+	static signalKey = Symbol();
+
+	constructor(list) {
+		super([list], () => list.$get());
+		this.start = new Comment();
+		this.end = new Comment();
+		this.end[ListenerNodeList.signalKey] = this;
+	}
+
+	attach(element) {
+		const fragment = document.createDocumentFragment();
+		fragment.appendChild(this.start);
+		for (let child of this.value) appendChild(fragment, child);
+		fragment.appendChild(this.end);
+		element.appendChild(fragment);
+		this.end[ListenerNodeList.signalKey] = this;
+	}
+
+	clear() {
+		let remove = false;
+		for (const node of [...this.end.parentNode.childNodes]) {
+			if (node === this.end) break;
+			if (remove) node.remove();
+			if (node === this.start) remove = true;
+		}
+	}
+
+	populate() {
+		const fragment = document.createDocumentFragment();
+		fragment.appendChild(this.start);
+		for (let child of this.value) appendChild(fragment, child);
+		this.end.parentNode.insertBefore(fragment, this.end);
+	}
+
+	update() {
+		if (!dirty.has(this) || !this.compute()) return;
+		this.clear();
+		this.populate();
+	}
 }
 
-export function derived$(getter, dependencies) {
-    return new Listener(dependencies, getter);
+/**
+ * One-way reactive node attribute.
+ */
+export class ListenerAttr extends Listener {
+	constructor(signal, element, name) {
+		super([signal], () => signal.$get());
+		this.element = element;
+		this.name = name;
+		this.symbol = Symbol();
+		element[this.symbol] = this;
+		element[name] = String(signal.$get()) || "";
+	}
+
+	update() {
+		if (!dirty.has(this) || !this.compute()) return;
+		setAttribute(this.element, this.name, this.value);
+	}
+}
+
+/**
+ * Two-way bound node attribute
+ * 
+ * @example
+ * ```tine
+ * <input type="text" value={state} />
+ * ```
+ *
+ */
+export class BoundAttr extends Listener {
+	static signalKey = Symbol();
+
+	constructor(state, element, name) {
+		super([state], () => state.$get());
+		this.state = state;
+		this.element = element;
+		this.name = name;
+		this.symbol = Symbol();
+		element[this.symbol] = this;
+		setAttribute(element, name, state.$get());
+		switch (name) {
+			case "value":
+				element.addEventListener("input", (e) => this.listener(e));
+			// Missing break here to also update "value" on "change"
+			case "checked":
+				element.addEventListener("change", (e) => this.listener(e));
+				break;
+			case "open":
+				element.addEventListener("toggle", (e) => this.listener(e));
+				break
+		}
+	}
+
+	listener(event) {
+		this.state.$set(event.currentTarget[this.name]);
+	}
+
+	update() {
+		if (!dirty.has(this) || !this.compute()) return;
+		setAttribute(this.element, this.name, this.value);
+	}
+}
+
+function setAttribute(element, key, value) {
+	const resolved = typeof value === "boolean" ? value : value ?? "";
+	element[key] = resolved;
+}
+
+export function toNode(value) {
+	if (value instanceof Reactive) {
+		if (Array.isArray(value.$get())) return new ListenerNodeList(value).end;
+		else return new ListenerNode(value).node;
+	}
+	if (Array.isArray(value)) {
+		const fragment = document.createDocumentFragment();
+		for (let child of value) fragment.appendChild(toNode(child));
+		return fragment;
+	}
+	if (value instanceof Node) return value;
+	return new Text(String(value) || "");
+}
+export function appendChild(parentNode, child) {
+	if (child instanceof Reactive) {
+		const reactive = Array.isArray(child.$get()) ? new ListenerNodeList(child) : new ListenerNode(child);
+		reactive.attach(parentNode);
+		return;
+	}
+	if (Array.isArray(child)) {
+		const fragment = document.createDocumentFragment();
+		for (let child of child) appendChild(fragment, child);
+		parentNode.appendChild(fragment);
+		return;
+	}
+	const node = child instanceof Node ? child : new Text(String(child) || "");
+	parentNode.appendChild(node);
+}
+
+export function state(initialValue) {
+	return new Signal(initialValue);
+}
+
+export function computed$(getter, dependencies) {
+	return new Listener(dependencies, getter);
 }

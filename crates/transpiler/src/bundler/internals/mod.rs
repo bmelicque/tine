@@ -31,7 +31,7 @@ fn parse(name: &str, source: &'static str) -> ModuleData {
 }
 
 pub fn parse_internals() -> ModuleData {
-    parse("internals", include_str!("internals.js"))
+    parse("$internals", include_str!("internals.js"))
 }
 
 pub fn parse_dom() -> ModuleData {

@@ -1,7 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use swc_common::FileName;
-use tine_core::ModulePath;
+use tine_common::module_path::ModulePath;
+use tine_ir as ir;
+use tine_symbols::table::SymbolTable;
 
 /// Compute a relative path from `base` to `path`.
 /// Works even if `path` is outside of `base` (e.g. gives `../../other/file`).
@@ -31,4 +33,12 @@ pub fn modulepath_to_filename(name: &ModulePath) -> FileName {
         ModulePath::Real(path) => FileName::Real(path.clone()),
         ModulePath::Virtual(name) => FileName::Custom(name.clone()),
     }
+}
+
+pub fn is_declaration_mutable(node: &ir::VariableDeclaration, symbols: &SymbolTable) -> bool {
+    node.pattern
+        .walk()
+        .filter_map(|n| n.as_pattern())
+        .filter_map(|p| p.as_identifier())
+        .any(|i| symbols.is_mutable(i.symbol))
 }
