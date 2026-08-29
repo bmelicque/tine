@@ -4,6 +4,37 @@ All meaningful changes to this project will be written here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
+## [0.1.0] - 2026-08-29
+
+### Added
+
+- Added type annotations on declarations
+- Added method definitions
+- Added exhaustivity checks on pattern matching
+- Added visibility markers `pub`
+- Added array methods: `length`, `get`, `set`, `push`, `pop`, `map`, `filter`
+- Added reactive node attributes
+- Added mdbook-format docs
+- Added todo-list example
+- Added `restart` server command for extension
+- Reinforced type inference
+- Started implementing traits and `@derive` instructions (like `Eq` and `Hash`)
+
+### Changed
+
+- [BREAKING] Changed `derived$` to `computed$` (eg. `$0` -> `state(0)`; `@(*counter * 2)` -> `derived$(*counter * 2)`)
+- [BREAKING] Changed declaration syntax to `let mut?`
+- [BREAKING] Added `:` before type annotations and `->` before return types
+- [BREAKING] Various other syntax changes
+
+### Removed
+
+- [BREAKING] Removed specific callback syntax
+
+### Fixed
+
+So much!
+
 ## [0.0.2] - 2026-03-03
 
 CLI: v0.0.1

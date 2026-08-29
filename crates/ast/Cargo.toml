@@ -1,6 +1,6 @@
 [package]
 name = "tine_ast"
-version = "0.0.2"
+version.workspace = true
 edition = "2021"
 build = "build.rs"
 
