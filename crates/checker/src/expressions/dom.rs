@@ -4,7 +4,7 @@ use tine_common::{
     diagnostics::DiagnosticKind,
     locations::{Locatable, Location},
 };
-use tine_ir as ir;
+use tine_ir::{self as ir, Typed};
 use tine_types::store::TypeStore;
 
 use crate::TypeChecker;
@@ -63,7 +63,7 @@ impl TypeChecker {
     fn visit_attribute(&mut self, attribute: ast::Attribute) -> Option<ir::Attribute> {
         let value = match attribute.value {
             Some(v) => match v {
-                ast::AttributeValue::Expression(e) => self.visit_expression(e)?,
+                ast::AttributeValue::Expression(e) => self.visit_expression_in_element(e)?,
                 ast::AttributeValue::String(s) => {
                     ir::Expression::StringLiteral(ir::StringLiteral {
                         loc: attribute.loc,
@@ -94,7 +94,7 @@ impl TypeChecker {
 
     fn visit_child(&mut self, child: ast::ElementChild) -> Option<ir::Expression> {
         match child {
-            ast::ElementChild::Expression(e) => self.visit_expression(e),
+            ast::ElementChild::Expression(e) => self.visit_expression_in_element(e),
             ast::ElementChild::Text(t) => Some(ir::Expression::StringLiteral(ir::StringLiteral {
                 loc: t.loc,
                 value: t.text,
@@ -106,5 +106,25 @@ impl TypeChecker {
                 self.visit_element_expression(v.into()).map(Into::into)
             }
         }
+    }
+
+    fn visit_expression_in_element(&mut self, expr: ast::Expression) -> Option<ir::Expression> {
+        let expr = self.visit_expression(expr)?;
+        if self.resolve(expr.ty()).is_reactive() {
+            return Some(expr);
+        }
+        let deps = self
+            .dependencies(&expr)
+            .filter(|dep| self.symbol_type(dep.symbol).is_reactive())
+            .cloned()
+            .collect::<Vec<_>>();
+        if deps.is_empty() {
+            return Some(expr);
+        }
+        let callee = self
+            .visit_identifier(ast::Identifier::new("computed$".into(), expr.loc()))
+            .unwrap()
+            .into();
+        self.build_computed(callee, expr, deps).map(Into::into)
     }
 }

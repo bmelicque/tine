@@ -113,6 +113,27 @@ impl DerefMut for ThisGuard<'_> {
     }
 }
 
+pub struct BindingGuard<'a> {
+    previous: Option<types::TypeId>,
+    pub tc: &'a mut TypeChecker,
+}
+impl Drop for BindingGuard<'_> {
+    fn drop(&mut self) {
+        self.tc.binding_expectation = self.previous;
+    }
+}
+impl Deref for BindingGuard<'_> {
+    type Target = TypeChecker;
+    fn deref(&self) -> &Self::Target {
+        &self.tc
+    }
+}
+impl DerefMut for BindingGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.tc
+    }
+}
+
 pub struct MutableThisGuard<'a> {
     previous: Option<bool>,
     pub tc: &'a mut TypeChecker,
@@ -146,6 +167,7 @@ pub struct TypeChecker {
     pub(crate) this: Vec<types::TypeId>,
     pub(crate) mutable_this: Option<bool>,
     pub(crate) placeholders: HashMap<types::Placeholder, types::TypeId>,
+    pub(crate) binding_expectation: Option<types::TypeId>,
 
     pub(super) loader: Box<dyn ModuleLoader>,
 
@@ -164,6 +186,7 @@ impl TypeChecker {
             this: vec![],
             mutable_this: None,
             placeholders: HashMap::new(),
+            binding_expectation: None,
 
             loader: Box::new(MockLoader),
 
@@ -421,18 +444,26 @@ impl TypeChecker {
     fn drop_scope(&mut self) -> Scope {
         let scope = self.scopes.pop().unwrap();
         for (_, &id) in &scope.bindings {
-            let ty = self.symbol_type_id(id);
-            let defined_at = self.symbols.get_symbol(id).defined_at();
-            let Some(inferred) = self.infer(ty) else {
-                self.error(DiagnosticKind::CannotInferType, defined_at);
-                continue;
-            };
-            let symbol = self.symbols.get_symbol_mut(id);
-            *symbol.ty_mut() = inferred;
+            self.infer_symbol_type(id);
         }
         scope
     }
+    pub fn infer_symbol_type(&mut self, id: SymbolId) {
+        let ty = self.symbol_type_id(id);
+        let defined_at = self.symbols.get_symbol(id).defined_at();
+        let Some(inferred) = self.infer(ty) else {
+            self.error(DiagnosticKind::CannotInferType, defined_at);
+            return;
+        };
+        let symbol = self.symbols.get_symbol_mut(id);
+        *symbol.ty_mut() = inferred;
+    }
 
+    pub fn with_binding_expectation(&mut self, expected: types::TypeId) -> BindingGuard<'_> {
+        let previous = self.binding_expectation;
+        self.binding_expectation = Some(expected);
+        BindingGuard { tc: self, previous }
+    }
     pub fn with_this(&mut self, this: types::TypeId) -> ThisGuard<'_> {
         self.this.push(this);
         ThisGuard { tc: self }

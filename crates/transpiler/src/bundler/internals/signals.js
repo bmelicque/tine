@@ -365,8 +365,8 @@ function setAttribute(element, key, value) {
 
 export function toNode(value) {
 	if (value instanceof Reactive) {
-		if (Array.isArray(value.$get())) return new ListenerNodeList(value);
-		else return new ListenerNode(value);
+		if (Array.isArray(value.$get())) return new ListenerNodeList(value).end;
+		else return new ListenerNode(value).node;
 	}
 	if (Array.isArray(value)) {
 		const fragment = document.createDocumentFragment();

@@ -137,15 +137,16 @@ impl TypeChecker {
         expected: types::TypeId,
         substitutions: &mut Substitutions,
     ) -> Option<ir::Expression> {
+        let mut self_ = self.with_binding_expectation(expected);
         let loc = node.loc();
-        let got = self.visit_expression(node)?;
-        self.can_be_assigned_to(got.ty(), expected, true);
-        let Some(ty) = self.infer(got.ty()) else {
-            self.error(DiagnosticKind::CannotInferType, got.loc());
+        let got = self_.visit_expression(node)?;
+        self_.can_be_assigned_to(got.ty(), expected, true);
+        let Some(ty) = self_.infer(got.ty()) else {
+            self_.error(DiagnosticKind::CannotInferType, got.loc());
             return None;
         };
-        let expected = self.infer(expected)?;
-        substitutions.unify(self, expected, ty, loc);
+        let expected = self_.infer(expected)?;
+        substitutions.unify(&mut self_, expected, ty, loc);
         Some(got)
     }
 

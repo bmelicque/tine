@@ -14,11 +14,13 @@ pub fn pretty_print_error(src: &Source, diag: &Diagnostic) {
 
     println!(
         "\nerror: {}\n --> line {}, column {}\n",
-        diag.kind, start_line, start_col
+        diag.kind,
+        start_line + 1,
+        start_col + 1
     );
-    println!("{} | {}", start_line, line_text.trim_end());
+    println!("{} | {}", start_line + 1, line_text.trim_end());
 
-    let gutter = " ".repeat(start_line.to_string().len());
+    let gutter = " ".repeat((start_line + 1).to_string().len());
     let underline = if end_col > start_col {
         "~".repeat(end_col - start_col)
     } else {

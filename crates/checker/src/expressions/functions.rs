@@ -27,6 +27,7 @@ impl TypeChecker {
                 ),
                 _ => None,
             };
+            s.analyze_function_signature(&params, return_type);
             let (return_type, body) = s.visit_function_body(node.body, return_type)?;
             let params = params?;
             Some(FunctionResult {
@@ -73,6 +74,36 @@ impl TypeChecker {
             body,
             ty,
         })
+    }
+
+    fn analyze_function_signature(
+        &mut self,
+        params: &Option<Vec<(Location, VariableSymbolId)>>,
+        return_type: Option<types::TypeId>,
+    ) {
+        let Some(expect) = self.binding_expectation else {
+            return;
+        };
+        let param_symbols = params
+            .as_ref()
+            .unwrap_or(&vec![])
+            .iter()
+            .map(|(_, v)| *v)
+            .collect::<Vec<_>>();
+        let params = param_symbols
+            .iter()
+            .map(|v| self.symbol_type_id(*v))
+            .collect();
+        let return_type = return_type.unwrap_or(self.new_type_placeholder().id);
+        let ty = self.intern(types::FunctionType {
+            type_params: vec![],
+            params,
+            return_type,
+        });
+        self.can_be_assigned_to(ty, expect, true);
+        param_symbols.iter().for_each(|&v| {
+            self.infer_symbol_type(v.into());
+        });
     }
 
     pub fn visit_function_params(
