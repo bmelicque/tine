@@ -40,12 +40,10 @@ let name = "Tine"
 let greeting = <p>Hello, {name}!</p>
 ```
 
-Signals are read the same explicit way inside markup as anywhere else — with `*`.
-However, passing a full signal (and not just its value) will create a _reactive node_.
+In markup, signals are automatically unwrapped and computed$ values are created where needed..
 
 ```tine
 let counter = state(0)
-let initalDisplay = <p>Initial: {*count}</p> // This will never ve updated
 let reactiveDisplay = <p>Current: {count}</p>
 ```
 
@@ -60,7 +58,7 @@ Attributes prefixed with `on` (like `onclick`) take a function value, called whe
 
 ```tine
 fn increment() {
-    *counter = *counter + 1
+    *counter += 1
 }
 
 let button = <button onclick={increment}>Click me!</button>
