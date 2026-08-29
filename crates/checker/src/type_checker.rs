@@ -78,7 +78,7 @@ impl<'tc> ScopeGuard<'tc> {
 }
 impl Drop for ScopeGuard<'_> {
     fn drop(&mut self) {
-        self.tc.scopes.pop();
+        self.tc.drop_scope();
     }
 }
 impl Deref for ScopeGuard<'_> {
@@ -145,6 +145,7 @@ pub struct TypeChecker {
     pub(crate) scopes: Vec<Scope>,
     pub(crate) this: Vec<types::TypeId>,
     pub(crate) mutable_this: Option<bool>,
+    pub(crate) placeholders: HashMap<types::Placeholder, types::TypeId>,
 
     pub(super) loader: Box<dyn ModuleLoader>,
 
@@ -162,6 +163,7 @@ impl TypeChecker {
             scopes: vec![Scope::new()],
             this: vec![],
             mutable_this: None,
+            placeholders: HashMap::new(),
 
             loader: Box::new(MockLoader),
 
@@ -201,7 +203,7 @@ impl TypeChecker {
                 .flat_map(|i| self.visit_item(i.clone()))
                 .collect(),
         };
-        let scope = self.scopes.pop().unwrap();
+        let scope = self.drop_scope();
 
         self.ir.insert(module_id, program);
         let mut exports = scope.as_bindings();
@@ -336,15 +338,62 @@ impl TypeChecker {
         expected_id: types::TypeId,
         got_immutable: bool,
     ) -> bool {
-        let actual = self.types.get(got);
-        let expected = self.types.get(expected_id);
+        let actual = self.types.get(got).clone();
+        let expected = self.types.get(expected_id).clone();
         use types::Type::*;
-        match (&expected, &actual) {
+        match (expected, actual) {
             (Unknown, _) | (_, Unknown) => true,
+
+            (Placeholder(p), _) => match self.placeholders.get(&p).cloned() {
+                Some(t) => self.can_be_assigned_to(got, t, got_immutable),
+                None => {
+                    self.placeholders.insert(p, got);
+                    true
+                }
+            },
+
+            (_, Placeholder(p)) => match self.placeholders.get(&p).cloned() {
+                Some(t) => self.can_be_assigned_to(t, expected_id, got_immutable),
+                None => {
+                    self.placeholders.insert(p, expected_id);
+                    true
+                }
+            },
+
             (Trait(t), _) => self.implements_trait(got, &t.clone(), got_immutable),
+            (Ref(e), Ref(a)) => e
+                .args
+                .iter()
+                .zip(&a.args)
+                .all(|(e, a)| self.can_be_assigned_to(*a, *e, got_immutable)),
             (e, Ref(a)) if e.is_generic() => a.inner == expected_id,
             (Float, Integer) => true,
-            (_, _) => actual == expected,
+
+            (Function(expected), Function(actual)) => {
+                let params_ok = expected
+                    .params
+                    .into_iter()
+                    .zip(actual.params)
+                    .all(|(e, a)| self.can_be_assigned_to(a, e, got_immutable));
+                params_ok
+                    && self.can_be_assigned_to(
+                        actual.return_type,
+                        expected.return_type,
+                        got_immutable,
+                    )
+            }
+
+            (Tuple(e), Tuple(a)) => {
+                if e.elements.len() != a.elements.len() {
+                    return false;
+                }
+                e.elements
+                    .into_iter()
+                    .zip(a.elements)
+                    .all(|(e, a)| self.can_be_assigned_to(a, e, got_immutable))
+            }
+
+            (_, _) => got == expected_id,
         }
     }
     pub fn can_expr_be_assigned_to(
@@ -362,12 +411,26 @@ impl TypeChecker {
     {
         self.scopes.push(Scope::new());
         let res = f(self);
-        self.scopes.pop();
+        self.drop_scope();
         res
     }
     pub fn with_local_scope(&mut self) -> ScopeGuard<'_> {
         self.scopes.push(Scope::new());
         ScopeGuard { tc: self }
+    }
+    fn drop_scope(&mut self) -> Scope {
+        let scope = self.scopes.pop().unwrap();
+        for (_, &id) in &scope.bindings {
+            let ty = self.symbol_type_id(id);
+            let defined_at = self.symbols.get_symbol(id).defined_at();
+            let Some(inferred) = self.infer(ty) else {
+                self.error(DiagnosticKind::CannotInferType, defined_at);
+                continue;
+            };
+            let symbol = self.symbols.get_symbol_mut(id);
+            *symbol.ty_mut() = inferred;
+        }
+        scope
     }
 
     pub fn with_this(&mut self, this: types::TypeId) -> ThisGuard<'_> {
@@ -562,9 +625,7 @@ pub struct Scope {
 
 impl Scope {
     pub fn new() -> Self {
-        Self {
-            bindings: HashMap::new(),
-        }
+        Self::default()
     }
 
     pub fn lookup(&self, name: &str) -> Option<SymbolId> {

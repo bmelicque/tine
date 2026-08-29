@@ -138,11 +138,15 @@ impl TypeChecker {
         substitutions: &mut Substitutions,
     ) -> Option<ir::Expression> {
         let loc = node.loc();
-        let got = self.visit_expression(node);
-        if let Some(got) = &got {
-            substitutions.unify(self, expected, got.ty(), loc);
-        }
-        got
+        let got = self.visit_expression(node)?;
+        self.can_be_assigned_to(got.ty(), expected, true);
+        let Some(ty) = self.infer(got.ty()) else {
+            self.error(DiagnosticKind::CannotInferType, got.loc());
+            return None;
+        };
+        let expected = self.infer(expected)?;
+        substitutions.unify(self, expected, ty, loc);
+        Some(got)
     }
 
     /// Get the concrete type arguments for an expression of generic type.

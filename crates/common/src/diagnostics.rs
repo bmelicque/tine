@@ -79,6 +79,7 @@ pub enum DiagnosticKind {
     },
     ExpectedTupleLikeBody,
     ExpectedType,
+    ExpectedTypeAnnotation,
     ExpectedTypeGotValue,
     ExpectedValueGotType,
     ExpectedVariantUnit,
@@ -150,6 +151,7 @@ pub enum DiagnosticKind {
         type_name: String,
         trait_name: String,
     },
+    TypeDoesNotMatchHint,
     UnexpectedCallback {
         expected: String,
     },
@@ -227,6 +229,7 @@ impl Display for DiagnosticKind {
                 write!(f, "expected tuple-like body but got a struct-like body")
             }
             Self::ExpectedType => write!(f, "expected a type"),
+            Self::ExpectedTypeAnnotation => write!(f, "expected a type hint"),
             Self::ExpectedTypeGotValue => write!(f, "expected a type but got a value"),
             Self::ExpectedValueGotType => write!(f, "expected a value but got a type"),
             Self::ExpectedVariantUnit => write!(f, "expected unit variant"),
@@ -327,6 +330,7 @@ impl Display for DiagnosticKind {
             Self::TypeDoesNotImplementTrait { type_name, trait_name} => {
                 write!(f, "type `{}` is expected to implement trait `{}` but does not", type_name, trait_name)
             }
+            Self::TypeDoesNotMatchHint => write!(f, "type does not match hint"),
             Self::UnexpectedCallback { expected } => {
                 write!(f, "expected type `{}` but got a callback", expected)
             }

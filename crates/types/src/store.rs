@@ -86,6 +86,10 @@ impl TypeStore {
                 p.id = self.get_next_id();
                 Type::Param(p)
             }
+            Type::Placeholder(mut p) => {
+                p.id = self.get_next_id();
+                Type::Placeholder(p)
+            }
             ty => ty,
         };
         self.arena.push(ty);
@@ -155,6 +159,7 @@ pub fn display_raw_type(store: &TypeStore, ty: TypeId) -> String {
         }
         Type::Integer => "int".into(),
         Type::Param(t) => t.name.clone(),
+        Type::Placeholder(_) => "{unknown}".into(),
         Type::Ref(t) => {
             if t.inner == TypeStore::ARRAY {
                 return format!("{}[]", display_type(store, t.args[0]));

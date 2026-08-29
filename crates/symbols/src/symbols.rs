@@ -324,6 +324,7 @@ pub trait Symbol {
 }
 pub trait SymbolMut: Symbol {
     fn access(&mut self) -> &mut SymbolAccessManager;
+    fn ty_mut(&mut self) -> &mut TypeId;
 }
 macro_rules! impl_symbol {
     ($symbol:ident) => {
@@ -361,6 +362,10 @@ macro_rules! impl_symbol {
         impl SymbolMut for $symbol {
             fn access(&mut self) -> &mut SymbolAccessManager {
                 &mut self.access
+            }
+
+            fn ty_mut(&mut self) -> &mut TypeId {
+                &mut self.ty
             }
         }
     };

@@ -135,7 +135,7 @@ impl Substitutions {
         use types::Type::*;
         match store.get(to).clone() {
             Boolean => to,
-            Dynamic => todo!(),
+            Dynamic => TypeStore::DYNAMIC,
             Enum(e) => {
                 let args = self.resolve_params(&e.params);
                 if args.is_empty() {
@@ -160,6 +160,7 @@ impl Substitutions {
                 store.add(l)
             }
             Param(p) => *self.table.get(&p).unwrap_or(&to),
+            Placeholder(_) => to,
             Ref(mut r) => {
                 r.args = r.args.into_iter().map(|a| self.apply(store, a)).collect();
                 store.add(r)

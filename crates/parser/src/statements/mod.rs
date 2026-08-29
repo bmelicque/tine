@@ -25,8 +25,9 @@ impl Parser<'_> {
             _ => None,
         };
         let Some((Ok(token), _)) = self.tokens.peek() else {
-            // This is unreachable because other cases have been handled just above
-            unreachable!()
+            return Some(ast::Statement::Comment(ast::Comment {
+                loc: docs.unwrap().loc,
+            }));
         };
         match token {
             Token::At => self.parse_meta(docs),

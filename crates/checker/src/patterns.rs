@@ -5,7 +5,7 @@ use tine_common::{
     diagnostics::DiagnosticKind,
     locations::{Locatable, Location},
 };
-use tine_ir::{self as ir, Typed};
+use tine_ir as ir;
 use tine_symbols::symbols::*;
 use tine_types::{store::display_type, types};
 
@@ -511,9 +511,9 @@ impl TypeChecker {
         &mut self,
         pattern: ast::Pattern,
         against: &ir::Expression,
+        expected_type: types::TypeId,
         is_public: bool,
     ) -> Option<ir::Pattern> {
-        let expected_type = against.ty();
         let dependencies = self.dependencies(against).cloned().collect::<Vec<_>>();
         let mut visitor = PatternVisitor {
             tc: self,

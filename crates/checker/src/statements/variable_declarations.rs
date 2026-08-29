@@ -1,33 +1,34 @@
 use tine_ast as ast;
 use tine_common::locations::Locatable;
-use tine_ir as ir;
+use tine_ir::{self as ir, Typed};
 
-use crate::TypeChecker;
+use crate::{substitutions::Substitutions, TypeChecker};
 
 impl TypeChecker {
     pub fn visit_variable_declaration(
         &mut self,
         node: ast::VariableDeclaration,
-    ) -> Vec<ir::VariableDeclaration> {
-        let Some(value) = node.value.and_then(|v| self.visit_expression(v)) else {
-            return vec![];
-        };
-        let Some(pattern) = node.pattern else {
-            return vec![];
-        };
+    ) -> Option<ir::VariableDeclaration> {
+        let ty = node.annotation.map(|a| self.visit_type(a));
 
-        let Some(pattern) = self.visit_pattern(pattern, &value, false) else {
-            return vec![];
+        let value = match ty {
+            Some(ty) => {
+                self.check_expression_against(node.value?, ty, &mut Substitutions::new())?
+            }
+            None => self.visit_expression(node.value?)?,
         };
+        let ty = ty.unwrap_or(value.ty());
+
+        let pattern = self.visit_pattern(node.pattern?, &value, ty, false)?;
 
         if !self.check_exhaustiveness(vec![&pattern], pattern.loc()) {
-            return vec![];
+            return None;
         }
-        vec![ir::VariableDeclaration {
+        Some(ir::VariableDeclaration {
             loc: node.loc,
             pattern,
             value,
-        }]
+        })
     }
 }
 

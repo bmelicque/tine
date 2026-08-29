@@ -19,6 +19,15 @@ impl Parser<'_> {
         }
         let loc = pub_loc.map_or(definition.loc, |l| Location::merge(l, definition.loc));
 
+        definition
+            .params
+            .iter()
+            .flat_map(|p| &p.params)
+            .filter(|p| p.type_annotation.is_none())
+            .for_each(|p| {
+                self.error(DiagnosticKind::ExpectedTypeAnnotation, p.loc.increment());
+            });
+
         ast::FunctionDefinition {
             docs,
             loc,

@@ -4,7 +4,7 @@ use tine_common::locations::Locatable;
 use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_types::store::TypeStore;
-use tine_types::types;
+use tine_types::types::*;
 
 use crate::expressions::path::PathContext;
 
@@ -22,11 +22,9 @@ impl TypeChecker {
             Element(node) => self.visit_element_expression(node).map(Into::into),
             FloatLiteral(node) => Some(visit_float_literal(node).into()),
             Member(node) => self.visit_member_expression(node).map(Into::into),
-            Function(node) => self.with_scope(|self_| {
-                self_
-                    .visit_function_expression(node, None, None)
-                    .map(Into::into)
-            }),
+            Function(node) => {
+                self.with_scope(|self_| self_.visit_function_expression(node, None).map(Into::into))
+            }
             Identifier(node) => self.visit_identifier(node).map(Into::into),
             If(node) => self.visit_if_expression(node).map(Into::into),
             IfDecl(node) => self.visit_if_decl_expression(node).map(Into::into),
@@ -51,7 +49,10 @@ impl TypeChecker {
             .filter_map(|e| self.visit_expression(e))
             .collect::<Vec<_>>();
 
-        let element_type = elements.first().map_or(TypeStore::DYNAMIC, |e| e.ty());
+        let element_type = match elements.first() {
+            Some(e) => e.ty(),
+            None => self.new_type_placeholder().id,
+        };
 
         for element in &elements {
             self.check_assigned_type(
@@ -62,7 +63,7 @@ impl TypeChecker {
             );
         }
 
-        let ty = self.intern(types::TypeRef {
+        let ty = self.intern(TypeRef {
             inner: TypeStore::ARRAY,
             args: vec![element_type],
         });
@@ -165,7 +166,7 @@ impl TypeChecker {
                 } else {
                     elements.into_iter().filter_map(|e| e).collect::<Vec<_>>()
                 };
-                let ty = self.intern(types::TupleType {
+                let ty = self.intern(TupleType {
                     elements: elements.iter().map(|e| e.ty()).collect(),
                     ..Default::default()
                 });
@@ -274,7 +275,7 @@ mod tests {
         let result = checker.resolve(result.ty);
         assert_eq!(
             result,
-            types::Type::Ref(types::TypeRef {
+            Type::Ref(TypeRef {
                 inner: TypeStore::ARRAY,
                 args: vec![TypeStore::INTEGER],
             })
@@ -303,7 +304,7 @@ mod tests {
         let result = checker.resolve(result.ty);
         assert_eq!(
             result,
-            types::Type::Ref(types::TypeRef {
+            Type::Ref(TypeRef {
                 inner: TypeStore::ARRAY,
                 args: vec![TypeStore::INTEGER],
             })
@@ -367,7 +368,7 @@ mod tests {
 
         let result = checker.visit_tuple_expression(tuple_expression);
         let result = checker.resolve(result.unwrap().ty());
-        assert_eq!(result, types::Type::Unit);
+        assert_eq!(result, Type::Unit);
         assert!(checker.diagnostics.is_empty());
     }
 
@@ -396,7 +397,7 @@ mod tests {
         let result = checker.resolve(result.unwrap().ty());
         assert_eq!(
             result,
-            types::Type::Tuple(types::TupleType {
+            Type::Tuple(TupleType {
                 elements: vec![TypeStore::INTEGER, TypeStore::STRING, TypeStore::BOOLEAN],
                 ..Default::default()
             })
@@ -432,7 +433,7 @@ mod tests {
 
         let result = checker.visit_tuple_expression(tuple_expression);
         let result = checker.resolve(result.unwrap().ty());
-        assert!(matches!(result, types::Type::Tuple(_)));
+        assert!(matches!(result, Type::Tuple(_)));
         assert!(checker.diagnostics.is_empty());
     }
 }

@@ -12,6 +12,7 @@ pub enum Type {
     Generic(GenericDef),
     Integer,
     Param(TypeParam), // Represents a generic type parameter
+    Placeholder(Placeholder),
     Listener(ListenerType),
     Ref(TypeRef),
     Result(ResultType),
@@ -57,6 +58,28 @@ impl Type {
     pub fn as_ref(&self) -> Option<&TypeRef> {
         match self {
             Self::Ref(t) => Some(t),
+            _ => None,
+        }
+    }
+    pub fn as_array(&self) -> Option<&TypeRef> {
+        match self {
+            Self::Ref(t) if t.inner == TypeStore::ARRAY => Some(t),
+            _ => None,
+        }
+    }
+
+    pub fn as_tuple(&self) -> Option<&TupleType> {
+        match self {
+            Self::Tuple(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    /// Get a reactive's inner value
+    pub fn unwrapped(&self) -> Option<TypeId> {
+        match self {
+            Self::Listener(l) => Some(l.inner),
+            Self::Signal(s) => Some(s.inner),
             _ => None,
         }
     }
@@ -143,6 +166,16 @@ pub struct TypeParam {
 impl Into<Type> for TypeParam {
     fn into(self) -> Type {
         Type::Param(self)
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+pub struct Placeholder {
+    pub id: TypeId,
+}
+impl Into<Type> for Placeholder {
+    fn into(self) -> Type {
+        Type::Placeholder(self)
     }
 }
 

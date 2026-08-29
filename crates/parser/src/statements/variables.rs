@@ -1,4 +1,4 @@
-use tine_ast as ast;
+use tine_ast::*;
 use tine_common::{
     diagnostics::DiagnosticKind,
     locations::{Locatable, Location},
@@ -9,9 +9,9 @@ use crate::{tokens::Token, Parser};
 impl Parser<'_> {
     pub fn parse_variable_declaration(
         &mut self,
-        docs: Option<ast::Docs>,
+        docs: Option<Docs>,
         pub_loc: Option<Location>,
-    ) -> ast::VariableDeclaration {
+    ) -> VariableDeclaration {
         let start_range = self.eat(&[Token::Let]);
         let kw_loc = self.localize(start_range);
 
@@ -21,10 +21,7 @@ impl Parser<'_> {
             self.error(DiagnosticKind::MissingPattern, loc);
         }
 
-        let type_annotation = match self.tokens.peek() {
-            Some((Ok(Token::Colon), _)) => self.parse_type(),
-            _ => None,
-        };
+        let type_annotation = self.maybe_parse_annotation();
 
         let op_range = self.expect(Token::Eq);
         let value = self.parse_expression_with_block();
@@ -40,7 +37,7 @@ impl Parser<'_> {
             None => Location::merge(start_loc, self.localize(op_range)),
         };
 
-        ast::VariableDeclaration {
+        VariableDeclaration {
             docs,
             loc,
             public: pub_loc.is_some(),
@@ -49,6 +46,16 @@ impl Parser<'_> {
             annotation: type_annotation,
             value: value.into(),
         }
+    }
+
+    fn maybe_parse_annotation(&mut self) -> Option<Type> {
+        let r = self.eat_if(&[Token::Colon])?;
+        let ty = self.parse_type();
+        if ty.is_none() {
+            let loc = self.localize(r);
+            self.error(DiagnosticKind::MissingType, loc);
+        }
+        ty
     }
 }
 
@@ -149,6 +156,13 @@ mod tests {
             decl.public,
             "declaration should be public when a pub_loc is supplied"
         );
+    }
+
+    #[test]
+    fn parses_typed_binding() {
+        let decl = parse_decl("let count: int = 0");
+        decl.annotation.expect("type should be present");
+        decl.value.expect("value should be present");
     }
 
     #[test]

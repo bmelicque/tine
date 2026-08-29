@@ -154,42 +154,8 @@ impl TypeChecker {
         params
             .iter()
             .zip(args.into_iter())
-            .filter_map(|(param, arg)| self.check_argument(arg, *param, substitutions))
+            .filter_map(|(param, arg)| self.check_expression_against(arg, *param, substitutions))
             .collect()
-    }
-
-    fn check_argument(
-        &mut self,
-        node: ast::Expression,
-        expected: types::TypeId,
-        substitutions: &mut Substitutions,
-    ) -> Option<ir::Expression> {
-        match node {
-            ast::Expression::Function(f) => self
-                .check_callback(f, expected, substitutions)
-                .map(Into::into),
-            expr => self
-                .check_expression_against(expr, expected, substitutions)
-                .map(|e| e.into()),
-        }
-    }
-
-    fn check_callback(
-        &mut self,
-        node: ast::FunctionExpression,
-        expected_id: types::TypeId,
-        substitutions: &mut Substitutions,
-    ) -> Option<ir::FunctionExpression> {
-        let expected = self.resolve(expected_id);
-        let types::Type::Function(expected) = expected else {
-            let expected = self.types.display(expected_id);
-            let error = DiagnosticKind::UnexpectedCallback { expected };
-            self.error(error, node.loc);
-            return None;
-        };
-        let f = self.visit_function_expression(node, None, Some(&expected))?;
-        substitutions.unify(self, expected_id, f.ty, f.loc);
-        Some(f)
     }
 
     fn visit_call_to_computed(&mut self, node: ast::CallExpression) -> Option<ir::CallExpression> {

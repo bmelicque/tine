@@ -1,8 +1,5 @@
 use tine_ast as ast;
-use tine_common::{
-    diagnostics::DiagnosticKind,
-    locations::{Locatable, Location},
-};
+use tine_common::locations::{Locatable, Location};
 use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_types::{store::TypeStore, types};
@@ -20,14 +17,17 @@ impl TypeChecker {
         &mut self,
         node: ast::FunctionExpression,
         docs: Option<String>,
-        type_hint: Option<&types::FunctionType>,
     ) -> Option<ir::FunctionExpression> {
-        let mut sub = Substitutions::new();
         let (result, type_params) = self.with_type_params(&node.type_params, |s, _| {
-            // TODO: handle generic type_hint
-            let params = s.visit_function_params(node.params, type_hint, &mut sub);
-            let (return_type, body) =
-                s.visit_function_return_body(node.return_type, node.body, type_hint, &mut sub)?;
+            let params = s.visit_function_params(node.params);
+            let return_type = match node.body.as_deref() {
+                Some(ast::Expression::Block(_)) => Some(
+                    node.return_type
+                        .map_or(TypeStore::UNIT, |ty| s.visit_type(ty)),
+                ),
+                _ => None,
+            };
+            let (return_type, body) = s.visit_function_body(node.body, return_type)?;
             let params = params?;
             Some(FunctionResult {
                 params,
@@ -46,8 +46,6 @@ impl TypeChecker {
             params: params.iter().map(|p| self.symbol_type_id(p.1)).collect(),
             return_type,
         });
-        let ty = sub.apply(&mut self.types, ty);
-        self.errors(sub.produce_diagnostics(&self.types), node.loc);
 
         let name = match node.name {
             Some(id) => {
@@ -80,73 +78,19 @@ impl TypeChecker {
     pub fn visit_function_params(
         &mut self,
         node: Option<ast::FunctionParams>,
-        hint: Option<&types::FunctionType>,
-        sub: &mut Substitutions,
     ) -> Option<Vec<(Location, VariableSymbolId)>> {
-        let node = node?;
-        let Some(hint) = hint else {
-            return node
-                .params
-                .into_iter()
-                .map(|p| Some((p.loc, self.visit_function_param(p, None, sub)?)))
-                .collect::<Option<Vec<_>>>();
-        };
-
-        self.report_extra_parameters(&node.params, hint, node.loc(), sub);
-
-        node.params
+        node?
+            .params
             .into_iter()
-            .zip(&hint.params)
-            .map(|(param, &hint)| {
-                Some((
-                    param.loc,
-                    self.visit_function_param(param, Some(hint), sub)?,
-                ))
-            })
+            .map(|p| Some((p.loc, self.visit_function_param(p)?)))
             .collect::<Option<Vec<_>>>()
     }
 
-    fn report_extra_parameters(
-        &mut self,
-        params: &[ast::FunctionParam],
-        hint: &types::FunctionType,
-        error_loc: Location,
-        sub: &mut Substitutions,
-    ) {
-        if hint.params.len() == params.len() {
-            return;
-        }
-        let expected = hint.params.len();
-        let got = params.len();
-        let error = DiagnosticKind::ArgumentCountMismatch { expected, got };
-        self.error(error, error_loc);
-        params
-            .iter()
-            .skip(hint.params.len())
-            .map(|p| self.visit_function_param(p.clone(), Some(TypeStore::UNKNOWN), sub))
-            .for_each(drop);
-    }
-
-    fn visit_function_param(
-        &mut self,
-        node: ast::FunctionParam,
-        hint: Option<types::TypeId>,
-        sub: &mut Substitutions,
-    ) -> Option<VariableSymbolId> {
+    fn visit_function_param(&mut self, node: ast::FunctionParam) -> Option<VariableSymbolId> {
         let name = node.name?;
-        let ty = match (hint, node.type_annotation) {
-            (Some(hint), Some(ty)) => {
-                let loc = ty.loc();
-                let ty = self.visit_type(ty);
-                self.try_unify(ty, hint, sub, loc);
-                ty
-            }
-            (Some(hint), None) => hint,
-            (None, Some(ty)) => self.visit_type(ty),
-            (None, None) => {
-                self.error(DiagnosticKind::CannotInferType, node.loc);
-                TypeStore::UNKNOWN
-            }
+        let ty = match node.type_annotation {
+            Some(ty) => self.visit_type(ty),
+            None => self.new_type_placeholder().id,
         };
         let id = self.symbols.insert::<VariableSymbolId>(VariableSymbol {
             name: name.as_str().into(),
@@ -158,23 +102,21 @@ impl TypeChecker {
         Some(id)
     }
 
-    /// Return (function return type, visited body)
-    pub fn visit_function_return_body(
+    pub fn visit_function_body(
         &mut self,
-        return_annotation: Option<ast::Type>,
         body: Option<Box<ast::Expression>>,
-        hint: Option<&types::FunctionType>,
-        sub: &mut Substitutions,
+        expected_type: Option<types::TypeId>,
     ) -> Option<(types::TypeId, ir::Block)> {
-        let body_must_be_block = hint.is_none() || return_annotation.is_some();
-        let return_type = self.visit_return_type(return_annotation, hint, sub);
-        let mut body = self.visit_function_body(*body?, body_must_be_block)?;
-        match hint {
-            Some(_) => self.check_callback_body_type(&body, return_type, sub),
-            None => self.check_function_body_type(&body, return_type),
-        }
+        let mut body: ir::Block = self.visit_expression(*body?)?.into();
+        let ty = match expected_type {
+            Some(e) => {
+                self.check_function_body_type(&body, e);
+                e
+            }
+            None => body.ty,
+        };
         return_last(&mut body);
-        Some((return_type, body))
+        Some((ty, body))
     }
 
     pub fn check_function_body_type(&mut self, body: &ir::Block, return_type: types::TypeId) {
@@ -226,36 +168,6 @@ impl TypeChecker {
                 self.check_assigned_type(hint, ty, true, loc);
             }
         }
-    }
-
-    fn visit_return_type(
-        &mut self,
-        return_type: Option<ast::Type>,
-        hint: Option<&types::FunctionType>,
-        sub: &mut Substitutions,
-    ) -> types::TypeId {
-        let Some(hint) = hint else {
-            return return_type.map_or(TypeStore::UNIT, |ty| self.visit_type(ty));
-        };
-        if let Some(return_type) = return_type {
-            let return_loc = return_type.loc();
-            let ty = self.visit_type(return_type);
-            self.try_unify(ty, hint.return_type, sub, return_loc);
-        }
-        sub.apply(&mut self.types, hint.return_type)
-    }
-
-    fn visit_function_body(
-        &mut self,
-        body: ast::Expression,
-        must_be_block: bool,
-    ) -> Option<ir::Block> {
-        let body = self.visit_expression(body)?;
-        if must_be_block && body.as_block().is_none() {
-            self.error(DiagnosticKind::ExpectedBlock, body.loc());
-            return None;
-        }
-        Some(body.into())
     }
 }
 
@@ -340,7 +252,7 @@ mod tests {
             }))),
         };
 
-        let result = checker.visit_function_expression(function_expression, None, None);
+        let result = checker.visit_function_expression(function_expression, None);
         let result = checker.resolve(result.map_or(TypeStore::UNKNOWN, |r| r.ty));
         assert_eq!(
             result,
@@ -383,7 +295,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = checker.visit_function_expression(function_expression, None, None);
+        let result = checker.visit_function_expression(function_expression, None);
         assert!(
             checker.diagnostics.is_empty(),
             "expected no errors, got {:?}",

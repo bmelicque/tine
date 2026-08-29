@@ -55,7 +55,7 @@ impl TypeChecker {
         arm: ast::MatchArm,
     ) -> Option<(ir::Pattern, ir::Expression)> {
         let mut self_ = self.with_local_scope();
-        let pattern = scrutinee.and_then(|s| self_.visit_pattern(*arm.pattern?, s, false));
+        let pattern = scrutinee.and_then(|s| self_.visit_pattern(*arm.pattern?, s, s.ty(), false));
         let expression = arm.expression.and_then(|e| self_.visit_expression(*e));
         Some((pattern?, expression?))
     }
