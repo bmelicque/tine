@@ -155,6 +155,7 @@ pub enum DiagnosticKind {
     UnexpectedCallback {
         expected: String,
     },
+    UnexpectedExpression,
     UnexpectedModuleTree,
     UnexpectedToken {
         token: String,
@@ -344,6 +345,7 @@ impl Display for DiagnosticKind {
             Self::UnknownMember { member } => {
                 write!(f, "unknown member `{}`", member)
             }
+            Self::UnexpectedExpression => write!(f, "unexpected expression"),
             Self::UnexpectedModuleTree => write!(f, "unexpected module tree"),
             Self::UnknownVariant { variant, enum_name } => {
                 write!(f, "unknown variant `{}` for enum `{}`", variant, enum_name)

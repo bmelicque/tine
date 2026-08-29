@@ -1,4 +1,4 @@
-use tine_ast as ast;
+use tine_ast::*;
 use tine_common::{
     diagnostics::DiagnosticKind,
     locations::{Locatable, Location},
@@ -7,71 +7,50 @@ use tine_common::{
 use crate::{tokens::Token, Parser};
 
 impl Parser<'_> {
-    const UNARY_TYPE_OPERATORS: [Token; 3] = [Token::Bang, Token::LBracket, Token::QMark];
+    pub fn parse_unary_type(&mut self) -> Option<Type> {
+        let mut ty = self.parse_atomic_type();
 
-    pub fn parse_unary_type(&mut self) -> Option<ast::Type> {
-        match self.tokens.peek() {
-            Some((Ok(token), _)) if Self::UNARY_TYPE_OPERATORS.contains(token) => {}
-            _ => return self.parse_atomic_type(),
+        while let Some((Ok(token), _)) = self.tokens.peek() {
+            match token {
+                Token::LBracket => {
+                    ty = Some(self.parse_array_type(ty).into());
+                }
+                Token::QMark => {
+                    ty = Some(Type::Option(OptionType {
+                        loc: self.unary_type_loc(&ty),
+                        base: ty.map(Box::new),
+                    }))
+                }
+                _ => break,
+            }
         }
-
-        let Some((Ok(token), op_range)) = self.tokens.next() else {
-            unreachable!()
-        };
-        let mut op_loc = self.localize(op_range);
-        if token == Token::LBracket {
-            op_loc = self.parse_array_token(op_loc);
-        }
-        let inner = self.parse_unary_type();
-        if inner.is_none() {
-            self.error(DiagnosticKind::MissingExpression, op_loc.increment());
-        }
-        let loc = match &inner {
-            Some(inner) => Location::merge(op_loc, inner.loc()),
-            None => op_loc,
-        };
-        let ty = match token {
-            Token::Bang => ast::Type::Result(ast::ResultType {
-                loc,
-                error: None,
-                ok: inner.map(|t| Box::new(t)),
-            }),
-            Token::LBracket => ast::Type::Array(ast::ArrayType {
-                loc,
-                element: inner.map(|t| Box::new(t)),
-            }),
-            Token::QMark => ast::Type::Option(ast::OptionType {
-                loc,
-                base: inner.map(|t| Box::new(t)),
-            }),
-            // unreachable because tokens are filtered at the top of the function
-            _ => unreachable!(),
-        };
-        Some(ty)
+        ty
     }
 
-    fn parse_array_token(&mut self, start_loc: Location) -> Location {
-        let result = self.better_expect(
-            |t| match t {
-                Token::RBracket => Some(()),
-                _ => None,
-            },
-            &[Token::Newline],
-        );
-        match result {
-            Ok(((), range)) => Location::merge(start_loc, self.localize(range)),
-            Err(error_range) => match self.tokens.peek() {
-                Some((Ok(Token::RBracket), range)) => {
-                    let range = range.clone();
-                    let loc = self.localize(range);
-                    Location::merge(start_loc, loc)
-                }
-                _ => {
-                    let range = error_range.clone();
-                    let loc = self.localize(range);
-                    Location::merge(start_loc, loc)
-                }
-            },
+    fn parse_array_type(&mut self, element: Option<Type>) -> ArrayType {
+        if element.is_none() {
+            let loc = self.next_loc();
+            self.error(DiagnosticKind::MissingType, loc);
+        }
+        let a = self.parse_array();
+        if !a.elements.is_empty() {
+            self.error(DiagnosticKind::UnexpectedExpression, a.loc);
+        }
+        let loc = element
+            .as_ref()
+            .map_or(a.loc, |t| Location::merge(t.loc(), a.loc));
+        ArrayType {
+            loc,
+            element: element.map(Box::new),
+        }
+    }
+
+    fn unary_type_loc(&mut self, inner: &Option<Type>) -> Location {
+        let r = self.tokens.next().unwrap().1;
+        let end = self.localize(r);
+        match inner {
+            Some(i) => Location::merge(i.loc(), end),
+            None => end,
         }
     }
 }
