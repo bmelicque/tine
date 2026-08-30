@@ -150,6 +150,7 @@ impl<'src> Parser<'src> {
         }
     }
 
+    /// Return `Err` if could not parse nor recover immediatly
     fn try_parse<F, R, T>(&mut self, parse: F, recover_at: R) -> Result<Option<T>, Location>
     where
         F: FnOnce(&mut Self) -> Option<T>,
