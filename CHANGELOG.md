@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Fixed crashes when parsing invalid enums
 - Fixed crashes when parsing invalid use items
 - Fixed error locations on variable declarations
+- Fixed misleading error on compile
 
 ## [0.1.0] - 2026-08-29
 

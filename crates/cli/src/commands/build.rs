@@ -9,13 +9,19 @@ pub fn run(args: BuildArgs) {
     let project_result = tine_parser::parse_project(module_path.clone(), None);
     let check_result = tine_checker::check_project(project_result);
     if !check_result.diagnostics.is_empty() {
+        let count = check_result
+            .diagnostics
+            .iter()
+            .fold(0, |sum, (_, list)| sum + list.len());
         for (module_id, diagnostics) in check_result.diagnostics {
             let src = &check_result.sources[&module_id];
             for diag in diagnostics {
                 pretty_print_error(src, &diag);
             }
         }
-        println!("Found errors, stopped before generating code");
+        if count > 0 {
+            println!("Found errors, stopped before generating code");
+        }
     }
 
     let loader = SwcLoader {
