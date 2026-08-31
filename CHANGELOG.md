@@ -4,6 +4,12 @@ All meaningful changes to this project will be written here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
+## Unreleased
+
+### Fixed
+
+- Fixed markup tag parsing
+
 ## [0.1.0] - 2026-08-29
 
 ### Added

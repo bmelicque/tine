@@ -318,7 +318,14 @@ impl Parser<'_> {
         );
         let end_loc = match res {
             Ok((_, range)) => self.localize(range),
-            Err(range) => self.localize(range).decrement(),
+            Err(range) => {
+                let error_kind = DiagnosticKind::ExpectedToken {
+                    expected: vec![">".into()],
+                };
+                let error_loc = self.localize(range).nth_char(0);
+                self.error(error_kind, error_loc);
+                error_loc.decrement()
+            }
         };
 
         Some((tag_name, Location::merge(start_loc, end_loc)))
@@ -424,6 +431,13 @@ mod tests {
             })),
             diagnostics: vec![],
         });
+    }
+
+    #[test]
+    fn parse_element_missing_last_token() {
+        let mut parser = Parser::new(0, "<tag></tag");
+        parser.parse_element_expression();
+        assert!(!parser.diagnostics.is_empty());
     }
 
     #[test]
