@@ -22,7 +22,7 @@ impl Parser<'_> {
 
         let tree = self.parse_use_tree();
         if tree.is_none() {
-            let error_loc = self.next_loc();
+            let error_loc = self.next_loc().nth_char(0);
             self.error(DiagnosticKind::MissingName, error_loc);
         }
 
