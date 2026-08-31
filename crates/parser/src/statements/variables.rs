@@ -28,7 +28,7 @@ impl Parser<'_> {
         if value.is_none() {
             self.error(
                 DiagnosticKind::MissingExpression,
-                self.localize(op_range.clone()).increment(),
+                self.localize(op_range.clone()).nth_char(0),
             );
         }
         let start_loc = pub_loc.unwrap_or(kw_loc);

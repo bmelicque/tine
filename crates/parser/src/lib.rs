@@ -264,7 +264,8 @@ impl<'src> Parser<'src> {
         let error = DiagnosticKind::ExpectedToken {
             expected: tokens.iter().map(|t| t.to_string()).collect(),
         };
-        self.error(error, self.localize(range.clone()));
+        let error_loc = self.localize(range.clone()).nth_char(0);
+        self.error(error, error_loc);
         range
     }
 
