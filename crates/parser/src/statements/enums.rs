@@ -19,20 +19,32 @@ impl Parser<'_> {
         let start = pub_loc.unwrap_or(self.localize(kw_range));
 
         let (name, params) = self.try_parse_type_name();
-        let (items, end) = self
+        let Some((items, end)) = self
             .try_parse(|s| s.parse_enum_items(), |t| matches!(t, Token::Newline))
             .ok()
             .flatten()
-            .unzip();
+        else {
+            let error_loc = self.next_loc().nth_char(0);
+            self.error(DiagnosticKind::MissingBody, error_loc);
+            return EnumDefinition {
+                loc: enum_loc(start, &name, &params, None),
+                docs,
+                meta,
+                public: pub_loc.is_some(),
+                name,
+                params,
+                items: None,
+            };
+        };
 
         EnumDefinition {
             docs,
             meta,
-            loc: Location::merge(start, end.unwrap()),
+            loc: enum_loc(start, &name, &params, Some(end)),
             public: pub_loc.is_some(),
             name,
             params,
-            items,
+            items: Some(items),
         }
     }
 
@@ -117,13 +129,40 @@ impl Parser<'_> {
     }
 }
 
+fn enum_loc(
+    start: Location,
+    name: &Option<Identifier>,
+    params: &Option<Vec<Identifier>>,
+    end: Option<Location>,
+) -> Location {
+    if let Some(end) = end {
+        Location::merge(start, end)
+    } else if let Some(param) = params.as_ref().and_then(|p| p.last()) {
+        Location::merge(start, param.loc())
+    } else if let Some(name) = &name {
+        Location::merge(start, name.loc)
+    } else {
+        start
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use tine_common::diagnostics::DiagnosticKind;
+
     use crate::test_utils::parse_statement;
 
     #[test]
     fn parse_enum_definition() {
         let stmt = parse_statement("enum Enum {}").expect("expected no errors");
         stmt.as_enum().expect("expected enum definition");
+    }
+
+    #[test]
+    fn parse_enum_definition_only_kw() {
+        let (_, errors) = parse_statement("enum").expect_err("expected errors");
+        assert_eq!(errors.len(), 2);
+        assert!(matches!(errors[0].kind, DiagnosticKind::MissingName));
+        assert!(matches!(errors[1].kind, DiagnosticKind::MissingBody));
     }
 }

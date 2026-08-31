@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ### Fixed
 
 - Fixed markup tag parsing
+- Fixed crashes when parsing invalid enums
 
 ## [0.1.0] - 2026-08-29
 
