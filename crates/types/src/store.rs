@@ -151,7 +151,11 @@ pub fn display_raw_type(store: &TypeStore, ty: TypeId) -> String {
                 .map(|p| display_type(store, *p))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("({}) => {}", params, display_type(store, t.return_type))
+            let return_type = match t.return_type {
+                TypeStore::UNIT => "".to_string(),
+                ty => format!(" -> {}", display_type(store, ty)),
+            };
+            format!("fn({}){}", params, return_type)
         }
         Type::Generic(_) => "generic".into(),
         Type::Listener(t) => {
@@ -273,7 +277,7 @@ mod tests {
             return_type: TypeStore::BOOLEAN,
         });
         let fn_id = store.add(fn_type);
-        assert_eq!(display_type(&store, fn_id), "(str, int) => bool");
+        assert_eq!(display_type(&store, fn_id), "fn(str, int) -> bool");
     }
 
     #[test]
