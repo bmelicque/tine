@@ -182,7 +182,7 @@ pub struct FunctionExpression {
 }
 
 #[tree_struct]
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Identifier {
     pub symbol: SymbolId,
 }
