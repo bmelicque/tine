@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tine_ast as ast;
-use tine_common::locations::Location;
+use tine_common::locations::{Locatable, Location};
 use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_types::types;
@@ -113,4 +113,18 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 fn generate_id() -> usize {
     COUNTER.fetch_add(1, Ordering::Relaxed)
+}
+
+pub fn return_last(body: &mut ir::Block) {
+    let Some(last) = body.statements.pop() else {
+        return;
+    };
+    let last = match last {
+        ir::Statement::Expression(e) => ir::Statement::Return(ir::ReturnStatement {
+            loc: e.loc(),
+            expression: Some(Box::new(e)),
+        }),
+        _ => last,
+    };
+    body.statements.push(last);
 }

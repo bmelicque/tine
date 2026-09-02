@@ -43,8 +43,7 @@ impl CodeGenerator<'_, '_> {
         let result = self.handle_pattern(arm.0, scrutinee.clone());
         let test = result.test.unwrap_or(create_bool(true));
         let mut cons = self.handle_block_stmt(ir::Block::from(arm.1));
-        if let Some(name) = result.decl {
-            let decl = declare_pat(name, scrutinee);
+        if let Some(decl) = get_arm_decl(result.decl, scrutinee) {
             cons.stmts.insert(0, decl.into());
         }
 
@@ -54,5 +53,12 @@ impl CodeGenerator<'_, '_> {
             cons: Box::new(cons.into()),
             alt: None,
         }
+    }
+}
+
+fn get_arm_decl(decl: Option<swc::Pat>, value: swc::Expr) -> Option<swc::Decl> {
+    match decl? {
+        swc::Pat::Object(o) if o.props.is_empty() => None,
+        decl => Some(declare_pat(decl, value)),
     }
 }

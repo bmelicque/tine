@@ -11,6 +11,7 @@ use tine_types::{store::TypeStore, types};
 
 use crate::{
     substitutions::{SubstitutionTable, Substitutions},
+    utils::return_last,
     TypeChecker,
 };
 
@@ -264,8 +265,9 @@ impl TypeChecker {
         node: Option<Box<ast::Expression>>,
         expected_return: types::TypeId,
     ) -> Option<ir::Block> {
-        let body: ir::Block = self.visit_expression(*node?)?.into();
+        let mut body: ir::Block = self.visit_expression(*node?)?.into();
         self.check_function_body_type(&body, expected_return);
+        return_last(&mut body);
         Some(body)
     }
 }

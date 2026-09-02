@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Fixed crashes when parsing invalid use items
 - Fixed crashes when checking some reactive expressions in markup
 - Fixed functions treated as statements where they should be expressions
+- Fixed missing return in generated method code
 - Fixed errors on duplicated method names
 - Fixed error locations on variable declarations
 - Fixed misleading error on compile
