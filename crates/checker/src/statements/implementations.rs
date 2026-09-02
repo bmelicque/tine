@@ -116,11 +116,6 @@ impl TypeChecker {
     ) -> Option<MethodSymbolId> {
         let ident = node.name.as_ref()?;
         let name = ident.as_str().to_string();
-        if self.has_member(owner, &name) {
-            let error = DiagnosticKind::DuplicateFieldName { name: name.clone() };
-            self.error(error, node.loc);
-            return None;
-        }
         let receiver = if node.static_ {
             MethodReceiverKind::Static
         } else if node.mut_ {
@@ -147,6 +142,16 @@ impl TypeChecker {
             params: param_types,
             return_type,
         });
+        let duplicated = self
+            .symbols
+            .find::<MethodSymbolId, _>(|s| {
+                s.name == name && s.owner == owner && &s.owner_args == owner_args
+            })
+            .is_some();
+        if duplicated {
+            let kind = DiagnosticKind::DuplicateMethodName { name: name.clone() };
+            self.error(kind, ident.loc);
+        }
         Some(self.insert(MethodSymbol {
             name,
             public: node.public,
@@ -262,33 +267,6 @@ impl TypeChecker {
         let body: ir::Block = self.visit_expression(*node?)?.into();
         self.check_function_body_type(&body, expected_return);
         Some(body)
-    }
-
-    fn has_member(&self, symbol: TypeSymbolId, field: &str) -> bool {
-        if self.has_method(symbol, field) {
-            return true;
-        }
-        let TypeSymbolId::Struct(s) = symbol else {
-            return false;
-        };
-        self.symbols
-            .get(s)
-            .members
-            .iter()
-            .find(|m| self.symbol_name(**m) == field)
-            .is_some()
-    }
-
-    fn has_method(&self, symbol: TypeSymbolId, field: &str) -> bool {
-        let methods = match symbol {
-            TypeSymbolId::Enum(s) => &self.symbols.get(s).methods,
-            TypeSymbolId::Struct(s) => &self.symbols.get(s).methods,
-            TypeSymbolId::Primitive(s) => &self.symbols.get(s).methods,
-        };
-        methods
-            .into_iter()
-            .find(|m| self.symbol_name(**m) == field)
-            .is_some()
     }
 }
 
