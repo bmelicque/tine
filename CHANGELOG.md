@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Fixed error locations on variable declarations
 - Fixed misleading error on compile
 - Fixed function type display
+- Fixed 'Installing' section from docs
 
 ## [0.1.0] - 2026-08-29
 
