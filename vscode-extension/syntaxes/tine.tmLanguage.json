@@ -1,18 +1,25 @@
 {
     "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
     "name": "Tine",
+    "scopeName": "source.tine",
     "patterns": [
+        {
+            "include": "#comments"
+        },
+        {
+            "include": "#strings"
+        },
+        {
+            "include": "#modules"
+        },
+        {
+            "include": "#markup"
+        },
         {
             "include": "#keywords"
         },
         {
             "include": "#functions"
-        },
-        {
-            "include": "#xml-element"
-        },
-        {
-            "include": "#xml-children"
         },
         {
             "include": "#types"
@@ -21,67 +28,117 @@
             "include": "#booleans"
         },
         {
-            "include": "#identifiers"
-        },
-        {
             "include": "#numbers"
         },
         {
-            "include": "#strings"
-        },
-        {
-            "include": "#comments"
+            "include": "#identifiers"
         }
     ],
     "repository": {
-        "xml-element": {
-            "name": "meta",
-            "begin": "(<\/?)([A-Za-z][A-Za-z0-9\\-]*)",
+        "markup": {
+            "patterns": [
+                {
+                    "include": "#markup-element"
+                }
+            ]
+        },
+        "markup-element": {
+            "name": "meta.tag.tine",
+            "begin": "(</?)([A-Za-z][A-Za-z0-9_-]*)",
             "beginCaptures": {
                 "1": {
                     "name": "punctuation.definition.tag.begin.tine"
                 },
                 "2": {
-                    "name": "entity.name.tag.open.tine"
+                    "name": "entity.name.tag.tine"
                 }
             },
-            "end": "(\/?>)",
+            "end": "/?>",
             "endCaptures": {
-                "1": {
+                "0": {
                     "name": "punctuation.definition.tag.end.tine"
                 }
             },
             "patterns": [
                 {
-                    "include": "#xml-tag-attributes"
+                    "include": "#markup-type-arguments"
+                },
+                {
+                    "include": "#markup-attributes"
                 }
             ]
         },
-        "xml-tag-attributes": {
-            "name": "meta.jsx.attributes",
-            "begin": "(?<=<[^>]*)(?=[^>]*>)",
-            "end": "(?=/?>)",
+        "markup-type-arguments": {
+            "begin": "<",
+            "end": ">",
+            "name": "meta.type.parameters.tine",
+            "beginCaptures": {
+                "0": {
+                    "name": "punctuation.definition.type.begin.tine"
+                }
+            },
+            "endCaptures": {
+                "0": {
+                    "name": "punctuation.definition.type.end.tine"
+                }
+            },
             "patterns": [
                 {
-                    "match": "\\b([A-Za-z_:][A-Za-z0-9_:\\-\\.]*)\\b",
+                    "include": "#types"
+                },
+                {
+                    "match": ",",
+                    "name": "punctuation.separator.type.tine"
+                }
+            ]
+        },
+        "markup-attributes": {
+            "patterns": [
+                {
+                    "match": "([A-Za-z_:][A-Za-z0-9_:.\\-]*)(\\s*=)",
                     "captures": {
                         "1": {
                             "name": "entity.other.attribute-name.tine"
+                        },
+                        "2": {
+                            "name": "keyword.operator.assignment.tine"
                         }
                     }
                 },
                 {
-                    "match": "\"[^\"]*\"",
-                    "name": "string.quoted.double.tine"
+                    "begin": "\"",
+                    "end": "\"",
+                    "name": "string.quoted.double.tine",
+                    "patterns": [
+                        {
+                            "include": "#string-escapes"
+                        }
+                    ]
                 },
                 {
-                    "match": "'[^']*'",
-                    "name": "string.quoted.single.tine"
+                    "begin": "'",
+                    "end": "'",
+                    "name": "string.quoted.single.tine",
+                    "patterns": [
+                        {
+                            "include": "#string-escapes"
+                        }
+                    ]
                 },
                 {
                     "begin": "\\{",
                     "end": "\\}",
                     "name": "meta.embedded.expression.tine",
+                    "beginCaptures": {
+                        "0": {
+                            "name": "punctuation.section.embedded.begin.tine"
+                        }
+                    },
+                    "endCaptures": {
+                        "0": {
+                            "name": "punctuation.section.embedded.end.tine"
+                        }
+                    },
                     "patterns": [
                         {
                             "include": "#expressions"
@@ -90,19 +147,46 @@
                 }
             ]
         },
-        "xml-children": {
-            "match": "(?<=>).*?(?=<\/)",
-            "name": "text.tine"
+        "expressions": {
+            "patterns": [
+                {
+                    "include": "#comments"
+                },
+                {
+                    "include": "#strings"
+                },
+                {
+                    "include": "#markup"
+                },
+                {
+                    "include": "#keywords"
+                },
+                {
+                    "include": "#functions"
+                },
+                {
+                    "include": "#types"
+                },
+                {
+                    "include": "#booleans"
+                },
+                {
+                    "include": "#numbers"
+                },
+                {
+                    "include": "#identifiers"
+                }
+            ]
         },
         "types": {
             "patterns": [
                 {
                     "name": "entity.name.type.tine",
-                    "match": "\\b([A-Z][a-zA-Z0-9_]*|str|int|float|bool)\\b"
+                    "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
                 },
                 {
                     "name": "entity.name.type.tine",
-                    "match": "(?<=^use)\\s+[A-Za-z_][A-Za-z0-9_]*|(?<=\\.)[A-Za-z_][A-Za-z0-9_]*"
+                    "match": "\\b(str|int|float|bool)\\b"
                 }
             ]
         },
@@ -113,7 +197,15 @@
         "functions": {
             "patterns": [
                 {
-                    "begin": "(?<=\\bfn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+                    "match": "\\b([a-zA-Z_][a-zA-Z0-9_$]*)\\s*(?=\\()",
+                    "captures": {
+                        "1": {
+                            "name": "entity.name.function.call.tine"
+                        }
+                    }
+                },
+                {
+                    "begin": "\\bfn\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
                     "beginCaptures": {
                         "1": {
                             "name": "entity.name.function.tine"
@@ -122,24 +214,19 @@
                     "end": "(?=\\()",
                     "patterns": [
                         {
-                            "begin": "<",
-                            "end": ">",
-                            "patterns": [
-                                {
-                                    "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b",
-                                    "name": "entity.name.type.tine"
-                                }
-                            ]
+                            "include": "#function-type-parameters"
                         }
                     ]
-                },
+                }
+            ]
+        },
+        "function-type-parameters": {
+            "begin": "<",
+            "end": ">",
+            "name": "meta.type.parameters.tine",
+            "patterns": [
                 {
-                    "match": "\\b([a-zA-Z_][a-zA-Z0-9_$]*)\\s*(?=\\()",
-                    "captures": {
-                        "1": {
-                            "name": "entity.name.function.call.tine"
-                        }
-                    }
+                    "include": "#types"
                 }
             ]
         },
@@ -168,30 +255,41 @@
             ]
         },
         "identifiers": {
+            "name": "variable.other.tine",
+            "match": "\\b[a-zA-Z_][a-zA-Z0-9_$]*\\b"
+        },
+        "modules": {
+            "begin": "(use)\\s+\\.*",
+            "beginCaptures": {
+                "1": {
+                    "name": "keyword.control.tine"
+                }
+            },
+            "end": "\\n",
             "patterns": [
                 {
-                    "name": "variable.other.tine",
-                    "match": "\\b([a-zA-Z_][a-zA-Z0-9_$]*)"
+                    "name": "entity.name.namespace.tine",
+                    "match": "\\b[a-zA-Z_][a-zA-Z0-9_$]*\\b"
                 }
             ]
         },
         "numbers": {
             "patterns": [
                 {
-                    "name": "constant.numeric.integer.decimal.tine",
-                    "match": "\\b([0-9]+)\\b"
+                    "name": "constant.numeric.float.tine",
+                    "match": "(?<![\\w.])[0-9]+\\.[0-9]*(?:[eE][+-]?[0-9]+)?"
                 },
                 {
                     "name": "constant.numeric.integer.hexadecimal.tine",
-                    "match": "\\b0x([0-9a-fA-F]+)\\b"
+                    "match": "\\b0x[0-9a-fA-F]+\\b"
                 },
                 {
                     "name": "constant.numeric.integer.binary.tine",
-                    "match": "\\b0b([01]+)\\b"
+                    "match": "\\b0b[01]+\\b"
                 },
                 {
-                    "name": "constant.numeric.float.tine",
-                    "match": "\\b([0-9]+\\.[0-9]*)([eE][+-]?[0-9]+)?\\b"
+                    "name": "constant.numeric.integer.decimal.tine",
+                    "match": "\\b[0-9]+\\b"
                 }
             ]
         },
@@ -201,16 +299,18 @@
             "end": "\"",
             "patterns": [
                 {
-                    "name": "constant.character.escape.tine",
-                    "match": "\\\\."
+                    "include": "#string-escapes"
                 }
             ]
+        },
+        "string-escapes": {
+            "name": "constant.character.escape.tine",
+            "match": "\\\\."
         },
         "comments": {
             "name": "comment.line.double-slash.tine",
             "begin": "//",
             "end": "$"
         }
-    },
-    "scopeName": "source.tine"
+    }
 }
