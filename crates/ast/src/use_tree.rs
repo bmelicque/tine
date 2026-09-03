@@ -53,7 +53,7 @@ fn use_virtual_module_imports(decl: &UseDeclaration) -> Vec<ModuleImports> {
 
 fn use_real_module_imports(base_path: &ModulePath, decl: &UseDeclaration) -> Vec<ModuleImports> {
     let ModulePath::Real(mut base) = base_path.clone() else {
-        panic!("expected real file name")
+        panic!("expected real file name, got {:?}", base_path)
     };
     for _ in 0..decl.relative_count {
         base = base.parent().unwrap().to_path_buf();
@@ -64,11 +64,17 @@ fn use_real_module_imports(base_path: &ModulePath, decl: &UseDeclaration) -> Vec
 fn use_tree_to_paths(base: &PathBuf, tree: &UseTree) -> Vec<ModuleImports> {
     let mut path = base.clone();
     for (i, path_element) in tree.path.iter().enumerate() {
-        let extended = path.join(path_element.as_str());
-        if !extended.exists() {
-            return avorted_tree_imports(path, tree, i, path_element.loc());
+        let as_dir = path.join(path_element.as_str());
+        if as_dir.exists() {
+            path = as_dir;
+            continue;
         }
-        path = extended
+        let as_file = path.join(format!("{}.tine", path_element.as_str()));
+        if as_file.exists() {
+            path = as_file;
+            continue;
+        }
+        return avorted_tree_imports(path, tree, i, path_element.loc());
     }
     let mut module_imports: Vec<_> = tree
         .sub_trees

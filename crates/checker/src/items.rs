@@ -52,18 +52,7 @@ impl TypeChecker {
             path: node.tree.path.iter().skip(1).cloned().collect(),
             sub_trees: node.tree.sub_trees.clone(),
         };
-        let symbols = if subtree.path.len() > 0 {
-            match self.visit_imported_name(module_id, &subtree) {
-                Some(symbol) => vec![symbol],
-                None => vec![],
-            }
-        } else {
-            subtree
-                .sub_trees
-                .into_iter()
-                .filter_map(|tree| self.visit_imported_name(module_id, &tree))
-                .collect()
-        };
+        let symbols = self.visit_imported_names(module_id, subtree);
 
         let path = self.loader.get_name(module_id).clone();
         Some(ir::UseDeclaration {
@@ -100,10 +89,8 @@ impl TypeChecker {
         let symbols = imports
             .import_tree
             .into_iter()
-            .map(|subtree| self.visit_imported_name(module_id, &subtree))
-            .collect::<Vec<_>>()
-            .into_iter()
-            .collect::<Option<Vec<_>>>()?;
+            .flat_map(|subtree| self.visit_imported_names(module_id, subtree))
+            .collect();
 
         Some(ir::UseDeclaration {
             module: module_id,
@@ -111,6 +98,25 @@ impl TypeChecker {
             loc,
             symbols,
         })
+    }
+
+    fn visit_imported_names(
+        &mut self,
+        module_id: ModuleId,
+        subtree: ast::UseTree,
+    ) -> Vec<SymbolId> {
+        if subtree.path.len() > 0 {
+            match self.visit_imported_name(module_id, &subtree) {
+                Some(symbol) => vec![symbol],
+                None => vec![],
+            }
+        } else {
+            subtree
+                .sub_trees
+                .into_iter()
+                .filter_map(|tree| self.visit_imported_name(module_id, &tree))
+                .collect()
+        }
     }
 
     /// Visit an imported element.

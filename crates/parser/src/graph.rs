@@ -146,6 +146,7 @@ impl ProjectParser {
 
     pub fn parse_project(&mut self, entry_point: ModulePath) -> anyhow::Result<()> {
         assert!(matches!(entry_point, ModulePath::Real(_)));
+        self.entry_point = entry_point.clone();
         self.parse_module(&entry_point)?;
         Ok(())
     }
