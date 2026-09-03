@@ -306,7 +306,8 @@ export class ListenerAttr extends Listener {
 		this.name = name;
 		this.symbol = Symbol();
 		element[this.symbol] = this;
-		element[name] = String(signal.$get()) || "";
+		const value = signal.$get();
+		element[name] = typeof value === "boolean" ? value : String(value);
 	}
 
 	update() {
