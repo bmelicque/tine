@@ -1,5 +1,7 @@
 import { appendChild, BoundAttr, ListenerAttr, Reactive, Signal } from "signals";
 
+export { computed$ } from "signals";
+
 export class Option {
 	static None() {
 		const $ = new this;

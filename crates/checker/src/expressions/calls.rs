@@ -181,7 +181,7 @@ impl TypeChecker {
         if deps.len() == 0 {
             self.error(DiagnosticKind::NonReactiveExpression, node.loc);
         }
-        self.build_computed(callee, arg, deps)
+        Some(self.build_computed(callee, arg, deps))
     }
 
     pub fn build_computed(
@@ -189,7 +189,7 @@ impl TypeChecker {
         callee: ir::Expression,
         arg: ir::Expression,
         deps: Vec<ir::Identifier>,
-    ) -> Option<ir::CallExpression> {
+    ) -> ir::CallExpression {
         let dependency_array = ir::Expression::Tuple(ir::TupleExpression {
             loc: arg.loc(),
             ty: self.intern(types::TupleType {
@@ -221,12 +221,12 @@ impl TypeChecker {
             },
         };
 
-        Some(ir::CallExpression {
+        ir::CallExpression {
             loc: arg.loc,
             callee: Box::new(callee),
             args: vec![arg.into(), dependency_array.into()],
             ty: return_type,
-        })
+        }
     }
 }
 

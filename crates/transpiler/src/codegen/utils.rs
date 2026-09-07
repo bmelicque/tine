@@ -116,14 +116,6 @@ pub fn create_bool(value: bool) -> swc::Expr {
     }))
 }
 
-pub fn create_block_stmt(stmts: Vec<swc::Stmt>) -> swc::BlockStmt {
-    swc::BlockStmt {
-        span: DUMMY_SP,
-        ctxt: SyntaxContext::empty(),
-        stmts,
-    }
-}
-
 pub fn can_be_inlined(node: &ir::Statement) -> bool {
     match node {
         ir::Statement::Assignment(a) => can_expression_be_inlined(&a.value),

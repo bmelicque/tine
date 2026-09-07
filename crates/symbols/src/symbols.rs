@@ -47,6 +47,13 @@ pub enum SymbolId {
 }
 
 impl SymbolId {
+    pub fn as_function(self) -> Option<FunctionSymbolId> {
+        match self {
+            Self::Function(f) => Some(f),
+            _ => None,
+        }
+    }
+
     pub fn as_type_symbol_id(self) -> Option<TypeSymbolId> {
         match self {
             SymbolId::Enum(s) => Some(s.into()),

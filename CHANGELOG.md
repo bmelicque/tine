@@ -4,6 +4,26 @@ All meaningful changes to this project will be written here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
+## [0.1.1] - 2026-09-07
+
+### Fixed
+
+- Fixed markup tag parsing
+- Fixed crashes when parsing invalid enums
+- Fixed crashes when parsing invalid use items
+- Fixed crashes when checking some reactive expressions in markup
+- Fixed module resolution
+- Fixed functions treated as statements where they should be expressions
+- Fixed missing return in generated method code
+- Fixed generated markup attribute value
+- Fixed errors on duplicated method names
+- Fixed concrete type resolution for struct fields
+- Fixed error locations on variable declarations
+- Fixed misleading error on compile
+- Fixed function type display
+- Fixed syntax coloring for generic args and expressions in markup
+- Fixed 'Installing' section from docs
+
 ## [0.1.0] - 2026-08-29
 
 ### Added

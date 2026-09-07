@@ -99,6 +99,13 @@ impl Type {
         *self == Type::Unknown
     }
 
+    pub fn is_function(&self) -> bool {
+        match self {
+            Self::Function(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_generic(&self) -> bool {
         match self {
             Self::Enum(e) => e.params.len() > 0,

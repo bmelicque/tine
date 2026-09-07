@@ -1,6 +1,13 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use tine_ast::{self as ast, use_tree::use_decl_to_paths};
-use tine_common::{diagnostics::Diagnostic, module_path::ModulePath, sources::Source};
+use tine_ast::{
+    self as ast,
+    use_tree::{use_decl_to_paths, ModuleIdentifier},
+};
+use tine_common::{
+    diagnostics::{Diagnostic, DiagnosticKind, DiagnosticLevel},
+    module_path::ModulePath,
+    sources::Source,
+};
 
 use crate::Parser;
 
@@ -139,6 +146,7 @@ impl ProjectParser {
 
     pub fn parse_project(&mut self, entry_point: ModulePath) -> anyhow::Result<()> {
         assert!(matches!(entry_point, ModulePath::Real(_)));
+        self.entry_point = entry_point.clone();
         self.parse_module(&entry_point)?;
         Ok(())
     }
@@ -157,13 +165,22 @@ impl ProjectParser {
         Ok(module_id)
     }
 
-    fn parse_dependency(&mut self, dependency_name: &ModulePath, parent_id: ModuleId) {
-        if let Some(&dependency_id) = self.ids.get(dependency_name) {
+    fn parse_dependency(&mut self, dep: &ModuleIdentifier, parent_id: ModuleId) {
+        if let Some(&dependency_id) = self.ids.get(&dep.path) {
             self.add_edge(dependency_id, parent_id.clone());
             return;
         }
-        let Ok(dependency) = self.parse_module(&dependency_name) else {
-            todo!()
+        let Ok(dependency) = self.parse_module(&dep.path) else {
+            let diags = self.diagnostics.entry(parent_id).or_default();
+            let kind = DiagnosticKind::CannotFindModule {
+                name: dep.path.to_string(),
+            };
+            diags.push(Diagnostic {
+                level: DiagnosticLevel::Error,
+                loc: dep.loc,
+                kind,
+            });
+            return;
         };
         self.add_edge(dependency, parent_id);
     }
@@ -196,15 +213,15 @@ impl ProjectParser {
 }
 
 /// Extract the paths of the modules used/imported within the given AST.
-fn get_dependencies(root_path: &ModulePath, ast: &ast::Program) -> Vec<ModulePath> {
-    let mut file_names: Vec<ModulePath> = ast
+fn get_dependencies(root_path: &ModulePath, ast: &ast::Program) -> Vec<ModuleIdentifier> {
+    let mut file_names: Vec<ModuleIdentifier> = ast
         .items
         .iter()
         .filter_map(|item| item.as_use_declaration_ref())
         .flat_map(|decl| use_decl_to_paths(root_path, decl))
         .map(|imports| imports.module_name)
         .collect();
-    file_names.sort();
-    file_names.dedup();
+    file_names.sort_by_key(|n| n.path.clone());
+    file_names.dedup_by(|a, b| a.path == b.path);
     file_names
 }

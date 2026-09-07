@@ -9,6 +9,7 @@ use crate::codegen::{
     CodeGenerator,
 };
 
+#[derive(Debug)]
 pub struct PatternResult {
     pub test: Option<swc::Expr>,
     pub decl: Option<swc::Pat>,

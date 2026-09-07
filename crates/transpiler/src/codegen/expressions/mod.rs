@@ -10,9 +10,7 @@ use crate::{
     codegen::{
         expressions::utils::{assign_if_last_expressions, ident_to_declaration},
         statements::types::enums::TAG_SYMBOL,
-        utils::{
-            call, create_block_stmt, create_str, internal_construct, internal_method_call, member,
-        },
+        utils::{call, create_str, internal_construct, internal_method_call, member},
     },
     ownership_analyser::OwnershipAction,
 };
@@ -160,7 +158,7 @@ impl CodeGenerator<'_, '_> {
 
     fn handle_function_expression(&mut self, node: ir::FunctionExpression) -> swc::ArrowExpr {
         let swc_params = self.function_params_to_swc(node.params);
-        let swc_body = self.function_body_to_swc(node.body);
+        let swc_body = self.handle_block_stmt(node.body).into();
 
         swc::ArrowExpr {
             params: swc_params,
@@ -198,16 +196,6 @@ impl CodeGenerator<'_, '_> {
                 })
             })
             .collect()
-    }
-
-    pub fn function_body_to_swc(&mut self, body: ir::Block) -> swc::BlockStmtOrExpr {
-        let stmts = body
-            .statements
-            .into_iter()
-            .flat_map(|stmt| self.stmt_to_swc(stmt))
-            .collect();
-
-        swc::BlockStmtOrExpr::BlockStmt(create_block_stmt(stmts))
     }
 
     pub fn handle_identifier(&mut self, node: ir::Identifier) -> swc::Expr {

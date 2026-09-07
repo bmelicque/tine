@@ -49,33 +49,37 @@ Tine is a work in progress. The core language — bindings, control flow, functi
 
 ## Installing
 
-As of today, there are no prebuilt binaries — you'll build Tine yourself.
-
-First, you'll need [Rust](https://rust-lang.org/) installed.
-
-Then, clone Tine's repo:
+You can either get a binary from [here](https://github.com/bmelicque/tine/releases/), or build it yourself:
+- First, you'll need [Rust](https://rust-lang.org/) installed.
+- Then, clone Tine's repo:
 
 ```sh
 git clone https://github.com/bmelicque/tine
 ```
 
-You can then run `cargo build` to buld binaries, or `cargo run` to use it on the fly.
+- Finally, run `cargo build` to build binaries, or `cargo run` to use it on the fly.
 
 ## Trying it out
 
-From the project root, transpile a `.tine` file to JavaScript:
+Using the CLI, use the `build` command to transpile a `.tine` file to JavaScript:
+
+```sh
+tine build <source> <output>
+```
+
+If you have Rust installed but no binary, you can try it with `cargo run`:
 
 ```sh
 cargo run -p tine_cli build <source> <output>
 ```
 
-The repository includes examples you can try in the `examples` folder.
+This repository includes examples you can try in the `examples` folder.
+For now, the cli only handles Tine-to-JS, but example folders also include ready-to-use HTML files that expect a JS output.
 
 ```sh
-cargo run -p tine_cli build ./examples/counter/counter.tine ./examples/counter/output.js
+tine build ./examples/counter/counter.tine ./examples/counter/output.js
 ```
 
-For now, the cli only handles Tine-to-JS, but example folders also include ready-to-use HTML files that expect a JS output.
 
 ## Editor support
 

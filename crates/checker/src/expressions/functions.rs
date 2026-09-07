@@ -4,7 +4,7 @@ use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_types::{store::TypeStore, types};
 
-use crate::{substitutions::Substitutions, TypeChecker};
+use crate::{substitutions::Substitutions, utils::return_last, TypeChecker};
 
 struct FunctionResult {
     pub params: Vec<(Location, VariableSymbolId)>,
@@ -200,20 +200,6 @@ impl TypeChecker {
             }
         }
     }
-}
-
-fn return_last(body: &mut ir::Block) {
-    let Some(last) = body.statements.pop() else {
-        return;
-    };
-    let last = match last {
-        ir::Statement::Expression(e) => ir::Statement::Return(ir::ReturnStatement {
-            loc: e.loc(),
-            expression: Some(Box::new(e)),
-        }),
-        _ => last,
-    };
-    body.statements.push(last);
 }
 
 #[cfg(test)]

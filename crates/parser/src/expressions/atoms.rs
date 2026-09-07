@@ -76,6 +76,11 @@ impl Parser<'_> {
             text,
         }
     }
+
+    pub fn maybe_parse_identifier(&mut self) -> Option<Identifier> {
+        let (text, loc) = self.maybe_eat(|t| t.identifier().map(|s| s.to_owned()))?;
+        Some(Identifier { text, loc })
+    }
 }
 
 #[cfg(test)]

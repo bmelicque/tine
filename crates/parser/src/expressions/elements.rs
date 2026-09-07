@@ -6,29 +6,22 @@ use tine_common::{
 
 use crate::{tokens::Token, Parser};
 
+struct OpeningTag {
+    name: String,
+    attributes: Vec<Attribute>,
+    self_closing: bool,
+    loc: Location,
+}
+
 impl Parser<'_> {
     pub fn parse_element_expression(&mut self) -> ElementExpression {
-        let start_range = self.eat(&[Token::Lt]);
-        let start_loc = self.localize(start_range);
-
-        let tag_name = self.parse_tag_name();
-        let attributes = self.parse_attributes();
-
-        match self.tokens.peek().cloned() {
-            Some((Ok(Token::Gt), _)) => {
-                self.tokens.next();
-            }
-            Some((Ok(Token::TagClose), close_range)) => {
-                self.tokens.next();
-                return ElementExpression::Void(VoidElement {
-                    loc: Location::merge(start_loc, self.localize(close_range)),
-                    tag_name,
-                    attributes,
-                });
-            }
-            _ => {
-                todo!("handle error")
-            }
+        let tag = self.parse_opening_tag();
+        if tag.self_closing {
+            return ElementExpression::Void(VoidElement {
+                loc: tag.loc,
+                tag_name: tag.name,
+                attributes: tag.attributes,
+            });
         }
 
         let children = self.parse_children();
@@ -38,8 +31,8 @@ impl Parser<'_> {
             self.error(DiagnosticKind::MissingCloseTag, error_loc);
         }
         match end.as_ref() {
-            Some((end_name, end_loc)) if *end_name != tag_name => {
-                let open = tag_name.clone();
+            Some((end_name, end_loc)) if *end_name != tag.name => {
+                let open = tag.name.clone();
                 let close = end_name.clone();
                 let kind = DiagnosticKind::MismatchedTags { open, close };
                 self.error(kind, *end_loc);
@@ -47,35 +40,77 @@ impl Parser<'_> {
             _ => {}
         }
         let loc = if let Some(end) = end {
-            Location::merge(start_loc, end.1)
+            Location::merge(tag.loc, end.1)
         } else if let Some(last) = children.last() {
-            Location::merge(start_loc, last.loc())
+            Location::merge(tag.loc, last.loc())
         } else {
-            start_loc
+            tag.loc
         };
         ElementExpression::Element(Element {
             loc,
-            tag_name,
-            attributes,
+            tag_name: tag.name,
+            attributes: tag.attributes,
             children,
         })
     }
 
-    fn parse_tag_name(&mut self) -> String {
-        let result = self.better_expect(
-            |t| match t {
-                Token::Ident(ident) => Some(ident.to_owned()),
+    fn parse_opening_tag(&mut self) -> OpeningTag {
+        let start_range = self.eat(&[Token::Lt]);
+        let mut loc = self.localize(start_range);
+
+        let name_result = self.try_parse(
+            |s| s.maybe_parse_identifier(),
+            |t| matches!(*t, Token::Gt | Token::TagClose | Token::Newline),
+        );
+
+        let name = match name_result {
+            Ok(Some(i)) => {
+                loc = Location::merge(loc, i.loc);
+                i.as_str().to_string()
+            }
+            _ => {
+                self.error(DiagnosticKind::MissingName, loc.increment());
+                "".to_string()
+            }
+        };
+
+        let attributes = self.parse_attributes();
+        if let Some(a) = attributes.last() {
+            loc = Location::merge(loc, a.loc);
+        }
+
+        let self_closing = self.try_parse(
+            |s| match s.tokens.peek().cloned() {
+                Some((Ok(Token::Gt), r)) => {
+                    s.tokens.next();
+                    let end = s.localize(r);
+                    loc = Location::merge(loc, end);
+                    Some(false)
+                }
+                Some((Ok(Token::TagClose), r)) => {
+                    s.tokens.next();
+                    let end = s.localize(r);
+                    loc = Location::merge(loc, end);
+                    Some(true)
+                }
                 _ => None,
             },
-            &[Token::Newline, Token::Gt, Token::TagClose],
+            |t| *t == Token::Newline,
         );
-        match result {
-            Ok(r) => r.0,
-            Err(range) => {
-                let loc = self.localize(range);
-                self.error(DiagnosticKind::MissingName, loc);
-                "".to_owned()
+        let self_closing = match self_closing {
+            Ok(Some(s)) => s,
+            _ => {
+                let expected = vec![">".to_string(), "/>".to_string()];
+                self.error(DiagnosticKind::ExpectedToken { expected }, loc.increment());
+                true
             }
+        };
+
+        OpeningTag {
+            name,
+            attributes,
+            self_closing,
+            loc,
         }
     }
 
@@ -283,7 +318,14 @@ impl Parser<'_> {
         );
         let end_loc = match res {
             Ok((_, range)) => self.localize(range),
-            Err(range) => self.localize(range).decrement(),
+            Err(range) => {
+                let error_kind = DiagnosticKind::ExpectedToken {
+                    expected: vec![">".into()],
+                };
+                let error_loc = self.localize(range).nth_char(0);
+                self.error(error_kind, error_loc);
+                error_loc.decrement()
+            }
         };
 
         Some((tag_name, Location::merge(start_loc, end_loc)))
@@ -309,6 +351,13 @@ mod tests {
             })),
             diagnostics: vec![],
         });
+    }
+
+    #[test]
+    fn parse_invalid_tag() {
+        let mut parser = Parser::new(0, "<img");
+        parser.parse_element_expression();
+        assert!(!parser.diagnostics.is_empty())
     }
 
     #[test]
@@ -382,6 +431,13 @@ mod tests {
             })),
             diagnostics: vec![],
         });
+    }
+
+    #[test]
+    fn parse_element_missing_last_token() {
+        let mut parser = Parser::new(0, "<tag></tag");
+        parser.parse_element_expression();
+        assert!(!parser.diagnostics.is_empty());
     }
 
     #[test]

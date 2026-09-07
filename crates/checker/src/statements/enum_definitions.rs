@@ -19,6 +19,7 @@ impl TypeChecker {
             return vec![];
         }
         let owner_id: EnumSymbolId = self.insert(EnumSymbol {
+            public: node.public,
             docs: node.docs.map(|d| d.text),
             name: name.text.clone(),
             defined_at: name.loc,

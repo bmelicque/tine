@@ -13,20 +13,7 @@ impl Parser<'_> {
         if let Some(loc) = pub_loc {
             definition.loc = Location::merge(loc, definition.loc);
         }
-        if definition.name.is_none() {
-            let loc = definition.loc.nth_char(2);
-            self.error(DiagnosticKind::MissingName, loc);
-        }
         let loc = pub_loc.map_or(definition.loc, |l| Location::merge(l, definition.loc));
-
-        definition
-            .params
-            .iter()
-            .flat_map(|p| &p.params)
-            .filter(|p| p.type_annotation.is_none())
-            .for_each(|p| {
-                self.error(DiagnosticKind::ExpectedTypeAnnotation, p.loc.increment());
-            });
 
         ast::FunctionDefinition {
             docs,
@@ -34,5 +21,21 @@ impl Parser<'_> {
             public: pub_loc.is_some(),
             definition,
         }
+    }
+
+    pub fn validate_function_definition(&mut self, def: &ast::FunctionDefinition) {
+        if def.definition.name.is_none() {
+            let loc = def.definition.loc.nth_char(2);
+            self.error(DiagnosticKind::MissingName, loc);
+        }
+
+        def.definition
+            .params
+            .iter()
+            .flat_map(|p| &p.params)
+            .filter(|p| p.type_annotation.is_none())
+            .for_each(|p| {
+                self.error(DiagnosticKind::ExpectedTypeAnnotation, p.loc.increment());
+            });
     }
 }

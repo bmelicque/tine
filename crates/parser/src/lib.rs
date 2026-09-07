@@ -150,6 +150,7 @@ impl<'src> Parser<'src> {
         }
     }
 
+    /// Return `Err` if could not parse nor recover immediatly
     fn try_parse<F, R, T>(&mut self, parse: F, recover_at: R) -> Result<Option<T>, Location>
     where
         F: FnOnce(&mut Self) -> Option<T>,
@@ -263,7 +264,8 @@ impl<'src> Parser<'src> {
         let error = DiagnosticKind::ExpectedToken {
             expected: tokens.iter().map(|t| t.to_string()).collect(),
         };
-        self.error(error, self.localize(range.clone()));
+        let error_loc = self.localize(range.clone()).nth_char(0);
+        self.error(error, error_loc);
         range
     }
 

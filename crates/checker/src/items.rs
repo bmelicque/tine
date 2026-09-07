@@ -42,30 +42,17 @@ impl TypeChecker {
         node: ast::UseDeclaration,
     ) -> Option<ir::UseDeclaration> {
         debug_assert_eq!(node.relative_count, 0);
-        let module_name = node.tree.path[0].as_str();
-        let Some(module_id) = self.loader.find_id(&module_name.into()) else {
-            let error = DiagnosticKind::CannotFindModule {
-                name: module_name.to_string(),
-            };
-            self.error(error, node.loc);
+        let Some(module_path) = node.tree.path.first() else {
             return None;
         };
+        let module_name = module_path.as_str();
+        // "module not found" reported during parsing phase
+        let module_id = self.loader.find_id(&module_name.into())?;
         let subtree = ast::UseTree {
             path: node.tree.path.iter().skip(1).cloned().collect(),
             sub_trees: node.tree.sub_trees.clone(),
         };
-        let symbols = if subtree.path.len() > 0 {
-            match self.visit_imported_name(module_id, &subtree) {
-                Some(symbol) => vec![symbol],
-                None => vec![],
-            }
-        } else {
-            subtree
-                .sub_trees
-                .into_iter()
-                .filter_map(|tree| self.visit_imported_name(module_id, &tree))
-                .collect()
-        };
+        let symbols = self.visit_imported_names(module_id, subtree);
 
         let path = self.loader.get_name(module_id).clone();
         Some(ir::UseDeclaration {
@@ -95,24 +82,41 @@ impl TypeChecker {
         imports: ModuleImports,
         loc: Location,
     ) -> Option<ir::UseDeclaration> {
-        let module_name = imports.module_name;
-        let Some(module_id) = self.loader.find_id(&module_name) else {
-            panic!("Cannot find module '{}' within parsed modules", module_name)
+        let module = imports.module_name;
+        let Some(module_id) = self.loader.find_id(&module.path) else {
+            panic!("Cannot find module '{}' within parsed modules", module.path)
         };
         let symbols = imports
             .import_tree
             .into_iter()
-            .map(|subtree| self.visit_imported_name(module_id, &subtree))
-            .collect::<Vec<_>>()
-            .into_iter()
-            .collect::<Option<Vec<_>>>()?;
+            .flat_map(|subtree| self.visit_imported_names(module_id, subtree))
+            .collect();
 
         Some(ir::UseDeclaration {
             module: module_id,
-            path: module_name,
+            path: module.path,
             loc,
             symbols,
         })
+    }
+
+    fn visit_imported_names(
+        &mut self,
+        module_id: ModuleId,
+        subtree: ast::UseTree,
+    ) -> Vec<SymbolId> {
+        if subtree.path.len() > 0 {
+            match self.visit_imported_name(module_id, &subtree) {
+                Some(symbol) => vec![symbol],
+                None => vec![],
+            }
+        } else {
+            subtree
+                .sub_trees
+                .into_iter()
+                .filter_map(|tree| self.visit_imported_name(module_id, &tree))
+                .collect()
+        }
     }
 
     /// Visit an imported element.

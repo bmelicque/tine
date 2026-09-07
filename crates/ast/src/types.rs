@@ -28,6 +28,11 @@ impl From<Identifier> for NamedType {
         }
     }
 }
+impl From<Identifier> for Type {
+    fn from(name: Identifier) -> Self {
+        Self::Named(name.into())
+    }
+}
 
 #[tree_struct(untyped)]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

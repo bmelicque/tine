@@ -110,7 +110,8 @@ impl TypeChecker {
 
     fn visit_expression_in_element(&mut self, expr: ast::Expression) -> Option<ir::Expression> {
         let expr = self.visit_expression(expr)?;
-        if self.resolve(expr.ty()).is_reactive() {
+        let ty = self.resolve(expr.ty());
+        if ty.is_reactive() || ty.is_function() {
             return Some(expr);
         }
         let deps = self
@@ -121,10 +122,25 @@ impl TypeChecker {
         if deps.is_empty() {
             return Some(expr);
         }
-        let callee = self
-            .visit_identifier(ast::Identifier::new("computed$".into(), expr.loc()))
-            .unwrap()
-            .into();
-        self.build_computed(callee, expr, deps).map(Into::into)
+        let (symbol_id, symbol) = self
+            .symbols
+            .all()
+            .filter(|(_, s)| s.defined_at().module() == 0)
+            .find(|(_, s)| s.name() == "computed$")
+            .unwrap();
+        let f_id = symbol_id.as_function().unwrap();
+        let callee = ir::Identifier {
+            ty: symbol.ty(),
+            loc: expr.loc(),
+            symbol: symbol_id,
+        };
+        let loc = expr.loc();
+        let call = self.build_computed(callee.into(), expr, deps);
+        Some(ir::Expression::IntrinsicCall(ir::IntrinsicCall {
+            ty: call.ty,
+            loc,
+            callee: f_id,
+            args: call.args,
+        }))
     }
 }
