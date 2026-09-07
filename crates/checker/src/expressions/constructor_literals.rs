@@ -124,7 +124,9 @@ impl TypeChecker {
         let key_loc = key.loc;
         let value = match field.value {
             Some(v) => {
-                self.check_expression_against(v, self.symbol_type_id(symbol), &mut substitutions)?
+                let expected = self.symbol_type_id(symbol);
+                let expected = substitutions.apply(&mut self.types, expected);
+                self.check_expression_against(v, expected, &mut substitutions)?
             }
             None => self.visit_identifier(key).map(Into::into)?,
         };
@@ -134,5 +136,54 @@ impl TypeChecker {
             name: (key_loc, symbol),
             value,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tine_types::types;
+
+    use crate::utils::Ast;
+
+    use super::*;
+
+    fn add_mock_generic_struct(tc: &mut TypeChecker) {
+        let generic = tc.add_type_param("T".to_string());
+        let ty = tc.intern_unique(types::StructType {
+            fields: vec![types::StructField {
+                name: "bar".to_string(),
+                def: generic.id,
+            }],
+            params: vec![generic.clone()],
+            ..Default::default()
+        });
+        let symbol: StructSymbolId = tc.insert(StructSymbol {
+            name: "Foo".into(),
+            ty,
+            ..Default::default()
+        });
+        let member: MemberSymbolId = tc.insert(MemberSymbol {
+            name: "bar".into(),
+            owner: symbol.into(),
+            ty: generic.id,
+            ..Default::default()
+        });
+        tc.symbols.get_mut(symbol).members.push(member);
+    }
+
+    #[test]
+    fn visit_concrete_invalid() {
+        let mut checker = TypeChecker::new();
+        add_mock_generic_struct(&mut checker);
+
+        let node = ast::StructExpression {
+            loc: Location::dummy(),
+            constructor: Ast::path_segment("Foo", Some(vec![Ast::identifier("int").into()])).into(),
+            fields: vec![Ast::struct_field("bar", Some(Ast::boolean(true).into()))],
+        };
+
+        checker.visit_struct_expression(node);
+        let errors = checker.diagnostics.entry(0).or_default();
+        assert!(!errors.is_empty());
     }
 }

@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Fixed missing return in generated method code
 - Fixed generated markup attribute value
 - Fixed errors on duplicated method names
+- Fixed concrete type resolution for struct fields
 - Fixed error locations on variable declarations
 - Fixed misleading error on compile
 - Fixed function type display

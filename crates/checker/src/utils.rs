@@ -128,3 +128,36 @@ pub fn return_last(body: &mut ir::Block) {
     };
     body.statements.push(last);
 }
+
+#[cfg(test)]
+pub struct Ast;
+
+#[cfg(test)]
+impl Ast {
+    pub fn boolean(value: bool) -> ast::BooleanLiteral {
+        ast::BooleanLiteral {
+            loc: Location::dummy(),
+            value,
+        }
+    }
+
+    pub fn identifier(name: &str) -> ast::Identifier {
+        ast::Identifier::new(name.to_string(), Location::dummy())
+    }
+
+    pub fn path_segment(name: &str, args: Option<Vec<ast::Type>>) -> ast::PathSegment {
+        ast::PathSegment {
+            loc: Location::dummy(),
+            ident: Ast::identifier(name),
+            generic_args: args,
+        }
+    }
+
+    pub fn struct_field(key: &str, value: Option<ast::Expression>) -> ast::StructExprField {
+        ast::StructExprField {
+            loc: Location::dummy(),
+            key: Some(ast::StructExprFieldKey::Name(Ast::identifier(key))),
+            value,
+        }
+    }
+}
