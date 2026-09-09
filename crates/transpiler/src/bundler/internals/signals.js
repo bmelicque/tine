@@ -385,7 +385,7 @@ export function appendChild(parentNode, child) {
 	}
 	if (Array.isArray(child)) {
 		const fragment = document.createDocumentFragment();
-		for (let child of child) appendChild(fragment, child);
+		for (let c of child) appendChild(fragment, c);
 		parentNode.appendChild(fragment);
 		return;
 	}
