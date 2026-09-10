@@ -1,38 +1,45 @@
 use tine_ast::*;
-use tine_common::locations::Location;
+use tine_common::{diagnostics::DiagnosticKind, locations::Location};
 
 use crate::{tokens::Token, Parser};
 
 impl Parser<'_> {
     pub(crate) fn parse_path_expression(&mut self) -> PathExpression {
-        let mut segments = Vec::new();
+        let (first, next) = self.parse_path_expr_segment().unwrap();
+        let mut segments = vec![first];
+        let Some(mut next) = next else {
+            return segments.into();
+        };
         loop {
-            let (segment, has_next) = self.parse_path_expr_segment();
-            segments.push(segment);
-            if !has_next {
+            let Some((segment, dot_loc)) = self.parse_path_expr_segment() else {
+                self.error(DiagnosticKind::MissingExpression, next.increment());
                 break segments.into();
+            };
+            segments.push(segment);
+            match dot_loc {
+                Some(loc) => next = loc,
+                None => break segments.into(),
             }
         }
     }
 
-    /// Parse a path segment. Also returns a `bool` equal to `true` if another
-    /// `PathSegment` is to be expected after this one.
-    fn parse_path_expr_segment(&mut self) -> (PathSegment, bool) {
-        let identifier = self.parse_identifier();
-        let Some(_) = self.maybe_eat(|t| t.dot()) else {
-            return (identifier.into(), false);
+    /// Parse a path segment
+    fn parse_path_expr_segment(&mut self) -> Option<(PathSegment, Option<Location>)> {
+        let identifier = self.maybe_parse_identifier()?;
+        let Some((_, dot_loc)) = self.maybe_eat(|t| t.dot()) else {
+            return Some((identifier.into(), None));
         };
         let Some((args, end)) = self.maybe_parse_generic_args() else {
-            return (identifier.into(), true);
+            return Some((identifier.into(), Some(dot_loc)));
         };
         let loc = Location::merge(identifier.loc, end);
-        let has_next = self.maybe_eat(|t| t.dot()).is_some();
+        let has_next = self.maybe_eat(|t| t.dot()).map(|t| t.1);
         let segment = PathSegment {
             loc,
             ident: identifier,
             generic_args: Some(args),
         };
-        (segment, has_next)
+        Some((segment, has_next))
     }
 
     pub fn maybe_parse_generic_args(&mut self) -> Option<(Vec<Type>, Location)> {
