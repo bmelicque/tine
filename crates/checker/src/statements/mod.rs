@@ -74,10 +74,16 @@ impl TypeChecker {
         node: ast::FunctionDefinition,
     ) -> Option<ir::FunctionDefinition> {
         let ast::FunctionDefinition {
-            docs, definition, ..
+            docs,
+            definition,
+            public,
+            ..
         } = node;
         let docs = docs.map(|d| d.text);
         let definition = self.visit_function_expression(definition, docs)?;
+        if let Some((_, s)) = definition.name {
+            self.symbols.get_mut(s).public = public
+        }
         Some(ir::FunctionDefinition {
             loc: definition.loc,
             name: definition.name.map(|(loc, s)| (loc, s.into()))?,
@@ -124,5 +130,37 @@ impl TypeChecker {
             });
             self.types.add_alias(ty, name.text);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::utils::Ast;
+
+    use super::*;
+
+    #[test]
+    fn function_visibility() {
+        let mut checker = TypeChecker::new();
+        let node = Ast::function_def(
+            None,
+            true,
+            Ast::valid_named_function(
+                Ast::identifier("foo"),
+                vec![],
+                None,
+                ast::BlockExpression::default().into(),
+            ),
+        );
+
+        let def = checker
+            .visit_function_definition(node)
+            .expect("expected a function definition");
+        let name = def
+            .name
+            .1
+            .as_function()
+            .expect("expected a function, not a method");
+        assert!(checker.symbols.get(name).public);
     }
 }
