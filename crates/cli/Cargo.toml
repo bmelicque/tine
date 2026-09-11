@@ -11,3 +11,5 @@ tine_common = { path = "../common" }
 tine_parser = { path = "../parser" }
 tine_checker = { path = "../checker" }
 tine_transpiler = { path = "../transpiler" }
+notify = "8.2.0"
+notify-debouncer-mini = "0.7.0"

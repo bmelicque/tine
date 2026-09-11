@@ -10,10 +10,15 @@ use tine_common::module_path::ModulePath;
 
 use crate::bundler::{SwcLoader, SwcResolver};
 
+pub struct BundleOptions {
+    pub minify: bool,
+}
+
 pub fn bundle_entry(
     filename: &ModulePath,
     loader: SwcLoader,
     swc_resolver: SwcResolver,
+    options: BundleOptions,
 ) -> anyhow::Result<String> {
     let ModulePath::Real(filename) = filename else {
         panic!()
@@ -44,6 +49,28 @@ pub fn bundle_entry(
         let unresolved_mark = top_level_mark;
 
         let mut output = String::new();
+        let minify_options = match options.minify {
+            true => MinifyOptions {
+                compress: Some(swc_ecma_minifier::option::CompressOptions {
+                    bools: false,
+                    conditionals: false,
+                    sequences: 0,
+                    if_return: false,
+                    collapse_vars: false,
+                    reduce_vars: false,
+                    side_effects: false,
+                    ..Default::default()
+                }),
+                mangle: None,
+                ..Default::default()
+            },
+            false => MinifyOptions::default(),
+        };
+        let extra_options = swc_ecma_minifier::option::ExtraOptions {
+            top_level_mark,
+            unresolved_mark,
+            mangle_name_cache: None,
+        };
         for bundle in bundles {
             let top_level_mark = Mark::fresh(Mark::root());
 
@@ -55,25 +82,8 @@ pub fn bundle_entry(
                 cm.clone(),
                 None,
                 None,
-                &MinifyOptions {
-                    compress: Some(swc_ecma_minifier::option::CompressOptions {
-                        bools: false,
-                        conditionals: false,
-                        sequences: 0,
-                        if_return: false,
-                        collapse_vars: false,
-                        reduce_vars: false,
-                        side_effects: false,
-                        ..Default::default()
-                    }),
-                    mangle: None,
-                    ..Default::default()
-                },
-                &swc_ecma_minifier::option::ExtraOptions {
-                    top_level_mark,
-                    unresolved_mark,
-                    mangle_name_cache: None,
-                },
+                &minify_options,
+                &extra_options,
             );
 
             let mut buf = vec![];

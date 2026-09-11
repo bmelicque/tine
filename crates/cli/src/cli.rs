@@ -12,6 +12,7 @@ pub struct Cli {
 pub enum Commands {
     Build(BuildArgs),
     Check(CheckArgs),
+    Dev(DevArgs),
 }
 
 #[derive(clap::Args)]
@@ -21,16 +22,12 @@ pub struct BuildArgs {
 }
 
 #[derive(clap::Args)]
-pub struct RunArgs {
-    pub input: String,
-}
-
-#[derive(clap::Args)]
 pub struct CheckArgs {
     pub input: String,
 }
 
 #[derive(clap::Args)]
-pub struct NewArgs {
-    pub name: String,
+pub struct DevArgs {
+    pub input: String,
+    pub output: Option<String>,
 }
