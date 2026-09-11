@@ -252,7 +252,9 @@ fn visit_block(block: &ir::Block, checker: &SemanticsChecker, map: &mut AliasMap
     block
         .statements
         .iter()
-        .take(block.statements.len() - 1)
+        .rev()
+        .skip(1)
+        .rev()
         .for_each(|stmt| visit_stmt(stmt, checker, map));
     block.statements.last().map_or(vec![], |stmt| match stmt {
         ir::Statement::Expression(e) => visit_expr(e, checker, map),
