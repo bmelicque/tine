@@ -199,6 +199,9 @@ impl CodeGenerator<'_, '_> {
     }
 
     pub fn handle_identifier(&mut self, node: ir::Identifier) -> swc::Expr {
+        if let Some(wk) = self.wellknown.identifiers.get(&node.symbol) {
+            return wk.clone();
+        }
         if let SymbolId::Variant(v) = node.symbol {
             return self.handle_variant_construct(v);
         }

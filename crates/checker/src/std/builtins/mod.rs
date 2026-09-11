@@ -16,6 +16,7 @@ impl TypeChecker {
         self.array_builtin();
         self.map_builtin();
         self.element_builtin();
+        self.log_builtin();
         self.eq_trait();
         self.hash_trait();
     }
@@ -137,6 +138,22 @@ impl TypeChecker {
             name: "Element".into(),
             public: true,
             ty: TypeStore::ELEMENT,
+            ..Default::default()
+        });
+    }
+
+    fn log_builtin(&mut self) {
+        let ty = self.intern(types::FunctionType {
+            type_params: vec![],
+            params: vec![TypeStore::STRING],
+            return_type: TypeStore::UNIT,
+        });
+        self.insert::<FunctionSymbolId>(FunctionSymbol {
+            name: "log".into(),
+            public: true,
+            param_names: vec!["text".to_string()],
+            ty,
+            docs: Some("Prints to the console, with a new line.".to_string()),
             ..Default::default()
         });
     }

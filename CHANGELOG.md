@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ### Added
 
 - Added `dev` command in CLI
+- Added basic `log` function (only takes `str` args for now)
 
 ### Fixed
 

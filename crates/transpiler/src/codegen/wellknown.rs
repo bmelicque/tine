@@ -15,6 +15,7 @@ type MethodTransformer = fn(&mut CodeGenerator, ir::MethodExpression) -> Express
 #[derive(Default)]
 pub(crate) struct WellknownSymbols {
     pub(crate) methods: HashMap<MethodSymbolId, MethodTransformer>,
+    pub(crate) identifiers: HashMap<SymbolId, swc::Expr>,
 }
 
 impl WellknownSymbols {
@@ -24,6 +25,7 @@ impl WellknownSymbols {
         self.int(symbols);
         self.string(symbols);
         self.array(symbols);
+        self.functions(symbols);
     }
 
     fn bool(&mut self, symbols: &SymbolTable) {
@@ -74,6 +76,15 @@ impl WellknownSymbols {
         self.register_method(symbols, &symbol.methods, "get", array_get);
         self.register_method(symbols, &symbol.methods, "set", array_set);
         self.register_method(symbols, &symbol.methods, "pop", array_pop);
+    }
+
+    fn functions(&mut self, symbols: &SymbolTable) {
+        if let Some(s) = symbols
+            .find_id::<FunctionSymbolId, _>(|s| s.defined_at.module() == 0 && s.name() == "log")
+        {
+            let expr = member(ident_from_str("console").into(), "log");
+            self.identifiers.insert(s.into(), expr.into());
+        }
     }
 
     fn register_method(
