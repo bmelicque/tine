@@ -8,7 +8,12 @@ use tine_symbols::table::SymbolTable;
 /// Compute a relative path from `base` to `path`.
 /// Works even if `path` is outside of `base` (e.g. gives `../../other/file`).
 pub fn make_relative(base: &Path, path: &Path) -> PathBuf {
-    let base = base.components().collect::<Vec<_>>();
+    let base_directory = if base.is_file() {
+        base.parent().unwrap()
+    } else {
+        base
+    };
+    let base = base_directory.components().collect::<Vec<_>>();
     let path = path.components().collect::<Vec<_>>();
 
     // Find common prefix length
@@ -16,8 +21,12 @@ pub fn make_relative(base: &Path, path: &Path) -> PathBuf {
 
     // Steps to go up from base to common ancestor
     let mut rel = PathBuf::new();
-    for _ in common_prefix_len..base.len() {
-        rel.push("..");
+    if base.len() == common_prefix_len {
+        rel.push(".")
+    } else {
+        for _ in common_prefix_len..base.len() {
+            rel.push("..");
+        }
     }
 
     // Steps down to target
