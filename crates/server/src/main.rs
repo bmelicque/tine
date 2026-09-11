@@ -69,6 +69,11 @@ impl Backend {
         let client = self.client.clone();
 
         let module_path = ModulePath::from(&entry_path);
+        let in_graph = self.ids.read().unwrap().keys().any(|k| *k == module_path);
+        let module_path = match in_graph {
+            true => self.find_graph_root(),
+            false => module_path,
+        };
         let loader = self.loader();
         let parse_result = tine_parser::parse_project(module_path.clone(), Some(Box::new(loader)));
         let result = tine_checker::check_project(parse_result);
@@ -106,6 +111,17 @@ impl Backend {
         }
 
         let _ = client.semantic_tokens_refresh().await;
+    }
+
+    fn find_graph_root(&self) -> ModulePath {
+        self.ids
+            .read()
+            .unwrap()
+            .iter()
+            .find(|(_, id)| **id == 1)
+            .unwrap()
+            .0
+            .clone()
     }
 
     fn find_module(&self, uri: &Url) -> Option<ModuleId> {

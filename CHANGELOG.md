@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Fixed public items import from other modules
 - Fixed dom element codegen
 - Fixed error messages in `use` statements
+- Fixed graph root in language server
 - Fixed markup coloring
 
 ## [0.1.1] - 2026-09-07
