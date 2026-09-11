@@ -76,7 +76,7 @@ impl TypeChecker {
 
     /// Visit all the import trees from a given real module.
     ///
-    /// For example, `use Module.(a, b.c)` will visit import trees `a` and `b.c` from module `Module`
+    /// For example, `use Module.{a, b.c}` will visit import trees `a` and `b.c` from module `Module`
     fn visit_module_imports(
         &mut self,
         imports: ModuleImports,
@@ -126,9 +126,7 @@ impl TypeChecker {
         let path_element = &tree.path[0];
         let name = path_element.as_str();
         let Some(symbol) = self.find_export(module, name) else {
-            let error = DiagnosticKind::UnknownMember {
-                member: name.to_string(),
-            };
+            let error = DiagnosticKind::ItemDoesNotExist(name.to_string());
             self.error(error, path_element.loc());
             return None;
         };
@@ -136,6 +134,11 @@ impl TypeChecker {
             .get_symbol_mut(symbol)
             .access()
             .read(path_element.loc());
+        if !self.symbols.is_public(symbol) {
+            let error = DiagnosticKind::ItemIsPrivate(name.to_string());
+            self.error(error, path_element.loc());
+            return None;
+        }
         self.current_scope().bind(name.to_string(), symbol);
         if tree.path.len() > 1 || tree.sub_trees.len() > 0 {
             self.error(DiagnosticKind::UnexpectedModuleTree, tree.loc());

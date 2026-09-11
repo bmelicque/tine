@@ -17,6 +17,7 @@ pub fn check_dom_module(module: ModuleId, tc: &mut TypeChecker) {
 
     let render_name = "render".to_string();
     let render_symbol = tc.symbols.insert::<FunctionSymbolId>(FunctionSymbol {
+        public: true,
         name: render_name.clone(),
         docs: Some(
             r#"Renders a UI element into a target container in the DOM

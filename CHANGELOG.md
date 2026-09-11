@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Fixed field visibility on path expressions
 - Fixed public items import from other modules
 - Fixed dom element codegen
+- Fixed error messages in `use` statements
 - Fixed markup coloring
 
 ## [0.1.1] - 2026-09-07

@@ -229,8 +229,7 @@ impl TypeChecker {
         let scope = self.drop_scope();
 
         self.ir.insert(module_id, program);
-        let mut exports = scope.as_bindings();
-        exports.retain(|_, id| self.symbols.is_public(*id));
+        let exports = scope.as_bindings();
         self.exports.insert(module_id, exports);
     }
 
