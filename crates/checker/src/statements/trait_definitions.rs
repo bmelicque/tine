@@ -29,8 +29,9 @@ impl TypeChecker {
             params: type_params,
             methods,
         });
+        self.types.add_alias(ty, name.text.clone());
 
-        self.symbols.insert::<TraitSymbolId>(TraitSymbol {
+        self.insert::<TraitSymbolId>(TraitSymbol {
             name: name.text,
             public: node.public,
             param_names,
