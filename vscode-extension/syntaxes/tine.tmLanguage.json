@@ -273,7 +273,7 @@
                 },
                 {
                     "name": "keyword.declaration.type.tine",
-                    "match": "\\b(struct|enum)\\b"
+                    "match": "\\b(struct|enum|trait)\\b"
                 },
                 {
                     "name": "keyword.declaration.function.tine",
