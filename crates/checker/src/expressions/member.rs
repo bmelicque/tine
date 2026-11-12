@@ -244,6 +244,11 @@ impl TypeChecker {
                     .find_id::<PrimitiveTypeSymbolId, _>(|s| s.ty == ty)
                     .map(Into::into)
             })
+            .or_else(|| {
+                self.symbols
+                    .find_id::<TraitSymbolId, _>(|s| s.ty == ty)
+                    .map(Into::into)
+            })
     }
 
     pub(crate) fn is_visible(&self, symbol: SymbolId) -> bool {

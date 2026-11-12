@@ -325,6 +325,7 @@ impl TypeChecker {
             TypeSymbolId::Enum(s) => &self.symbols.get(s).methods,
             TypeSymbolId::Primitive(s) => &self.symbols.get(s).methods,
             TypeSymbolId::Struct(s) => &self.symbols.get(s).methods,
+            TypeSymbolId::Trait(s) => &self.symbols.get(s).methods,
         }
     }
     pub fn symbol_methods_mut<'s, S>(&'s mut self, symbol: S) -> &'s mut Vec<MethodSymbolId>
@@ -336,6 +337,7 @@ impl TypeChecker {
             TypeSymbolId::Enum(s) => &mut self.symbols.get_mut(s).methods,
             TypeSymbolId::Primitive(s) => &mut self.symbols.get_mut(s).methods,
             TypeSymbolId::Struct(s) => &mut self.symbols.get_mut(s).methods,
+            TypeSymbolId::Trait(s) => &mut self.symbols.get_mut(s).methods,
         }
     }
 
