@@ -164,7 +164,7 @@ impl Parser<'_> {
     fn maybe_parse_return_type(&mut self) -> Option<ast::Type> {
         self.try_parse(
             |self_| {
-                self_.eat_if(&[Token::Colon])?;
+                self_.eat_if(&[Token::SlimArrow])?;
                 self_.parse_type()
             },
             |t| matches!(t, Token::Newline | Token::RBrace),
@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     fn parse_trait_method_with_return_type() {
-        let (trait_def, diags) = parse_trait_definition("trait Foo { bar(): Int }");
+        let (trait_def, diags) = parse_trait_definition("trait Foo { bar() -> Int }");
 
         assert!(diags.is_empty());
 
@@ -318,7 +318,7 @@ mod tests {
 
     #[test]
     fn parse_generic_trait_method() {
-        let (trait_def, diags) = parse_trait_definition("trait Foo { bar<T>(value: T): T }");
+        let (trait_def, diags) = parse_trait_definition("trait Foo { bar<T>(value: T) -> T }");
 
         assert!(diags.is_empty());
 

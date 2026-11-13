@@ -325,6 +325,7 @@ impl TypeChecker {
             TypeSymbolId::Enum(s) => &self.symbols.get(s).methods,
             TypeSymbolId::Primitive(s) => &self.symbols.get(s).methods,
             TypeSymbolId::Struct(s) => &self.symbols.get(s).methods,
+            TypeSymbolId::Trait(s) => &self.symbols.get(s).methods,
         }
     }
     pub fn symbol_methods_mut<'s, S>(&'s mut self, symbol: S) -> &'s mut Vec<MethodSymbolId>
@@ -336,6 +337,7 @@ impl TypeChecker {
             TypeSymbolId::Enum(s) => &mut self.symbols.get_mut(s).methods,
             TypeSymbolId::Primitive(s) => &mut self.symbols.get_mut(s).methods,
             TypeSymbolId::Struct(s) => &mut self.symbols.get_mut(s).methods,
+            TypeSymbolId::Trait(s) => &mut self.symbols.get_mut(s).methods,
         }
     }
 
@@ -382,7 +384,10 @@ impl TypeChecker {
                 }
             },
 
-            (Trait(t), _) => self.implements_trait(got, &t.clone(), got_immutable),
+            (Trait(_), _) => self.implements_trait(got, expected_id, got_immutable),
+            (Ref(r), _) if matches!(self.types.get(r.inner), Trait(_)) => {
+                self.implements_trait(got, expected_id, got_immutable)
+            }
             (Ref(e), Ref(a)) => e
                 .args
                 .iter()
@@ -414,6 +419,8 @@ impl TypeChecker {
                     .zip(a.elements)
                     .all(|(e, a)| self.can_be_assigned_to(a, e, got_immutable))
             }
+
+            (Param(_), _) => true,
 
             (_, _) => got == expected_id,
         }
@@ -582,28 +589,30 @@ impl TypeChecker {
         )
     }
 
-    /// Given a value whose type implements the given trait, check if an
-    /// immutable version of the type also implements the trait (since some
-    /// methods might be defined with a mutable receiver).
     pub(super) fn implements_trait(
         &mut self,
         ty: types::TypeId,
-        expected_trait: &types::TraitType,
+        expected_trait_id: types::TypeId,
         got_immutable: bool,
     ) -> bool {
+        let (trait_id, trait_subs) = self.unwrap_type(expected_trait_id);
+
+        let types::Type::Trait(expected_trait) = self.types.get(trait_id).clone() else {
+            return false;
+        };
+
         if expected_trait.methods.is_empty() {
             return true;
         }
-        if let types::Type::Trait(test) = &self.types.get(ty) {
-            if *test == *expected_trait {
-                return true;
-            }
-        }
+
         let Some(type_symbol) = self.resolve_type_symbol(ty) else {
             return false;
         };
+
         let mut methods = self.symbol_methods(type_symbol).to_vec();
+
         methods.retain(|m| self.is_visible((*m).into()));
+
         if got_immutable {
             methods.retain(|m| !self.symbols.get(*m).is_mutating());
         }
@@ -620,20 +629,20 @@ impl TypeChecker {
             })
             .collect::<Vec<_>>();
 
-        expected_trait
-            .methods
-            .iter()
-            .cloned()
-            .map(|mut m| {
-                if let Some(s) = &m.self_type {
-                    let subs = Substitutions::with_initial(&[s.clone()], &[ty]);
-                    m.self_type = None;
-                    m.def = subs.apply(&mut self.types, m.def);
-                }
-                m
-            })
-            .find(|expected| !got.contains(expected))
-            .is_none()
+        expected_trait.methods.iter().all(|method| {
+            let mut expected = method.clone();
+
+            expected.def = trait_subs.apply(&mut self.types, expected.def);
+
+            if let Some(self_type) = &expected.self_type {
+                let self_subs = Substitutions::with_initial(&[self_type.clone()], &[ty]);
+
+                expected.def = self_subs.apply(&mut self.types, expected.def);
+                expected.self_type = None;
+            }
+
+            got.contains(&expected)
+        })
     }
 
     pub(super) fn find_export(&self, module: ModuleId, name: &str) -> Option<SymbolId> {

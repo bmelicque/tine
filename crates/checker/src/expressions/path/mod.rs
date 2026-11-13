@@ -95,11 +95,7 @@ impl TypeChecker {
 
             TypeAlias(s) => visit_type_alias_path(&mut visitor, s, ctx),
 
-            Trait(_) => {
-                let error = DiagnosticKind::TraitNotAllowedInExpression;
-                visitor.error(error, visitor.start_loc);
-                None
-            }
+            Trait(_) => visit_trait_path(&mut visitor),
             Member(_) | Method(_) => {
                 panic!("shouldn't be able to find those symbols here!")
             }
@@ -140,6 +136,12 @@ fn visit_primitive_path(
     visit_static_method_path(visitor, sym.into(), &segment)
 }
 
+fn visit_trait_path(visitor: &mut PathVisitor) -> Option<ir::Expression> {
+    let error = DiagnosticKind::TraitNotAllowedInExpression;
+    visitor.error(error, visitor.start_loc);
+    None
+}
+
 fn visit_type_alias_path(
     visitor: &mut PathVisitor,
     sym: TypeAliasSymbolId,
@@ -150,6 +152,7 @@ fn visit_type_alias_path(
         Some(TypeSymbolId::Struct(s)) => visit_struct_path(visitor, s, ctx),
         Some(TypeSymbolId::Enum(s)) => visit_enum_path(visitor, s, ctx),
         Some(TypeSymbolId::Primitive(s)) => visit_primitive_path(visitor, s, ctx),
+        Some(TypeSymbolId::Trait(_)) => visit_trait_path(visitor),
         None => visit_raw_type_path(visitor, sym, ctx),
     }
 }

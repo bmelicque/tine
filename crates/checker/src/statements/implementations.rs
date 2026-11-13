@@ -15,6 +15,45 @@ use crate::{
     TypeChecker,
 };
 
+pub struct MethodSignature<'method> {
+    pub docs: &'method Option<ast::Docs>,
+    pub public: bool,
+    pub static_: bool,
+    pub mut_: bool,
+    pub name: &'method Option<ast::Identifier>,
+    pub type_params: &'method Option<Vec<ast::Identifier>>,
+    pub params: &'method Option<ast::FunctionParams>,
+    pub return_type: &'method Option<ast::Type>,
+}
+impl<'a> From<&'a ast::MethodDefinition> for MethodSignature<'a> {
+    fn from(node: &'a ast::MethodDefinition) -> Self {
+        Self {
+            docs: &node.docs,
+            public: node.public,
+            static_: node.static_,
+            mut_: node.mut_,
+            name: &node.name,
+            type_params: &node.type_params,
+            params: &node.params,
+            return_type: &node.return_type,
+        }
+    }
+}
+impl<'a> From<&'a ast::TraitMethod> for MethodSignature<'a> {
+    fn from(node: &'a ast::TraitMethod) -> Self {
+        Self {
+            docs: &None,
+            public: true,
+            static_: false,
+            mut_: false,
+            name: &node.name,
+            type_params: &node.type_params,
+            params: &node.params,
+            return_type: &node.return_annotation,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct PtrKey<T: ?Sized>(*const T);
 impl<T: ?Sized> Hash for PtrKey<T> {
@@ -109,12 +148,16 @@ impl TypeChecker {
             .collect()
     }
 
-    pub fn infer_method_symbol(
+    pub fn infer_method_symbol<'a, I>(
         &mut self,
-        node: &ast::MethodDefinition,
+        node: I,
         owner: TypeSymbolId,
         owner_args: &SubstitutionTable,
-    ) -> Option<MethodSymbolId> {
+    ) -> Option<MethodSymbolId>
+    where
+        I: Into<MethodSignature<'a>>,
+    {
+        let node = node.into();
         let ident = node.name.as_ref()?;
         let name = ident.as_str().to_string();
         let receiver = if node.static_ {
@@ -137,7 +180,7 @@ impl TypeChecker {
             .flatten()
             .map(|p| self.infer_method_param(p))
             .unzip();
-        let return_type = self.infer_method_return_type(node);
+        let return_type = self.infer_method_return_type(node.return_type);
         let ty = self.intern(types::FunctionType {
             type_params,
             params: param_types,
@@ -174,8 +217,8 @@ impl TypeChecker {
             .map_or(TypeStore::UNKNOWN, |t| self.visit_type(t.clone()));
         (name, ty)
     }
-    fn infer_method_return_type(&mut self, node: &ast::MethodDefinition) -> types::TypeId {
-        node.return_type
+    fn infer_method_return_type(&mut self, return_type: &Option<ast::Type>) -> types::TypeId {
+        return_type
             .as_ref()
             .map_or(TypeStore::UNIT, |t| self.visit_type(t.clone()))
     }
@@ -283,7 +326,7 @@ mod tests {
             return_type: None,
             ..Default::default()
         };
-        let ty = checker.infer_method_return_type(&node);
+        let ty = checker.infer_method_return_type(&node.return_type);
         assert_eq!(ty, TypeStore::UNIT);
     }
 
@@ -296,7 +339,7 @@ mod tests {
             )),
             ..Default::default()
         };
-        let ty = checker.infer_method_return_type(&node);
+        let ty = checker.infer_method_return_type(&node.return_type);
         assert_eq!(ty, TypeStore::INTEGER);
     }
 }
