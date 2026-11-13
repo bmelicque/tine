@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::types::{StructType, Type, TypeId, TypeParam};
+use crate::types::{StructType, TraitMethod, Type, TypeId, TypeParam};
 
 #[derive(Debug, Default, Clone)]
 pub struct TypeStore {
@@ -145,16 +145,8 @@ pub fn display_raw_type(store: &TypeStore, ty: TypeId) -> String {
             .join(" | "),
         Type::Float => "float".into(),
         Type::Function(t) => {
-            let params = t
-                .params
-                .iter()
-                .map(|p| display_type(store, *p))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let return_type = match t.return_type {
-                TypeStore::UNIT => "".to_string(),
-                ty => format!(" -> {}", display_type(store, ty)),
-            };
+            let params = display_params(store, &t.params);
+            let return_type = display_return_type(store, t.return_type);
             format!("fn({}){}", params, return_type)
         }
         Type::Generic(_) => "generic".into(),
@@ -206,10 +198,10 @@ pub fn display_raw_type(store: &TypeStore, ty: TypeId) -> String {
             let methods = t
                 .methods
                 .iter()
-                .map(|method| format!("{} {}", method.name, display_type(store, method.def)))
+                .map(|method| display_trait_method(store, method))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!(".({})", methods)
+            format!("{{ {} }}", methods)
         }
         Type::Tuple(t) => {
             let elements = t
@@ -223,6 +215,31 @@ pub fn display_raw_type(store: &TypeStore, ty: TypeId) -> String {
         Type::Unit => "()".into(),
         Type::Unknown => "unknown".into(),
     }
+}
+
+fn display_params(store: &TypeStore, params: &[TypeId]) -> String {
+    params
+        .iter()
+        .map(|p| display_type(store, *p))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn display_return_type(store: &TypeStore, ty: TypeId) -> String {
+    match ty {
+        TypeStore::UNIT => "".to_string(),
+        ty => format!(" -> {}", display_type(store, ty)),
+    }
+}
+
+fn display_trait_method(store: &TypeStore, method: &TraitMethod) -> String {
+    let name = &method.name;
+    let Type::Function(ty) = store.get(method.def) else {
+        panic!()
+    };
+    let params = display_params(store, &ty.params);
+    let return_type = display_return_type(store, ty.return_type);
+    format!("fn {}({}){}", name, params, return_type)
 }
 
 #[cfg(test)]
