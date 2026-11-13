@@ -5,7 +5,10 @@ use tine_common::{
 };
 use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
-use tine_types::types;
+use tine_types::{
+    store::{display_raw_type, display_type},
+    types,
+};
 
 use crate::{
     substitutions::{SubstitutionTable, Substitutions},
