@@ -143,7 +143,16 @@ impl TypeChecker {
         let mut self_ = self.with_binding_expectation(expected);
         let loc = node.loc();
         let got = self_.visit_expression(node)?;
-        self_.can_be_assigned_to(got.ty(), expected, true);
+        if !self_.can_be_assigned_to(got.ty(), expected, true) {
+            let left_name = display_type(&self_.types, expected);
+            let right_name = display_type(&self_.types, got.ty());
+            let error = DiagnosticKind::MismatchedTypes {
+                left_name,
+                right_name,
+            };
+            self_.error(error, got.loc());
+            return None;
+        }
         let Some(ty) = self_.infer(got.ty()) else {
             self_.error(DiagnosticKind::CannotInferType, got.loc());
             return None;

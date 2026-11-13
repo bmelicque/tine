@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ### Fixed
 
 - Fixed crashes on member expressions when missing field
+- Fixed missing type checks (notably with type hints on variable declaration)
 - Fixed module resolution in project parser
 - Fixed field visibility on path expressions
 - Fixed public items import from other modules
