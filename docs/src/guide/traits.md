@@ -1,8 +1,6 @@
 # Defining shared behavior with traits
 
-🔮 Planned — partially implemented
-
-_This chapter describes a feature that's still taking shape. Some of what's shown here works today; some of it doesn't yet. Treat this as a preview, not a reference._
+🚧 Unstable
 
 ## Declaring a trait
 
