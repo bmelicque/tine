@@ -2029,7 +2029,7 @@ dependencies = [
 
 [[package]]
 name = "tine_ast"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "ordered-float",
  "paste",
@@ -2039,7 +2039,7 @@ dependencies = [
 
 [[package]]
 name = "tine_checker"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "ordered-float",
@@ -2054,7 +2054,7 @@ dependencies = [
 
 [[package]]
 name = "tine_cli"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2068,14 +2068,14 @@ dependencies = [
 
 [[package]]
 name = "tine_common"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "tine_macros",
 ]
 
 [[package]]
 name = "tine_expander"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "ordered-float",
@@ -2085,7 +2085,7 @@ dependencies = [
 
 [[package]]
 name = "tine_ir"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "ordered-float",
  "paste",
@@ -2098,7 +2098,7 @@ dependencies = [
 
 [[package]]
 name = "tine_macros"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "convert_case",
  "proc-macro2",
@@ -2108,7 +2108,7 @@ dependencies = [
 
 [[package]]
 name = "tine_parser"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "logos",
@@ -2119,7 +2119,7 @@ dependencies = [
 
 [[package]]
 name = "tine_server"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "dashmap 6.1.0",
@@ -2136,7 +2136,7 @@ dependencies = [
 
 [[package]]
 name = "tine_symbols"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "tine_common",
  "tine_macros",
@@ -2145,7 +2145,7 @@ dependencies = [
 
 [[package]]
 name = "tine_transpiler"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "ordered-float",
@@ -2168,7 +2168,7 @@ dependencies = [
 
 [[package]]
 name = "tine_types"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "tine_common",
 ]
