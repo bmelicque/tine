@@ -215,6 +215,20 @@
         "types": {
             "patterns": [
                 {
+                    "begin": "\\b([A-Z][A-Za-z0-9_]*)<\\b",
+                    "beginCaptures": {
+                        "1": {
+                            "name": "entity.name.type.tine"
+                        }
+                    },
+                    "end": ">",
+                    "patterns": [
+                        {
+                            "include": "#type-parameters"
+                        }
+                    ]
+                },
+                {
                     "name": "entity.name.type.tine",
                     "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
                 },
