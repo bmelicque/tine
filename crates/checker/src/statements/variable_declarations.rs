@@ -19,7 +19,7 @@ impl TypeChecker {
         };
         let ty = ty.unwrap_or(value.ty());
 
-        let pattern = self.visit_pattern(node.pattern?, &value, ty, false)?;
+        let pattern = self.visit_pattern(node.pattern?, &value, ty, node.public)?;
 
         if !self.check_exhaustiveness(vec![&pattern], pattern.loc()) {
             return None;

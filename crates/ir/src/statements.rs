@@ -68,6 +68,14 @@ pub enum FunctionName {
     Function(FunctionSymbolId),
     StaticMethod(MethodSymbolId),
 }
+impl FunctionName {
+    pub fn as_function(&self) -> Option<FunctionSymbolId> {
+        match self {
+            Self::Function(f) => Some(*f),
+            _ => None,
+        }
+    }
+}
 
 impl Into<FunctionExpression> for FunctionDefinition {
     fn into(self) -> FunctionExpression {

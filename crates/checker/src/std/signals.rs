@@ -29,6 +29,7 @@ fn register_state_symbol(tc: &mut TypeChecker) -> FunctionSymbolId {
         return_type,
     });
     tc.symbols.insert::<FunctionSymbolId>(FunctionSymbol {
+        public: true,
         name: "state".to_string(),
         ty: state_type,
         param_names: vec!["initialValue".to_string()],
@@ -64,6 +65,7 @@ fn register_computed_symbol(tc: &mut TypeChecker) -> FunctionSymbolId {
         type_params: vec![param_type],
     });
     tc.symbols.insert::<FunctionSymbolId>(FunctionSymbol {
+        public: true,
         name: "computed$".to_string(),
         ty: computed_type,
         param_names: vec!["expression".to_string()],

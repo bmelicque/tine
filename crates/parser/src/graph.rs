@@ -107,7 +107,7 @@ impl ProjectParser {
         let mut queue = VecDeque::<ModuleId>::new();
         // List all nodes without dependencies
         for id in 1..self.names.len() + 1 {
-            if self.edges.iter().find(|e| e.dependent == id).is_none() {
+            if self.edges.iter().all(|e| e.dependent != id) {
                 queue.push_back(id);
             }
         }
@@ -129,7 +129,7 @@ impl ProjectParser {
                 edges.remove(&removed);
                 let dependent_met_prerequisites = edges
                     .iter()
-                    .find(|e| e.dependency == removed.dependent)
+                    .find(|e| e.dependent == removed.dependent)
                     .is_none();
                 if dependent_met_prerequisites && !queue.contains(&removed.dependent) {
                     queue.push_back(removed.dependent);
@@ -224,4 +224,125 @@ fn get_dependencies(root_path: &ModulePath, ast: &ast::Program) -> Vec<ModuleIde
     file_names.sort_by_key(|n| n.path.clone());
     file_names.dedup_by(|a, b| a.path == b.path);
     file_names
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn graph(edges: &[(ModuleId, ModuleId)]) -> ProjectParser {
+        let mut graph = ProjectParser::new(Box::new(ParserLoader));
+
+        for &(dependency, dependent) in edges {
+            graph.edges.insert(GraphEdge {
+                dependency,
+                dependent,
+            });
+        }
+
+        graph
+    }
+
+    #[test]
+    fn empty_graph() {
+        let graph = graph(&[]);
+
+        assert_eq!(graph.try_sorted_vec(), Ok(vec![]));
+    }
+
+    #[test]
+    fn single_node() {
+        let mut graph = graph(&[]);
+        graph.names.push("A".into());
+
+        assert_eq!(graph.try_sorted_vec(), Ok(vec![1]));
+    }
+
+    #[test]
+    fn independent_nodes() {
+        let mut graph = graph(&[]);
+        graph.names.extend(["A".into(), "B".into(), "C".into()]);
+
+        assert_eq!(graph.try_sorted_vec(), Ok(vec![1, 2, 3]));
+    }
+
+    #[test]
+    fn simple_chain() {
+        // 1 -> 2 -> 3
+        let mut graph = graph(&[(1, 2), (2, 3)]);
+        graph.names.extend(["A".into(), "B".into(), "C".into()]);
+
+        assert_eq!(graph.try_sorted_vec(), Ok(vec![1, 2, 3]));
+    }
+
+    #[test]
+    fn branching() {
+        //     ┌-> 2
+        // 1 --┤
+        //     └-> 3
+        let mut graph = graph(&[(1, 2), (1, 3)]);
+        graph.names.extend(["A".into(), "B".into(), "C".into()]);
+
+        assert!(matches!(graph.try_sorted_vec(), Ok(_)));
+    }
+
+    #[test]
+    fn convergence() {
+        // 1 -> 3
+        // 2 -> 3
+        let mut graph = graph(&[(1, 3), (2, 3)]);
+        graph.names.extend(["A".into(), "B".into(), "C".into()]);
+
+        assert_eq!(graph.try_sorted_vec(), Ok(vec![1, 2, 3]));
+    }
+
+    #[test]
+    fn simple_cycle() {
+        // 1 -> 2 -> 1
+        let mut graph = graph(&[(1, 2), (2, 1)]);
+        graph.names.extend(["A".into(), "B".into()]);
+
+        let result = graph.try_sorted_vec();
+
+        assert_eq!(
+            result,
+            Err(HashSet::from([
+                GraphEdge {
+                    dependency: 1,
+                    dependent: 2,
+                },
+                GraphEdge {
+                    dependency: 2,
+                    dependent: 1,
+                },
+            ]))
+        );
+    }
+
+    #[test]
+    fn three_node_cycle() {
+        // 1 -> 2 -> 3 -> 1
+        let mut graph = graph(&[(1, 2), (2, 3), (3, 1)]);
+        graph.names.extend(["A".into(), "B".into(), "C".into()]);
+
+        let result = graph.try_sorted_vec();
+
+        assert_eq!(
+            result,
+            Err(HashSet::from([
+                GraphEdge {
+                    dependency: 1,
+                    dependent: 2,
+                },
+                GraphEdge {
+                    dependency: 2,
+                    dependent: 3,
+                },
+                GraphEdge {
+                    dependency: 3,
+                    dependent: 1,
+                },
+            ]))
+        );
+    }
 }

@@ -85,6 +85,8 @@ pub enum DiagnosticKind {
     ExpectedVariantUnit,
     FieldIsPrivate(String),
     HostMutation,
+    ItemDoesNotExist(String),
+    ItemIsPrivate(String),
     InvalidAssignTarget,
     InvalidCondition {
         type_name: String,
@@ -236,6 +238,8 @@ impl Display for DiagnosticKind {
             Self::ExpectedVariantUnit => write!(f, "expected unit variant"),
             Self::FieldIsPrivate(s) => write!(f, "field `{}` is private", s),
             Self::HostMutation => write!(f, "cannot mutate method host in a non-mut method"),
+            Self::ItemDoesNotExist(s) => write!(f, "item `{}` does not exist in this module", s),
+            Self::ItemIsPrivate(s) => write!(f, "item `{}` is private", s),
             Self::InvalidAssignTarget => write!(f, "invalid assign target"),
             Self::InvalidCondition { type_name } => {
                 write!(

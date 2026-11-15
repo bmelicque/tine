@@ -16,10 +16,13 @@
             "include": "#markup"
         },
         {
-            "include": "#keywords"
+            "include": "#type-declarations"
         },
         {
             "include": "#functions"
+        },
+        {
+            "include": "#keywords"
         },
         {
             "include": "#types"
@@ -39,12 +42,15 @@
             "patterns": [
                 {
                     "include": "#markup-element"
+                },
+                {
+                    "include": "#markup-self-closing"
                 }
             ]
         },
-        "markup-element": {
+        "markup-self-closing": {
             "name": "meta.tag.tine",
-            "begin": "(</?)([A-Za-z][A-Za-z0-9_-]*)",
+            "begin": "(<)([A-Za-z][A-Za-z0-9_-]*)",
             "beginCaptures": {
                 "1": {
                     "name": "punctuation.definition.tag.begin.tine"
@@ -53,7 +59,7 @@
                     "name": "entity.name.tag.tine"
                 }
             },
-            "end": "/?>",
+            "end": "/>",
             "endCaptures": {
                 "0": {
                     "name": "punctuation.definition.tag.end.tine"
@@ -61,34 +67,43 @@
             },
             "patterns": [
                 {
-                    "include": "#markup-type-arguments"
-                },
-                {
                     "include": "#markup-attributes"
                 }
             ]
         },
-        "markup-type-arguments": {
-            "begin": "<",
-            "end": ">",
-            "name": "meta.type.parameters.tine",
+        "markup-element": {
+            "name": "meta.tag.tine",
+            "begin": "(<)([A-Za-z][A-Za-z0-9_-]*)",
             "beginCaptures": {
-                "0": {
-                    "name": "punctuation.definition.type.begin.tine"
+                "1": {
+                    "name": "punctuation.definition.tag.begin.tine"
+                },
+                "2": {
+                    "name": "entity.name.tag.tine"
                 }
             },
+            "end": "(</)([A-Za-z][A-Za-z0-9_-]*)(\\s*>)",
             "endCaptures": {
-                "0": {
-                    "name": "punctuation.definition.type.end.tine"
+                "1": {
+                    "name": "punctuation.definition.tag.begin.tine"
+                },
+                "2": {
+                    "name": "entity.name.tag.tine"
+                },
+                "3": {
+                    "name": "punctuation.definition.tag.end.tine"
                 }
             },
             "patterns": [
                 {
-                    "include": "#types"
+                    "include": "#markup-attributes"
                 },
                 {
-                    "match": ",",
-                    "name": "punctuation.separator.type.tine"
+                    "match": ">",
+                    "name": "punctuation.definition.tag.end.tine"
+                },
+                {
+                    "include": "#markup-children"
                 }
             ]
         },
@@ -147,6 +162,25 @@
                 }
             ]
         },
+        "markup-children": {
+            "patterns": [
+                {
+                    "include": "#markup"
+                },
+                {
+                    "begin": "{",
+                    "end": "}",
+                    "patterns": [
+                        {
+                            "include": "#expressions"
+                        }
+                    ]
+                },
+                {
+                    "name": "markup.content.tine"
+                }
+            ]
+        },
         "expressions": {
             "patterns": [
                 {
@@ -159,10 +193,10 @@
                     "include": "#markup"
                 },
                 {
-                    "include": "#keywords"
+                    "include": "#functions"
                 },
                 {
-                    "include": "#functions"
+                    "include": "#keywords"
                 },
                 {
                     "include": "#types"
@@ -197,6 +231,17 @@
         "functions": {
             "patterns": [
                 {
+                    "match": "\\b(fn)\\s+([a-zA-Z_][a-zA-Z0-9_$]*)\\s*(?=\\()",
+                    "captures": {
+                        "1": {
+                            "name": "keyword.declaration.function.tine"
+                        },
+                        "2": {
+                            "name": "entity.name.function.call.tine"
+                        }
+                    }
+                },
+                {
                     "match": "\\b([a-zA-Z_][a-zA-Z0-9_$]*)\\s*(?=\\()",
                     "captures": {
                         "1": {
@@ -205,28 +250,52 @@
                     }
                 },
                 {
-                    "begin": "\\bfn\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+                    "begin": "\\b(fn)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
                     "beginCaptures": {
                         "1": {
-                            "name": "entity.name.function.tine"
+                            "name": "keyword.declaration.function.tine"
+                        },
+                        "2": {
+                            "name": "entity.name.function.call.tine"
                         }
                     },
                     "end": "(?=\\()",
                     "patterns": [
                         {
-                            "include": "#function-type-parameters"
+                            "include": "#type-parameters"
                         }
                     ]
                 }
             ]
         },
-        "function-type-parameters": {
+        "type-parameters": {
             "begin": "<",
             "end": ">",
             "name": "meta.type.parameters.tine",
             "patterns": [
                 {
                     "include": "#types"
+                }
+            ]
+        },
+        "type-declarations": {
+            "patterns": [
+                {
+                    "begin": "\\b(struct|enum|trait)\\s+([A-Z][A-Za-z0-9_]*)",
+                    "beginCaptures": {
+                        "1": {
+                            "name": "keyword.declaration.type.tine"
+                        },
+                        "2": {
+                            "name": "entity.name.type.tine"
+                        }
+                    },
+                    "end": "(?=\\s*\\{)",
+                    "patterns": [
+                        {
+                            "include": "#type-parameters"
+                        }
+                    ]
                 }
             ]
         },
@@ -242,7 +311,7 @@
                 },
                 {
                     "name": "keyword.declaration.type.tine",
-                    "match": "\\b(struct|enum)\\b"
+                    "match": "\\b(struct|enum|trait)\\b"
                 },
                 {
                     "name": "keyword.declaration.function.tine",

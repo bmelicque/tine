@@ -84,6 +84,7 @@ macro_rules! impl_as_id {
 pub enum TypeSymbolId {
     Struct(StructSymbolId),
     Enum(EnumSymbolId),
+    Trait(TraitSymbolId),
     Primitive(PrimitiveTypeSymbolId),
 }
 impl TypeSymbolId {
@@ -104,6 +105,7 @@ impl From<TypeSymbolId> for SymbolId {
         match value {
             TypeSymbolId::Enum(t) => t.into(),
             TypeSymbolId::Struct(t) => t.into(),
+            TypeSymbolId::Trait(t) => t.into(),
             TypeSymbolId::Primitive(t) => t.into(),
         }
     }
@@ -278,6 +280,7 @@ pub struct TraitSymbol {
     pub public: bool,
     // This is expected to have the same length as the function type's params.
     pub param_names: Vec<String>,
+    pub methods: Vec<MethodSymbolId>,
     pub ty: TypeId,
     pub docs: Option<String>,
     pub defined_at: Location,

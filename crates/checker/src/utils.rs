@@ -160,4 +160,36 @@ impl Ast {
             value,
         }
     }
+
+    pub fn function_def(
+        docs: Option<ast::Docs>,
+        public: bool,
+        def: ast::FunctionExpression,
+    ) -> ast::FunctionDefinition {
+        ast::FunctionDefinition {
+            loc: Location::dummy(),
+            docs,
+            public,
+            definition: def,
+        }
+    }
+
+    pub fn valid_named_function(
+        name: ast::Identifier,
+        params: Vec<ast::FunctionParam>,
+        return_type: Option<tine_ast::Type>,
+        body: ast::Expression,
+    ) -> ast::FunctionExpression {
+        ast::FunctionExpression {
+            loc: Location::dummy(),
+            name: Some(name),
+            type_params: None,
+            params: Some(ast::FunctionParams {
+                loc: Location::dummy(),
+                params,
+            }),
+            return_type,
+            body: Some(Box::new(body)),
+        }
+    }
 }

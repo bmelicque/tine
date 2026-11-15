@@ -40,6 +40,7 @@ impl Parser<'_> {
             Token::Pub => self.parse_pub(docs),
             Token::Return => Some(self.parse_return_statement().into()),
             Token::Struct => Some(self.parse_struct_definition(docs, None, None).into()),
+            Token::Trait => Some(self.parse_trait_definition(docs, None).into()),
             Token::Type => Some(self.parse_type_alias(docs, None).into()),
             _ => self.parse_assignment(),
         }
@@ -97,6 +98,7 @@ impl Parser<'_> {
             Token::Fn => Some(self.parse_function_definition(docs, Some(start)).into()),
             Token::Let => Some(self.parse_variable_declaration(docs, Some(start)).into()),
             Token::Struct => Some(self.parse_struct_definition(docs, None, Some(start)).into()),
+            Token::Trait => Some(self.parse_trait_definition(docs, Some(start)).into()),
             Token::Type => Some(self.parse_type_alias(docs, Some(start)).into()),
             _ => unreachable!(),
         }

@@ -4,6 +4,28 @@ All meaningful changes to this project will be written here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
+## [0.2.0] - 2026-11-15
+
+### Added
+
+- Added `dev` command in CLI
+- Added basic `log` function (only takes `str` args for now)
+- Added traits
+
+### Fixed
+
+- Fixed crashes on member expressions when missing field
+- Fixed missing type checks (notably with type hints on variable declaration)
+- Fixed module resolution in project parser
+- Fixed field visibility on path expressions
+- Fixed public items import from other modules
+- Fixed alias resolution crashes in empty blocks
+- Fixed dom element codegen
+- Fixed bundler path resolution
+- Fixed error messages in `use` statements
+- Fixed graph root in language server
+- Fixed markup coloring
+
 ## [0.1.1] - 2026-09-07
 
 ### Fixed

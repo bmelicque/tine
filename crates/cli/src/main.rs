@@ -10,5 +10,6 @@ fn main() {
     match cli.command {
         Commands::Build(args) => commands::build::run(args),
         Commands::Check(args) => commands::check::run(args),
+        Commands::Dev(args) => commands::dev::run(args),
     }
 }
