@@ -75,7 +75,7 @@ impl TypeChecker {
                 .map(|e| ir::Expression::If(e).into()),
         }?;
         if let Some(expected) = expected {
-            if !self.can_be_assigned_to(alternate.ty, expected, true) {
+            if !self.can_be_coerced_into(alternate.ty, expected, true) {
                 let error = DiagnosticKind::MismatchedBranchTypes {
                     expected: self.types.display(expected),
                     got: self.types.display(alternate.ty),

@@ -356,43 +356,48 @@ impl TypeChecker {
             .find(|s| s.name() == name)
     }
 
-    pub fn can_be_assigned_to(
+    /// Check if 'got' type can be coerced into 'expected' type.
+    ///
+    /// This is used for assignments and call arguments.
+    pub fn can_be_coerced_into(
         &mut self,
-        got: types::TypeId,
+        got_id: types::TypeId,
         expected_id: types::TypeId,
         got_immutable: bool,
     ) -> bool {
-        let actual = self.types.get(got).clone();
+        let got = self.types.get(got_id).clone();
         let expected = self.types.get(expected_id).clone();
         use types::Type::*;
-        match (expected, actual) {
+        match (expected, got) {
             (Unknown, _) | (_, Unknown) => true,
 
             (Placeholder(p), _) => match self.placeholders.get(&p).cloned() {
-                Some(t) => self.can_be_assigned_to(got, t, got_immutable),
+                Some(t) => self.can_be_coerced_into(got_id, t, got_immutable),
                 None => {
-                    self.placeholders.insert(p, got);
+                    self.placeholders.insert(p, got_id);
                     true
                 }
             },
 
             (_, Placeholder(p)) => match self.placeholders.get(&p).cloned() {
-                Some(t) => self.can_be_assigned_to(t, expected_id, got_immutable),
+                Some(t) => self.can_be_coerced_into(t, expected_id, got_immutable),
                 None => {
                     self.placeholders.insert(p, expected_id);
                     true
                 }
             },
 
-            (Trait(_), _) => self.implements_trait(got, expected_id, got_immutable),
+            (Trait(_), _) => self.implements_trait(got_id, expected_id, got_immutable),
             (Ref(r), _) if matches!(self.types.get(r.inner), Trait(_)) => {
-                self.implements_trait(got, expected_id, got_immutable)
+                self.implements_trait(got_id, expected_id, got_immutable)
             }
-            (Ref(e), Ref(a)) => e
-                .args
-                .iter()
-                .zip(&a.args)
-                .all(|(e, a)| self.can_be_assigned_to(*a, *e, got_immutable)),
+            (Ref(e), Ref(a)) => {
+                a.args.len() == e.args.len()
+                    && e.args
+                        .iter()
+                        .zip(&a.args)
+                        .all(|(e, a)| self.can_be_coerced_into(*a, *e, got_immutable))
+            }
             (e, Ref(a)) if e.is_generic() => a.inner == expected_id,
             (Float, Integer) => true,
 
@@ -401,9 +406,9 @@ impl TypeChecker {
                     .params
                     .into_iter()
                     .zip(actual.params)
-                    .all(|(e, a)| self.can_be_assigned_to(a, e, got_immutable));
+                    .all(|(e, a)| self.can_be_coerced_into(a, e, got_immutable));
                 params_ok
-                    && self.can_be_assigned_to(
+                    && self.can_be_coerced_into(
                         actual.return_type,
                         expected.return_type,
                         got_immutable,
@@ -417,12 +422,12 @@ impl TypeChecker {
                 e.elements
                     .into_iter()
                     .zip(a.elements)
-                    .all(|(e, a)| self.can_be_assigned_to(a, e, got_immutable))
+                    .all(|(e, a)| self.can_be_coerced_into(a, e, got_immutable))
             }
 
             (Param(_), _) => true,
 
-            (_, _) => got == expected_id,
+            (_, _) => got_id == expected_id,
         }
     }
     pub fn can_expr_be_assigned_to(
@@ -431,7 +436,7 @@ impl TypeChecker {
         got: &ir::Expression,
     ) -> bool {
         let got_immutable = self.is_mutable(&got) == Some(false);
-        self.can_be_assigned_to(got.ty(), expected, got_immutable)
+        self.can_be_coerced_into(got.ty(), expected, got_immutable)
     }
 
     pub fn with_scope<F, T>(&mut self, f: F) -> T

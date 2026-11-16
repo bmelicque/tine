@@ -100,7 +100,7 @@ impl TypeChecker {
             params,
             return_type,
         });
-        self.can_be_assigned_to(ty, expect, true);
+        self.can_be_coerced_into(ty, expect, true);
         param_symbols.iter().for_each(|&v| {
             self.infer_symbol_type(v.into());
         });

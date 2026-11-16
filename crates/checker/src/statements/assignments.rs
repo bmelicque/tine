@@ -28,7 +28,7 @@ impl TypeChecker {
             (Some(assignee), Some(value)) => (assignee, value),
             _ => return None,
         };
-        if !self.can_be_assigned_to(value.ty(), assignee.ty(), false) {
+        if !self.can_be_coerced_into(value.ty(), assignee.ty(), false) {
             let left_name = self.types.display(assignee.ty());
             let right_name = self.types.display(value.ty());
             let error = DiagnosticKind::MismatchedTypes {

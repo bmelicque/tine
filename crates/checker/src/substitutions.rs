@@ -24,7 +24,6 @@ impl From<&Substitutions> for SubstitutionTable {
 pub struct Substitutions {
     table: SubstitutionTable,
     mismatched_pairs: Vec<(types::TypeId, types::TypeId)>,
-    diagnostics: Vec<DiagnosticKind>,
 }
 impl From<SubstitutionTable> for Substitutions {
     fn from(table: SubstitutionTable) -> Self {
@@ -40,7 +39,6 @@ impl Substitutions {
         Self {
             table: HashMap::new(),
             mismatched_pairs: Vec::new(),
-            diagnostics: Vec::new(),
         }
     }
 
@@ -74,8 +72,8 @@ impl Substitutions {
             (Param(p), a) => {
                 match self.table.get(&p) {
                     Some(&p) => {
-                        if !tc.can_be_assigned_to(concrete, p, true) {
-                            self.push_mismatched(&tc.types, p, concrete);
+                        if !tc.can_be_coerced_into(concrete, p, true) {
+                            self.push_mismatched(p, concrete);
                         }
                     }
                     None => match &a {
@@ -86,6 +84,37 @@ impl Substitutions {
                     },
                 };
             }
+            (Ref(g), Ref(c)) => {
+                if g.inner != c.inner || g.args.len() != c.args.len() {
+                    self.push_mismatched(generic, concrete);
+                    return;
+                }
+                for (a, b) in g.args.iter().zip(&c.args) {
+                    self.unify(tc, *a, *b, loc);
+                }
+            }
+            (type_, Ref(type_ref)) => {
+                if generic != type_ref.inner {
+                    self.push_mismatched(generic, concrete);
+                    return;
+                }
+                let params = type_.as_params().unwrap_or(&[]);
+                let args = type_ref.args;
+                if params.len() != args.len() {
+                    self.push_mismatched(generic, concrete);
+                    return;
+                }
+                for (p, a) in params.iter().zip(args) {
+                    self.unify(tc, p.id, a, loc);
+                }
+            }
+            (Ref(type_ref), _) => {
+                if type_ref.inner != concrete {
+                    self.push_mismatched(generic, concrete);
+                    return;
+                }
+            }
+            // TODO: (type, param)
             (Function(e), Function(a)) => {
                 if e.params.len() != a.params.len() {
                     self.mismatched_pairs.push((generic, concrete));
@@ -215,12 +244,8 @@ impl Substitutions {
             .collect()
     }
 
-    fn push_mismatched(&mut self, store: &TypeStore, left: types::TypeId, right: types::TypeId) {
-        let diag = DiagnosticKind::MismatchedTypes {
-            left_name: display_type(store, left),
-            right_name: display_type(store, right),
-        };
-        self.diagnostics.push(diag);
+    fn push_mismatched(&mut self, left: types::TypeId, right: types::TypeId) {
+        self.mismatched_pairs.push((left, right));
     }
 
     pub fn produce_diagnostics(&self, store: &TypeStore) -> Vec<DiagnosticKind> {

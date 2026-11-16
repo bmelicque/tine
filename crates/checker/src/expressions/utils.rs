@@ -5,10 +5,7 @@ use tine_common::{
 };
 use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
-use tine_types::{
-    store::{display_raw_type, display_type},
-    types,
-};
+use tine_types::types;
 
 use crate::{
     substitutions::{SubstitutionTable, Substitutions},
@@ -96,7 +93,7 @@ impl TypeChecker {
         got_immutable: bool,
         loc: Location,
     ) {
-        let ok = self.can_be_assigned_to(got, expected, got_immutable);
+        let ok = self.can_be_coerced_into(got, expected, got_immutable);
 
         if !ok {
             let got = self.types.display(got);
@@ -143,16 +140,6 @@ impl TypeChecker {
         let mut self_ = self.with_binding_expectation(expected);
         let loc = node.loc();
         let got = self_.visit_expression(node)?;
-        if !self_.can_be_assigned_to(got.ty(), expected, true) {
-            let left_name = display_type(&self_.types, expected);
-            let right_name = display_type(&self_.types, got.ty());
-            let error = DiagnosticKind::MismatchedTypes {
-                left_name,
-                right_name,
-            };
-            self_.error(error, got.loc());
-            return None;
-        }
         let Some(ty) = self_.infer(got.ty()) else {
             self_.error(DiagnosticKind::CannotInferType, got.loc());
             return None;
