@@ -1,6 +1,7 @@
 use tine_ast as ast;
 use tine_common::locations::Locatable;
 use tine_ir::{self as ir, Typed};
+use tine_types::types;
 
 use crate::{substitutions::Substitutions, TypeChecker};
 
@@ -9,15 +10,10 @@ impl TypeChecker {
         &mut self,
         node: ast::VariableDeclaration,
     ) -> Option<ir::VariableDeclaration> {
-        let ty = node.annotation.map(|a| self.visit_type(a));
+        let hint = node.annotation.map(|a| self.visit_type(a));
 
-        let value = match ty {
-            Some(ty) => {
-                self.check_expression_against(node.value?, ty, &mut Substitutions::new())?
-            }
-            None => self.visit_expression(node.value?)?,
-        };
-        let ty = ty.unwrap_or(value.ty());
+        let value = self.visit_init_value(node.value, hint)?;
+        let ty = hint.unwrap_or(value.ty());
 
         let pattern = self.visit_pattern(node.pattern?, &value, ty, node.public)?;
 
@@ -29,6 +25,22 @@ impl TypeChecker {
             pattern,
             value,
         })
+    }
+
+    fn visit_init_value(
+        &mut self,
+        value: Option<ast::Expression>,
+        hint: Option<types::TypeId>,
+    ) -> Option<ir::Expression> {
+        let value = value?;
+        let loc = value.loc();
+        let mut subs = Substitutions::new();
+        let value = match hint {
+            Some(ty) => self.check_expression_against(value, ty, &mut subs)?,
+            None => self.visit_expression(value)?,
+        };
+        self.errors(subs.produce_diagnostics(&self.types), loc);
+        Some(value)
     }
 }
 

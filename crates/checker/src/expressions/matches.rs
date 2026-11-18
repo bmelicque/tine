@@ -60,6 +60,7 @@ impl TypeChecker {
         Some((pattern?, expression?))
     }
 
+    /// Check if a list of patterns cover all possible cases
     pub fn check_exhaustiveness(&mut self, patterns: Vec<&ir::Pattern>, loc: Location) -> bool {
         let matrix = patterns
             .into_iter()
