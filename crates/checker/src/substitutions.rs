@@ -164,7 +164,6 @@ impl Substitutions {
         use types::Type::*;
         match store.get(to).clone() {
             Boolean => to,
-            Dynamic => TypeStore::DYNAMIC,
             Enum(e) => {
                 let args = self.resolve_params(&e.params);
                 if args.is_empty() {

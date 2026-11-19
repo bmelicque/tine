@@ -5,7 +5,6 @@ pub type TypeId = u32;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     Boolean,
-    Dynamic, // Represents a type that will have to be inferred later
     Enum(EnumType),
     Float,
     Function(FunctionType),
@@ -91,10 +90,6 @@ impl Type {
         }
     }
 
-    pub fn is_unresolved(&self) -> bool {
-        *self == Type::Dynamic
-    }
-
     pub fn is_unknown(&self) -> bool {
         *self == Type::Unknown
     }
@@ -151,6 +146,11 @@ pub struct Variant {
     pub name: String,
     pub def: TypeId,
 }
+impl Variant {
+    pub fn new(name: String, def: TypeId) -> Self {
+        Self { name, def }
+    }
+}
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionType {
@@ -176,7 +176,16 @@ impl Into<Type> for TypeParam {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+/// Placeholders for types that have yet to be inferred.
+///
+/// Example use-cases:
+/// - `let mut list = []` -> The inner type of the array has to be inferred
+/// from later uses
+/// - `Box { ... }` -> The type argument of `Box<T>` has to be inferred from
+/// its content
+/// - `fn (x) { ... }` -> Parts of the closure have to be inferred from its
+/// context
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Placeholder {
     pub id: TypeId,
 }
@@ -269,6 +278,11 @@ impl Into<Type> for StructType {
 pub struct StructField {
     pub name: String,
     pub def: TypeId,
+}
+impl StructField {
+    pub fn new(name: String, def: TypeId) -> Self {
+        Self { name, def }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

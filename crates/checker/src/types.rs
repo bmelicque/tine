@@ -48,10 +48,8 @@ impl TypeChecker {
     }
 
     pub fn visit_map_type(&mut self, node: ast::MapType) -> types::TypeId {
-        let key = node.key.map_or(TypeStore::DYNAMIC, |k| self.visit_type(*k));
-        let value = node
-            .value
-            .map_or(TypeStore::DYNAMIC, |v| self.visit_type(*v));
+        let key = self.visit_type_option(node.key);
+        let value = self.visit_type_option(node.value);
         let symbol = self.builtin_symbol("Map").unwrap();
         self.intern(types::TypeRef {
             inner: symbol.ty(),
@@ -108,18 +106,13 @@ impl TypeChecker {
     }
 
     pub fn visit_option_type(&mut self, node: ast::OptionType) -> types::TypeId {
-        let some = node
-            .base
-            .map_or(TypeStore::DYNAMIC, |t| self.visit_type(*t));
+        let some = self.visit_type_option(node.base);
         self.option_type(some)
     }
 
     pub fn visit_result_type(&mut self, node: ast::ResultType) -> types::TypeId {
-        let ok = node.ok.map_or(TypeStore::DYNAMIC, |o| self.visit_type(*o));
-        let error = node
-            .error
-            .map_or(TypeStore::DYNAMIC, |e| self.visit_type(*e))
-            .into();
+        let ok = self.visit_type_option(node.ok);
+        let error = self.visit_type_option(node.error).into();
         self.intern(types::ResultType { ok, error })
     }
 
@@ -133,6 +126,13 @@ impl TypeChecker {
             elements,
             ..Default::default()
         })
+    }
+
+    fn visit_type_option(&mut self, node: Option<Box<ast::Type>>) -> types::TypeId {
+        match node {
+            Some(t) => self.visit_type(*t),
+            None => self.new_type_placeholder().id,
+        }
     }
 }
 

@@ -1,73 +1,73 @@
+use std::collections::VecDeque;
+
+use tine_ast as ast;
 use tine_common::diagnostics::DiagnosticKind;
 use tine_ir as ir;
 use tine_symbols::symbols::*;
 
-use crate::{
-    assert_end,
-    expressions::path::{
-        utils::{get_host_type, visit_static_method_path},
-        PathContext, PathVisitor,
-    },
-};
+use crate::{expressions::path::PathContext, TypeChecker};
 
-pub(super) fn visit_struct_path(
-    visitor: &mut PathVisitor,
-    sym: StructSymbolId,
-    ctx: PathContext,
-) -> Option<ir::Expression> {
-    match ctx {
-        PathContext::Expr => visit_struct_in_any_expr(visitor, sym),
-        PathContext::Call => visit_struct_path_in_call(visitor, sym),
-        PathContext::Struct => visit_struct_in_struct_expr(visitor, sym),
+impl TypeChecker {
+    pub(super) fn visit_struct_path(
+        &mut self,
+        sym: StructSymbolId,
+        mut segments: VecDeque<ast::PathSegment>,
+        ctx: PathContext,
+    ) -> Option<ir::Expression> {
+        let first = segments.pop_front().unwrap();
+        let struct_ = self.visit_first_segment_with_args(first, sym.into());
+        match ctx {
+            PathContext::Expr => self.visit_struct_in_any_expr(sym, struct_, segments),
+            PathContext::Call => self.visit_struct_path_in_call(sym, segments),
+            PathContext::Struct => self.visit_struct_in_struct_expr(struct_, segments),
+        }
     }
-}
 
-fn visit_struct_in_any_expr(
-    visitor: &mut PathVisitor,
-    sym: StructSymbolId,
-) -> Option<ir::Expression> {
-    let symbol = visitor.tc.symbols.get(sym);
-    if symbol.members.len() > 0 {
-        visitor.error(DiagnosticKind::ExpectedValueGotType, visitor.start_loc);
-        return None;
+    /// Visit structs used as identifiers.
+    ///
+    /// This is forbidden by the language's grammar, except for unit structs,
+    /// which can be constructed with `StructName` instead of `StructName {}`.
+    fn visit_struct_in_any_expr(
+        &mut self,
+        sym: StructSymbolId,
+        ident: ir::Identifier,
+        segments: VecDeque<ast::PathSegment>,
+    ) -> Option<ir::Expression> {
+        self.assert_path_end(&segments).ok()?;
+        let symbol = self.symbols.get(sym);
+        if symbol.members.len() > 0 {
+            self.error(DiagnosticKind::ExpectedValueGotType, ident.loc);
+            return None;
+        }
+        Some(ir::Expression::Struct(ir::StructExpression {
+            ty: ident.ty,
+            loc: ident.loc,
+            constructor: (ident.loc, sym),
+            fields: vec![],
+        }))
     }
-    assert_end!(visitor);
-    let ty = visitor.tc.symbol_type_id(sym);
-    let ty = get_host_type(visitor, ty);
-    Some(ir::Expression::Struct(ir::StructExpression {
-        ty,
-        loc: visitor.start_loc,
-        constructor: (visitor.start_loc, sym),
-        fields: vec![],
-    }))
-}
 
-fn visit_struct_path_in_call(
-    visitor: &mut PathVisitor,
-    sym: StructSymbolId,
-) -> Option<ir::Expression> {
-    let Some(segment) = visitor.segments.pop_front() else {
-        visitor.error(DiagnosticKind::ExpectedFunctionGotType, visitor.start_loc);
-        return None;
-    };
-    visit_static_method_path(visitor, sym.into(), &segment)
-}
-
-fn visit_struct_in_struct_expr(
-    visitor: &mut PathVisitor,
-    sym: StructSymbolId,
-) -> Option<ir::Expression> {
-    if let Some(extra) = visitor.segments.pop_front() {
-        let member = extra.ident.text;
-        let error = DiagnosticKind::UnknownMember { member };
-        visitor.tc.error(error, extra.loc);
-        return None;
+    fn visit_struct_path_in_call(
+        &mut self,
+        sym: StructSymbolId,
+        mut segments: VecDeque<ast::PathSegment>,
+    ) -> Option<ir::Expression> {
+        let host = segments.pop_front().unwrap();
+        // expect a method name after the host
+        if segments.is_empty() {
+            self.error(DiagnosticKind::ExpectedFunctionGotType, host.loc);
+            return None;
+        };
+        self.visit_static_method_path(sym.into(), segments)
     }
-    let host = visitor.tc.symbol_type_id(sym);
-    let host = get_host_type(visitor, host);
-    Some(ir::Expression::Identifier(ir::Identifier {
-        loc: visitor.start_loc,
-        ty: host,
-        symbol: sym.into(),
-    }))
+
+    /// Visit structs used in a constructor context (ie followed by braces).
+    fn visit_struct_in_struct_expr(
+        &mut self,
+        ident: ir::Identifier,
+        segments: VecDeque<ast::PathSegment>,
+    ) -> Option<ir::Expression> {
+        self.assert_path_end(&segments).ok()?;
+        Some(ir::Expression::Identifier(ident))
+    }
 }

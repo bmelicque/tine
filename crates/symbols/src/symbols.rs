@@ -120,6 +120,7 @@ pub struct FunctionSymbolId(pub(crate) usize);
 pub struct StructSymbolId(pub(crate) usize);
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct EnumSymbolId(pub(crate) usize);
+impl_as_id!(EnumSymbolId, Enum, as_enum);
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VariantSymbolId(pub(crate) usize);
 impl_as_id!(VariantSymbolId, Variant, as_variant);

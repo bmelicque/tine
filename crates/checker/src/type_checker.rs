@@ -282,6 +282,14 @@ impl TypeChecker {
         self.types.get(id).clone()
     }
 
+    pub fn auto_deref(&self, id: types::TypeId) -> types::TypeId {
+        match self.resolve(id) {
+            types::Type::Signal(ty) => ty.inner,
+            types::Type::Listener(ty) => ty.inner,
+            _ => id,
+        }
+    }
+
     pub fn symbol_type_id<S>(&self, symbol: S) -> types::TypeId
     where
         S: Into<SymbolId>,

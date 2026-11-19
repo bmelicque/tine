@@ -1,112 +1,123 @@
-use tine_ast::PathSegment;
+use std::collections::VecDeque;
+
+use tine_ast as ast;
 use tine_common::{diagnostics::DiagnosticKind, locations::Location};
 use tine_ir as ir;
 use tine_symbols::symbols::EnumSymbolId;
 
-use crate::expressions::path::{
-    utils::get_host_type, visit_static_method_path, PathContext, PathVisitor,
-};
+use crate::{expressions::path::PathContext, TypeChecker};
 
-pub(super) fn visit_enum_path(
-    visitor: &mut PathVisitor,
-    sym: EnumSymbolId,
-    ctx: PathContext,
-) -> Option<ir::Expression> {
-    match ctx {
-        PathContext::Expr => visit_enum_path_in_expr(visitor, sym),
-        PathContext::Call => visit_enum_path_in_call(visitor, sym),
-        PathContext::Struct => visit_enum_path_in_struct(visitor),
-    }
-}
-
-fn visit_enum_path_in_expr(visitor: &mut PathVisitor, sym: EnumSymbolId) -> Option<ir::Expression> {
-    let Some(variant_segment) = visitor.segments.pop_front() else {
-        visitor
-            .tc
-            .error(DiagnosticKind::ExpectedVariantUnit, visitor.start_loc);
-        return None;
-    };
-    match find_enum_variant(visitor, sym, &variant_segment) {
-        Ok(v) => {
-            if let Some((_, len)) = v {
-                if len > 0 {
-                    visitor.error(DiagnosticKind::ExpectedValueGotType, visitor.start_loc);
-                    return None;
-                }
-            }
-            v.map(|v| v.0)
+impl TypeChecker {
+    /// Visit a path starting with an enum name
+    pub(super) fn visit_enum_path(
+        &mut self,
+        sym: EnumSymbolId,
+        mut segments: VecDeque<ast::PathSegment>,
+        ctx: PathContext,
+    ) -> Option<ir::Expression> {
+        let first = segments.pop_front().unwrap();
+        let enum_ = self.visit_first_segment_with_args(first, sym.into());
+        match ctx {
+            PathContext::Expr => self.visit_enum_path_in_expr(enum_, segments),
+            PathContext::Call => self.visit_enum_path_in_call(enum_, segments),
+            PathContext::Struct => self.visit_enum_path_in_struct(enum_),
         }
-        Err(()) => {
-            let symbol = visitor.tc.symbols.get(sym);
-            let enum_name = symbol.name.clone();
-            let variant = variant_segment.ident.text;
-            let error = DiagnosticKind::UnknownVariant { enum_name, variant };
-            visitor.tc.error(error, variant_segment.loc);
+    }
+
+    /// Visit a path starting with an enum name outside of a call or construct
+    /// context. This leaves only unit variant values (like `Option.None`) as
+    /// valid expressions.
+    fn visit_enum_path_in_expr(
+        &mut self,
+        enum_: ir::Identifier,
+        mut segments: VecDeque<ast::PathSegment>,
+    ) -> Option<ir::Expression> {
+        let Some(variant_segment) = segments.pop_front() else {
+            self.error(DiagnosticKind::ExpectedVariantUnit, enum_.loc);
             return None;
-        }
-    }
-}
-
-fn visit_enum_path_in_call(visitor: &mut PathVisitor, sym: EnumSymbolId) -> Option<ir::Expression> {
-    let Some(next_segment) = visitor.segments.pop_front() else {
-        visitor
-            .tc
-            .error(DiagnosticKind::ExpectedMember, visitor.start_loc);
-        return None;
-    };
-
-    if let Ok(expr) = find_enum_variant(visitor, sym, &next_segment) {
-        if let Some((_, len)) = expr {
-            if len == 0 {
-                visitor.error(DiagnosticKind::ExpectedTypeGotValue, visitor.start_loc);
+        };
+        match find_enum_variant(self, &enum_, &variant_segment, segments) {
+            Ok(Some((expr, 0))) => Some(expr),
+            Ok(Some(_)) => {
+                self.error(DiagnosticKind::ExpectedValueGotType, enum_.loc);
+                None
+            }
+            Ok(None) => None,
+            Err(()) => {
+                let symbol = self.symbols.get(enum_.symbol.as_enum()?);
+                let enum_name = symbol.name.clone();
+                let variant = variant_segment.ident.text;
+                let error = DiagnosticKind::UnknownVariant { enum_name, variant };
+                self.error(error, variant_segment.loc);
                 return None;
             }
         }
-        return expr.map(|e| e.0);
     }
 
-    visit_static_method_path(visitor, sym.into(), &next_segment)
+    /// Visit a path starting with an enum identifier within a "call" context
+    /// (ie parentheses), which could be either constructing a variant or
+    /// calling a static method.
+    fn visit_enum_path_in_call(
+        &mut self,
+        enum_: ir::Identifier,
+        mut segments: VecDeque<ast::PathSegment>,
+    ) -> Option<ir::Expression> {
+        let Some(next_segment) = segments.pop_front() else {
+            self.error(DiagnosticKind::ExpectedMember, enum_.loc);
+            return None;
+        };
+
+        if let Ok(expr) = find_enum_variant(self, &enum_, &next_segment, segments.clone()) {
+            if let Some((_, len)) = expr {
+                if len == 0 {
+                    self.error(DiagnosticKind::ExpectedTypeGotValue, enum_.loc);
+                    return None;
+                }
+            }
+            return expr.map(|e| e.0);
+        }
+
+        segments.push_front(next_segment);
+        self.visit_static_method_path(enum_.symbol, segments)
+    }
+
+    fn visit_enum_path_in_struct(&mut self, enum_: ir::Identifier) -> Option<ir::Expression> {
+        self.error(DiagnosticKind::ExpectedStructGotEnum, enum_.loc);
+        None
+    }
 }
 
 fn find_enum_variant(
-    visitor: &mut PathVisitor,
-    sym: EnumSymbolId,
-    segment: &PathSegment,
+    tc: &mut TypeChecker,
+    enum_ident: &ir::Identifier,
+    variant_segment: &ast::PathSegment,
+    mut segments: VecDeque<ast::PathSegment>,
 ) -> Result<Option<(ir::Expression, usize)>, ()> {
-    let symbol = visitor.tc.symbols.get(sym);
+    let sym = enum_ident.symbol.as_enum().unwrap();
+    let symbol = tc.symbols.get(sym);
     let variant = symbol
         .variants
         .iter()
-        .find(|v| visitor.tc.symbol_name(**v) == segment.ident.as_str());
+        .find(|v| tc.symbol_name(**v) == variant_segment.ident.as_str());
     let Some(&variant) = variant else {
         return Err(());
     };
-    if segment.generic_args.is_some() {
-        visitor
-            .tc
-            .error(DiagnosticKind::UnexpectedTypeParams, segment.loc);
+    if variant_segment.generic_args.is_some() {
+        tc.error(DiagnosticKind::UnexpectedTypeParams, variant_segment.loc);
     }
-    if let Some(extra) = visitor.segments.pop_front() {
+    if let Some(extra) = segments.pop_front() {
         let member = extra.ident.text;
-        visitor.error(DiagnosticKind::UnknownMember { member }, extra.loc);
+        tc.error(DiagnosticKind::UnknownMember { member }, extra.loc);
         return Ok(None);
     }
-    visitor.tc.symbols.get_mut(variant).access.read(segment.loc);
-    let variant_symbol = visitor.tc.symbols.get(variant).clone();
+    tc.symbols.get_mut(variant).access.read(variant_segment.loc);
+    let variant_symbol = tc.symbols.get(variant).clone();
 
-    let ty = visitor.tc.symbol_type_id(sym);
-    let ty = get_host_type(visitor, ty);
+    let ty = enum_ident.ty;
     let id = ir::Expression::Identifier(ir::Identifier {
         ty,
-        loc: Location::merge(visitor.start_loc, segment.loc),
+        loc: Location::merge(enum_ident.loc, variant_segment.loc),
         symbol: variant.into(),
     });
     Ok(Some((id, variant_symbol.body.len())))
-}
-
-fn visit_enum_path_in_struct(visitor: &mut PathVisitor) -> Option<ir::Expression> {
-    visitor
-        .tc
-        .error(DiagnosticKind::ExpectedStructGotEnum, visitor.start_loc);
-    None
 }

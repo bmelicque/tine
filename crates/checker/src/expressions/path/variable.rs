@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use tine_ast as ast;
 use tine_common::{
     diagnostics::DiagnosticKind,
@@ -7,104 +9,95 @@ use tine_ir::{self as ir, Typed};
 use tine_symbols::symbols::*;
 use tine_types::types;
 
-use crate::{expressions::path::PathVisitor, substitutions::Substitutions, TypeChecker};
+use crate::TypeChecker;
 
-pub(super) fn visit_variable_path(
-    visitor: &mut PathVisitor,
-    sym: VariableSymbolId,
-) -> Option<ir::Expression> {
-    if visitor.first_generic_args.is_some() {
-        visitor.error(DiagnosticKind::UnexpectedTypeParams, visitor.start_loc);
-    }
-
-    let ty = visitor.tc.symbol_type_id(sym);
-    let mut base = ir::Expression::Identifier(ir::Identifier {
-        loc: visitor.start_loc,
-        ty,
-        symbol: sym.into(),
-    });
-
-    while let Some(segment) = visitor.segments.pop_front() {
-        base = visit_chain_segment(visitor, base, segment)?;
-    }
-
-    Some(base)
-}
-
-fn visit_chain_segment(
-    visitor: &mut PathVisitor,
-    host: ir::Expression,
-    segment: ast::PathSegment,
-) -> Option<ir::Expression> {
-    let (host_ty, generic_args) = deref_host_ty(visitor, host.ty());
-    let member_name = segment.ident.as_str();
-    let variable_prop = find_variable_prop(&mut visitor.tc, host_ty, &generic_args, member_name);
-    if let Some((sym, ty)) = variable_prop {
-        visitor.read(sym, segment.loc);
-        if !visitor.tc.is_visible(sym.into()) {
-            let error = DiagnosticKind::FieldIsPrivate(member_name.to_string());
-            visitor.error(error, segment.ident.loc);
+impl TypeChecker {
+    /// Visit a path that starts with a variable name, like a member expression
+    /// or a method call.
+    pub(super) fn visit_variable_path(
+        &mut self,
+        mut segments: VecDeque<ast::PathSegment>,
+    ) -> Option<ir::Expression> {
+        let first = segments.pop_front().unwrap();
+        if first.generic_args.is_some() {
+            self.error(DiagnosticKind::UnexpectedTypeParams, first.loc);
         }
-        return Some(ir::Expression::Member(ir::MemberExpression {
-            loc: Location::merge(host.loc(), segment.loc),
-            object: Some(Box::new(host)),
-            member: (segment.loc, sym),
-            ty,
-        }));
-    }
+        let mut id = self.visit_identifier(first.ident)?;
+        id.ty = self.types.instantiate(id.ty(), &[]);
+        let mut expr = id.into();
 
-    if let Some((sym, ty)) = visitor.tc.find_method(host.ty(), member_name, |_| true) {
-        visitor.read(sym, segment.loc);
-        if !visitor.tc.is_visible(sym.into()) {
-            let error = DiagnosticKind::MethodIsPrivate(member_name.to_string());
-            visitor.error(error, segment.ident.loc);
+        while let Some(segment) = segments.pop_front() {
+            expr = self.visit_variable_path_segment(expr, segment)?;
         }
-        return Some(ir::Expression::Method(ir::MethodExpression {
-            loc: Location::merge(host.loc(), segment.loc),
-            host: Some(Box::new(host)),
-            method: (segment.loc, sym),
-            args: vec![],
-            ty,
-        }));
+
+        Some(expr)
     }
 
-    let member = member_name.to_string();
-    let error = DiagnosticKind::UnknownMember { member };
-    visitor.error(error, segment.loc);
+    fn visit_variable_path_segment(
+        &mut self,
+        host: ir::Expression,
+        segment: ast::PathSegment,
+    ) -> Option<ir::Expression> {
+        let ty: u32 = self.auto_deref(host.ty());
+        let ident = segment.ident;
+        let member_name = ident.as_str();
 
-    None
-}
-fn deref_host_ty(
-    visitor: &mut PathVisitor,
-    host: types::TypeId,
-) -> (types::TypeId, Vec<types::TypeId>) {
-    let deref = match visitor.tc.resolve(host) {
-        types::Type::Signal(s) => s.inner,
-        types::Type::Listener(l) => l.inner,
-        _ => host,
-    };
-    match visitor.tc.resolve(deref) {
-        types::Type::Ref(r) => (r.inner, r.args),
-        _ => (deref, vec![]),
+        // Try as field
+        if let Some((sym, ty)) = self.find_field(ty, ident.as_str()) {
+            self.symbols.get_mut(sym).access.read(ident.loc);
+            if !self.is_visible(sym.into()) {
+                let error = DiagnosticKind::FieldIsPrivate(member_name.to_string());
+                self.error(error, ident.loc);
+            }
+            return Some(ir::Expression::Member(ir::MemberExpression {
+                loc: Location::merge(host.loc(), segment.loc),
+                object: Some(Box::new(host)),
+                member: (segment.loc, sym),
+                ty,
+            }));
+        }
+
+        // Try as method
+        if let Some((sym, ty)) = self.find_method(ty, member_name, |_| true) {
+            self.symbols.get_mut(sym).access.read(ident.loc);
+            if !self.is_visible(sym.into()) {
+                let error = DiagnosticKind::MethodIsPrivate(member_name.to_string());
+                self.error(error, ident.loc);
+            }
+            return Some(ir::Expression::Method(ir::MethodExpression {
+                loc: Location::merge(host.loc(), segment.loc),
+                host: Some(Box::new(host)),
+                method: (segment.loc, sym),
+                args: vec![],
+                ty,
+            }));
+        }
+
+        // Default to error
+        let member = member_name.to_string();
+        let error = DiagnosticKind::UnknownMember { member };
+        self.error(error, segment.loc);
+
+        None
     }
-}
 
-fn find_variable_prop(
-    tc: &mut TypeChecker,
-    host: types::TypeId,
-    generic_args: &[types::TypeId],
-    prop: &str,
-) -> Option<(MemberSymbolId, types::TypeId)> {
-    let symbol = tc.get_struct_symbol(host)?;
-    let member = symbol
-        .members
-        .iter()
-        .find(|m| tc.symbol_name(**m) == prop)
-        .copied()?;
-    let struct_ty = tc.resolve(symbol.ty);
-    let struct_ty = struct_ty.as_struct().unwrap();
-    let sub = Substitutions::with_initial(&struct_ty.params, generic_args);
-    let member_ty = tc.symbol_type_id(member);
-    let member_ty = sub.apply(&mut tc.types, member_ty);
-    Some((member, member_ty))
+    /// Find the field with given name on the given type.
+    ///
+    /// This method expects the type to be instantiated.
+    fn find_field(
+        &self,
+        host: types::TypeId,
+        prop: &str,
+    ) -> Option<(MemberSymbolId, types::TypeId)> {
+        let symbol = self.get_struct_symbol(host)?;
+        let member = symbol
+            .members
+            .iter()
+            .find(|m| self.symbol_name(**m) == prop)
+            .copied()?;
+        let ty = self.resolve(symbol.ty);
+        let struct_ty = ty.as_struct()?;
+        let member_ty = struct_ty.fields.iter().find(|f| f.name == prop)?.def;
+        Some((member, member_ty))
+    }
 }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::types::{StructType, TraitMethod, Type, TypeId, TypeParam};
+use crate::types::{Placeholder, StructType, TraitMethod, Type, TypeId, TypeParam};
 
 #[derive(Debug, Default, Clone)]
 pub struct TypeStore {
@@ -12,20 +12,18 @@ pub struct TypeStore {
 impl TypeStore {
     pub const UNKNOWN: TypeId = 0;
     pub const UNIT: TypeId = 1;
-    pub const DYNAMIC: TypeId = 2;
-    pub const BOOLEAN: TypeId = 3;
-    pub const STRING: TypeId = 4;
-    pub const INTEGER: TypeId = 5;
-    pub const FLOAT: TypeId = 6;
-    pub const ELEMENT: TypeId = 7;
-    pub const ARRAY_PARAM: TypeId = 8;
-    pub const ARRAY: TypeId = 9;
+    pub const BOOLEAN: TypeId = 2;
+    pub const STRING: TypeId = 3;
+    pub const INTEGER: TypeId = 4;
+    pub const FLOAT: TypeId = 5;
+    pub const ELEMENT: TypeId = 6;
+    pub const ARRAY_PARAM: TypeId = 7;
+    pub const ARRAY: TypeId = 8;
 
     pub fn new() -> Self {
         let mut store = Self::default();
         store.add(Type::Unknown);
         store.add(Type::Unit);
-        store.add(Type::Dynamic);
         store.add(Type::Boolean);
         store.add(Type::String);
         store.add(Type::Integer);
@@ -95,6 +93,9 @@ impl TypeStore {
         self.arena.push(ty);
         (self.arena.len() - 1) as TypeId
     }
+    pub fn add_new_placeholder(&mut self) -> TypeId {
+        self.add_unique(Type::Placeholder(Placeholder::default()))
+    }
     pub fn add_alias(&mut self, ty: TypeId, name: String) {
         self.aliases.push((ty, name));
     }
@@ -107,7 +108,13 @@ impl TypeStore {
     where
         T: Into<Type>,
     {
-        self.arena[at as usize] = new.into();
+        let mut new = new.into();
+        match &mut new {
+            Type::Struct(t) => t.id = at,
+            Type::Enum(t) => t.id = at,
+            _ => {}
+        }
+        self.arena[at as usize] = new;
     }
 
     pub fn get(&self, id: TypeId) -> &Type {
@@ -147,7 +154,6 @@ pub fn display_type(store: &TypeStore, ty: TypeId) -> String {
 pub fn display_raw_type(store: &TypeStore, ty: TypeId) -> String {
     match &store.get(ty) {
         Type::Boolean => "bool".into(),
-        Type::Dynamic => "dynamic".into(),
         Type::Enum(t) => t
             .variants
             .iter()
@@ -263,7 +269,6 @@ mod tests {
         let store = TypeStore::new();
         assert_eq!(store.get(TypeStore::UNKNOWN), &Type::Unknown);
         assert_eq!(store.get(TypeStore::UNIT), &Type::Unit);
-        assert_eq!(store.get(TypeStore::DYNAMIC), &Type::Dynamic);
         assert_eq!(store.get(TypeStore::BOOLEAN), &Type::Boolean);
         assert_eq!(store.get(TypeStore::STRING), &Type::String);
         assert_eq!(store.get(TypeStore::INTEGER), &Type::Integer);
