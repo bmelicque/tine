@@ -187,7 +187,7 @@ impl Into<Type> for Placeholder {
 }
 
 /// Used for generic type aliases
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct GenericDef {
     pub def: TypeId,
     pub params: Vec<TypeParam>,

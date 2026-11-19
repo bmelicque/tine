@@ -1,4 +1,5 @@
 mod assignments;
+mod common;
 mod enum_definitions;
 mod implementations;
 mod struct_definitions;

@@ -1,5 +1,4 @@
 use tine_ast as ast;
-use tine_common::diagnostics::DiagnosticKind;
 use tine_ir as ir;
 use tine_symbols::symbols::*;
 use tine_types::types;
@@ -12,9 +11,7 @@ impl TypeChecker {
             self.fallback_check_struct_body(node.body);
             return vec![];
         };
-        if self.current_scope().has(name.as_str()) {
-            let error = DiagnosticKind::DuplicateIdentifier { name: name.text };
-            self.error(error, name.loc);
+        if self.check_duplicate_identifier(&name) {
             self.fallback_check_struct_body(node.body);
             return vec![];
         }
@@ -26,38 +23,50 @@ impl TypeChecker {
             ..Default::default()
         });
         let Some(body) = node.body else {
-            let def = ir::StructDefinition {
-                loc: node.loc,
-                symbol: owner_id,
-            };
+            let loc = node.loc;
+            let symbol = owner_id;
+            let def = ir::StructDefinition { loc, symbol };
             return vec![def.into()];
         };
 
         let (fields, method_nodes) = split_struct_body(body);
         let (mut self_, type_params) = self.with_type_params2(&node.params);
 
-        let members = fields
-            .into_iter()
-            .filter_map(|f| self_.visit_struct_definition_field(owner_id.into(), f))
-            .collect::<Vec<_>>();
-        let ty = self_.get_struct_type(&members, type_params);
-        let mut self_ = self_.with_this(ty);
+        // Fields
+        let this = self_.declare_temporary_type(&name, &type_params);
+        let members = self_.visit_struct_definition_fields(fields, owner_id.into());
+        let ty = self_.get_struct_type(&members, type_params, this);
         self_.symbols.get_mut(owner_id).ty = ty;
         self_.types.add_alias(ty, name.text);
 
+        // Methods (shallow)
+        let mut self_ = self_.with_this(ty);
         let methods =
             self_.infer_method_symbols(&method_nodes, owner_id.into(), &SubstitutionTable::new());
         let symbol = self_.symbols.get_mut(owner_id);
         symbol.members = members.clone();
         symbol.methods.extend(methods.values().copied());
 
+        // Methods (deep)
         let mut stmts: Vec<ir::Statement> = self_
             .visit_methods(&method_nodes, methods)
             .into_iter()
             .map(Into::into)
             .collect();
+
         stmts.insert(0, ir::StructDefinition::new(owner_id, node.loc).into());
         stmts
+    }
+
+    fn visit_struct_definition_fields(
+        &mut self,
+        fields: Vec<ast::StructDefinitionField>,
+        owner: TypeSymbolId,
+    ) -> Vec<MemberSymbolId> {
+        fields
+            .into_iter()
+            .filter_map(|f| self.visit_struct_definition_field(owner, f))
+            .collect::<Vec<_>>()
     }
 
     fn visit_struct_definition_field(
@@ -82,16 +91,21 @@ impl TypeChecker {
         &mut self,
         members: &[MemberSymbolId],
         params: Vec<types::TypeParam>,
+        placeholder: types::TypeId,
     ) -> types::TypeId {
         let fields = members
             .into_iter()
             .map(|m| self.member_symbol_to_struct_field(*m))
             .collect();
-        self.intern_unique(types::StructType {
-            params,
-            fields,
-            ..Default::default()
-        })
+        self.types.overwrite(
+            placeholder,
+            types::StructType {
+                params,
+                fields,
+                ..Default::default()
+            },
+        );
+        placeholder
     }
     fn member_symbol_to_struct_field(&mut self, m: MemberSymbolId) -> types::StructField {
         types::StructField {

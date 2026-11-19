@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## Unreleased
 
+### Added
+
+- Added self-referencing types
+
 ### Fixed
 
 - Fixed missing error on variable declarations, if init value does not match type hint

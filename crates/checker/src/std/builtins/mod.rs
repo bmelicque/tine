@@ -1,5 +1,7 @@
 mod array;
 
+use tine_ast as ast;
+use tine_common::locations::Location;
 use tine_symbols::symbols::*;
 use tine_types::{store::TypeStore, types};
 
@@ -69,7 +71,11 @@ impl TypeChecker {
             body: vec![some_arg],
             ..Default::default()
         });
-        self.attach_variant_symbols(enum_id, vec![none, some], type_params);
+        let placeholder = self.declare_temporary_type(
+            &ast::Identifier::new("Option".to_string(), Location::default()),
+            &type_params,
+        );
+        self.attach_variant_symbols(enum_id, vec![none, some], type_params, placeholder);
 
         self.add_method(enum_id, "isSome", vec![], &[], TypeStore::BOOLEAN);
         self.add_method(enum_id, "isNone", vec![], &[], TypeStore::BOOLEAN);

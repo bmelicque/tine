@@ -99,6 +99,17 @@ impl TypeStore {
         self.aliases.push((ty, name));
     }
 
+    /// Overwrites the given target type with the provided one.
+    ///
+    /// This should be used only for replacing "placeholder" type params that
+    /// have been used for building a self-referencing type.
+    pub fn overwrite<T>(&mut self, at: TypeId, new: T)
+    where
+        T: Into<Type>,
+    {
+        self.arena[at as usize] = new.into();
+    }
+
     pub fn get(&self, id: TypeId) -> &Type {
         &self.arena[id as usize]
     }

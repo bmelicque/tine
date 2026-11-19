@@ -25,15 +25,7 @@ impl TypeChecker {
         };
         let mut param_types = Vec::new();
         for param in params {
-            let ty = self.add_type_param(param.text.clone());
-            let id = self.symbols.insert::<TypeAliasSymbolId>(TypeAliasSymbol {
-                name: param.text.clone(),
-                ty: ty.id,
-                defined_at: param.loc,
-                ..Default::default()
-            });
-            self.current_scope().bind(param.text.clone(), id.into());
-            self.types.add_alias(ty.id, param.text.clone());
+            let ty = self.declare_type_param(param.clone());
             param_types.push(ty);
         }
         (ScopeGuard::new(self), param_types)
@@ -56,22 +48,25 @@ impl TypeChecker {
         self.with_scope(|checker| {
             let mut param_types = Vec::new();
             for param in params {
-                let ty = checker.add_type_param(param.text.clone());
-                // FIXME: spans
-                let id = checker
-                    .symbols
-                    .insert::<TypeAliasSymbolId>(TypeAliasSymbol {
-                        name: param.text.clone(),
-                        ty: ty.id,
-                        defined_at: param.loc,
-                        ..Default::default()
-                    });
-                checker.current_scope().bind(param.text.clone(), id.into());
-                checker.types.add_alias(ty.id, param.text.clone());
+                let ty = checker.declare_type_param(param.clone());
                 param_types.push(ty);
             }
             (visit(checker, &param_types), param_types)
         })
+    }
+
+    pub fn declare_type_param(&mut self, param: ast::Identifier) -> types::TypeParam {
+        let name = param.text;
+        let ty = self.add_type_param(name.clone());
+        let id = self.symbols.insert::<TypeAliasSymbolId>(TypeAliasSymbol {
+            name: name.clone(),
+            ty: ty.id,
+            defined_at: param.loc,
+            ..Default::default()
+        });
+        self.current_scope().bind(name.clone(), id.into());
+        self.types.add_alias(ty.id, name);
+        ty
     }
 
     pub fn make_temp_variable(

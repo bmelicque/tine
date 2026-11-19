@@ -1,5 +1,5 @@
 use tine_ast as ast;
-use tine_common::{diagnostics::DiagnosticKind, locations::Locatable};
+use tine_common::locations::Locatable;
 use tine_ir as ir;
 use tine_symbols::symbols::*;
 use tine_types::types;
@@ -12,9 +12,7 @@ impl TypeChecker {
             self.fallback_check_enum_body(node.items);
             return vec![];
         };
-        if self.current_scope().has(name.as_str()) {
-            let error = DiagnosticKind::DuplicateIdentifier { name: name.text };
-            self.error(error, name.loc);
+        if self.check_duplicate_identifier(&name) {
             self.fallback_check_enum_body(node.items);
             return vec![];
         }
@@ -26,21 +24,23 @@ impl TypeChecker {
             ..Default::default()
         });
         let Some(items) = node.items else {
-            let def = ir::EnumDefinition {
-                loc: node.loc,
-                symbol: owner_id,
-            };
+            let loc = node.loc;
+            let symbol = owner_id;
+            let def = ir::EnumDefinition { loc, symbol };
             return vec![def.into()];
         };
-        let (mut self_, type_params) = self.with_type_params2(&node.params);
 
         let (variants, method_nodes) = split_enum_body(items);
+        let (mut self_, type_params) = self.with_type_params2(&node.params);
 
+        // Variants
+        let this = self_.declare_temporary_type(&name, &type_params);
         let variants = variants
             .into_iter()
             .filter_map(|v| self_.visit_enum_variant(v, owner_id))
             .collect::<Vec<_>>();
-        let ty = self_.attach_variant_symbols(owner_id, variants, type_params.to_vec());
+        let ty = self_.attach_variant_symbols(owner_id, variants, type_params.to_vec(), this);
+
         let mut self_ = self_.with_this(ty);
         let methods =
             self_.infer_method_symbols(&method_nodes, owner_id.into(), &SubstitutionTable::new());
@@ -119,8 +119,9 @@ impl TypeChecker {
         e: EnumSymbolId,
         variants: Vec<VariantSymbolId>,
         type_params: Vec<types::TypeParam>,
+        placeholder: types::TypeId,
     ) -> types::TypeId {
-        let ty = self.get_enum_type(&variants, type_params);
+        let ty = self.get_enum_type(&variants, type_params, placeholder);
         let name = self.symbol_name(e).to_string();
         self.types.add_alias(ty, name);
         variants.iter().for_each(|v| {
@@ -136,6 +137,7 @@ impl TypeChecker {
         &mut self,
         variants: &[VariantSymbolId],
         params: Vec<types::TypeParam>,
+        placeholder: types::TypeId,
     ) -> types::TypeId {
         let type_variants = variants
             .iter()
@@ -144,11 +146,15 @@ impl TypeChecker {
                 def: self.symbol_type_id(*v),
             })
             .collect::<Vec<_>>();
-        self.intern_unique(types::EnumType {
-            params,
-            variants: type_variants,
-            ..Default::default()
-        })
+        self.types.overwrite(
+            placeholder,
+            types::EnumType {
+                params,
+                variants: type_variants,
+                ..Default::default()
+            },
+        );
+        placeholder
     }
 
     fn fallback_check_enum_body(&mut self, body: Option<Vec<ast::EnumItem>>) {
