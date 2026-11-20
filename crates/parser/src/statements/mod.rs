@@ -108,10 +108,12 @@ impl Parser<'_> {
         let mut meta = Vec::new();
         while let Some(attr) = self.maybe_parse_meta_attribute() {
             meta.push(attr);
+            self.skip_new_lines();
         }
 
-        let start = self.eat(&[Token::Pub]);
-        let start = self.localize(start);
+        let pub_loc = self
+            .maybe_eat(|t| matches!(t, Token::Pub).then_some(()))
+            .map(|r| r.1);
 
         let tokens = [Token::Enum, Token::Struct];
 
@@ -124,9 +126,9 @@ impl Parser<'_> {
         };
 
         match token {
-            Token::Enum => Some(self.parse_enum(docs, Some(meta), Some(start)).into()),
+            Token::Enum => Some(self.parse_enum(docs, Some(meta), pub_loc).into()),
             Token::Struct => Some(
-                self.parse_struct_definition(docs, Some(meta), Some(start))
+                self.parse_struct_definition(docs, Some(meta), pub_loc)
                     .into(),
             ),
             _ => unreachable!(),
@@ -151,10 +153,7 @@ impl Parser<'_> {
             Token::Comma,
             Token::RParen,
         );
-        let end_range = match self.tokens.peek() {
-            Some((Ok(Token::RParen), r)) => r.clone(),
-            _ => self.recover_at(&[Token::RParen]),
-        };
+        let end_range = self.expect(Token::RParen);
         Some((args, self.localize(end_range)))
     }
 }

@@ -12,6 +12,12 @@ impl Parser<'_> {
         }
     }
 
+    pub(super) fn skip_new_lines(&mut self) {
+        while let Some((Ok(Token::Newline), _)) = self.tokens.peek() {
+            self.tokens.next();
+        }
+    }
+
     /// Parse a list of elements, separated by `separator` then an optional newline.
     /// Parsing stops right before it finds a `terminator` token, without consuming it.
     pub(super) fn parse_list<F, R>(
