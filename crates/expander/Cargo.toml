@@ -8,3 +8,4 @@ anyhow = "1.0.100"
 ordered-float = "5.0.0"
 tine_ast = { path = "../ast" }
 tine_common = { path = "../common" }
+tine_parser = { path = "../parser" }

@@ -11,8 +11,13 @@ impl Expander {
         &mut self,
         callee: Identifier,
         args: Option<Vec<Identifier>>,
-        node: &Option<Vec<StructItem>>,
+        node: &StructDefinition,
     ) -> Vec<MethodDefinition> {
+        let name = match &node.name {
+            Some(name) => name.as_str(),
+            None => return vec![],
+        };
+        let body = &node.body;
         let Some(args) = args else {
             self.error(callee.loc, DiagnosticKind::MissingArguments);
             return vec![];
@@ -20,8 +25,8 @@ impl Expander {
 
         args.into_iter()
             .filter_map(|arg| match arg.as_str() {
-                "Eq" => Some(eq::derive_struct(node, arg.loc)),
-                "Hash" => Some(hash::derive_struct(node, arg.loc)),
+                "Eq" => Some(eq::derive_struct(name, body, arg.loc)),
+                "Hash" => Some(hash::derive_struct(body, arg.loc)),
                 _ => {
                     self.error(arg.loc, DiagnosticKind::UnknownDeriveArgument);
                     None

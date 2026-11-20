@@ -67,7 +67,7 @@ impl Expander {
             .into_iter()
             .filter_map(|m| Some((m.name.clone()?, m.args.clone())))
             .flat_map(|(n, args)| match n.as_str() {
-                "derive" => self.derive_struct(n, args, &node.body),
+                "derive" => self.derive_struct(n, args, &node),
                 _ => {
                     self.error(n.loc, DiagnosticKind::UnknownMacro);
                     vec![]

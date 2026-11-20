@@ -76,7 +76,8 @@ impl Backend {
         };
         let loader = self.loader();
         let parse_result = tine_parser::parse_project(module_path.clone(), Some(Box::new(loader)));
-        let result = tine_checker::check_project(parse_result);
+        let expand_result = tine_expander::expand_project(parse_result);
+        let result = tine_checker::check_project(expand_result);
         {
             let mut types = self.types.write().unwrap();
             *types = result.types;

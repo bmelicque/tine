@@ -6,7 +6,8 @@ use tine_transpiler::{SwcLoader, TranspileOptions};
 pub fn build_once(path_buf: &PathBuf, output: &str, options: TranspileOptions) {
     let module_path = ModulePath::from(path_buf);
     let project_result = tine_parser::parse_project(module_path.clone(), None);
-    let check_result = tine_checker::check_project(project_result);
+    let expanded_result = tine_expander::expand_project(project_result);
+    let check_result = tine_checker::check_project(expanded_result);
 
     if !check_result.diagnostics.is_empty() {
         let count = check_result

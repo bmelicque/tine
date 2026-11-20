@@ -1,14 +1,14 @@
 use tine_ast::*;
 use tine_common::locations::Location;
 
-pub fn derive_struct(node: &Option<Vec<StructItem>>, at: Location) -> MethodDefinition {
+pub fn derive_struct(name: &str, body: &Option<Vec<StructItem>>, at: Location) -> MethodDefinition {
     let default = BooleanLiteral::new(true, at).into();
-    let expr = match node {
+    let expr = match body {
         Some(s) => s
             .iter()
             .filter_map(|f| f.as_field())
             .filter_map(|f| f.name.as_ref())
-            .map(|name| field_eq(name.text.clone(), at))
+            .map(|name| field_eq_method_call(name.text.clone(), at))
             .reduce(|lhs, rhs| BinaryExpression::and(lhs, rhs, at).into())
             .unwrap_or(default),
         None => default,
@@ -23,7 +23,7 @@ pub fn derive_struct(node: &Option<Vec<StructItem>>, at: Location) -> MethodDefi
         type_params: None,
         params: Some(FunctionParams {
             loc: at,
-            params: vec![other_param(at)],
+            params: vec![other_param(name, at)],
         }),
         return_type: Some(Type::Named(Identifier::new("bool".to_string(), at).into())),
         body: Some(Box::new(Expression::Block(BlockExpression {
@@ -34,7 +34,7 @@ pub fn derive_struct(node: &Option<Vec<StructItem>>, at: Location) -> MethodDefi
 }
 
 /// `self.<name>.eq(other.<name>)`
-fn field_eq(name: String, loc: Location) -> Expression {
+fn field_eq_method_call(name: String, loc: Location) -> Expression {
     Expression::Call(CallExpression {
         loc,
         callee: Some(Box::new(Expression::Member(MemberExpression::valid(
@@ -55,10 +55,10 @@ fn field_eq(name: String, loc: Location) -> Expression {
     })
 }
 
-fn other_param(at: Location) -> FunctionParam {
+fn other_param(name: &str, at: Location) -> FunctionParam {
     FunctionParam {
         loc: at,
         name: Some(Identifier::new("other".to_string(), at)),
-        type_annotation: Some(Type::Named(Identifier::new("Self".to_string(), at).into())),
+        type_annotation: Some(Type::Named(Identifier::new(name.to_string(), at).into())),
     }
 }

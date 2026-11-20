@@ -2062,6 +2062,7 @@ dependencies = [
  "notify-debouncer-mini",
  "tine_checker",
  "tine_common",
+ "tine_expander",
  "tine_parser",
  "tine_transpiler",
 ]
@@ -2081,6 +2082,7 @@ dependencies = [
  "ordered-float",
  "tine_ast",
  "tine_common",
+ "tine_parser",
 ]
 
 [[package]]
@@ -2126,6 +2128,7 @@ dependencies = [
  "swc_common",
  "tine_checker",
  "tine_common",
+ "tine_expander",
  "tine_parser",
  "tine_symbols",
  "tine_types",

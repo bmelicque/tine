@@ -12,6 +12,7 @@ tower-lsp = "0.20.0"
 url = "2.5.7"
 tine_checker = { path = "../checker" }
 tine_common = { path = "../common" }
+tine_expander = { path = "../expander" }
 tine_parser = { path = "../parser" }
 tine_symbols = { path = "../symbols" }
 tine_types = { path = "../types" }

@@ -6,8 +6,6 @@ use tine_common::{
     locations::{Locatable, Location},
 };
 use tine_ir::{self as ir, Typed};
-use tine_symbols::symbols::*;
-use tine_types::types;
 
 use crate::TypeChecker;
 
@@ -79,25 +77,5 @@ impl TypeChecker {
         self.error(error, segment.loc);
 
         None
-    }
-
-    /// Find the field with given name on the given type.
-    ///
-    /// This method expects the type to be instantiated.
-    fn find_field(
-        &self,
-        host: types::TypeId,
-        prop: &str,
-    ) -> Option<(MemberSymbolId, types::TypeId)> {
-        let symbol = self.get_struct_symbol(host)?;
-        let member = symbol
-            .members
-            .iter()
-            .find(|m| self.symbol_name(**m) == prop)
-            .copied()?;
-        let ty = self.resolve(symbol.ty);
-        let struct_ty = ty.as_struct()?;
-        let member_ty = struct_ty.fields.iter().find(|f| f.name == prop)?.def;
-        Some((member, member_ty))
     }
 }
