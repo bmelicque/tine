@@ -78,7 +78,7 @@ impl TypeChecker {
             name: ident.text,
             owner,
             body,
-            defined_at: variant.loc,
+            defined_at: ident.loc,
             ..Default::default()
         }))
     }
@@ -109,7 +109,7 @@ impl TypeChecker {
             public,
             ty,
             owner,
-            defined_at: loc,
+            defined_at: loc.zeroed(),
             ..Default::default()
         })
     }

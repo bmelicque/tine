@@ -51,6 +51,13 @@ impl Span {
         Self { start, end }
     }
 
+    pub fn zeroed(&self) -> Self {
+        Self {
+            start: self.start,
+            end: self.start,
+        }
+    }
+
     pub fn is_within(&self, test: Self) -> bool {
         self.start >= test.start && self.end <= test.end
     }
@@ -128,6 +135,13 @@ impl Location {
         Location {
             module: self.module,
             span,
+        }
+    }
+
+    pub fn zeroed(&self) -> Self {
+        Self {
+            module: self.module,
+            span: self.span.zeroed(),
         }
     }
 }
