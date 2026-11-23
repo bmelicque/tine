@@ -81,7 +81,7 @@ impl Expander {
 
         let implementation = Statement::Implementation(Implementation {
             loc: node.loc,
-            implemented_type: Some(Identifier::new(name.text.clone(), node.loc).into()),
+            implemented_type: Some(Identifier::new(name.text.clone(), name.loc).into()),
             body: Some(body),
         });
 
@@ -114,7 +114,7 @@ impl Expander {
 
         let implementation = Statement::Implementation(Implementation {
             loc: node.loc,
-            implemented_type: Some(Identifier::new(name.text.clone(), node.loc).into()),
+            implemented_type: Some(Identifier::new(name.text.clone(), name.loc).into()),
             body: Some(body),
         });
 

@@ -7,6 +7,9 @@
             "include": "#comments"
         },
         {
+            "include": "#meta"
+        },
+        {
             "include": "#strings"
         },
         {
@@ -178,6 +181,20 @@
                 },
                 {
                     "name": "markup.content.tine"
+                }
+            ]
+        },
+        "meta": {
+            "begin": "@([A-Za-z0-9_]*)\\(",
+            "beginCaptures": {
+                "1": {
+                    "name": "entity.name.function.call.tine"
+                }
+            },
+            "end": "\\)",
+            "patterns": [
+                {
+                    "include": "#types"
                 }
             ]
         },
