@@ -70,8 +70,9 @@ impl TypeChecker {
         let symbol = self.symbols.get(v);
         let params = symbol
             .body
+            .clone()
             .iter()
-            .map(|m| self.symbol_type_id(*m))
+            .map(|m| self.get_variant_param_type(*m, &sub))
             .collect::<Vec<_>>();
         let args = self.check_arguments(args, &params, &mut sub, loc);
         let ty = sub.apply(&mut self.types, constructor);
@@ -101,17 +102,17 @@ impl TypeChecker {
 
         if let Some(v) = try_callee_as_variant(&callee) {
             let variant = self.symbols.get(v);
-            let e = self.symbols.get(variant.owner);
-            let type_params = self.resolve(e.ty).as_enum().unwrap().params.clone();
+            let (_, subs) = self.unwrap_type(callee.ty());
             let params = variant
                 .body
-                .iter()
-                .map(|m| self.symbol_type_id(*m))
+                .clone()
+                .into_iter()
+                .map(|m| self.get_variant_param_type(m, &subs))
                 .collect();
             let f = types::FunctionType {
-                type_params,
+                type_params: vec![],
                 params,
-                return_type: variant.ty,
+                return_type: callee.ty(),
             };
             self.intern(f.clone());
             return Ok((callee, f));
@@ -134,6 +135,14 @@ impl TypeChecker {
             ast::Expression::Path(p) => self.visit_path_expression(p, super::PathContext::Call),
             expr => self.visit_expression(expr),
         }
+    }
+    fn get_variant_param_type(
+        &mut self,
+        symbol: MemberSymbolId,
+        subs: &Substitutions,
+    ) -> types::TypeId {
+        let ty = self.symbol_type_id(symbol);
+        subs.apply(&mut self.types, ty)
     }
 
     fn check_arguments(

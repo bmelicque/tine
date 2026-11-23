@@ -36,11 +36,23 @@ impl TypeChecker {
         let loc = value.loc();
         let mut subs = Substitutions::new();
         let value = match hint {
-            Some(ty) => self.check_expression_against(value, ty, &mut subs)?,
+            Some(ty) => {
+                let ty = self.instantiate_type_hint(ty);
+                self.check_expression_against(value, ty, &mut subs)?
+            }
             None => self.visit_expression(value)?,
         };
         self.errors(subs.produce_diagnostics(&self.types), loc);
         Some(value)
+    }
+
+    fn instantiate_type_hint(&mut self, ty: types::TypeId) -> types::TypeId {
+        let (ty, args) = match self.resolve(ty) {
+            types::Type::Ref(r) => (r.inner, r.args),
+            _ => (ty, vec![]),
+        };
+        let args = self.types.complete_type_args(ty, args);
+        self.types.instantiate(ty, &args)
     }
 }
 

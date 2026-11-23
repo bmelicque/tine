@@ -160,6 +160,10 @@ impl TypeChecker {
         let mut self_ = self.with_binding_expectation(expected);
         let loc = node.loc();
         let got = self_.visit_expression(node)?;
+        if let Err(error) = self_.unify_placeholders(expected, got.ty()) {
+            self_.error(error, loc);
+            return None;
+        }
         let Some(ty) = self_.infer(got.ty()) else {
             self_.error(DiagnosticKind::CannotInferType, got.loc());
             return None;
