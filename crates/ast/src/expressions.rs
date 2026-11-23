@@ -1,7 +1,7 @@
 use std::fmt;
 
 use ordered_float::OrderedFloat;
-use tine_common::locations::{Locatable, Location};
+use tine_common::locations::{vec_loc, Locatable, Location};
 use tine_macros::tree_struct;
 
 use crate::{
@@ -272,6 +272,14 @@ impl MemberExpression {
         }
     }
 
+    pub fn this(at: Location) -> Self {
+        Self {
+            loc: at,
+            object: None,
+            prop: None,
+        }
+    }
+
     pub fn valid<O, M>(object: O, member: M, loc: Location) -> Self
     where
         O: Into<Expression>,
@@ -295,6 +303,14 @@ ast_enum!(MemberProp {
 pub struct TupleExpression {
     #[child]
     pub elements: Vec<Expression>,
+}
+impl From<Vec<Expression>> for TupleExpression {
+    fn from(value: Vec<Expression>) -> Self {
+        Self {
+            loc: vec_loc(&value).unwrap(),
+            elements: value,
+        }
+    }
 }
 
 /// Internals use only.

@@ -39,15 +39,21 @@ impl Expander {
         &mut self,
         callee: Identifier,
         args: Option<Vec<Identifier>>,
-        _node: &EnumDefinition,
+        node: &EnumDefinition,
     ) -> Vec<MethodDefinition> {
         let Some(args) = args else {
             self.error(callee.loc, DiagnosticKind::MissingArguments);
             return vec![];
         };
 
+        let name = match &node.name {
+            Some(name) => name.as_str(),
+            None => return vec![],
+        };
+
         args.into_iter()
             .filter_map(|arg| match arg.as_str() {
+                "Eq" => Some(eq::derive_enum(name, &node.items, arg.loc)),
                 _ => {
                     self.error(arg.loc, DiagnosticKind::UnknownDeriveArgument);
                     None
