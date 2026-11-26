@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ### Fixed
 
+- Fixed binary types parsing
 - Fixed match expression with diverging blocks
 - Fixed missing error on variable declarations, if init value does not match type hint
 - Fixed type inference

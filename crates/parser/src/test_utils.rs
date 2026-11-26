@@ -2,6 +2,28 @@ use tine_ast as ast;
 
 use crate::{Diagnostic, Parser};
 
+pub(super) struct TypeTest<'parser> {
+    pub input: &'parser str,
+    pub expected: ast::Type,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+#[cfg(test)]
+pub(super) fn parse_type(src: &str) -> Result<ast::Type, Vec<Diagnostic>> {
+    let mut parser = Parser::new(0, src);
+    match parser.parse_type() {
+        Some(ty) => Ok(ty),
+        _ => Err(parser.diagnostics),
+    }
+}
+
+pub(super) fn test_type(test: TypeTest) {
+    let mut parser = Parser::new(0, test.input);
+    let result = parser.parse_type();
+    assert_eq!(result, Some(test.expected));
+    assert_eq!(parser.diagnostics, test.diagnostics);
+}
+
 pub(super) struct ExpressionTest<'parser> {
     pub input: &'parser str,
     pub expected: ast::Expression,
