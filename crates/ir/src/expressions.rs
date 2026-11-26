@@ -46,6 +46,17 @@ impl Expression {
                 _ => false,
             })
     }
+
+    pub fn diverges(&self) -> bool {
+        match self {
+            Expression::Block(expr) => expr.diverges(),
+            Expression::If(expr) => expr.diverges(),
+            Expression::For(expr) => expr.body.diverges(),
+            Expression::ForIn(expr) => expr.body.diverges(),
+            Expression::Match(expr) => expr.diverges(),
+            _ => false,
+        }
+    }
 }
 
 #[tree_struct]
@@ -115,6 +126,17 @@ impl Block {
             .map(|r| r.expression.as_deref())
             .chain(self.statements.last().map(|s| s.as_expression()))
             .collect()
+    }
+
+    pub fn diverges(&self) -> bool {
+        let Some(last) = self.statements.last() else {
+            return false;
+        };
+        match last {
+            Statement::Return(_) | Statement::Break(_) | Statement::Continue(_) => true,
+            Statement::Expression(expr) => expr.diverges(),
+            _ => false,
+        }
     }
 }
 
@@ -212,6 +234,14 @@ pub struct IfExpression {
     #[child]
     pub alternate: Option<Block>,
 }
+impl IfExpression {
+    pub fn diverges(&self) -> bool {
+        match &self.alternate {
+            Some(a) => self.consequent.diverges() && a.diverges(),
+            _ => false,
+        }
+    }
+}
 
 #[tree_struct]
 #[derive(Debug, Clone)]
@@ -252,6 +282,11 @@ pub struct MatchExpression {
     #[child]
     pub scrutinee: Box<Expression>,
     pub arms: Vec<(Pattern, Expression)>,
+}
+impl MatchExpression {
+    pub fn diverges(&self) -> bool {
+        self.arms.iter().all(|a| a.1.diverges())
+    }
 }
 
 #[tree_struct]

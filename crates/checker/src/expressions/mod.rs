@@ -1,4 +1,5 @@
 mod binary;
+mod blocks;
 mod calls;
 mod conditions;
 mod constructor_literals;

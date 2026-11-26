@@ -447,6 +447,7 @@ impl TypeChecker {
         self.can_be_coerced_into(got.ty(), expected, got_immutable)
     }
 
+    #[deprecated(note = "use `with_local_scope` instead")]
     pub fn with_scope<F, T>(&mut self, f: F) -> T
     where
         F: FnOnce(&mut Self) -> T,

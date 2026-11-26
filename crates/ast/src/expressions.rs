@@ -150,6 +150,18 @@ pub struct MatchArm {
     pub pattern: Option<Box<Pattern>>,
     pub expression: Option<Box<Expression>>,
 }
+impl MatchArm {
+    pub fn valid(pattern: Pattern, expression: Expression) -> Self {
+        let loc = Location::merge(pattern.loc(), expression.loc());
+        let pattern = Some(Box::new(pattern));
+        let expression = Some(Box::new(expression));
+        Self {
+            loc,
+            pattern,
+            expression,
+        }
+    }
+}
 impl<'a> PushNodes<'a> for MatchArm {
     fn push_nodes(&'a self, stack: &mut Vec<crate::Node<'a>>) {
         self.expression.push_nodes(stack);

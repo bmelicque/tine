@@ -74,28 +74,6 @@ impl TypeChecker {
         }
     }
 
-    pub fn visit_block_expression(&mut self, node: ast::BlockExpression) -> ir::Block {
-        let statements = self.with_scope(|checker| {
-            node.statements
-                .into_iter()
-                .flat_map(|stmt| checker.visit_statement(stmt))
-                .collect::<Vec<_>>()
-        });
-
-        let ty = statements
-            .last()
-            .map_or(TypeStore::UNIT, |stmt| match stmt {
-                ir::Statement::Expression(e) => e.ty(),
-                _ => TypeStore::UNIT,
-            });
-
-        ir::Block {
-            loc: node.loc,
-            statements,
-            ty,
-        }
-    }
-
     pub fn visit_identifier(&mut self, node: ast::Identifier) -> Option<ir::Identifier> {
         let symbol_id = self.get_symbol_id(node.as_str());
         match symbol_id {
