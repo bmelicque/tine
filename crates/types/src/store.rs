@@ -42,6 +42,7 @@ impl TypeStore {
         store.add_alias(element, "Element".into());
         store.add_array();
         store.add_result();
+        store.add_json();
         store
     }
 
@@ -77,6 +78,16 @@ impl TypeStore {
         });
         self.add_alias(result_id, "Result".into());
         self.well_known.insert("Result".into(), result_id);
+    }
+
+    fn add_json(&mut self) {
+        let id = self.add_unique(StructType::default());
+        self.add_alias(id, "Json".to_string());
+        self.well_known.insert("Json".into(), id);
+
+        let id = self.add_unique(StructType::default());
+        self.add_alias(id, "JsonObject".to_string());
+        self.well_known.insert("JsonObject".into(), id);
     }
 
     pub fn get_next_id(&self) -> TypeId {

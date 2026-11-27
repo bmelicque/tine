@@ -1,4 +1,5 @@
 mod array;
+mod json;
 
 use tine_ast as ast;
 use tine_common::locations::Location;
@@ -18,6 +19,7 @@ impl TypeChecker {
         self.result_builtin();
         self.array_builtin();
         self.map_builtin();
+        self.json_builtin();
         self.element_builtin();
         self.log_builtin();
         self.eq_trait();
@@ -201,6 +203,17 @@ impl TypeChecker {
             TypeStore::BOOLEAN,
         );
     }
+    pub fn map_type(&mut self, key: types::TypeId, value: types::TypeId) -> types::TypeId {
+        let map = self
+            .symbols
+            .find::<StructSymbolId, _>(|e| &e.name == "Map")
+            .unwrap()
+            .ty;
+        self.intern(types::TypeRef {
+            inner: map,
+            args: vec![key, value],
+        })
+    }
 
     fn element_builtin(&mut self) {
         self.insert::<StructSymbolId>(StructSymbol {
@@ -297,7 +310,14 @@ impl TypeChecker {
     ) where
         I: Into<TypeSymbolId> + Copy,
     {
-        self.add_method_helper(owner, name, params, param_names, return_type, false);
+        self.add_method_helper(
+            owner,
+            name,
+            params,
+            param_names,
+            return_type,
+            MethodReceiverKind::Immutable,
+        );
     }
 
     fn add_mutating_method<I>(
@@ -310,7 +330,34 @@ impl TypeChecker {
     ) where
         I: Into<TypeSymbolId> + Copy,
     {
-        self.add_method_helper(owner, name, params, param_names, return_type, true);
+        self.add_method_helper(
+            owner,
+            name,
+            params,
+            param_names,
+            return_type,
+            MethodReceiverKind::Mutable,
+        );
+    }
+
+    fn add_static_method<I>(
+        &mut self,
+        owner: I,
+        name: &str,
+        params: Vec<types::TypeId>,
+        param_names: &[&str],
+        return_type: types::TypeId,
+    ) where
+        I: Into<TypeSymbolId> + Copy,
+    {
+        self.add_method_helper(
+            owner,
+            name,
+            params,
+            param_names,
+            return_type,
+            MethodReceiverKind::Static,
+        );
     }
 
     fn add_method_helper<I>(
@@ -320,7 +367,7 @@ impl TypeChecker {
         params: Vec<types::TypeId>,
         param_names: &[&str],
         return_type: types::TypeId,
-        mutating: bool,
+        receiver: MethodReceiverKind,
     ) where
         I: Into<TypeSymbolId> + Copy,
     {
@@ -329,11 +376,6 @@ impl TypeChecker {
             return_type,
             ..Default::default()
         });
-        let receiver = if mutating {
-            MethodReceiverKind::Mutable
-        } else {
-            MethodReceiverKind::Immutable
-        };
         let fn_symbol: MethodSymbolId = self.symbols.insert(MethodSymbol {
             name: name.into(),
             public: true,

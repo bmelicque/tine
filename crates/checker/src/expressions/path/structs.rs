@@ -18,7 +18,7 @@ impl TypeChecker {
         let struct_ = self.visit_first_segment_with_args(first, sym.into());
         match ctx {
             PathContext::Expr => self.visit_struct_in_any_expr(sym, struct_, segments),
-            PathContext::Call => self.visit_struct_path_in_call(sym, segments),
+            PathContext::Call => self.visit_struct_path_in_call(sym, struct_, segments),
             PathContext::Struct => self.visit_struct_in_struct_expr(struct_, segments),
         }
     }
@@ -50,12 +50,12 @@ impl TypeChecker {
     fn visit_struct_path_in_call(
         &mut self,
         sym: StructSymbolId,
-        mut segments: VecDeque<ast::PathSegment>,
+        ident: ir::Identifier,
+        segments: VecDeque<ast::PathSegment>,
     ) -> Option<ir::Expression> {
-        let host = segments.pop_front().unwrap();
         // expect a method name after the host
         if segments.is_empty() {
-            self.error(DiagnosticKind::ExpectedFunctionGotType, host.loc);
+            self.error(DiagnosticKind::ExpectedFunctionGotType, ident.loc);
             return None;
         };
         self.visit_static_method_path(sym.into(), segments)
