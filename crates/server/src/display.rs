@@ -1,6 +1,7 @@
 use tine_symbols::symbols::*;
 use tine_types::{
-    store::{display_raw_type, display_type, TypeStore},
+    display::{display_raw_type, display_type},
+    store::TypeStore,
     types::{FunctionType, Type, TypeId},
 };
 

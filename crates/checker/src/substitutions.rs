@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
 use tine_common::{diagnostics::DiagnosticKind, locations::Location};
-use tine_types::{
-    store::{display_type, TypeStore},
-    types,
-};
+use tine_types::{display::display_type, store::TypeStore, types};
 
 use crate::TypeChecker;
 
@@ -128,18 +125,6 @@ impl Substitutions {
             (Listener(e), Listener(a)) => {
                 self.unify(tc, e.inner, a.inner, loc);
             }
-            (Result(e), Result(a)) => {
-                self.unify(tc, e.ok, a.ok, loc);
-                match (&e.error, &a.error) {
-                    (Some(e), Some(a)) => {
-                        self.unify(tc, *e, *a, loc);
-                    }
-                    (None, None) => {}
-                    _ => {
-                        self.mismatched_pairs.push((generic, concrete));
-                    }
-                }
-            }
             (Signal(e), Signal(a)) => {
                 self.unify(tc, e.inner, a.inner, loc);
             }
@@ -191,14 +176,6 @@ impl Substitutions {
             Placeholder(_) => to,
             Ref(mut r) => {
                 r.args = r.args.into_iter().map(|a| self.apply(store, a)).collect();
-                store.add(r)
-            }
-            Result(mut r) => {
-                r.ok = self.apply(store, r.ok);
-                match &r.error {
-                    Some(e) => r.error = Some(self.apply(store, *e)),
-                    None => {}
-                }
                 store.add(r)
             }
             SelfType => to,

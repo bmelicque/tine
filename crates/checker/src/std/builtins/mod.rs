@@ -15,6 +15,7 @@ impl TypeChecker {
         self.primitive_builtin("str", TypeStore::STRING);
         self.to_string_builtin(&["int", "float"]);
         self.option_builtin();
+        self.result_builtin();
         self.array_builtin();
         self.map_builtin();
         self.element_builtin();
@@ -98,6 +99,68 @@ impl TypeChecker {
         self.intern(types::TypeRef {
             inner: option,
             args: vec![some],
+        })
+    }
+
+    fn result_builtin(&mut self) {
+        let ty = self.types.well_known("Result");
+        let enum_id = self.insert::<EnumSymbolId>(EnumSymbol {
+            name: "Result".into(),
+            public: true,
+            ty,
+            ..Default::default()
+        });
+
+        let resolved = self.resolve(ty);
+        let params = resolved.as_params().unwrap();
+        assert_eq!(params.len(), 2);
+        let ok_type = params[0].id;
+        let ok_arg = self.insert::<MemberSymbolId>(MemberSymbol {
+            name: format!("_0"),
+            public: true,
+            owner: enum_id.into(),
+            ty: ok_type,
+            ..Default::default()
+        });
+        let ok = self.insert::<VariantSymbolId>(VariantSymbol {
+            name: "Ok".into(),
+            owner: enum_id,
+            body: vec![ok_arg],
+            ty,
+            ..Default::default()
+        });
+
+        let error_type = params[1].id;
+        let error_arg = self.insert::<MemberSymbolId>(MemberSymbol {
+            name: format!("_0"),
+            public: true,
+            owner: enum_id.into(),
+            ty: error_type,
+            ..Default::default()
+        });
+        let error = self.insert::<VariantSymbolId>(VariantSymbol {
+            name: "Error".into(),
+            owner: enum_id,
+            body: vec![error_arg],
+            ty,
+            ..Default::default()
+        });
+
+        let enum_ = self.symbols.get_mut(enum_id);
+        enum_.variants = vec![ok, error];
+
+        self.add_method(enum_id, "isOk", vec![], &[], TypeStore::BOOLEAN);
+        let ok_option = self.option_type(ok_type);
+        self.add_method(enum_id, "asOk", vec![], &[], ok_option);
+        self.add_method(enum_id, "isError", vec![], &[], TypeStore::BOOLEAN);
+        let error_option = self.option_type(error_type);
+        self.add_method(enum_id, "asError", vec![], &[], error_option);
+    }
+    pub fn result_type(&mut self, ok: types::TypeId, error: types::TypeId) -> types::TypeId {
+        let result = self.types.well_known("Result");
+        self.intern(types::TypeRef {
+            inner: result,
+            args: vec![ok, error],
         })
     }
 

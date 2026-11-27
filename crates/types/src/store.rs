@@ -1,12 +1,16 @@
 use std::collections::HashMap;
 
-use crate::types::{Placeholder, StructType, TraitMethod, Type, TypeId, TypeParam};
+use crate::{
+    display::display_type,
+    types::{EnumType, Placeholder, StructType, Type, TypeId, TypeParam, Variant},
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct TypeStore {
     arena: Vec<Type>,
     lookup: HashMap<Type, TypeId>,
     aliases: Vec<(TypeId, String)>,
+    well_known: HashMap<String, TypeId>,
 }
 
 impl TypeStore {
@@ -37,7 +41,12 @@ impl TypeStore {
         });
         store.add_alias(element, "Element".into());
         store.add_array();
+        store.add_result();
         store
+    }
+
+    pub fn well_known(&self, name: &str) -> TypeId {
+        *self.well_known.get(name).unwrap()
     }
 
     fn add_array(&mut self) {
@@ -55,6 +64,21 @@ impl TypeStore {
         debug_assert_eq!(array_id, Self::ARRAY);
     }
 
+    fn add_result(&mut self) {
+        let ok_param = self.add_param("T".into());
+        let error_param = self.add_param("E".into());
+        let result_id = self.add_unique(EnumType {
+            variants: vec![
+                Variant::new("Ok".into(), ok_param.id),
+                Variant::new("Error".into(), error_param.id),
+            ],
+            params: vec![ok_param, error_param],
+            ..Default::default()
+        });
+        self.add_alias(result_id, "Result".into());
+        self.well_known.insert("Result".into(), result_id);
+    }
+
     pub fn get_next_id(&self) -> TypeId {
         self.arena.len() as TypeId
     }
@@ -70,7 +94,8 @@ impl TypeStore {
             }
         }
     }
-    pub fn add_unique(&mut self, ty: Type) -> TypeId {
+    pub fn add_unique(&mut self, ty: impl Into<Type>) -> TypeId {
+        let ty = ty.into();
         let ty = match ty {
             Type::Struct(mut st) => {
                 st.id = self.get_next_id();
@@ -92,6 +117,13 @@ impl TypeStore {
         };
         self.arena.push(ty);
         (self.arena.len() - 1) as TypeId
+    }
+    pub fn add_param(&mut self, name: String) -> TypeParam {
+        let id = self.add_unique(Type::Param(TypeParam {
+            name: name.clone(),
+            ..Default::default()
+        }));
+        TypeParam { name, id }
     }
     pub fn add_new_placeholder(&mut self) -> TypeId {
         self.add_unique(Type::Placeholder(Placeholder::default()))
@@ -142,121 +174,6 @@ impl TypeStore {
     pub fn display(&self, ty: TypeId) -> String {
         display_type(self, ty)
     }
-}
-
-pub fn display_type(store: &TypeStore, ty: TypeId) -> String {
-    if let Some(name) = store.get_alias(ty) {
-        return name.clone();
-    }
-    display_raw_type(store, ty)
-}
-
-pub fn display_raw_type(store: &TypeStore, ty: TypeId) -> String {
-    match &store.get(ty) {
-        Type::Boolean => "bool".into(),
-        Type::Enum(t) => t
-            .variants
-            .iter()
-            .map(|variant| format!("{}({})", variant.name, display_type(store, variant.def)))
-            .collect::<Vec<_>>()
-            .join(" | "),
-        Type::Float => "float".into(),
-        Type::Function(t) => {
-            let params = display_params(store, &t.params);
-            let return_type = display_return_type(store, t.return_type);
-            format!("fn({}){}", params, return_type)
-        }
-        Type::Generic(_) => "generic".into(),
-        Type::Listener(t) => {
-            format!("Computed<{}>", display_type(store, t.inner))
-        }
-        Type::Integer => "int".into(),
-        Type::Param(t) => t.name.clone(),
-        Type::Placeholder(_) => "{unknown}".into(),
-        Type::Ref(t) => {
-            if t.inner == TypeStore::ARRAY {
-                return format!("{}[]", display_type(store, t.args[0]));
-            }
-
-            let args = t
-                .args
-                .iter()
-                .map(|arg| display_type(store, *arg))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("{}<{}>", display_type(store, t.inner), args)
-        }
-        Type::Result(t) => {
-            if let Some(error) = &t.error {
-                format!(
-                    "{}!{}",
-                    display_type(store, *error),
-                    display_type(store, t.ok)
-                )
-            } else {
-                format!("!{}", display_type(store, t.ok))
-            }
-        }
-        Type::SelfType => "Self".into(),
-        Type::Signal(t) => {
-            format!("${}", display_type(store, t.inner))
-        }
-        Type::String => "str".into(),
-        Type::Struct(t) => {
-            let fields = t
-                .fields
-                .iter()
-                .map(|field| format!("{}: {}", field.name, display_type(store, field.def)))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("{{ {} }}", fields)
-        }
-        Type::Trait(t) => {
-            let methods = t
-                .methods
-                .iter()
-                .map(|method| display_trait_method(store, method))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("{{ {} }}", methods)
-        }
-        Type::Tuple(t) => {
-            let elements = t
-                .elements
-                .iter()
-                .map(|e| display_type(store, *e))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("({})", elements)
-        }
-        Type::Unit => "()".into(),
-        Type::Unknown => "unknown".into(),
-    }
-}
-
-fn display_params(store: &TypeStore, params: &[TypeId]) -> String {
-    params
-        .iter()
-        .map(|p| display_type(store, *p))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-fn display_return_type(store: &TypeStore, ty: TypeId) -> String {
-    match ty {
-        TypeStore::UNIT => "".to_string(),
-        ty => format!(" -> {}", display_type(store, ty)),
-    }
-}
-
-fn display_trait_method(store: &TypeStore, method: &TraitMethod) -> String {
-    let name = &method.name;
-    let Type::Function(ty) = store.get(method.def) else {
-        panic!()
-    };
-    let params = display_params(store, &ty.params);
-    let return_type = display_return_type(store, ty.return_type);
-    format!("fn {}({}){}", name, params, return_type)
 }
 
 #[cfg(test)]

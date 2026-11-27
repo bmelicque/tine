@@ -48,7 +48,6 @@ impl TypeStore {
             Param(ty) => self.apply_param(ty, substitutions),
             Listener(ty) => self.apply_listener(ty, substitutions),
             Ref(ty) => self.apply_ref(ty, substitutions),
-            Result(ty) => self.apply_result(ty, substitutions),
             Signal(ty) => self.apply_signal(ty, substitutions),
             Struct(ty) => self.apply_struct(ty, substitutions),
             Trait(ty) => self.apply_trait(ty, type_id, substitutions),
@@ -98,12 +97,6 @@ impl TypeStore {
             .map(|a| self.apply(a, substitutions))
             .collect::<Vec<_>>();
         self.instantiate(ty.inner, &args)
-    }
-
-    fn apply_result(&mut self, ty: ResultType, substitutions: &Substitutions) -> TypeId {
-        let ok = self.apply(ty.ok, substitutions);
-        let error = ty.error.map(|error| self.apply(error, substitutions));
-        self.add(ResultType { ok, error })
     }
 
     fn apply_signal(&mut self, ty: SignalType, substitutions: &Substitutions) -> TypeId {

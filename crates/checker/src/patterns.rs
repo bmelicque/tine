@@ -7,7 +7,7 @@ use tine_common::{
 };
 use tine_ir as ir;
 use tine_symbols::symbols::*;
-use tine_types::{store::display_type, types};
+use tine_types::{display::display_type, types};
 
 use crate::{
     expressions::expressions::{

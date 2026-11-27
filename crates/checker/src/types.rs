@@ -113,7 +113,7 @@ impl TypeChecker {
     pub fn visit_result_type(&mut self, node: ast::ResultType) -> types::TypeId {
         let ok = self.visit_type_option(node.ok);
         let error = self.visit_type_option(node.error).into();
-        self.intern(types::ResultType { ok, error })
+        self.result_type(ok, error)
     }
 
     pub fn visit_tuple_type(&mut self, node: ast::TupleType) -> types::TypeId {
@@ -316,13 +316,9 @@ mod tests {
 
         let result = checker.visit_result_type(result_type);
         let result = checker.resolve(result);
-        assert_eq!(
-            result,
-            Type::Result(types::ResultType {
-                ok: TypeStore::INTEGER,
-                error: Some(TypeStore::STRING),
-            })
-        );
+        let expected = checker.result_type(TypeStore::INTEGER, TypeStore::STRING);
+        let expected = checker.resolve(expected);
+        assert_eq!(result, expected);
     }
 
     #[test]

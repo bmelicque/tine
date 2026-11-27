@@ -14,7 +14,6 @@ pub enum Type {
     Placeholder(Placeholder),
     Listener(ListenerType),
     Ref(TypeRef),
-    Result(ResultType),
     SelfType, // Represents the current type in a method context
     Signal(SignalType),
     String,
@@ -242,18 +241,6 @@ pub struct ListenerType {
 impl Into<Type> for ListenerType {
     fn into(self) -> Type {
         Type::Listener(self)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ResultType {
-    pub ok: TypeId,
-    pub error: Option<TypeId>,
-}
-
-impl Into<Type> for ResultType {
-    fn into(self) -> Type {
-        Type::Result(self)
     }
 }
 

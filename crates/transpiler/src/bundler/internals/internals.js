@@ -53,9 +53,41 @@ export class Option {
 }
 
 export class Result {
-	constructor(__, _) {
-		this.__ = __;
-		this[0] = _;
+	static Ok(_0) {
+		const $ = new this;
+		$.$tag = 0;
+		$._0 = _0;
+		return $;
+	}
+
+	static Error(_0) {
+		const $ = new this;
+		$.$tag = 1;
+		$._0 = _0;
+		return $;
+	}
+
+	$clone() {
+		const $ = new this;
+		$.$tag = this.$tag;
+		$._0 = this._0.$clone?.() ?? this._0;
+		return $;
+	}
+
+	isOk() {
+		return this.$tag === 0;
+	}
+
+	isError() {
+		return this.$tag === 1;
+	}
+
+	asOk() {
+		return this.$tag === 0 ? Option.Some(this._0) : Option.None();
+	}
+
+	asError() {
+		return this.$tag === 1 ? Option.Some(this._0) : Option.None();
 	}
 }
 

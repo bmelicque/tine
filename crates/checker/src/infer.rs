@@ -1,6 +1,6 @@
 use tine_common::diagnostics::DiagnosticKind;
 use tine_types::{
-    store::display_type,
+    display::display_type,
     types::{self, Placeholder, TypeId},
 };
 
